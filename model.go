@@ -33,8 +33,8 @@ type AnalysisRequest struct {
 // SubjectInfo - Additional Information about the subject for the AnalysisRequest
 // Do not use in implentation directly
 type SubjectInfo struct {
-	Type        SubjectType
-	DateOfBirth *time.Time
+	Type         SubjectType
+	DateOfBirth  *time.Time
 	FirstName    *string
 	LastName     *string
 	DonorID      *string
@@ -122,9 +122,9 @@ type Instrument struct {
 	FileEncoding       string
 	Timezone           string
 	Hostname           string
-	ClientPort      int
-	ResultMode      ResultMode
-	AnalyteMappings []AnalyteMapping
+	ClientPort         int
+	ResultMode         ResultMode
+	AnalyteMappings    []AnalyteMapping
 	RequestMappings    []RequestMapping
 }
 
@@ -136,8 +136,8 @@ type AnalyteMapping struct {
 	InstrumentAnalyte string
 	AnalyteID         uuid.UUID
 	ChannelMappings   []ChannelMapping
-	ResultMappings []ResultMapping
-	ResultType     ResultType
+	ResultMappings    []ResultMapping
+	ResultType        ResultType
 }
 
 type ChannelMapping struct {
@@ -185,13 +185,13 @@ const (
 type AnalysisResult struct {
 	ID              uuid.UUID
 	AnalysisRequest AnalysisRequest
-	AnalyteMapping AnalyteMapping
-	Instrument     Instrument
+	AnalyteMapping  AnalyteMapping
+	Instrument      Instrument
 	// ResultRecordID - reference to raw result record stored in an implementation-created table
 	ResultRecordID           uuid.UUID
-	Result              string
-	Status              ResultStatus
-	ResultYieldDateTime time.Time
+	Result                   string
+	Status                   ResultStatus
+	ResultYieldDateTime      time.Time
 	ValidUntil               time.Time
 	Operator                 string
 	TechnicalReleaseDateTime time.Time

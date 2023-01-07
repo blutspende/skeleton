@@ -55,14 +55,18 @@ func TestSubmitAnalysisResult(t *testing.T) {
 	_, err = analysisService.CreateAnalysisRequests(context.TODO(), analysisRequests)
 	assert.Nil(t, err)
 
+	instrumentID := uuid.New()
+
 	err = skeletonInstance.SubmitAnalysisResult(context.TODO(), skeleton.AnalysisResult{
 		ID:              uuid.UUID{},
 		AnalysisRequest: analysisRequests[0],
 		AnalyteMapping: skeleton.AnalyteMapping{
-			AnalyteID:    uuid.New(),
-			InstrumentID: uuid.New(),
+			AnalyteID:    analysisRequests[0].ID,
+			InstrumentID: instrumentID,
 		},
-		Instrument:               skeleton.Instrument{},
+		Instrument: skeleton.Instrument{
+			ID: instrumentID,
+		},
 		ResultRecordID:           uuid.UUID{},
 		Result:                   "",
 		Status:                   "",

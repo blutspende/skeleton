@@ -1,6 +1,5 @@
 package skeleton_test
 
-
 import (
 	"github.com/DRK-Blutspende-BaWueHe/skeleton"
 	"testing"

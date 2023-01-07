@@ -25,9 +25,9 @@ type analysisRequestDAO struct {
 
 type subjectInfoDAO struct {
 	ID                uuid.UUID      `db:"id"`
-	AnalysisRequestID uuid.UUID    `db:"analysis_request_id"`
-	Type              SubjectType  `db:"type"`
-	DateOfBirth       sql.NullTime `db:"date_of_birth"`
+	AnalysisRequestID uuid.UUID      `db:"analysis_request_id"`
+	Type              SubjectType    `db:"type"`
+	DateOfBirth       sql.NullTime   `db:"date_of_birth"`
 	FirstName         sql.NullString `db:"first_name"`
 	LastName          sql.NullString `db:"last_name"`
 	DonorID           sql.NullString `db:"donor_id"`
@@ -43,16 +43,16 @@ type analysisResultDAO struct {
 	InstrumentID      uuid.UUID      `db:"instrument_id"`
 	InstrumentRunID   uuid.UUID      `db:"instrument_run_id"`
 	ResultRecordID    uuid.UUID      `db:"result_record_id"`
-	Result     string       `db:"result"`
-	Status     ResultStatus `db:"status"`
-	ResultMode ResultMode   `db:"mode"`
-	YieldedAt  time.Time      `db:"yielded_at"`
+	Result            string         `db:"result"`
+	Status            ResultStatus   `db:"status"`
+	ResultMode        ResultMode     `db:"mode"`
+	YieldedAt         time.Time      `db:"yielded_at"`
 	ValidUntil        time.Time      `db:"valid_until"`
 	Operator          string         `db:"operator"`
 	Edited            bool           `db:"edited"`
-	EditReason        string         `db:"edit_reason"`
+	EditReason        sql.NullString `db:"edit_reason"`
 	Error             sql.NullString `db:"error"`
-	ErrorTimestamp    sql.NullString `db:"error_timestamp"`
+	ErrorTimestamp    sql.NullTime   `db:"error_timestamp"`
 	RetryCount        int            `db:"retry_count"`
 	SentToCerberusAt  sql.NullTime   `db:"sent_to_cerberus_at"`
 	ChannelResults    []channelResultDAO
@@ -275,7 +275,7 @@ func (r *analysisRepository) CreateAnalysisResultsBatch(ctx context.Context, ana
 		return []uuid.UUID{}, err
 	}
 
-	for i:= range analysisResults {
+	for i := range analysisResults {
 		quantitativeChannelResultsMap := make(map[uuid.UUID]map[string]string)
 		channelImagesMap := make(map[uuid.NullUUID][]Image)
 		channelResultIDs, err := r.createChannelResults(ctx, analysisResults[i].ChannelResults, ids[i])
@@ -284,7 +284,7 @@ func (r *analysisRepository) CreateAnalysisResultsBatch(ctx context.Context, ana
 		}
 		for j := range analysisResults[i].ChannelResults {
 			quantitativeChannelResultsMap[channelResultIDs[j]] = analysisResults[i].ChannelResults[j].QuantitativeResults
-			channelImagesMap[uuid.NullUUID{UUID:channelResultIDs[j], Valid: true}] = analysisResults[i].ChannelResults[j].Images
+			channelImagesMap[uuid.NullUUID{UUID: channelResultIDs[j], Valid: true}] = analysisResults[i].ChannelResults[j].Images
 		}
 		imagesMap[ids[i]] = channelImagesMap
 		err = r.createChannelResultQuantitativeValues(ctx, quantitativeChannelResultsMap)
@@ -334,7 +334,7 @@ func (r *analysisRepository) createChannelResults(ctx context.Context, channelRe
 		VALUES(:id, :analysis_result_id, :channel_id, :qualitative_result, :qualitative_result_edited);`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, convertChannelResultsToDAOs(channelResults, analysisResultID))
 	if err != nil {
-		log.Error().Err(err).Msg("create analysis result batch failed")
+		log.Error().Err(err).Msg("create channel result batch failed")
 		return []uuid.UUID{}, err
 	}
 	return ids, nil
@@ -384,30 +384,7 @@ func (r *analysisRepository) createReagentInfos(ctx context.Context, reagentInfo
 	return nil
 }
 
-func convertReagentInfoToDAO(reagentInfo ReagentInfo, analysisResultID uuid.UUID) reagentInfoDAO {
-	return reagentInfoDAO{
-		AnalysisResultID:        analysisResultID,
-		SerialNumber:            reagentInfo.SerialNumber,
-		Name:                    reagentInfo.Name,
-		Code:                    reagentInfo.Code,
-		ShelfLife:               reagentInfo.ShelfLife,
-		LotNo:                   reagentInfo.LotNo,
-		ManufacturerName:        reagentInfo.ManufacturerName,
-		ReagentManufacturerDate: reagentInfo.ReagentManufacturerDate,
-		ReagentType:             reagentInfo.ReagentType,
-		UseUntil:                reagentInfo.UseUntil,
-	}
-}
-
-func convertReagentInfosToDAOs(reagentInfos []ReagentInfo, analysisResultID uuid.UUID) []reagentInfoDAO {
-	reagentInfoDAOs := make([]reagentInfoDAO, len(reagentInfos))
-	for i:= range reagentInfos {
-		reagentInfoDAOs[i] = convertReagentInfoToDAO(reagentInfos[i], analysisResultID)
-	}
-	return reagentInfoDAOs
-}
-
-func (r *analysisRepository) createImages(ctx context.Context, images map[uuid.UUID]map[uuid.NullUUID][]Image) error{
+func (r *analysisRepository) createImages(ctx context.Context, images map[uuid.UUID]map[uuid.NullUUID][]Image) error {
 	imageDAOs := make([]imageDAO, 0)
 	for analysisResultID, imagesMap := range images {
 		for channelResultID, images := range imagesMap {
@@ -451,17 +428,6 @@ func (r *analysisRepository) createWarnings(ctx context.Context, warningsByAnaly
 		return err
 	}
 	return nil
-}
-
-func convertWarningsToDAOs(warnings []string, analysisResultID uuid.UUID) []warningDAO {
-	warningDAOs := make([]warningDAO, len(warnings))
-	for i:=range warnings {
-		warningDAOs = append(warningDAOs, warningDAO{
-			AnalysisResultID: analysisResultID,
-			Warning:          warnings[i],
-		})
-	}
-	return warningDAOs
 }
 
 func (r *analysisRepository) UpdateResultTransmissionData(ctx context.Context, analysisResultID uuid.UUID, success bool, errorMessage string) error {
@@ -540,7 +506,10 @@ func convertAnalysisResultToDAO(analysisResult AnalysisResult) analysisResultDAO
 		ValidUntil:        analysisResult.ValidUntil,
 		Operator:          analysisResult.Operator,
 		Edited:            analysisResult.Edited,
-		EditReason:        analysisResult.EditReason,
+		EditReason: sql.NullString{
+			String: analysisResult.EditReason,
+			Valid:  true,
+		},
 	}
 }
 
@@ -570,7 +539,7 @@ func convertChannelResultsToDAOs(channelResults []ChannelResult, analysisResultI
 	return channelResultDAOs
 }
 
-func convertExtraValueToDAO(extraValue ExtraValue, analysisResultID uuid.UUID) extraValueDAO{
+func convertExtraValueToDAO(extraValue ExtraValue, analysisResultID uuid.UUID) extraValueDAO {
 	return extraValueDAO{
 		AnalysisResultID: analysisResultID,
 		Key:              extraValue.Key,
@@ -578,14 +547,13 @@ func convertExtraValueToDAO(extraValue ExtraValue, analysisResultID uuid.UUID) e
 	}
 }
 
-func convertExtraValuesToDAOs(extraValues []ExtraValue, analysisResultID uuid.UUID) []extraValueDAO{
- extraValueDAOs := make([]extraValueDAO, len(extraValues))
- for i := range extraValues {
-	 extraValueDAOs[i] = convertExtraValueToDAO(extraValues[i], analysisResultID)
- }
- return extraValueDAOs
+func convertExtraValuesToDAOs(extraValues []ExtraValue, analysisResultID uuid.UUID) []extraValueDAO {
+	extraValueDAOs := make([]extraValueDAO, len(extraValues))
+	for i := range extraValues {
+		extraValueDAOs[i] = convertExtraValueToDAO(extraValues[i], analysisResultID)
+	}
+	return extraValueDAOs
 }
-
 
 func convertQuantiativeResultsToDAOs(quantitativeResults map[string]string, channelResultID uuid.UUID) []quantitativeChannelResultDAO {
 	DAOs := make([]quantitativeChannelResultDAO, len(quantitativeResults))
@@ -599,6 +567,40 @@ func convertQuantiativeResultsToDAOs(quantitativeResults map[string]string, chan
 	return DAOs
 }
 
+func convertReagentInfoToDAO(reagentInfo ReagentInfo, analysisResultID uuid.UUID) reagentInfoDAO {
+	return reagentInfoDAO{
+		AnalysisResultID:        analysisResultID,
+		SerialNumber:            reagentInfo.SerialNumber,
+		Name:                    reagentInfo.Name,
+		Code:                    reagentInfo.Code,
+		ShelfLife:               reagentInfo.ShelfLife,
+		LotNo:                   reagentInfo.LotNo,
+		ManufacturerName:        reagentInfo.ManufacturerName,
+		ReagentManufacturerDate: reagentInfo.ReagentManufacturerDate,
+		ReagentType:             reagentInfo.ReagentType,
+		UseUntil:                reagentInfo.UseUntil,
+	}
+}
+
+func convertReagentInfosToDAOs(reagentInfos []ReagentInfo, analysisResultID uuid.UUID) []reagentInfoDAO {
+	reagentInfoDAOs := make([]reagentInfoDAO, len(reagentInfos))
+	for i := range reagentInfos {
+		reagentInfoDAOs[i] = convertReagentInfoToDAO(reagentInfos[i], analysisResultID)
+	}
+	return reagentInfoDAOs
+}
+
+func convertWarningsToDAOs(warnings []string, analysisResultID uuid.UUID) []warningDAO {
+	warningDAOs := make([]warningDAO, len(warnings))
+	for i := range warnings {
+		warningDAOs = append(warningDAOs, warningDAO{
+			AnalysisResultID: analysisResultID,
+			Warning:          warnings[i],
+		})
+	}
+	return warningDAOs
+}
+
 func convertImageToDAO(image Image, analysisResultID uuid.UUID, channelResultID uuid.NullUUID) imageDAO {
 	dao := imageDAO{
 		ID:               image.ID,
@@ -609,7 +611,7 @@ func convertImageToDAO(image Image, analysisResultID uuid.UUID, channelResultID 
 	if image.Description != nil {
 		dao.Description = sql.NullString{
 			String: *image.Description,
-			Valid: len(*image.Description) > 0,
+			Valid:  len(*image.Description) > 0,
 		}
 	}
 	return dao
