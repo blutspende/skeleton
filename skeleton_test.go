@@ -6,9 +6,6 @@ import (
 	"github.com/DRK-Blutspende-BaWueHe/skeleton"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/db"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/migrator"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/model"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/repositories"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/services"
 	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
@@ -37,13 +34,13 @@ func TestSubmitAnalysisResult(t *testing.T) {
 
 
 	dbConn := db.CreateDbConnector(sqlConn)
-	analysisRepository := repositories.NewAnalysisRepository(dbConn, schemaName)
+	analysisRepository := skeleton.NewAnalysisRepository(dbConn, schemaName)
 
-	analysisService := services.NewAnalysisService()
+	analysisService := skeleton.NewAnalysisService()
 	cerberusClientMock := cerberusClientMock{}
 
 	skeletonInstance := skeleton.NewSkeleton(sqlConn, schemaName, migrator.NewSkeletonMigrator(), analysisService, analysisRepository,&cerberusClientMock)
-	analysisRequests := []model.AnalysisRequestV1{
+	analysisRequests := []skeleton.AnalysisRequestV1{
 		{
 			ID:             uuid.New(),
 			WorkItemID:     uuid.New(),
@@ -59,14 +56,14 @@ func TestSubmitAnalysisResult(t *testing.T) {
 	_, err = analysisService.CreateAnalysisRequests(context.TODO(), analysisRequests)
 	assert.Nil(t, err)
 
-	err = skeletonInstance.SubmitAnalysisResult(context.TODO(), model.AnalysisResultV1{
+	err = skeletonInstance.SubmitAnalysisResult(context.TODO(), skeleton.AnalysisResultV1{
 		ID:              uuid.UUID{},
 		AnalysisRequest: analysisRequests[0],
-		AnalyteMapping: model.AnalyteMappingV1{
+		AnalyteMapping: skeleton.AnalyteMappingV1{
 			AnalyteID:    uuid.New(),
 			InstrumentID: uuid.New(),
 		},
-		Instrument:               model.InstrumentV1{},
+		Instrument:               skeleton.InstrumentV1{},
 		ResultRecordID:           uuid.UUID{},
 		Result:                   "",
 		Status:                   "",
@@ -93,17 +90,17 @@ func TestSubmitAnalysisResult(t *testing.T) {
 }
 
 type cerberusClientMock struct {
-	AnalysisResults []model.AnalysisResultV1
-	ResponseStatuses []model.AnalysisResultCreateStatusV1
+	AnalysisResults []skeleton.AnalysisResultV1
+	ResponseStatuses []skeleton.AnalysisResultCreateStatusV1
 }
 
-func (m *cerberusClientMock) RegisterInstrument(instrument model.InstrumentV1) error {
+func (m *cerberusClientMock) RegisterInstrument(instrument skeleton.InstrumentV1) error {
 	return nil
 }
 
-func (m *cerberusClientMock) PostAnalysisResultBatch(analysisResults []model.AnalysisResultV1) ([]model.AnalysisResultCreateStatusV1, error) {
+func (m *cerberusClientMock) PostAnalysisResultBatch(analysisResults []skeleton.AnalysisResultV1) ([]skeleton.AnalysisResultCreateStatusV1, error) {
 	m.AnalysisResults = append(m.AnalysisResults, analysisResults...)
-	resp := make([]model.AnalysisResultCreateStatusV1, len(analysisResults))
+	resp := make([]skeleton.AnalysisResultCreateStatusV1, len(analysisResults))
 	for i := range resp {
 		resp[i].Success = true
 	}

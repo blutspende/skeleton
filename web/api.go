@@ -2,11 +2,9 @@ package web
 
 import (
 	"fmt"
-	"net/http/pprof"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/authmanager"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/config"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/services"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/web/middleware"
+	"net/http/pprof"
 	"sync"
 
 	"github.com/rs/zerolog"
@@ -19,9 +17,9 @@ type Api interface {
 }
 
 type api struct {
-	config          *config.Configuration
+	config          *skeleton.Configuration
 	engine          *gin.Engine
-	analysisService services.AnalysisService
+	analysisService skeleton.AnalysisService
 	/*healthHandler               handlers.HealthHandler
 	instrumentsHandler          handlers.Instruments
 	analyteMappingHandler       handlers.AnalyteMapping
@@ -42,8 +40,8 @@ func (api *api) Run() error {
 	}
 }
 
-func NewAPI(config *config.Configuration, authManager authmanager.AuthManager,
-	analysisService services.AnalysisService) Api {
+func NewAPI(config *skeleton.Configuration, authManager skeleton.AuthManager,
+	analysisService skeleton.AnalysisService) Api {
 
 	if config.LogLevel <= zerolog.DebugLevel {
 		gin.SetMode(gin.DebugMode)

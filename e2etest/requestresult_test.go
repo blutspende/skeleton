@@ -1,8 +1,8 @@
 package e2etest
 
 import (
+	v1 "github.com/DRK-Blutspende-BaWueHe/skeleton"
 	"github.com/stretchr/testify/assert"
-	v1 "github.com/DRK-Blutspende-BaWueHe/skeleton/model"
 	"testing"
 )
 

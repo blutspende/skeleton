@@ -2,16 +2,9 @@ package skeleton
 
 import (
 	"context"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/authmanager"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/clients"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/config"
+	bloodlabNet "github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/db"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/migrator"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/model"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/repositories"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/services"
-
-	bloodlabNet "github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 )
@@ -28,11 +21,11 @@ type SkeletonCallbackHandlerV1 interface {
 	// HandleAnalysisRequests is called when the Sekeleton needs to resolve an updated AnalysisRequest
 	// based on data that was probably not processed before. This function is supposed to trigger a
 	// SkeletionAPI.SubmitAnalysisResult on the SkeletonAPI if result-data was found.
-	HandleAnalysisRequests(request []model.AnalysisRequestV1) error
+	HandleAnalysisRequests(request []AnalysisRequestV1) error
 
 	// GetManufacturerTestList is called when the Skeleton requires a list of testnames (strings)
 	// as known to be valid by the manfucaturer of this instrument
-	GetManufacturerTestList() ([]model.SupportedManufacturerTests, error)
+	GetManufacturerTestList() ([]SupportedManufacturerTests, error)
 }
 
 // SkeletonAPI is the interface for accessing the skeleton driver capabilities
@@ -47,13 +40,13 @@ type SkeletonAPI interface {
 	LogDebug(instrumentID uuid.UUID, msg string)
 
 	// GetAnalysisRequestWithNoResults - return those requests that have no results yet
-	GetAnalysisRequestWithNoResults(currentPage, itemsPerPage int) (requests []model.AnalysisRequestV1, maxPages int, err error)
-	GetAnalysisRequestsBySampleCode(sampleCode string) ([]model.AnalysisRequestV1, error)
+	GetAnalysisRequestWithNoResults(currentPage, itemsPerPage int) (requests []AnalysisRequestV1, maxPages int, err error)
+	GetAnalysisRequestsBySampleCode(sampleCode string) ([]AnalysisRequestV1, error)
 
 	// GetAnalysisRequestsBySampleCodes - Return a list of Analysisrequests that contains the sampleCodes
 	// Empty List if nothing is found. Error occurs only on Database-error
-	GetAnalysisRequestsBySampleCodes(sampleCodes []string) ([]model.AnalysisRequestV1, error)
-	GetRequestMappingsByInstrumentID(instrumentID uuid.UUID) ([]model.RequestMappingV1, error)
+	GetAnalysisRequestsBySampleCodes(sampleCodes []string) ([]AnalysisRequestV1, error)
+	GetRequestMappingsByInstrumentID(instrumentID uuid.UUID) ([]RequestMappingV1, error)
 
 	// SubmitAnalysisResult - Submit results to Skeleton and/or Cerberus,
 	//
@@ -64,24 +57,24 @@ type SkeletonAPI interface {
 	//  * SubmitTypeStoreOnly = Store the results and do not send to cerberus
 	// By default this function batches the transmissions by collecting them and
 	// use the batch-endpoint of cerberus for performance reasons
-	SubmitAnalysisResult(ctx context.Context, resultData model.AnalysisResultV1, submitTypes ...model.SubmitType) error
+	SubmitAnalysisResult(ctx context.Context, resultData AnalysisResultV1, submitTypes ...SubmitType) error
 
 	// GetInstrument returns all the settings regarding an instrument
 	// contains AnalyteMappings[] and RequestMappings[]
-	GetInstrument(instrumentID uuid.UUID) (model.InstrumentV1, error)
+	GetInstrument(instrumentID uuid.UUID) (InstrumentV1, error)
 
 	// GetInstruments - Returns a list of instruments configured for this Driverclass
 	// contains AnalyteMappings[] and RequestMappings[]
-	GetInstruments() ([]model.InstrumentV1, error)
+	GetInstruments() ([]InstrumentV1, error)
 
 	// FindAnalyteByManufacturerTestCode - Search for the analyte that is mapped (check ui for more info)
 	// Returns the mapping or model.EmptyAnalyteMapping
-	FindAnalyteByManufacturerTestCode(instrument model.InstrumentV1, testCode string) model.AnalyteMappingV1
+	FindAnalyteByManufacturerTestCode(instrument InstrumentV1, testCode string) AnalyteMappingV1
 
 	// FindResultMapping - Helper function to search for the RESULT mapping
 	// Resultmappings can be made via the ui to translate results
 	// e.g. "+" -> "pos" to be used in a pein datatype
-	FindResultMapping(searchvalue string, mapping []model.ResultMappingV1) (string, error)
+	FindResultMapping(searchvalue string, mapping []ResultMappingV1) (string, error)
 
 	// Start - MUST BE CALLED ON STARTUP
 	// - migrates skeleton database
@@ -90,19 +83,19 @@ type SkeletonAPI interface {
 }
 
 func New(sqlConn *sqlx.DB, dbSchema string) (SkeletonAPI, error) {
-	config, err := config.ReadConfiguration()
+	config, err := ReadConfiguration()
 	if err != nil {
 		return nil, err
 	}
-	authManager := authmanager.NewAuthManager(&config,
-		clients.NewRestyClient(context.Background(), &config, true))
+	authManager := NewAuthManager(&config,
+		NewRestyClient(context.Background(), &config, true))
 	authManager.StartClientCredentialTask(context.Background())
-	internalApiRestyClient := clients.NewRestyClientWithAuthManager(context.Background(), &config, authManager)
-	cerberusClient, err := clients.NewCerberusV1Client(config.CerberusURL, internalApiRestyClient)
-	analysisService := services.NewAnalysisService()
+	internalApiRestyClient := NewRestyClientWithAuthManager(context.Background(), &config, authManager)
+	cerberusClient, err := NewCerberusV1Client(config.CerberusURL, internalApiRestyClient)
+	analysisService := NewAnalysisService()
 	if err != nil {
 		return nil, err
 	}
 	dbConn := db.CreateDbConnector(sqlConn)
-	return NewSkeleton(sqlConn, dbSchema, migrator.NewSkeletonMigrator(), analysisService, repositories.NewAnalysisRepository(dbConn, dbSchema), cerberusClient), nil
+	return NewSkeleton(sqlConn, dbSchema, migrator.NewSkeletonMigrator(), analysisService, NewAnalysisRepository(dbConn, dbSchema), cerberusClient), nil
 }

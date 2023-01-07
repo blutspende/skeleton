@@ -1,8 +1,8 @@
 package middleware
 
 import (
+	authmanager "github.com/DRK-Blutspende-BaWueHe/skeleton"
 	"net/http"
-	authmanager "github.com/DRK-Blutspende-BaWueHe/skeleton/authmanager"
 	"strings"
 	"time"
 

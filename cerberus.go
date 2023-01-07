@@ -1,10 +1,9 @@
-package clients
+package skeleton
 
 import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/model"
 	"net/http"
 	"time"
 
@@ -22,8 +21,8 @@ var (
 )
 
 type CerberusV1 interface {
-	RegisterInstrument(instrument model.InstrumentV1) error
-	PostAnalysisResultBatch(analysisResults []model.AnalysisResultV1) ([]model.AnalysisResultCreateStatusV1, error)
+	RegisterInstrument(instrument InstrumentV1) error
+	PostAnalysisResultBatch(analysisResults []AnalysisResultV1) ([]AnalysisResultCreateStatusV1, error)
 }
 
 type cerberusV1 struct {
@@ -119,7 +118,7 @@ func NewCerberusV1Client(cerberusUrl string, restyClient *resty.Client) (Cerberu
 }
 
 // RegisterInstrument UPdate cerberus with changed instrument-information
-func (cia *cerberusV1) RegisterInstrument(instrument model.InstrumentV1) error {
+func (cia *cerberusV1) RegisterInstrument(instrument InstrumentV1) error {
 	instrumentDTO := ciaInstrumentV1TO{
 		ID:   instrument.ID,
 		Name: instrument.Name,
@@ -149,10 +148,10 @@ func (cia *cerberusV1) RegisterInstrument(instrument model.InstrumentV1) error {
 }
 
 // PostAnalysisResultBatch Submit a list of Analysisresults to Cerberus
-func (cia *cerberusV1) PostAnalysisResultBatch(analysisResults []model.AnalysisResultV1) ([]model.AnalysisResultCreateStatusV1, error) {
+func (cia *cerberusV1) PostAnalysisResultBatch(analysisResults []AnalysisResultV1) ([]AnalysisResultCreateStatusV1, error) {
 
 	if len(analysisResults) == 0 {
-		return []model.AnalysisResultCreateStatusV1{}, nil
+		return []AnalysisResultCreateStatusV1{}, nil
 	}
 
 	analysisResultsTOs := make([]analysisResultV1TO, 0)
@@ -182,20 +181,20 @@ func (cia *cerberusV1) PostAnalysisResultBatch(analysisResults []model.AnalysisR
 		}
 
 		switch ar.Status {
-		case model.Preliminary:
+		case Preliminary:
 			analysisResultTO.Status = "PRE"
-		case model.Final:
+		case Final:
 			analysisResultTO.Status = "FIN"
 		default:
 			return nil, fmt.Errorf("Invalid result-status '%s'", ar.Status) // TODO: Can-it later
 		}
 
 		switch ar.Instrument.ResultMode {
-		case model.Simulation:
+		case Simulation:
 			analysisResultTO.Mode = "SIMULATION"
-		case model.Qualify:
+		case Qualify:
 			analysisResultTO.Mode = "QUALIFY"
-		case model.Production:
+		case Production:
 			analysisResultTO.Mode = "PRODUCTION"
 		default:
 			return nil, fmt.Errorf("Invalid result-mode '%s'", ar.Instrument.ResultMode) // TODO: Can-it later
@@ -236,9 +235,9 @@ func (cia *cerberusV1) PostAnalysisResultBatch(analysisResults []model.AnalysisR
 			}
 
 			switch ri.ReagentType {
-			case model.Reagent:
+			case Reagent:
 				reagentInfoTO.ReagentType = "Reagent"
-			case model.Diluent:
+			case Diluent:
 				reagentInfoTO.ReagentType = "Diluent"
 			default:
 			}
@@ -267,9 +266,9 @@ func (cia *cerberusV1) PostAnalysisResultBatch(analysisResults []model.AnalysisR
 			return nil, err
 		}
 
-		returnAnalysisResultStatus := []model.AnalysisResultCreateStatusV1{}
+		returnAnalysisResultStatus := []AnalysisResultCreateStatusV1{}
 		for i, responseItem := range responseItems {
-			analysisResultStatus := model.AnalysisResultCreateStatusV1{
+			analysisResultStatus := AnalysisResultCreateStatusV1{
 				AnalyisResult:            &analysisResults[i],
 				Success:                  responseItem.ID.Valid,
 				ErrorMessage:             "",

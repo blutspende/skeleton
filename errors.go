@@ -9,7 +9,6 @@ var (
 	InvalidResultType    = fmt.Errorf("Invalid result type")
 	OrderAlreadySent     = fmt.Errorf("Orders already sent")
 
-	ErrSendResultBatchFailed          = fmt.Errorf(MsgSendResultBatchFailed)
 	ErrSendResultBatchPartiallyFailed = fmt.Errorf(MsgSendResultBatchPartiallyFailed)
 	ErrUnmarshalResponseFailed        = fmt.Errorf(MsgUnmarshalResponseFailed)
 	ErrUnmarshalErrorResponseFailed   = fmt.Errorf(MsgUnmarshalErrorResponseFailed)
@@ -63,7 +62,6 @@ const (
 
 	CanNotGetOIDCConfig = "can not get OIDC config"
 
-	MsgSendResultBatchFailed          = "send result batch to cerberus failed"
 	MsgSendResultBatchPartiallyFailed = "send result batch to cerberus partially Failed"
 	MsgUnmarshalResponseFailed        = "unmarshal send result batch response failed"
 	MsgUnmarshalErrorResponseFailed   = "unmarshal send result batch error response failed"

@@ -1,11 +1,11 @@
 package web
 
 import (
+	v1 "github.com/DRK-Blutspende-BaWueHe/skeleton"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"net/http"
-	v1 "github.com/DRK-Blutspende-BaWueHe/skeleton/model"
 	"time"
 )
 
