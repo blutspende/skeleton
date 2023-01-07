@@ -68,11 +68,11 @@ type channelResultDAO struct {
 	ChannelID             uuid.UUID `db:"channel_id"`
 	QualitativeResult     string    `db:"qualitative_result"`
 	QualitativeResultEdit bool      `db:"qualitative_result_edited"`
-	QuantitativeResults   []quantitativeResultDAO
+	QuantitativeResults   []quantitativeChannelResultDAO
 	Images                []imageDAO
 }
 
-type quantitativeResultDAO struct {
+type quantitativeChannelResultDAO struct {
 	ID              uuid.UUID `db:"id"`
 	ChannelResultID uuid.UUID `db:"channel_result_id"`
 	Metric          string    `db:"metric"`
@@ -256,6 +256,50 @@ func (r *analysisRepository) CreateAnalysisResultsBatch(ctx context.Context, ana
 		log.Error().Err(err).Msg("create analysis result batch failed")
 		return []uuid.UUID{}, err
 	}
+
+	extraValuesMap := make(map[uuid.UUID][]ExtraValue)
+	warningsMap := make(map[uuid.UUID][]string)
+	reagentInfosMap := make(map[uuid.UUID][]ReagentInfo)
+	imagesMap := make(map[uuid.UUID]map[uuid.NullUUID][]Image)
+
+	for i := range analysisResults {
+		extraValuesMap[ids[i]] = analysisResults[i].ExtraValues
+		warningsMap[ids[i]] = analysisResults[i].Warnings
+		reagentInfosMap[ids[i]] = analysisResults[i].ReagentInfos
+		imagesMap[ids[i]] = make(map[uuid.NullUUID][]Image)
+		imagesMap[ids[i]][uuid.NullUUID{Valid: false}] = analysisResults[i].Images
+	}
+
+	err = r.createExtraValues(ctx, extraValuesMap)
+	if err != nil {
+		return []uuid.UUID{}, err
+	}
+
+	for i:= range analysisResults {
+		quantitativeChannelResultsMap := make(map[uuid.UUID]map[string]string)
+		channelImagesMap := make(map[uuid.NullUUID][]Image)
+		channelResultIDs, err := r.createChannelResults(ctx, analysisResults[i].ChannelResults, ids[i])
+		if err != nil {
+			return []uuid.UUID{}, err
+		}
+		for j := range analysisResults[i].ChannelResults {
+			quantitativeChannelResultsMap[channelResultIDs[j]] = analysisResults[i].ChannelResults[j].QuantitativeResults
+			channelImagesMap[uuid.NullUUID{UUID:channelResultIDs[j], Valid: true}] = analysisResults[i].ChannelResults[j].Images
+		}
+		imagesMap[ids[i]] = channelImagesMap
+		err = r.createChannelResultQuantitativeValues(ctx, quantitativeChannelResultsMap)
+	}
+
+	err = r.createWarnings(ctx, warningsMap)
+	if err != nil {
+		return []uuid.UUID{}, err
+	}
+
+	err = r.createImages(ctx, imagesMap)
+	if err != nil {
+		return []uuid.UUID{}, err
+	}
+
 	return ids, nil
 }
 
@@ -294,6 +338,130 @@ func (r *analysisRepository) createChannelResults(ctx context.Context, channelRe
 		return []uuid.UUID{}, err
 	}
 	return ids, nil
+}
+
+func (r *analysisRepository) createChannelResultQuantitativeValues(ctx context.Context, quantitativeValuesByChannelResultIDs map[uuid.UUID]map[string]string) error {
+	quantitativeChannelResultDAOs := make([]quantitativeChannelResultDAO, 0)
+	for channelResultID, quantitativeValues := range quantitativeValuesByChannelResultIDs {
+		qrDAOs := convertQuantiativeResultsToDAOs(quantitativeValues, channelResultID)
+		for i := range qrDAOs {
+			qrDAOs[i].ID = uuid.New()
+		}
+		quantitativeChannelResultDAOs = append(quantitativeChannelResultDAOs, qrDAOs...)
+	}
+	if len(quantitativeChannelResultDAOs) == 0 {
+		return nil
+	}
+	query := fmt.Sprintf(`INSERT INTO %s.channel_result_quantitative_results(id, channel_result_id, metric, "value")
+		VALUES(:id, :channel_result_id, :metric, :value);`, r.dbSchema)
+	_, err := r.db.NamedExecContext(ctx, query, quantitativeChannelResultDAOs)
+	if err != nil {
+		log.Error().Err(err).Msg("create channel result quantitative values batch failed")
+		return err
+	}
+	return nil
+}
+
+func (r *analysisRepository) createReagentInfos(ctx context.Context, reagentInfosByAnalysisResultID map[uuid.UUID][]ReagentInfo) error {
+	reagentInfoDAOs := make([]reagentInfoDAO, 0)
+	for analysisResultID, reagentInfos := range reagentInfosByAnalysisResultID {
+		ridaos := convertReagentInfosToDAOs(reagentInfos, analysisResultID)
+		for i := range ridaos {
+			ridaos[i].ID = uuid.New()
+		}
+		reagentInfoDAOs = append(reagentInfoDAOs, ridaos...)
+	}
+	if len(reagentInfoDAOs) == 0 {
+		return nil
+	}
+	query := fmt.Sprintf(`INSERT INTO %s.analysis_result_reagent_info(id, analysis_result_id, serial, name, code, shelfLife, lot_no, manufacturer_name, reagent_manufacturer_date, reagent_type, use_until, date_created)
+		VALUES(:id, :analysis_result_id, :serial, :name, :code, :shelfLife, :lot_no, :manufacturer_name, :reagent_manufacturer_date, :reagent_type, :use_until, :date_created)`, r.dbSchema)
+	_, err := r.db.NamedExecContext(ctx, query, reagentInfoDAOs)
+	if err != nil {
+		log.Error().Err(err).Msg("create analysis result reagent infos failed")
+		return err
+	}
+	return nil
+}
+
+func convertReagentInfoToDAO(reagentInfo ReagentInfo, analysisResultID uuid.UUID) reagentInfoDAO {
+	return reagentInfoDAO{
+		AnalysisResultID:        analysisResultID,
+		SerialNumber:            reagentInfo.SerialNumber,
+		Name:                    reagentInfo.Name,
+		Code:                    reagentInfo.Code,
+		ShelfLife:               reagentInfo.ShelfLife,
+		LotNo:                   reagentInfo.LotNo,
+		ManufacturerName:        reagentInfo.ManufacturerName,
+		ReagentManufacturerDate: reagentInfo.ReagentManufacturerDate,
+		ReagentType:             reagentInfo.ReagentType,
+		UseUntil:                reagentInfo.UseUntil,
+	}
+}
+
+func convertReagentInfosToDAOs(reagentInfos []ReagentInfo, analysisResultID uuid.UUID) []reagentInfoDAO {
+	reagentInfoDAOs := make([]reagentInfoDAO, len(reagentInfos))
+	for i:= range reagentInfos {
+		reagentInfoDAOs[i] = convertReagentInfoToDAO(reagentInfos[i], analysisResultID)
+	}
+	return reagentInfoDAOs
+}
+
+func (r *analysisRepository) createImages(ctx context.Context, images map[uuid.UUID]map[uuid.NullUUID][]Image) error{
+	imageDAOs := make([]imageDAO, 0)
+	for analysisResultID, imagesMap := range images {
+		for channelResultID, images := range imagesMap {
+			idaos := convertImagesToDAOs(images, analysisResultID, channelResultID)
+			for i := range idaos {
+				idaos[i].ID = uuid.New()
+			}
+			imageDAOs = append(imageDAOs, idaos...)
+		}
+	}
+	if len(imageDAOs) == 0 {
+		return nil
+	}
+	query := fmt.Sprintf(`INSERT INTO %s.analysis_result_extravalues(id, analysis_result_id, "key", "value")
+		VALUES(:id, :analysis_result_id, :key, :value)`, r.dbSchema)
+	_, err := r.db.NamedExecContext(ctx, query, imageDAOs)
+	if err != nil {
+		log.Error().Err(err).Msg("create analysis result images failed")
+		return err
+	}
+	return nil
+}
+
+func (r *analysisRepository) createWarnings(ctx context.Context, warningsByAnalysisResultID map[uuid.UUID][]string) error {
+	warningDAOs := make([]warningDAO, 0)
+	for analysisResultID, warnings := range warningsByAnalysisResultID {
+		wdaos := convertWarningsToDAOs(warnings, analysisResultID)
+		for i := range wdaos {
+			wdaos[i].ID = uuid.New()
+		}
+		warningDAOs = append(warningDAOs, wdaos...)
+	}
+	if len(warningDAOs) == 0 {
+		return nil
+	}
+	query := fmt.Sprintf(`INSERT INTO %s.analysis_result_warnings(id, analysis_result_id, warning)
+		VALUES(:id, :analysis_result_id, :warning)`, r.dbSchema)
+	_, err := r.db.NamedExecContext(ctx, query, warningDAOs)
+	if err != nil {
+		log.Error().Err(err).Msg("create analysis result warnings failed")
+		return err
+	}
+	return nil
+}
+
+func convertWarningsToDAOs(warnings []string, analysisResultID uuid.UUID) []warningDAO {
+	warningDAOs := make([]warningDAO, len(warnings))
+	for i:=range warnings {
+		warningDAOs = append(warningDAOs, warningDAO{
+			AnalysisResultID: analysisResultID,
+			Warning:          warnings[i],
+		})
+	}
+	return warningDAOs
 }
 
 func (r *analysisRepository) UpdateResultTransmissionData(ctx context.Context, analysisResultID uuid.UUID, success bool, errorMessage string) error {
@@ -419,10 +587,10 @@ func convertExtraValuesToDAOs(extraValues []ExtraValue, analysisResultID uuid.UU
 }
 
 
-func convertQuantiativeResultsToDAOs(quantitativeResults map[string]string, channelResultID uuid.UUID) []quantitativeResultDAO {
-	DAOs := make([]quantitativeResultDAO, len(quantitativeResults))
+func convertQuantiativeResultsToDAOs(quantitativeResults map[string]string, channelResultID uuid.UUID) []quantitativeChannelResultDAO {
+	DAOs := make([]quantitativeChannelResultDAO, len(quantitativeResults))
 	for metric, value := range quantitativeResults {
-		DAOs = append(DAOs, quantitativeResultDAO{
+		DAOs = append(DAOs, quantitativeChannelResultDAO{
 			ChannelResultID: channelResultID,
 			Metric:          metric,
 			Value:           value,
@@ -431,8 +599,28 @@ func convertQuantiativeResultsToDAOs(quantitativeResults map[string]string, chan
 	return DAOs
 }
 
-func convertImageToDAOs() {
+func convertImageToDAO(image Image, analysisResultID uuid.UUID, channelResultID uuid.NullUUID) imageDAO {
+	dao := imageDAO{
+		ID:               image.ID,
+		AnalysisResultID: analysisResultID,
+		ChannelResultID:  channelResultID,
+		Name:             image.Name,
+	}
+	if image.Description != nil {
+		dao.Description = sql.NullString{
+			String: *image.Description,
+			Valid: len(*image.Description) > 0,
+		}
+	}
+	return dao
+}
 
+func convertImagesToDAOs(images []Image, analysisResultID uuid.UUID, channelResultID uuid.NullUUID) []imageDAO {
+	imageDAOs := make([]imageDAO, len(images))
+	for i := range images {
+		imageDAOs[i] = convertImageToDAO(images[i], analysisResultID, channelResultID)
+	}
+	return imageDAOs
 }
 
 func convertAnalysisRequestDAOToAnalysisRequest(analysisRequest analysisRequestDAO) AnalysisRequest {
