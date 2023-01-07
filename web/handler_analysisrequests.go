@@ -1,13 +1,12 @@
-package api
+package web
 
 import (
-	"astm/skeletonapi"
-	"net/http"
-	"time"
-
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
+	"net/http"
+	v1 "skeleton/v1"
+	"time"
 )
 
 type subjectType string
@@ -73,7 +72,7 @@ func (h *api) CreateAnalysisRequestBatch(c *gin.Context) {
 	}
 
 	// Map TO to model
-	analysisRequests := make([]skeletonapi.AnalysisRequestV1, len(analysisRequestTOs))
+	analysisRequests := make([]v1.AnalysisRequestV1, len(analysisRequestTOs))
 	for i := range analysisRequestTOs {
 		analysisRequests[i].ID = uuid.Nil
 		analysisRequests[i].WorkItemID = analysisRequestTOs[i].WorkItemID
@@ -84,7 +83,7 @@ func (h *api) CreateAnalysisRequestBatch(c *gin.Context) {
 		analysisRequests[i].ValidUntilTime = analysisRequestTOs[i].ValidUntilTime
 		analysisRequests[i].CreatedAt = time.Time{}
 		if analysisRequestTOs[i].Subject != nil {
-			subject := skeletonapi.SubjectInfoV1{
+			subject := v1.SubjectInfoV1{
 				Type:         "",
 				DateOfBirth:  analysisRequestTOs[i].Subject.DateOfBirth,
 				FirstName:    analysisRequestTOs[i].Subject.FirstName,
@@ -96,11 +95,11 @@ func (h *api) CreateAnalysisRequestBatch(c *gin.Context) {
 			}
 			switch analysisRequestTOs[i].Subject.Type {
 			case "DONOR":
-				subject.Type = skeletonapi.Donor
+				subject.Type = v1.Donor
 			case "PERSONAL":
-				subject.Type = skeletonapi.Personal
+				subject.Type = v1.Personal
 			case "PSEUDONYMIZED":
-				subject.Type = skeletonapi.Pseudonym
+				subject.Type = v1.Pseudonym
 			default:
 				log.Error().Err(err).Msg(ErrInvalidSubjectTypeProvidedInAnalysisRequest.Message)
 				//TODO: Add logcom: notify some groups

@@ -1,10 +1,12 @@
 package clients
 
 import (
-	"astm/skeleton/auth"
-	"astm/skeleton/config"
 	"context"
 	"crypto/tls"
+
+	authmanager "skeleton/authmanager"
+
+	"skeleton/config"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -28,7 +30,7 @@ func NewRestyClient(ctx context.Context, configuration *config.Configuration, us
 	return client
 }
 
-func NewRestyClientWithAuthManager(ctx context.Context, configuration *config.Configuration, authManager auth.AuthManager) *resty.Client {
+func NewRestyClientWithAuthManager(ctx context.Context, configuration *config.Configuration, authManager authmanager.AuthManager) *resty.Client {
 	client := resty.New().
 		OnBeforeRequest(configureRequest(ctx, configuration)).
 		OnBeforeRequest(func(client *resty.Client, request *resty.Request) error {

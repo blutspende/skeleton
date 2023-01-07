@@ -1,9 +1,6 @@
 package middleware
 
-import (
-	"astm/skeleton/i18n"
-	"errors"
-)
+import "errors"
 
 // TODO: Update new Error Structure
 type HTTPError struct {
@@ -16,26 +13,26 @@ type HTTPError struct {
 var (
 	InvalidTokenResponse = HTTPError{
 		MessageKey: "40100",
-		Message:    i18n.InvalidTokenMsg,
+		Message:    "Invalid Token",
 	}
 	ErrOpenIDConfiguration = HTTPError{
 		MessageKey: "40099",
-		Message:    i18n.CanNotGetOIDCConfig,
+		Message:    "OIDC .well-known/configuration could not be retrieved",
 	}
 	TokenExpiredResponse = HTTPError{
 		MessageKey: "40101",
-		Message:    i18n.ExpiredTokenMsg,
+		Message:    "Token expired",
 	}
 	ErrInvalidToken = HTTPError{
 		MessageKey: "40100",
-		Message:    i18n.InvalidTokenMsg,
+		Message:    "Invalid Token",
 	}
 	ErrNoPrivileges = HTTPError{
 		MessageKey: "40102",
-		Message:    i18n.NoPrivilegeMsg,
+		Message:    "Not authorized",
 	}
 )
 
 var (
-	ErrFailedToLoadJwks = errors.New(i18n.FailedToLoadJwksMsg)
+	ErrFailedToLoadJwks = errors.New("Failed to load JWKS")
 )

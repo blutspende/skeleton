@@ -1,4 +1,4 @@
-package skeleton
+package v1
 
 import (
 	"time"
@@ -181,7 +181,7 @@ const (
 )
 
 // AnalysisResultV1 - The final result on 'per-workitem' basis to return the result to cerberus.
-// Call SkeletonAPI.SubmitAnalysisResult for submission.
+// Call v1.SubmitAnalysisResult for submission.
 type AnalysisResultV1 struct {
 	ID              uuid.UUID
 	AnalysisRequest AnalysisRequestV1

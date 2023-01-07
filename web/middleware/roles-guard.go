@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"astm/skeleton/i18n"
 	"fmt"
 	"net/http"
 
@@ -22,14 +21,14 @@ func RoleProtection(roles []string, strict, authMode bool) gin.HandlerFunc {
 
 		userObj, ok := c.Get("User")
 		if !ok {
-			log.Error().Msg(i18n.CanNotGetSavedUserFromTokenMsg)
+			log.Error().Msg(ErrInvalidToken.Message)
 			c.AbortWithStatusJSON(http.StatusUnauthorized, ErrInvalidToken)
 			return
 		}
 
 		user, ok := userObj.(UserToken)
 		if !ok {
-			log.Error().Msg(i18n.CanNotParseUserObjectInUserTokenModelMsg)
+			log.Error().Msg(ErrInvalidToken.Message)
 			c.AbortWithStatusJSON(http.StatusUnauthorized, ErrInvalidToken)
 			return
 		}
@@ -41,13 +40,13 @@ func RoleProtection(roles []string, strict, authMode bool) gin.HandlerFunc {
 					return
 				}
 			}
-			log.Error().Msg(fmt.Sprintf(i18n.UserMissingOneOfThisPrivilegesMsg, roles))
+			log.Error().Msg(fmt.Sprintf("%s. roles=%v", ErrNoPrivileges.Message, roles))
 			c.AbortWithStatusJSON(http.StatusUnauthorized, ErrNoPrivileges)
 			return
 		}
 
 		if !containsAll(user.Roles, roles) {
-			log.Error().Msg(fmt.Sprintf(i18n.UserMissingAllPrivilegesMsg, roles))
+			log.Error().Msg(fmt.Sprintf("%s. roles=%v", ErrNoPrivileges.Message, roles))
 			c.AbortWithStatusJSON(http.StatusUnauthorized, ErrNoPrivileges)
 			return
 		}

@@ -1,15 +1,16 @@
-package skeleton
+package services
 
 import (
 	"context"
-	"skeleton/auth"
 	"skeleton/clients"
 	"skeleton/config"
 	"skeleton/db"
 	"skeleton/migrator"
 	"skeleton/repositories"
-	"skeleton/services"
+	v1 "skeleton/v1"
 	"time"
+
+	authmanager "skeleton/authmanager"
 
 	"github.com/jmoiron/sqlx"
 
@@ -18,20 +19,20 @@ import (
 )
 
 type skeleton struct {
-	callBackHandler    SkeletonCallbackHandlerV1
+	callBackHandler    v1.SkeletonCallbackHandlerV1
 	migrator           migrator.SkeletonMigrator
-	analysisService    services.AnalysisService
+	analysisService    AnalysisService
 	analysisRepository repositories.AnalysisRepository
-	resultsBuffer      []AnalysisResultV1
-	resultsChan        chan AnalysisResultV1
-	resultBatchesChan  chan []AnalysisResultV1
+	resultsBuffer      []v1.AnalysisResultV1
+	resultsChan        chan v1.AnalysisResultV1
+	resultBatchesChan  chan []v1.AnalysisResultV1
 	cerberusClient     clients.CerberusV1
 }
 
-func (s *skeleton) SetCallbackHandler(eventHandler skeletonapi.SkeletonCallbackHandlerV1) {
+func (s *skeleton) SetCallbackHandler(eventHandler v1.SkeletonCallbackHandlerV1) {
 	s.callBackHandler = eventHandler
 }
-func (s *skeleton) GetCallbackHandler() skeletonapi.SkeletonCallbackHandlerV1 {
+func (s *skeleton) GetCallbackHandler() v1.SkeletonCallbackHandlerV1 {
 	return s.callBackHandler
 }
 
@@ -47,29 +48,29 @@ func (s *skeleton) LogDebug(instrumentID uuid.UUID, msg string) {
 	log.Debug().Interface("instrumentId", instrumentID).Msg(msg)
 }
 
-func (s *skeleton) GetAnalysisRequestWithNoResults(currentPage, itemsPerPage int) (requests []skeletonapi.AnalysisRequestV1, maxPages int, err error) {
+func (s *skeleton) GetAnalysisRequestWithNoResults(currentPage, itemsPerPage int) (requests []v1.AnalysisRequestV1, maxPages int, err error) {
 
-	return []skeletonapi.AnalysisRequestV1{}, 0, nil
+	return []v1.AnalysisRequestV1{}, 0, nil
 }
 
-func (s *skeleton) GetAnalysisRequestsBySampleCode(sampleCode string) ([]skeletonapi.AnalysisRequestV1, error) {
-	return []skeletonapi.AnalysisRequestV1{}, nil
+func (s *skeleton) GetAnalysisRequestsBySampleCode(sampleCode string) ([]v1.AnalysisRequestV1, error) {
+	return []v1.AnalysisRequestV1{}, nil
 }
 
-func (s *skeleton) GetAnalysisRequestsBySampleCodes(sampleCodes []string) ([]skeletonapi.AnalysisRequestV1, error) {
-	return []skeletonapi.AnalysisRequestV1{}, nil
+func (s *skeleton) GetAnalysisRequestsBySampleCodes(sampleCodes []string) ([]v1.AnalysisRequestV1, error) {
+	return []v1.AnalysisRequestV1{}, nil
 }
 
-func (s *skeleton) GetRequestMappingsByInstrumentID(instrumentID uuid.UUID) ([]skeletonapi.RequestMappingV1, error) {
-	return []skeletonapi.RequestMappingV1{}, nil
+func (s *skeleton) GetRequestMappingsByInstrumentID(instrumentID uuid.UUID) ([]v1.RequestMappingV1, error) {
+	return []v1.RequestMappingV1{}, nil
 }
 
-func (s *skeleton) SubmitAnalysisResult(ctx context.Context, resultData skeletonapi.AnalysisResultV1, submitTypes ...skeletonapi.SubmitType) error {
+func (s *skeleton) SubmitAnalysisResult(ctx context.Context, resultData v1.AnalysisResultV1, submitTypes ...v1.SubmitType) error {
 	tx, err := s.analysisRepository.CreateTransaction()
 	if err != nil {
 		return err
 	}
-	_, err = s.analysisRepository.WithTransaction(tx).CreateAnalysisResultsBatch(ctx, []skeletonapi.AnalysisResultV1{resultData})
+	_, err = s.analysisRepository.WithTransaction(tx).CreateAnalysisResultsBatch(ctx, []v1.AnalysisResultV1{resultData})
 	if err != nil {
 		return err
 	}
@@ -78,19 +79,19 @@ func (s *skeleton) SubmitAnalysisResult(ctx context.Context, resultData skeleton
 	return nil
 }
 
-func (s *skeleton) GetInstrument(instrumentID uuid.UUID) (skeletonapi.InstrumentV1, error) {
-	return skeletonapi.InstrumentV1{}, nil
+func (s *skeleton) GetInstrument(instrumentID uuid.UUID) (v1.InstrumentV1, error) {
+	return v1.InstrumentV1{}, nil
 }
 
-func (s *skeleton) GetInstruments() ([]skeletonapi.InstrumentV1, error) {
-	return []skeletonapi.InstrumentV1{}, nil
+func (s *skeleton) GetInstruments() ([]v1.InstrumentV1, error) {
+	return []v1.InstrumentV1{}, nil
 }
 
-func (s *skeleton) FindAnalyteByManufacturerTestCode(instrument skeletonapi.InstrumentV1, testCode string) skeletonapi.AnalyteMappingV1 {
-	return skeletonapi.AnalyteMappingV1{}
+func (s *skeleton) FindAnalyteByManufacturerTestCode(instrument v1.InstrumentV1, testCode string) v1.AnalyteMappingV1 {
+	return v1.AnalyteMappingV1{}
 }
 
-func (s *skeleton) FindResultMapping(searchvalue string, mapping []skeletonapi.ResultMappingV1) (string, error) {
+func (s *skeleton) FindResultMapping(searchvalue string, mapping []v1.ResultMappingV1) (string, error) {
 	return "", nil
 }
 
@@ -119,11 +120,11 @@ func (s *skeleton) processAnalysisResults(ctx context.Context) {
 			s.resultsBuffer = append(s.resultsBuffer, result)
 			if len(s.resultsBuffer) >= 500 {
 				s.resultBatchesChan <- s.resultsBuffer
-				s.resultsBuffer = make([]skeletonapi.AnalysisResultV1, 0, 500)
+				s.resultsBuffer = make([]v1.AnalysisResultV1, 0, 500)
 			}
 		case <-time.After(3 * time.Second):
 			s.resultBatchesChan <- s.resultsBuffer
-			s.resultsBuffer = make([]skeletonapi.AnalysisResultV1, 0, 500)
+			s.resultsBuffer = make([]v1.AnalysisResultV1, 0, 500)
 		}
 	}
 }
@@ -154,25 +155,25 @@ func (s *skeleton) processAnalysisResultBatches(ctx context.Context) {
 	}
 }
 
-func NewV1(migrator migrator.SkeletonMigrator, analysisService services.AnalysisService, analysisRepository repositories.AnalysisRepository, cerberusClient clients.CerberusV1) skeletonapi.SkeletonAPI {
+func NewV1(migrator migrator.SkeletonMigrator, analysisService AnalysisService, analysisRepository repositories.AnalysisRepository, cerberusClient clients.CerberusV1) v1.SkeletonAPI {
 	return &skeleton{
 		migrator:           migrator,
 		analysisService:    analysisService,
 		analysisRepository: analysisRepository,
 		cerberusClient:     cerberusClient,
-		resultsBuffer:      make([]skeletonapi.AnalysisResultV1, 0, 500),
-		resultsChan:        make(chan skeletonapi.AnalysisResultV1, 500),
-		resultBatchesChan:  make(chan []skeletonapi.AnalysisResultV1, 10),
+		resultsBuffer:      make([]v1.AnalysisResultV1, 0, 500),
+		resultsChan:        make(chan v1.AnalysisResultV1, 500),
+		resultBatchesChan:  make(chan []v1.AnalysisResultV1, 10),
 	}
 }
 
-func NewV1Default(sqlConn *sqlx.DB, dbSchema string, config *config.Configuration) (skeletonapi.SkeletonAPI, error) {
-	authManager := auth.NewAuthManager(config,
+func NewV1Default(sqlConn *sqlx.DB, dbSchema string, config *config.Configuration) (v1.SkeletonAPI, error) {
+	authManager := authmanager.NewAuthManager(config,
 		clients.NewRestyClient(context.Background(), config, true))
 	authManager.StartClientCredentialTask(context.Background())
 	internalApiRestyClient := clients.NewRestyClientWithAuthManager(context.Background(), config, authManager)
 	cerberusClient, err := clients.NewCerberusV1Client(config.CerberusURL, internalApiRestyClient)
-	analysisService := services.NewAnalysisService()
+	analysisService := NewAnalysisService()
 	if err != nil {
 		return nil, err
 	}

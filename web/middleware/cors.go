@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"astm/skeleton/config"
+	"skeleton/config"
 	"strings"
 
 	"github.com/gin-contrib/cors"

@@ -1,8 +1,8 @@
 package db
 
 import (
-	"astm/skeleton/config"
 	"fmt"
+	"skeleton/config"
 
 	"github.com/jmoiron/sqlx"
 	// Need this import for sqlx

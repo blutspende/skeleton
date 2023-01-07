@@ -1,7 +1,7 @@
 package utils_test
 
 import (
-	"astm/skeleton/utils"
+	"skeleton/utils"
 	"testing"
 
 	"github.com/stretchr/testify/assert"

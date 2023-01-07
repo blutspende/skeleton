@@ -1,21 +1,21 @@
 package services
 
 import (
-	"astm/skeletonapi"
 	"context"
+	v1 "skeleton/v1"
 )
 
 type AnalysisService interface {
-	CreateAnalysisRequests(ctx context.Context, requests []skeletonapi.AnalysisRequestV1) ([]skeletonapi.AnalysisRequestStatusV1, error)
+	CreateAnalysisRequests(ctx context.Context, requests []v1.AnalysisRequestV1) ([]v1.AnalysisRequestStatusV1, error)
 }
 
 type analysisService struct {
 	//analysisRequestRepository
 }
 
-func (as *analysisService) CreateAnalysisRequests(ctx context.Context, requests []skeletonapi.AnalysisRequestV1) ([]skeletonapi.AnalysisRequestStatusV1, error) {
+func (as *analysisService) CreateAnalysisRequests(ctx context.Context, requests []v1.AnalysisRequestV1) ([]v1.AnalysisRequestStatusV1, error) {
 
-	return []skeletonapi.AnalysisRequestStatusV1{}, nil
+	return []v1.AnalysisRequestStatusV1{}, nil
 }
 
 func NewAnalysisService() AnalysisService {

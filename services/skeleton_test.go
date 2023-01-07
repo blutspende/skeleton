@@ -1,19 +1,18 @@
-package skeleton_test
+package services_test
 
 import (
-	"astm/skeleton"
-	"astm/skeleton/config"
-	"astm/skeleton/db"
-	"astm/skeleton/migrator"
-	"astm/skeleton/repositories"
-	"astm/skeleton/services"
-	"astm/skeletonapi"
 	"context"
 	"fmt"
 	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/assert"
+	"skeleton/config"
+	"skeleton/db"
+	"skeleton/migrator"
+	"skeleton/repositories"
+	"skeleton/services"
+	"skeleton/v1"
 	"testing"
 	"time"
 )
@@ -49,8 +48,8 @@ func TestSubmitAnalysisResult(t *testing.T) {
 
 	analysisService := services.NewAnalysisService()
 
-	skeleton := skeleton.NewV1(migrator.NewSkeletonMigrator(), analysisService, analysisRepository, &cerberusClientMock{})
-	analysisRequests := []skeletonapi.AnalysisRequestV1{
+	skeleton := NewV1(migrator.NewSkeletonMigrator(), analysisService, analysisRepository, &cerberusClientMock{})
+	analysisRequests := []v1.AnalysisRequestV1{
 		{
 			ID:             uuid.New(),
 			WorkItemID:     uuid.New(),
@@ -64,14 +63,14 @@ func TestSubmitAnalysisResult(t *testing.T) {
 		},
 	}
 	analysisService.CreateAnalysisRequests(context.TODO(), analysisRequests)
-	skeleton.SubmitAnalysisResult(context.TODO(), skeletonapi.AnalysisResultV1{
+	skeleton.SubmitAnalysisResult(context.TODO(), v1.AnalysisResultV1{
 		ID:              uuid.UUID{},
 		AnalysisRequest: analysisRequests[0],
-		AnalyteMapping: skeletonapi.AnalyteMappingV1{
+		AnalyteMapping: v1.AnalyteMappingV1{
 			AnalyteID:    uuid.New(),
 			InstrumentID: uuid.New(),
 		},
-		Instrument:               skeletonapi.InstrumentV1{},
+		Instrument:               v1.InstrumentV1{},
 		ResultRecordID:           uuid.UUID{},
 		Result:                   "",
 		Status:                   "",
@@ -95,16 +94,16 @@ func TestSubmitAnalysisResult(t *testing.T) {
 }
 
 type cerberusClientMock struct {
-	analysisResults []skeletonapi.AnalysisResultV1
+	analysisResults []v1.AnalysisResultV1
 }
 
-func (m *cerberusClientMock) RegisterInstrument(instrument skeletonapi.InstrumentV1) error {
+func (m *cerberusClientMock) RegisterInstrument(instrument v1.InstrumentV1) error {
 	return nil
 }
 
-func (m *cerberusClientMock) PostAnalysisResultBatch(analysisResults []skeletonapi.AnalysisResultV1) ([]skeletonapi.AnalysisResultCreateStatusV1, error) {
+func (m *cerberusClientMock) PostAnalysisResultBatch(analysisResults []v1.AnalysisResultV1) ([]v1.AnalysisResultCreateStatusV1, error) {
 	analysisResults = append(analysisResults, analysisResults...)
-	resp := make([]skeletonapi.AnalysisResultCreateStatusV1, len(analysisResults))
+	resp := make([]v1.AnalysisResultCreateStatusV1, len(analysisResults))
 	for i := range resp {
 		resp[i].Success = true
 	}

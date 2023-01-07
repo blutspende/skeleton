@@ -1,8 +1,8 @@
 package config
 
 import (
-	i18n "astm/skeleton/i18n"
 	"encoding/base64"
+	v1 "skeleton/v1"
 
 	"github.com/rs/zerolog"
 
@@ -60,8 +60,8 @@ func ReadConfiguration() (Configuration, error) {
 	var config Configuration
 	err := envconfig.Process("", &config)
 	if err != nil {
-		err = errors.Wrap(err, i18n.FailedToReadConfigurationMsg)
-		log.Error().Err(err).Msgf("%s\n", i18n.FailedToReadConfigurationMsg)
+		err = errors.Wrap(err, v1.FailedToReadConfigurationMsg)
+		log.Error().Err(err).Msgf("%s\n", v1.FailedToReadConfigurationMsg)
 		return config, err
 	}
 	config.ClientCredentialAuthHeaderValue = base64.StdEncoding.EncodeToString([]byte(config.ClientID + ":" + config.ClientSecret))

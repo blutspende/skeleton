@@ -1,12 +1,11 @@
-package api
+package web
 
 import (
-	"astm/skeleton/api/middleware"
-	"astm/skeleton/auth"
-	"astm/skeleton/config"
-	"astm/skeleton/services"
 	"fmt"
 	"net/http/pprof"
+	"skeleton/config"
+	"skeleton/services"
+	"skeleton/web/middleware"
 	"sync"
 
 	"github.com/rs/zerolog"
@@ -42,7 +41,7 @@ func (api *api) Run() error {
 	}
 }
 
-func NewAPI(config *config.Configuration, authManager auth.AuthManager,
+func NewAPI(config *config.Configuration, authManager authmanager.AuthManager,
 	analysisService services.AnalysisService) Api {
 
 	if config.LogLevel <= zerolog.DebugLevel {

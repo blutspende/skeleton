@@ -1,9 +1,9 @@
-package auth
+package authmanager
 
 import (
-	"astm/skeleton/config"
 	"context"
 	"errors"
+	"skeleton/config"
 	"strings"
 	"sync"
 	"time"

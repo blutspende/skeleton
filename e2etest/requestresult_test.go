@@ -1,31 +1,30 @@
 package e2etest
 
 import (
-	"astm/skeletonapi"
-	"testing"
-
 	"github.com/stretchr/testify/assert"
+	v1 "skeleton/v1"
+	"testing"
 )
 
 type cerberusBackendMock struct {
 	SentAsBatch               bool
-	StoredResultsThatWereSent []skeletonapi.AnalysisResultV1
+	StoredResultsThatWereSent []v1.AnalysisResultV1
 }
 
-func (cbm *cerberusBackendMock) RegisterInstrument(instrument skeletonapi.InstrumentV1) error {
+func (cbm *cerberusBackendMock) RegisterInstrument(instrument v1.InstrumentV1) error {
 	return nil
 }
-func (cbm *cerberusBackendMock) PostAnalysisResultBatch(analysisResults []skeletonapi.AnalysisResultV1) ([]skeletonapi.AnalysisResultCreateStatusV1, error) {
+func (cbm *cerberusBackendMock) PostAnalysisResultBatch(analysisResults []v1.AnalysisResultV1) ([]v1.AnalysisResultCreateStatusV1, error) {
 	cbm.SentAsBatch = true
 	cbm.StoredResultsThatWereSent = append(cbm.StoredResultsThatWereSent, analysisResults...)
-	return []skeletonapi.AnalysisResultCreateStatusV1{}, nil
+	return []v1.AnalysisResultCreateStatusV1{}, nil
 }
 
 func TestResultTransmission(t *testing.T) {
 
 	cerberusBackend := &cerberusBackendMock{
 		SentAsBatch:               false,
-		StoredResultsThatWereSent: []skeletonapi.AnalysisResultV1{},
+		StoredResultsThatWereSent: []v1.AnalysisResultV1{},
 	}
 	// Mock a Request
 

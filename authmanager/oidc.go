@@ -1,4 +1,4 @@
-package auth
+package authmanager
 
 type OpenIDConfiguration struct {
 	Issuer                                                    string   `json:"issuer"`

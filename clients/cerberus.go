@@ -1,12 +1,13 @@
 package clients
 
 import (
-	"astm/skeletonapi"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"time"
+
+	v1 "skeleton/v1"
 
 	"github.com/google/uuid"
 
@@ -15,8 +16,8 @@ import (
 )
 
 type CerberusV1 interface {
-	RegisterInstrument(instrument skeletonapi.InstrumentV1) error
-	PostAnalysisResultBatch(analysisResults []skeletonapi.AnalysisResultV1) ([]skeletonapi.AnalysisResultCreateStatusV1, error)
+	RegisterInstrument(instrument v1.InstrumentV1) error
+	PostAnalysisResultBatch(analysisResults []v1.AnalysisResultV1) ([]v1.AnalysisResultCreateStatusV1, error)
 }
 
 type cerberusV1 struct {
@@ -113,7 +114,7 @@ func NewCerberusV1Client(cerberusUrl string, restyClient *resty.Client) (Cerberu
 }
 
 // RegisterInstrument UPdate cerberus with changed instrument-information
-func (cia *cerberusV1) RegisterInstrument(instrument skeletonapi.InstrumentV1) error {
+func (cia *cerberusV1) RegisterInstrument(instrument v1.InstrumentV1) error {
 	instrumentDTO := ciaInstrumentV1TO{
 		ID:   instrument.ID,
 		Name: instrument.Name,
@@ -143,10 +144,10 @@ func (cia *cerberusV1) RegisterInstrument(instrument skeletonapi.InstrumentV1) e
 }
 
 // PostAnalysisResultBatch Submit a list of Analysisresults to Cerberus
-func (cia *cerberusV1) PostAnalysisResultBatch(analysisResults []skeletonapi.AnalysisResultV1) ([]skeletonapi.AnalysisResultCreateStatusV1, error) {
+func (cia *cerberusV1) PostAnalysisResultBatch(analysisResults []v1.AnalysisResultV1) ([]v1.AnalysisResultCreateStatusV1, error) {
 
 	if len(analysisResults) == 0 {
-		return []skeletonapi.AnalysisResultCreateStatusV1{}, nil
+		return []v1.AnalysisResultCreateStatusV1{}, nil
 	}
 
 	analysisResultsTOs := make([]analysisResultV1TO, 0)
@@ -176,20 +177,20 @@ func (cia *cerberusV1) PostAnalysisResultBatch(analysisResults []skeletonapi.Ana
 		}
 
 		switch ar.Status {
-		case skeletonapi.Preliminary:
+		case v1.Preliminary:
 			analysisResultTO.Status = "PRE"
-		case skeletonapi.Final:
+		case v1.Final:
 			analysisResultTO.Status = "FIN"
 		default:
 			return nil, fmt.Errorf("Invalid result-status '%s'", ar.Status) // TODO: Can-it later
 		}
 
 		switch ar.Instrument.ResultMode {
-		case skeletonapi.Simulation:
+		case v1.Simulation:
 			analysisResultTO.Mode = "SIMULATION"
-		case skeletonapi.Qualify:
+		case v1.Qualify:
 			analysisResultTO.Mode = "QUALIFY"
-		case skeletonapi.Production:
+		case v1.Production:
 			analysisResultTO.Mode = "PRODUCTION"
 		default:
 			return nil, fmt.Errorf("Invalid result-mode '%s'", ar.Instrument.ResultMode) // TODO: Can-it later
@@ -230,9 +231,9 @@ func (cia *cerberusV1) PostAnalysisResultBatch(analysisResults []skeletonapi.Ana
 			}
 
 			switch ri.ReagentType {
-			case skeletonapi.Reagent:
+			case v1.Reagent:
 				reagentInfoTO.ReagentType = "Reagent"
-			case skeletonapi.Diluent:
+			case v1.Diluent:
 				reagentInfoTO.ReagentType = "Diluent"
 			default:
 			}
@@ -247,7 +248,7 @@ func (cia *cerberusV1) PostAnalysisResultBatch(analysisResults []skeletonapi.Ana
 		Post(cia.cerberusUrl + "/v1/analysis-results/batch")
 
 	if err != nil {
-		return nil, fmt.Errorf("%s (%w)", skeletonapi.ErrSendResultBatchFailed, err)
+		return nil, fmt.Errorf("%s (%w)", v1.ErrSendResultBatchFailed, err)
 		// log.Error().Err(err).Msg(i18n.MsgSendResultBatchFailed)
 		//requestBody, _ := json.Marshal(analysisResultsTOs)
 		//TODO:Better soltion for request-logging cia.ciaHistoryService.Create(model.TYPE_AnalysisResultBatch, err.Error(), string(requestBody), 0, nil, analysisResultIDs)
@@ -261,9 +262,9 @@ func (cia *cerberusV1) PostAnalysisResultBatch(analysisResults []skeletonapi.Ana
 			return nil, err
 		}
 
-		returnAnalysisResultStatus := []skeletonapi.AnalysisResultCreateStatusV1{}
+		returnAnalysisResultStatus := []v1.AnalysisResultCreateStatusV1{}
 		for i, responseItem := range responseItems {
-			analysisResultStatus := skeletonapi.AnalysisResultCreateStatusV1{
+			analysisResultStatus := v1.AnalysisResultCreateStatusV1{
 				AnalyisResult:            &analysisResults[i],
 				Success:                  responseItem.ID.Valid,
 				ErrorMessage:             "",
@@ -288,7 +289,7 @@ func (cia *cerberusV1) PostAnalysisResultBatch(analysisResults []skeletonapi.Ana
 }
 
 /*
-func (cia *cerberusV1) PostAnalysisResult(analysisResult skeletonapi.AnalysisResultV1) (skeletonapi.AnalysisResultCreateStatusV1, error) {
+func (cia *cerberusV1) PostAnalysisResult(analysisResult v1.AnalysisResultV1) (v1.AnalysisResultCreateStatusV1, error) {
 		var responseBodyStr string
 		requestBody, _ := json.Marshal(cia.mapAnalysisResultToAnalysisResultDTO(analysisResult))
 		requestBodyStr := string(requestBody)
@@ -322,7 +323,7 @@ func (cia *cerberusV1) PostAnalysisResult(analysisResult skeletonapi.AnalysisRes
 			log.Error().Err(err).Msg("Can not create cia http history")
 		}
 		if resp.StatusCode() == http.StatusAccepted {
-			err = skeletonapi.ErrSendResultBatchPartiallyFailed
+			err = v1.ErrSendResultBatchPartiallyFailed
 		}
 
 		return resp, nil
@@ -330,7 +331,7 @@ func (cia *cerberusV1) PostAnalysisResult(analysisResult skeletonapi.AnalysisRes
 }
 */
 /*
-	func (cia *cerberusV1) mapAnalysisResultToAnalysisResultDTO(analysisRes skeletonapi.AnalysisResultV1) analysisResultV1TO {
+	func (cia *cerberusV1) mapAnalysisResultToAnalysisResultDTO(analysisRes v1.AnalysisResultV1) analysisResultV1TO {
 		return analysisResultV1TO{
 			WorkingItemID:            analysisRes.WorkItemID,
 			ValidUntil:               analysisRes.ValidUntil,
@@ -355,7 +356,7 @@ func (cia *cerberusV1) PostAnalysisResult(analysisResult skeletonapi.AnalysisRes
 		}
 	}
 
-func (cia *cerberusV1) mapImageToImageDTO(images []skeletonapi.ImageV1) []imageV1TO {
+func (cia *cerberusV1) mapImageToImageDTO(images []v1.ImageV1) []imageV1TO {
 	imagesDTO := make([]imageV1TO, 0)
 	for _, image := range images {
 		imagesDTO = append(imagesDTO, imageV1TO{
@@ -368,7 +369,7 @@ func (cia *cerberusV1) mapImageToImageDTO(images []skeletonapi.ImageV1) []imageV
 	return imagesDTO
 }
 
-func (cia *cerberusV1) mapReagentInfoToReagentInfoDTO(reagentInfos []skeletonapi.ReagentInfoV1) []reagentInfoV1TO {
+func (cia *cerberusV1) mapReagentInfoToReagentInfoDTO(reagentInfos []v1.ReagentInfoV1) []reagentInfoV1TO {
 	reagentInfoList := make([]reagentInfoV1TO, 0)
 
 	for _, reagentInfoItem := range reagentInfos {
@@ -387,7 +388,7 @@ func (cia *cerberusV1) mapReagentInfoToReagentInfoDTO(reagentInfos []skeletonapi
 }
 
 // TODO: Eliminate and move to model
-func (cia *cerberusV1) mapExtraValuesToExtraValuesDTO(extraValues []skeletonapi.ExtraValueV1) []extraValueV1TO {
+func (cia *cerberusV1) mapExtraValuesToExtraValuesDTO(extraValues []v1.ExtraValueV1) []extraValueV1TO {
 	extraValueList := make([]extraValueV1TO, 0)
 
 	for _, extraValueItem := range extraValues {
@@ -400,7 +401,7 @@ func (cia *cerberusV1) mapExtraValuesToExtraValuesDTO(extraValues []skeletonapi.
 	return extraValueList
 }
 
-func (cia *cerberusV1) mapChannelResultsToChannelResultsDTO(channels []skeletonapi.ChannelResultV1) []channelResultV1TO {
+func (cia *cerberusV1) mapChannelResultsToChannelResultsDTO(channels []v1.ChannelResultV1) []channelResultV1TO {
 	channelResultList := make([]channelResultV1TO, 0)
 
 	for _, channel := range channels {

@@ -1,20 +1,19 @@
-package skeleton
+package v1
 
 import (
 	"fmt"
-	"skeleton/i18n"
 )
 
 var (
-	CanNotValidateResult = fmt.Errorf(i18n.CanNotValidateResult)
-	InvalidResultType    = fmt.Errorf(i18n.InvalidResultType)
-	OrderAlreadySent     = fmt.Errorf(i18n.OrderAlreadySent)
+	CanNotValidateResult = fmt.Errorf("Can not validate Result")
+	InvalidResultType    = fmt.Errorf("Invalid result type")
+	OrderAlreadySent     = fmt.Errorf("Orders already sent")
 
-	ErrSendResultBatchFailed          = fmt.Errorf(i18n.MsgSendResultBatchFailed)
-	ErrSendResultBatchPartiallyFailed = fmt.Errorf(i18n.MsgSendResultBatchPartiallyFailed)
-	ErrUnmarshalResponseFailed        = fmt.Errorf(i18n.MsgUnmarshalResponseFailed)
-	ErrUnmarshalErrorResponseFailed   = fmt.Errorf(i18n.MsgUnmarshalErrorResponseFailed)
-	ReceiveError                      = fmt.Errorf(i18n.MsgErrorInSkeleton)
+	ErrSendResultBatchFailed          = fmt.Errorf(MsgSendResultBatchFailed)
+	ErrSendResultBatchPartiallyFailed = fmt.Errorf(MsgSendResultBatchPartiallyFailed)
+	ErrUnmarshalResponseFailed        = fmt.Errorf(MsgUnmarshalResponseFailed)
+	ErrUnmarshalErrorResponseFailed   = fmt.Errorf(MsgUnmarshalErrorResponseFailed)
+	ReceiveError                      = fmt.Errorf(MsgErrorInSkeleton)
 )
 
 const (

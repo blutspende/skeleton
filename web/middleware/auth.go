@@ -1,8 +1,8 @@
 package middleware
 
 import (
-	"astm/skeleton/auth"
 	"net/http"
+	authmanager "skeleton/authmanager"
 	"strings"
 	"time"
 
@@ -11,7 +11,7 @@ import (
 )
 
 // CheckAuth - Token Validator for api requests
-func CheckAuth(authManager auth.AuthManager) gin.HandlerFunc {
+func CheckAuth(authManager authmanager.AuthManager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.Request.Header.Get("Authorization")
 		token := strings.Split(authHeader, "Bearer ")

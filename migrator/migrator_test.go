@@ -1,13 +1,13 @@
 package migrator_test
 
 import (
-	"astm/skeleton/migrator"
 	"context"
 	"fmt"
 	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/proullon/ramsql/driver"
 	"github.com/stretchr/testify/assert"
+	"skeleton/migrator"
 	"testing"
 )
 
