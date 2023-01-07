@@ -1,4 +1,4 @@
-module skeleton
+module github.com/DRK-Blutspende-BaWueHe/skeleton
 
 go 1.19
 
