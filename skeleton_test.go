@@ -39,6 +39,10 @@ func TestSubmitAnalysisResult(t *testing.T) {
 	cerberusClientMock := cerberusClientMock{}
 
 	skeletonInstance := skeleton.NewSkeleton(sqlConn, schemaName, migrator.NewSkeletonMigrator(), analysisService, analysisRepository, &cerberusClientMock)
+	func() {
+		err = skeletonInstance.Start()
+		assert.Nil(t, err)
+	}()
 	analysisRequests := []skeleton.AnalysisRequest{
 		{
 			ID:             uuid.New(),
@@ -57,7 +61,7 @@ func TestSubmitAnalysisResult(t *testing.T) {
 
 	instrumentID := uuid.New()
 
-	err = skeletonInstance.SubmitAnalysisResult(context.TODO(), skeleton.AnalysisResult{
+	analysisResult := skeleton.AnalysisResult{
 		ID:              uuid.UUID{},
 		AnalysisRequest: analysisRequests[0],
 		AnalyteMapping: skeleton.AnalyteMapping{
@@ -68,7 +72,7 @@ func TestSubmitAnalysisResult(t *testing.T) {
 			ID: instrumentID,
 		},
 		ResultRecordID:           uuid.UUID{},
-		Result:                   "",
+		Result:                   "pos",
 		Status:                   "",
 		ResultYieldDateTime:      time.Time{},
 		ValidUntil:               time.Time{},
@@ -78,7 +82,7 @@ func TestSubmitAnalysisResult(t *testing.T) {
 		RunCounter:               0,
 		Edited:                   false,
 		EditReason:               "",
-		Warnings:                 nil,
+		Warnings:                 []string{"test warning"},
 		ChannelResults:           nil,
 		ExtraValues:              nil,
 		ReagentInfos:             nil,
@@ -86,10 +90,17 @@ func TestSubmitAnalysisResult(t *testing.T) {
 		IsSentToCerberus:         false,
 		ErrorMessage:             "",
 		RetryCount:               0,
-	})
+	}
+
+	err = skeletonInstance.SubmitAnalysisResult(context.TODO(), analysisResult)
 	assert.Nil(t, err)
 	time.Sleep(4 * time.Second)
 	assert.Equal(t, 1, len(cerberusClientMock.AnalysisResults))
+	assert.Equal(t, analysisRequests[0].WorkItemID, cerberusClientMock.AnalysisResults[0].AnalysisRequest.WorkItemID)
+	assert.Equal(t, analysisRequests[0].SampleCode, cerberusClientMock.AnalysisResults[0].AnalysisRequest.SampleCode)
+	assert.Equal(t, analysisRequests[0].AnalyteID, cerberusClientMock.AnalysisResults[0].AnalysisRequest.AnalyteID)
+	assert.Equal(t, instrumentID, cerberusClientMock.AnalysisResults[0].Instrument.ID)
+	assert.Equal(t, analysisResult.Result, cerberusClientMock.AnalysisResults[0].Result)
 }
 
 type cerberusClientMock struct {

@@ -189,6 +189,7 @@ type AnalysisResult struct {
 	Instrument      Instrument
 	// ResultRecordID - reference to raw result record stored in an implementation-created table
 	ResultRecordID           uuid.UUID
+	BatchID                  uuid.UUID
 	Result                   string
 	Status                   ResultStatus
 	ResultYieldDateTime      time.Time

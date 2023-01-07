@@ -912,6 +912,7 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_analysis_results
 	instrument_id uuid NOT NULL,
 	instrument_run_id uuid NOT NULL,
     result_record_id uuid NOT NULL,
+    batch_id uuid NOT NULL DEFAULT('00000000-0000-0000-0000-000000000000'),
 	"result" varchar NOT NULL,
     status varchar NOT NULL,
     mode varchar NOT NULL,
@@ -920,7 +921,7 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_analysis_results
     operator varchar NOT NULL,
     edited bool NOT NULL,
     edit_reason varchar,
-	error varchar NOT NULL,
+	error varchar,
 	error_timestamp timestamp NULL,
 	retry_count int4 NOT NULL DEFAULT 0,
 	sent_to_cerberus_at timestamp NULL,
@@ -935,14 +936,13 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_channel_results
     qualitative_result varchar NOT NULL,
 	qualitative_result_edited bool NOT NULL,
 	CONSTRAINT sk_pk_channel_results PRIMARY KEY (id),
-    CONSTRAINT sk_fk_channel_results_analysis_result FOREIGN KEY (analysis_result_id) REFERENCES <SCHEMA_PLACEHOLDER>.sk_analysis_results(id),
-    CONSTRAINT sk_fk_channel_results_channel_mapping FOREIGN KEY (channel_id) REFERENCES <SCHEMA_PLACEHOLDER>.sk_channel_mappings(channel_id)
+    CONSTRAINT sk_fk_channel_results_analysis_result FOREIGN KEY (analysis_result_id) REFERENCES <SCHEMA_PLACEHOLDER>.sk_analysis_results(id)
 );
 
 CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_channel_result_quantitative_values(
     id uuid NOT NULL DEFAULT uuid_generate_v4(),
 	channel_result_id uuid NOT NULL,
-	metric varchar NOT NULL
+	metric varchar NOT NULL,
 	"value" varchar NOT NULL,
     CONSTRAINT sk_pk_channel_result_quantitative_values PRIMARY KEY (id),
     CONSTRAINT sk_fk_channel_result_quantitative_values_channel_result FOREIGN KEY (channel_result_id) REFERENCES <SCHEMA_PLACEHOLDER>.sk_channel_results(id)
@@ -969,7 +969,7 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_analysis_result_reagent_infos(
 	reagent_manufacturer_date timestamp NOT NULL,
 	reagent_type varchar NOT NULL,
 	use_until timestamp NOT NULL,
-	date_created timestamp NOT NULL DEFAULT now()
+	date_created timestamp NOT NULL DEFAULT now(),
     CONSTRAINT sk_pk_analysis_result_reagent_infos PRIMARY KEY (id),
     CONSTRAINT sk_fk_analysis_result_reagent_infos_analysis_result FOREIGN KEY (analysis_result_id) REFERENCES <SCHEMA_PLACEHOLDER>.sk_analysis_results(id)
 );
@@ -981,7 +981,7 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_analysis_result_images(
 	name varchar NOT NULL,
 	description varchar,
     CONSTRAINT sk_pk_analysis_result_images PRIMARY KEY (id),
-    CONSTRAINT sk_fk_analysis_result_images_analysis_result FOREIGN KEY (analysis_result_id) REFERENCES <SCHEMA_PLACEHOLDER>.sk_analysis_results(id)
+    CONSTRAINT sk_fk_analysis_result_images_analysis_result FOREIGN KEY (analysis_result_id) REFERENCES <SCHEMA_PLACEHOLDER>.sk_analysis_results(id),
     CONSTRAINT sk_fk_analysis_result_images_channel_result FOREIGN KEY (channel_result_id) REFERENCES <SCHEMA_PLACEHOLDER>.sk_channel_results(id)
 );
 
@@ -996,15 +996,6 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_analysis_result_warnings(
 CREATE INDEX sk_analysis_result_batch_id ON
 <SCHEMA_PLACEHOLDER>.sk_analysis_results (batch_id);
 
-CREATE INDEX sk_analysis_result_data_result_id ON
-<SCHEMA_PLACEHOLDER>.sk_analysis_results (data_result_id);
-
-CREATE INDEX sk_analysis_result_sample_code ON
-<SCHEMA_PLACEHOLDER>.sk_analysis_results (sample_code);
-
-CREATE INDEX sk_analysis_result_batch_created_at ON
-<SCHEMA_PLACEHOLDER>.sk_analysis_results (batch_created_at);
-
 CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_cia_http_history
 (
 	id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -1012,7 +1003,7 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_cia_http_history
 	status_code int DEFAULT 0,
 	response_body TEXT,
 	request_body TEXT NOT NULL,
-	created_at timestamp DEFAULT now(),
+	created_at timestamp NOT NULL DEFAULT now(),
 	CONSTRAINT pk_cia_history_id_id PRIMARY KEY (id)
 );
 

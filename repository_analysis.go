@@ -43,6 +43,7 @@ type analysisResultDAO struct {
 	InstrumentID      uuid.UUID      `db:"instrument_id"`
 	InstrumentRunID   uuid.UUID      `db:"instrument_run_id"`
 	ResultRecordID    uuid.UUID      `db:"result_record_id"`
+	BatchID           uuid.UUID      `db:"batch_id"`
 	Result            string         `db:"result"`
 	Status            ResultStatus   `db:"status"`
 	ResultMode        ResultMode     `db:"mode"`
@@ -249,7 +250,7 @@ func (r *analysisRepository) CreateAnalysisResultsBatch(ctx context.Context, ana
 	if len(analysisResults) == 0 {
 		return ids, nil
 	}
-	query := fmt.Sprintf(`INSERT INTO %s.analysis_results(id, analysis_request_id, analyte_mapping_id, instrument_id, instrument_run_id, result_record_id, "result", status, mode, yielded_at, valid_until, operator, edited, edit_reason)
+	query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_results(id, analysis_request_id, analyte_mapping_id, instrument_id, instrument_run_id, result_record_id, "result", status, mode, yielded_at, valid_until, operator, edited, edit_reason)
 		VALUES(:id, :analysis_request_id, :analyte_mapping_id, :instrument_id, :instrument_run_id, :result_record_id, :result, :status, :mode, :yielded_at, :valid_until, :operator, :edited, :edit_reason)`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, convertAnalysisResultsToDAOs(analysisResults))
 	if err != nil {
@@ -315,7 +316,7 @@ func (r *analysisRepository) createExtraValues(ctx context.Context, extraValuesB
 	if len(extraValuesDAOs) == 0 {
 		return nil
 	}
-	query := fmt.Sprintf(`INSERT INTO %s.analysis_result_extravalues(id, analysis_result_id, "key", "value")
+	query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_result_extravalues(id, analysis_result_id, "key", "value")
 		VALUES(:id, :analysis_result_id, :key, :value)`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, extraValuesDAOs)
 	if err != nil {
@@ -330,7 +331,7 @@ func (r *analysisRepository) createChannelResults(ctx context.Context, channelRe
 	if len(channelResults) == 0 {
 		return ids, nil
 	}
-	query := fmt.Sprintf(`INSERT INTO %s.channel_results(id, analysis_result_id, channel_id, qualitative_result, qualitative_result_edited)
+	query := fmt.Sprintf(`INSERT INTO %s.sk_channel_results(id, analysis_result_id, channel_id, qualitative_result, qualitative_result_edited)
 		VALUES(:id, :analysis_result_id, :channel_id, :qualitative_result, :qualitative_result_edited);`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, convertChannelResultsToDAOs(channelResults, analysisResultID))
 	if err != nil {
@@ -352,7 +353,7 @@ func (r *analysisRepository) createChannelResultQuantitativeValues(ctx context.C
 	if len(quantitativeChannelResultDAOs) == 0 {
 		return nil
 	}
-	query := fmt.Sprintf(`INSERT INTO %s.channel_result_quantitative_results(id, channel_result_id, metric, "value")
+	query := fmt.Sprintf(`INSERT INTO %s.sk_channel_result_quantitative_results(id, channel_result_id, metric, "value")
 		VALUES(:id, :channel_result_id, :metric, :value);`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, quantitativeChannelResultDAOs)
 	if err != nil {
@@ -374,7 +375,7 @@ func (r *analysisRepository) createReagentInfos(ctx context.Context, reagentInfo
 	if len(reagentInfoDAOs) == 0 {
 		return nil
 	}
-	query := fmt.Sprintf(`INSERT INTO %s.analysis_result_reagent_info(id, analysis_result_id, serial, name, code, shelfLife, lot_no, manufacturer_name, reagent_manufacturer_date, reagent_type, use_until, date_created)
+	query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_result_reagent_info(id, analysis_result_id, serial, name, code, shelfLife, lot_no, manufacturer_name, reagent_manufacturer_date, reagent_type, use_until, date_created)
 		VALUES(:id, :analysis_result_id, :serial, :name, :code, :shelfLife, :lot_no, :manufacturer_name, :reagent_manufacturer_date, :reagent_type, :use_until, :date_created)`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, reagentInfoDAOs)
 	if err != nil {
@@ -398,7 +399,7 @@ func (r *analysisRepository) createImages(ctx context.Context, images map[uuid.U
 	if len(imageDAOs) == 0 {
 		return nil
 	}
-	query := fmt.Sprintf(`INSERT INTO %s.analysis_result_extravalues(id, analysis_result_id, "key", "value")
+	query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_result_extravalues(id, analysis_result_id, "key", "value")
 		VALUES(:id, :analysis_result_id, :key, :value)`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, imageDAOs)
 	if err != nil {
@@ -420,7 +421,7 @@ func (r *analysisRepository) createWarnings(ctx context.Context, warningsByAnaly
 	if len(warningDAOs) == 0 {
 		return nil
 	}
-	query := fmt.Sprintf(`INSERT INTO %s.analysis_result_warnings(id, analysis_result_id, warning)
+	query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_result_warnings(id, analysis_result_id, warning)
 		VALUES(:id, :analysis_result_id, :warning)`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, warningDAOs)
 	if err != nil {
@@ -434,10 +435,10 @@ func (r *analysisRepository) UpdateResultTransmissionData(ctx context.Context, a
 	var query string
 	var err error
 	if success {
-		query = fmt.Sprintf(`UPDATE %s.analysis_results SET sent_to_cerberus_at = timezone('utc',now()) WHERE id = $1;`, r.dbSchema)
+		query = fmt.Sprintf(`UPDATE %s.sk_analysis_results SET sent_to_cerberus_at = timezone('utc',now()) WHERE id = $1;`, r.dbSchema)
 		_, err = r.db.ExecContext(ctx, query, analysisResultID)
 	} else {
-		query = fmt.Sprintf(`UPDATE %s.analysis_results SET retry_count = retry_count + 1, error_message = $2 WHERE id = $1;`, r.dbSchema)
+		query = fmt.Sprintf(`UPDATE %s.sk_analysis_results SET retry_count = retry_count + 1, error_message = $2 WHERE id = $1;`, r.dbSchema)
 		_, err = r.db.ExecContext(ctx, query, analysisResultID, errorMessage)
 	}
 	if err != nil {
