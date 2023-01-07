@@ -2,7 +2,7 @@ package services
 
 import (
 	"context"
-	v1 "skeleton/v1"
+	v1 "skeleton/model"
 )
 
 type AnalysisService interface {

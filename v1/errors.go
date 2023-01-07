@@ -38,7 +38,6 @@ const (
 	UserMissingOneOfThisPrivilegesMsg        = "user missing one of this privileges: %v"
 	UserMissingAllPrivilegesMsg              = "user missing privileges: %v all of these must assign to the user!"
 
-	FailedToReadConfigurationMsg         = "failed to read configuration"
 	InvalidBodyInRequest                 = "can't not bind request body!"
 	InvalidValidUntil                    = "valid until is in the Past!"
 	InvalidDateTimeForValidUntil         = "invalid Datetime for ValidUntilTime"

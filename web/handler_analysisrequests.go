@@ -5,7 +5,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"net/http"
-	v1 "skeleton/v1"
+	v1 "skeleton/model"
 	"time"
 )
 

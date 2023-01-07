@@ -1,4 +1,4 @@
-package v1
+package model
 
 import (
 	"time"
@@ -33,8 +33,8 @@ type AnalysisRequestV1 struct {
 // SubjectInfoV1 - Additional Information about the subject for the AnalysisRequestV1
 // Do not use in implentation directly
 type SubjectInfoV1 struct {
-	Type         SubjectTypeV1
-	DateOfBirth  *time.Time
+	Type        SubjectTypeV1
+	DateOfBirth *time.Time
 	FirstName    *string
 	LastName     *string
 	DonorID      *string
@@ -113,19 +113,19 @@ type ChannelResultV1 struct {
 type InstrumentV1 struct {
 	ID                 uuid.UUID
 	Name               string
-	ProtocolID         uuid.UUID
-	ProtocolName       ProtocolV1
-	CaptureResults     bool
+	ProtocolID      uuid.UUID
+	ProtocolName    ProtocolV1
+	CaptureResults  bool
 	CaptureDiagnostics bool
 	ReplyToQuery       bool
 	Status             string
 	FileEncoding       string
 	Timezone           string
 	Hostname           string
-	ClientPort         int
-	ResultMode         ResultModeV1
-	AnalyteMappings    []AnalyteMappingV1
-	RequestMappings    []RequestMappingV1
+	ClientPort      int
+	ResultMode      ResultModeV1
+	AnalyteMappings []AnalyteMappingV1
+	RequestMappings []RequestMappingV1
 }
 
 type ProtocolV1 string
@@ -134,10 +134,10 @@ type AnalyteMappingV1 struct {
 	ID                uuid.UUID
 	InstrumentID      uuid.UUID
 	InstrumentAnalyte string
-	AnalyteID         uuid.UUID
-	ChannelMappings   []ChannelMappingV1
-	ResultMappings    []ResultMappingV1
-	ResultType        ResultTypeV1
+	AnalyteID       uuid.UUID
+	ChannelMappings []ChannelMappingV1
+	ResultMappings  []ResultMappingV1
+	ResultType      ResultTypeV1
 }
 
 type ChannelMappingV1 struct {
@@ -189,9 +189,9 @@ type AnalysisResultV1 struct {
 	Instrument      InstrumentV1
 	// ResultRecordID - reference to raw result record stored in an implementation-created table
 	ResultRecordID           uuid.UUID
-	Result                   string
-	Status                   ResultStatusV1
-	ResultYieldDateTime      time.Time
+	Result              string
+	Status              ResultStatusV1
+	ResultYieldDateTime time.Time
 	ValidUntil               time.Time
 	Operator                 string
 	TechnicalReleaseDateTime time.Time
@@ -199,12 +199,12 @@ type AnalysisResultV1 struct {
 	RunCounter               int
 	Edited                   bool
 	EditReason               string
-	Warnings                 []string
-	ChannelResults           []ChannelResultV1
-	ExtraValues              []ExtraValueV1
-	ReagentInfos             []ReagentInfoV1
-	Images                   []ImageV1
-	IsSentToCerberus         bool
+	Warnings            []string
+	ChannelResults      []ChannelResultV1
+	ExtraValues         []ExtraValueV1
+	ReagentInfos        []ReagentInfoV1
+	Images              []ImageV1
+	IsSentToCerberus    bool
 	ErrorMessage             string
 	RetryCount               int
 }

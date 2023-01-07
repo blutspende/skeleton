@@ -2,8 +2,6 @@ package config
 
 import (
 	"encoding/base64"
-	v1 "skeleton/v1"
-
 	"github.com/rs/zerolog"
 
 	"github.com/pkg/errors"
@@ -11,6 +9,9 @@ import (
 	"github.com/kelseyhightower/envconfig"
 	"github.com/rs/zerolog/log"
 )
+
+const MsgFailedToReadConfiguration         = "failed to read configuration"
+var ErrFailedToReadConfiguration = errors.New(MsgFailedToReadConfiguration)
 
 type Configuration struct {
 	PostgresDB struct {
@@ -60,8 +61,8 @@ func ReadConfiguration() (Configuration, error) {
 	var config Configuration
 	err := envconfig.Process("", &config)
 	if err != nil {
-		err = errors.Wrap(err, v1.FailedToReadConfigurationMsg)
-		log.Error().Err(err).Msgf("%s\n", v1.FailedToReadConfigurationMsg)
+		err = errors.Wrap(err, MsgFailedToReadConfiguration)
+		log.Error().Err(err).Msgf("%s\n", ErrFailedToReadConfiguration)
 		return config, err
 	}
 	config.ClientCredentialAuthHeaderValue = base64.StdEncoding.EncodeToString([]byte(config.ClientID + ":" + config.ClientSecret))

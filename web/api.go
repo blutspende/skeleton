@@ -3,6 +3,7 @@ package web
 import (
 	"fmt"
 	"net/http/pprof"
+	"skeleton/authmanager"
 	"skeleton/config"
 	"skeleton/services"
 	"skeleton/web/middleware"

@@ -2,7 +2,7 @@ package e2etest
 
 import (
 	"github.com/stretchr/testify/assert"
-	v1 "skeleton/v1"
+	v1 "skeleton/model"
 	"testing"
 )
 

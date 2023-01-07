@@ -5,9 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 	"skeleton/db"
+	v1 "skeleton/model"
 	"time"
-
-	v1 "skeleton/v1"
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
@@ -45,10 +44,10 @@ type analysisResultDAO struct {
 	InstrumentID      uuid.UUID         `db:"instrument_id"`
 	InstrumentRunID   uuid.UUID         `db:"instrument_run_id"`
 	ResultRecordID    uuid.UUID         `db:"result_record_id"`
-	Result            string            `db:"result"`
-	Status            v1.ResultStatusV1 `db:"status"`
-	ResultMode        v1.ResultModeV1   `db:"mode"`
-	YieldedAt         time.Time         `db:"yielded_at"`
+	Result     string            `db:"result"`
+	Status     v1.ResultStatusV1 `db:"status"`
+	ResultMode v1.ResultModeV1   `db:"mode"`
+	YieldedAt  time.Time         `db:"yielded_at"`
 	ValidUntil        time.Time         `db:"valid_until"`
 	Operator          string            `db:"operator"`
 	Edited            bool              `db:"edited"`
