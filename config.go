@@ -10,7 +10,8 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const MsgFailedToReadConfiguration         = "failed to read configuration"
+const MsgFailedToReadConfiguration = "failed to read configuration"
+
 var ErrFailedToReadConfiguration = errors.New(MsgFailedToReadConfiguration)
 
 type Configuration struct {

@@ -7,18 +7,18 @@ import (
 )
 
 const (
-	Universal_Lis2A2 ProtocolV1 = "Universal Lis2A2 (Generic)"
+	Universal_Lis2A2 Protocol = "Universal Lis2A2 (Generic)"
 )
 
 // AnalysisRequestResponseItemV1 - Response of the AnalysisService to indicate the status of the requests
-type AnalysisRequestStatusV1 struct {
-	AnalysisRequest *AnalysisRequestV1
+type AnalysisRequestStatus struct {
+	AnalysisRequest *AnalysisRequest
 	Error           error
 }
 
-// AnalysisRequestV1 - Analysis Request as processed by our AnalysisService
+// AnalysisRequest - Analysis Request as processed by our AnalysisService
 // Do not use in implentation directly
-type AnalysisRequestV1 struct {
+type AnalysisRequest struct {
 	ID             uuid.UUID
 	WorkItemID     uuid.UUID
 	AnalyteID      uuid.UUID
@@ -27,13 +27,13 @@ type AnalysisRequestV1 struct {
 	LaboratoryID   uuid.UUID
 	ValidUntilTime time.Time
 	CreatedAt      time.Time
-	SubjectInfo    *SubjectInfoV1
+	SubjectInfo    *SubjectInfo
 }
 
-// SubjectInfoV1 - Additional Information about the subject for the AnalysisRequestV1
+// SubjectInfo - Additional Information about the subject for the AnalysisRequest
 // Do not use in implentation directly
-type SubjectInfoV1 struct {
-	Type        SubjectTypeV1
+type SubjectInfo struct {
+	Type        SubjectType
 	DateOfBirth *time.Time
 	FirstName    *string
 	LastName     *string
@@ -43,37 +43,37 @@ type SubjectInfoV1 struct {
 	Pseudonym    *string
 }
 
-type ResultModeV1 string
+type ResultMode string
 
 const (
 	// Simulated results will not be transmitted to Cerberus and stay within the driver
-	Simulation ResultModeV1 = "SIMULATION"
+	Simulation ResultMode = "SIMULATION"
 	// Qualification Results are transmitted to cerberus but not returned to any EIA interface
-	Qualify ResultModeV1 = "QUALIFY"
+	Qualify ResultMode = "QUALIFY"
 	// Production allows the results to be returned via EIA
-	Production ResultModeV1 = "PRODUCTION"
+	Production ResultMode = "PRODUCTION"
 )
 
-type ResultStatusV1 string
+type ResultStatus string
 
 const (
 	// Result status required for Cerberus
-	Preliminary ResultStatusV1 = "PRE"
+	Preliminary ResultStatus = "PRE"
 	// Result status required for Cerberus
-	Final ResultStatusV1 = "FIN"
+	Final ResultStatus = "FIN"
 )
 
-type ResultTypeV1 string // nolint
+type ResultType string // nolint
 
 const (
-	Int            ResultTypeV1 = "int"
-	Decimal        ResultTypeV1 = "decimal"
-	BoundedDecimal ResultTypeV1 = "boundedDecimal"
-	String         ResultTypeV1 = "string"
-	Pein           ResultTypeV1 = "pein"
-	React          ResultTypeV1 = "react"
-	InValid        ResultTypeV1 = "invalid"
-	Enum           ResultTypeV1 = "enum"
+	Int            ResultType = "int"
+	Decimal        ResultType = "decimal"
+	BoundedDecimal ResultType = "boundedDecimal"
+	String         ResultType = "string"
+	Pein           ResultType = "pein"
+	React          ResultType = "react"
+	InValid        ResultType = "invalid"
+	Enum           ResultType = "enum"
 )
 
 type ReagentType string
@@ -83,7 +83,7 @@ const (
 	Diluent ReagentType = "Diluent"
 )
 
-type ReagentInfoV1 struct {
+type ReagentInfo struct {
 	SerialNumber            string      `json:"serialNo" db:"serial"`
 	Name                    string      `json:"name" db:"name"`
 	Code                    string      `json:"code" db:"code"`
@@ -96,26 +96,26 @@ type ReagentInfoV1 struct {
 	DateCreated             time.Time   `json:"dateCreated" db:"date_created"`
 }
 
-type ExtraValueV1 struct {
+type ExtraValue struct {
 	Key   string
 	Value string
 }
 
-type ChannelResultV1 struct {
+type ChannelResult struct {
 	ID                    uuid.UUID
 	ChannelID             uuid.UUID
 	QualitativeResult     string
 	QualitativeResultEdit bool
 	QuantitativeResults   map[string]string
-	Images                []ImageV1
+	Images                []Image
 }
 
-type InstrumentV1 struct {
+type Instrument struct {
 	ID                 uuid.UUID
 	Name               string
-	ProtocolID      uuid.UUID
-	ProtocolName    ProtocolV1
-	CaptureResults  bool
+	ProtocolID         uuid.UUID
+	ProtocolName       Protocol
+	CaptureResults     bool
 	CaptureDiagnostics bool
 	ReplyToQuery       bool
 	Status             string
@@ -123,41 +123,41 @@ type InstrumentV1 struct {
 	Timezone           string
 	Hostname           string
 	ClientPort      int
-	ResultMode      ResultModeV1
-	AnalyteMappings []AnalyteMappingV1
-	RequestMappings []RequestMappingV1
+	ResultMode      ResultMode
+	AnalyteMappings []AnalyteMapping
+	RequestMappings    []RequestMapping
 }
 
-type ProtocolV1 string
+type Protocol string
 
-type AnalyteMappingV1 struct {
+type AnalyteMapping struct {
 	ID                uuid.UUID
 	InstrumentID      uuid.UUID
 	InstrumentAnalyte string
-	AnalyteID       uuid.UUID
-	ChannelMappings []ChannelMappingV1
-	ResultMappings  []ResultMappingV1
-	ResultType      ResultTypeV1
+	AnalyteID         uuid.UUID
+	ChannelMappings   []ChannelMapping
+	ResultMappings []ResultMapping
+	ResultType     ResultType
 }
 
-type ChannelMappingV1 struct {
+type ChannelMapping struct {
 	ID                uuid.UUID
 	InstrumentChannel string
 	ChannelID         uuid.UUID
 	AnalyteMappingID  uuid.UUID
 }
 
-// ResultMappingV1 - Maps a ManufacturerTestCode to an AnalyteId (cerberus)
-type ResultMappingV1 struct {
+// ResultMapping - Maps a ManufacturerTestCode to an AnalyteId (cerberus)
+type ResultMapping struct {
 	ID               uuid.UUID
 	AnalyteMappingID uuid.UUID
 	Key              string
 	Value            string
 }
 
-// RequestMappingV1 - Maps ManufacturerTestCode (on Instrument) to one or more Analytes (cerberus)
+// RequestMapping - Maps ManufacturerTestCode (on Instrument) to one or more Analytes (cerberus)
 // for transmission to instrument
-type RequestMappingV1 struct {
+type RequestMapping struct {
 	ID                       uuid.UUID
 	Code                     string
 	InstrumentID             uuid.UUID
@@ -165,32 +165,32 @@ type RequestMappingV1 struct {
 	RequestMappingAnalyteIDs []uuid.UUID
 }
 
-type UploadLogStatusV1 string
+type UploadLogStatus string
 
 const (
-	Success UploadLogStatusV1 = "success"
-	Failed  UploadLogStatusV1 = "failed"
+	Success UploadLogStatus = "success"
+	Failed  UploadLogStatus = "failed"
 )
 
-type SubjectTypeV1 string
+type SubjectType string
 
 const (
-	Donor     SubjectTypeV1 = "DONOR"
-	Personal  SubjectTypeV1 = "PERSONAL"
-	Pseudonym SubjectTypeV1 = "PSEUDONYMIZED"
+	Donor     SubjectType = "DONOR"
+	Personal  SubjectType = "PERSONAL"
+	Pseudonym SubjectType = "PSEUDONYMIZED"
 )
 
-// AnalysisResultV1 - The final result on 'per-workitem' basis to return the result to cerberus.
+// AnalysisResult - The final result on 'per-workitem' basis to return the result to cerberus.
 // Call v1.SubmitAnalysisResult for submission.
-type AnalysisResultV1 struct {
+type AnalysisResult struct {
 	ID              uuid.UUID
-	AnalysisRequest AnalysisRequestV1
-	AnalyteMapping  AnalyteMappingV1
-	Instrument      InstrumentV1
+	AnalysisRequest AnalysisRequest
+	AnalyteMapping AnalyteMapping
+	Instrument     Instrument
 	// ResultRecordID - reference to raw result record stored in an implementation-created table
 	ResultRecordID           uuid.UUID
 	Result              string
-	Status              ResultStatusV1
+	Status              ResultStatus
 	ResultYieldDateTime time.Time
 	ValidUntil               time.Time
 	Operator                 string
@@ -199,25 +199,25 @@ type AnalysisResultV1 struct {
 	RunCounter               int
 	Edited                   bool
 	EditReason               string
-	Warnings            []string
-	ChannelResults      []ChannelResultV1
-	ExtraValues         []ExtraValueV1
-	ReagentInfos        []ReagentInfoV1
-	Images              []ImageV1
-	IsSentToCerberus    bool
+	Warnings                 []string
+	ChannelResults           []ChannelResult
+	ExtraValues              []ExtraValue
+	ReagentInfos             []ReagentInfo
+	Images                   []Image
+	IsSentToCerberus         bool
 	ErrorMessage             string
 	RetryCount               int
 }
 
 type AnalysisResultCreateStatusV1 struct {
-	AnalyisResult            *AnalysisResultV1
+	AnalyisResult            *AnalysisResult
 	Success                  bool
 	ErrorMessage             string
 	CerberusAnalysisResultID uuid.NullUUID
 }
 
-// ImageV1 Images are Id's as returned by the DEA service where they get uploaded to
-type ImageV1 struct {
+// Image Images are Id's as returned by the DEA service where they get uploaded to
+type Image struct {
 	ID          uuid.UUID
 	Name        string
 	Description *string

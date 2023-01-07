@@ -5,16 +5,16 @@ import (
 )
 
 type AnalysisService interface {
-	CreateAnalysisRequests(ctx context.Context, requests []AnalysisRequestV1) ([]AnalysisRequestStatusV1, error)
+	CreateAnalysisRequests(ctx context.Context, requests []AnalysisRequest) ([]AnalysisRequestStatus, error)
 }
 
 type analysisService struct {
 	//analysisRequestRepository
 }
 
-func (as *analysisService) CreateAnalysisRequests(ctx context.Context, requests []AnalysisRequestV1) ([]AnalysisRequestStatusV1, error) {
+func (as *analysisService) CreateAnalysisRequests(ctx context.Context, requests []AnalysisRequest) ([]AnalysisRequestStatus, error) {
 
-	return []AnalysisRequestStatusV1{}, nil
+	return []AnalysisRequestStatus{}, nil
 }
 
 func NewAnalysisService() AnalysisService {

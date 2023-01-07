@@ -72,7 +72,7 @@ func (h *api) CreateAnalysisRequestBatch(c *gin.Context) {
 	}
 
 	// Map TO to model
-	analysisRequests := make([]v1.AnalysisRequestV1, len(analysisRequestTOs))
+	analysisRequests := make([]v1.AnalysisRequest, len(analysisRequestTOs))
 	for i := range analysisRequestTOs {
 		analysisRequests[i].ID = uuid.Nil
 		analysisRequests[i].WorkItemID = analysisRequestTOs[i].WorkItemID
@@ -83,7 +83,7 @@ func (h *api) CreateAnalysisRequestBatch(c *gin.Context) {
 		analysisRequests[i].ValidUntilTime = analysisRequestTOs[i].ValidUntilTime
 		analysisRequests[i].CreatedAt = time.Time{}
 		if analysisRequestTOs[i].Subject != nil {
-			subject := v1.SubjectInfoV1{
+			subject := v1.SubjectInfo{
 				Type:         "",
 				DateOfBirth:  analysisRequestTOs[i].Subject.DateOfBirth,
 				FirstName:    analysisRequestTOs[i].Subject.FirstName,

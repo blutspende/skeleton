@@ -16,13 +16,14 @@ import (
 const (
 	MsgSendResultBatchFailed = "send result batch failed"
 )
+
 var (
 	ErrSendResultBatchFailed = errors.New(MsgSendResultBatchFailed)
 )
 
 type CerberusV1 interface {
-	RegisterInstrument(instrument InstrumentV1) error
-	PostAnalysisResultBatch(analysisResults []AnalysisResultV1) ([]AnalysisResultCreateStatusV1, error)
+	RegisterInstrument(instrument Instrument) error
+	PostAnalysisResultBatch(analysisResults []AnalysisResult) ([]AnalysisResultCreateStatusV1, error)
 }
 
 type cerberusV1 struct {
@@ -118,7 +119,7 @@ func NewCerberusV1Client(cerberusUrl string, restyClient *resty.Client) (Cerberu
 }
 
 // RegisterInstrument UPdate cerberus with changed instrument-information
-func (cia *cerberusV1) RegisterInstrument(instrument InstrumentV1) error {
+func (cia *cerberusV1) RegisterInstrument(instrument Instrument) error {
 	instrumentDTO := ciaInstrumentV1TO{
 		ID:   instrument.ID,
 		Name: instrument.Name,
@@ -148,7 +149,7 @@ func (cia *cerberusV1) RegisterInstrument(instrument InstrumentV1) error {
 }
 
 // PostAnalysisResultBatch Submit a list of Analysisresults to Cerberus
-func (cia *cerberusV1) PostAnalysisResultBatch(analysisResults []AnalysisResultV1) ([]AnalysisResultCreateStatusV1, error) {
+func (cia *cerberusV1) PostAnalysisResultBatch(analysisResults []AnalysisResult) ([]AnalysisResultCreateStatusV1, error) {
 
 	if len(analysisResults) == 0 {
 		return []AnalysisResultCreateStatusV1{}, nil
@@ -293,7 +294,7 @@ func (cia *cerberusV1) PostAnalysisResultBatch(analysisResults []AnalysisResultV
 }
 
 /*
-func (cia *cerberusV1) PostAnalysisResult(analysisResult v1.AnalysisResultV1) (v1.AnalysisResultCreateStatusV1, error) {
+func (cia *cerberusV1) PostAnalysisResult(analysisResult v1.AnalysisResult) (v1.AnalysisResultCreateStatusV1, error) {
 		var responseBodyStr string
 		requestBody, _ := json.Marshal(cia.mapAnalysisResultToAnalysisResultDTO(analysisResult))
 		requestBodyStr := string(requestBody)
@@ -335,7 +336,7 @@ func (cia *cerberusV1) PostAnalysisResult(analysisResult v1.AnalysisResultV1) (v
 }
 */
 /*
-	func (cia *cerberusV1) mapAnalysisResultToAnalysisResultDTO(analysisRes v1.AnalysisResultV1) analysisResultV1TO {
+	func (cia *cerberusV1) mapAnalysisResultToAnalysisResultDTO(analysisRes v1.AnalysisResult) analysisResultV1TO {
 		return analysisResultV1TO{
 			WorkingItemID:            analysisRes.WorkItemID,
 			ValidUntil:               analysisRes.ValidUntil,
@@ -360,7 +361,7 @@ func (cia *cerberusV1) PostAnalysisResult(analysisResult v1.AnalysisResultV1) (v
 		}
 	}
 
-func (cia *cerberusV1) mapImageToImageDTO(images []v1.ImageV1) []imageV1TO {
+func (cia *cerberusV1) mapImageToImageDTO(images []v1.Image) []imageV1TO {
 	imagesDTO := make([]imageV1TO, 0)
 	for _, image := range images {
 		imagesDTO = append(imagesDTO, imageV1TO{
@@ -373,7 +374,7 @@ func (cia *cerberusV1) mapImageToImageDTO(images []v1.ImageV1) []imageV1TO {
 	return imagesDTO
 }
 
-func (cia *cerberusV1) mapReagentInfoToReagentInfoDTO(reagentInfos []v1.ReagentInfoV1) []reagentInfoV1TO {
+func (cia *cerberusV1) mapReagentInfoToReagentInfoDTO(reagentInfos []v1.ReagentInfo) []reagentInfoV1TO {
 	reagentInfoList := make([]reagentInfoV1TO, 0)
 
 	for _, reagentInfoItem := range reagentInfos {
@@ -392,7 +393,7 @@ func (cia *cerberusV1) mapReagentInfoToReagentInfoDTO(reagentInfos []v1.ReagentI
 }
 
 // TODO: Eliminate and move to model
-func (cia *cerberusV1) mapExtraValuesToExtraValuesDTO(extraValues []v1.ExtraValueV1) []extraValueV1TO {
+func (cia *cerberusV1) mapExtraValuesToExtraValuesDTO(extraValues []v1.ExtraValue) []extraValueV1TO {
 	extraValueList := make([]extraValueV1TO, 0)
 
 	for _, extraValueItem := range extraValues {
@@ -405,7 +406,7 @@ func (cia *cerberusV1) mapExtraValuesToExtraValuesDTO(extraValues []v1.ExtraValu
 	return extraValueList
 }
 
-func (cia *cerberusV1) mapChannelResultsToChannelResultsDTO(channels []v1.ChannelResultV1) []channelResultV1TO {
+func (cia *cerberusV1) mapChannelResultsToChannelResultsDTO(channels []v1.ChannelResult) []channelResultV1TO {
 	channelResultList := make([]channelResultV1TO, 0)
 
 	for _, channel := range channels {

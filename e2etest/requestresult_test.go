@@ -8,13 +8,13 @@ import (
 
 type cerberusBackendMock struct {
 	SentAsBatch               bool
-	StoredResultsThatWereSent []v1.AnalysisResultV1
+	StoredResultsThatWereSent []v1.AnalysisResult
 }
 
-func (cbm *cerberusBackendMock) RegisterInstrument(instrument v1.InstrumentV1) error {
+func (cbm *cerberusBackendMock) RegisterInstrument(instrument v1.Instrument) error {
 	return nil
 }
-func (cbm *cerberusBackendMock) PostAnalysisResultBatch(analysisResults []v1.AnalysisResultV1) ([]v1.AnalysisResultCreateStatusV1, error) {
+func (cbm *cerberusBackendMock) PostAnalysisResultBatch(analysisResults []v1.AnalysisResult) ([]v1.AnalysisResultCreateStatusV1, error) {
 	cbm.SentAsBatch = true
 	cbm.StoredResultsThatWereSent = append(cbm.StoredResultsThatWereSent, analysisResults...)
 	return []v1.AnalysisResultCreateStatusV1{}, nil
@@ -24,7 +24,7 @@ func TestResultTransmission(t *testing.T) {
 
 	cerberusBackend := &cerberusBackendMock{
 		SentAsBatch:               false,
-		StoredResultsThatWereSent: []v1.AnalysisResultV1{},
+		StoredResultsThatWereSent: []v1.AnalysisResult{},
 	}
 	// Mock a Request
 

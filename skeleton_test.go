@@ -32,15 +32,14 @@ func TestSubmitAnalysisResult(t *testing.T) {
 	_, err = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
 	assert.Nil(t, err)
 
-
 	dbConn := db.CreateDbConnector(sqlConn)
 	analysisRepository := skeleton.NewAnalysisRepository(dbConn, schemaName)
 
 	analysisService := skeleton.NewAnalysisService()
 	cerberusClientMock := cerberusClientMock{}
 
-	skeletonInstance := skeleton.NewSkeleton(sqlConn, schemaName, migrator.NewSkeletonMigrator(), analysisService, analysisRepository,&cerberusClientMock)
-	analysisRequests := []skeleton.AnalysisRequestV1{
+	skeletonInstance := skeleton.NewSkeleton(sqlConn, schemaName, migrator.NewSkeletonMigrator(), analysisService, analysisRepository, &cerberusClientMock)
+	analysisRequests := []skeleton.AnalysisRequest{
 		{
 			ID:             uuid.New(),
 			WorkItemID:     uuid.New(),
@@ -56,14 +55,14 @@ func TestSubmitAnalysisResult(t *testing.T) {
 	_, err = analysisService.CreateAnalysisRequests(context.TODO(), analysisRequests)
 	assert.Nil(t, err)
 
-	err = skeletonInstance.SubmitAnalysisResult(context.TODO(), skeleton.AnalysisResultV1{
+	err = skeletonInstance.SubmitAnalysisResult(context.TODO(), skeleton.AnalysisResult{
 		ID:              uuid.UUID{},
 		AnalysisRequest: analysisRequests[0],
-		AnalyteMapping: skeleton.AnalyteMappingV1{
+		AnalyteMapping: skeleton.AnalyteMapping{
 			AnalyteID:    uuid.New(),
 			InstrumentID: uuid.New(),
 		},
-		Instrument:               skeleton.InstrumentV1{},
+		Instrument:               skeleton.Instrument{},
 		ResultRecordID:           uuid.UUID{},
 		Result:                   "",
 		Status:                   "",
@@ -90,15 +89,15 @@ func TestSubmitAnalysisResult(t *testing.T) {
 }
 
 type cerberusClientMock struct {
-	AnalysisResults []skeleton.AnalysisResultV1
+	AnalysisResults  []skeleton.AnalysisResult
 	ResponseStatuses []skeleton.AnalysisResultCreateStatusV1
 }
 
-func (m *cerberusClientMock) RegisterInstrument(instrument skeleton.InstrumentV1) error {
+func (m *cerberusClientMock) RegisterInstrument(instrument skeleton.Instrument) error {
 	return nil
 }
 
-func (m *cerberusClientMock) PostAnalysisResultBatch(analysisResults []skeleton.AnalysisResultV1) ([]skeleton.AnalysisResultCreateStatusV1, error) {
+func (m *cerberusClientMock) PostAnalysisResultBatch(analysisResults []skeleton.AnalysisResult) ([]skeleton.AnalysisResultCreateStatusV1, error) {
 	m.AnalysisResults = append(m.AnalysisResults, analysisResults...)
 	resp := make([]skeleton.AnalysisResultCreateStatusV1, len(analysisResults))
 	for i := range resp {

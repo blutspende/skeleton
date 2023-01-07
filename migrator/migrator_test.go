@@ -3,11 +3,11 @@ package migrator_test
 import (
 	"context"
 	"fmt"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/migrator"
 	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/proullon/ramsql/driver"
 	"github.com/stretchr/testify/assert"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/migrator"
 	"testing"
 )
 

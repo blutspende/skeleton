@@ -12,16 +12,16 @@ import (
 )
 
 type skeleton struct {
-	sqlConn *sqlx.DB
-	dbSchema        string
-	callBackHandler SkeletonCallbackHandlerV1
+	sqlConn            *sqlx.DB
+	dbSchema           string
+	callBackHandler    SkeletonCallbackHandlerV1
 	migrator           migrator.SkeletonMigrator
 	analysisService    AnalysisService
 	analysisRepository AnalysisRepository
-	resultsBuffer      []AnalysisResultV1
-	resultsChan        chan AnalysisResultV1
-	resultBatchesChan chan []AnalysisResultV1
-	cerberusClient    CerberusV1
+	resultsBuffer      []AnalysisResult
+	resultsChan        chan AnalysisResult
+	resultBatchesChan  chan []AnalysisResult
+	cerberusClient     CerberusV1
 }
 
 func (s *skeleton) SetCallbackHandler(eventHandler SkeletonCallbackHandlerV1) {
@@ -43,29 +43,29 @@ func (s *skeleton) LogDebug(instrumentID uuid.UUID, msg string) {
 	log.Debug().Interface("instrumentId", instrumentID).Msg(msg)
 }
 
-func (s *skeleton) GetAnalysisRequestWithNoResults(currentPage, itemsPerPage int) (requests []AnalysisRequestV1, maxPages int, err error) {
+func (s *skeleton) GetAnalysisRequestWithNoResults(currentPage, itemsPerPage int) (requests []AnalysisRequest, maxPages int, err error) {
 
-	return []AnalysisRequestV1{}, 0, nil
+	return []AnalysisRequest{}, 0, nil
 }
 
-func (s *skeleton) GetAnalysisRequestsBySampleCode(sampleCode string) ([]AnalysisRequestV1, error) {
-	return []AnalysisRequestV1{}, nil
+func (s *skeleton) GetAnalysisRequestsBySampleCode(sampleCode string) ([]AnalysisRequest, error) {
+	return []AnalysisRequest{}, nil
 }
 
-func (s *skeleton) GetAnalysisRequestsBySampleCodes(sampleCodes []string) ([]AnalysisRequestV1, error) {
-	return []AnalysisRequestV1{}, nil
+func (s *skeleton) GetAnalysisRequestsBySampleCodes(sampleCodes []string) ([]AnalysisRequest, error) {
+	return []AnalysisRequest{}, nil
 }
 
-func (s *skeleton) GetRequestMappingsByInstrumentID(instrumentID uuid.UUID) ([]RequestMappingV1, error) {
-	return []RequestMappingV1{}, nil
+func (s *skeleton) GetRequestMappingsByInstrumentID(instrumentID uuid.UUID) ([]RequestMapping, error) {
+	return []RequestMapping{}, nil
 }
 
-func (s *skeleton) SubmitAnalysisResult(ctx context.Context, resultData AnalysisResultV1, submitTypes ...SubmitType) error {
+func (s *skeleton) SubmitAnalysisResult(ctx context.Context, resultData AnalysisResult, submitTypes ...SubmitType) error {
 	tx, err := s.analysisRepository.CreateTransaction()
 	if err != nil {
 		return err
 	}
-	_, err = s.analysisRepository.WithTransaction(tx).CreateAnalysisResultsBatch(ctx, []AnalysisResultV1{resultData})
+	_, err = s.analysisRepository.WithTransaction(tx).CreateAnalysisResultsBatch(ctx, []AnalysisResult{resultData})
 	if err != nil {
 		return err
 	}
@@ -74,19 +74,19 @@ func (s *skeleton) SubmitAnalysisResult(ctx context.Context, resultData Analysis
 	return nil
 }
 
-func (s *skeleton) GetInstrument(instrumentID uuid.UUID) (InstrumentV1, error) {
-	return InstrumentV1{}, nil
+func (s *skeleton) GetInstrument(instrumentID uuid.UUID) (Instrument, error) {
+	return Instrument{}, nil
 }
 
-func (s *skeleton) GetInstruments() ([]InstrumentV1, error) {
-	return []InstrumentV1{}, nil
+func (s *skeleton) GetInstruments() ([]Instrument, error) {
+	return []Instrument{}, nil
 }
 
-func (s *skeleton) FindAnalyteByManufacturerTestCode(instrument InstrumentV1, testCode string) AnalyteMappingV1 {
-	return AnalyteMappingV1{}
+func (s *skeleton) FindAnalyteByManufacturerTestCode(instrument Instrument, testCode string) AnalyteMapping {
+	return AnalyteMapping{}
 }
 
-func (s *skeleton) FindResultMapping(searchvalue string, mapping []ResultMappingV1) (string, error) {
+func (s *skeleton) FindResultMapping(searchvalue string, mapping []ResultMapping) (string, error) {
 	return "", nil
 }
 
@@ -115,11 +115,11 @@ func (s *skeleton) processAnalysisResults(ctx context.Context) {
 			s.resultsBuffer = append(s.resultsBuffer, result)
 			if len(s.resultsBuffer) >= 500 {
 				s.resultBatchesChan <- s.resultsBuffer
-				s.resultsBuffer = make([]AnalysisResultV1, 0, 500)
+				s.resultsBuffer = make([]AnalysisResult, 0, 500)
 			}
 		case <-time.After(3 * time.Second):
 			s.resultBatchesChan <- s.resultsBuffer
-			s.resultsBuffer = make([]AnalysisResultV1, 0, 500)
+			s.resultsBuffer = make([]AnalysisResult, 0, 500)
 		}
 	}
 }
@@ -152,14 +152,14 @@ func (s *skeleton) processAnalysisResultBatches(ctx context.Context) {
 
 func NewSkeleton(sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, analysisService AnalysisService, analysisRepository AnalysisRepository, cerberusClient CerberusV1) SkeletonAPI {
 	return &skeleton{
-		sqlConn:sqlConn,
-		dbSchema: dbSchema,
+		sqlConn:            sqlConn,
+		dbSchema:           dbSchema,
 		migrator:           migrator,
 		analysisService:    analysisService,
 		analysisRepository: analysisRepository,
 		cerberusClient:     cerberusClient,
-		resultsBuffer:      make([]AnalysisResultV1, 0, 500),
-		resultsChan:        make(chan AnalysisResultV1, 500),
-		resultBatchesChan:  make(chan []AnalysisResultV1, 10),
+		resultsBuffer:      make([]AnalysisResult, 0, 500),
+		resultsChan:        make(chan AnalysisResult, 500),
+		resultBatchesChan:  make(chan []AnalysisResult, 10),
 	}
 }

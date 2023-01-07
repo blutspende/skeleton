@@ -21,7 +21,7 @@ type SkeletonCallbackHandlerV1 interface {
 	// HandleAnalysisRequests is called when the Sekeleton needs to resolve an updated AnalysisRequest
 	// based on data that was probably not processed before. This function is supposed to trigger a
 	// SkeletionAPI.SubmitAnalysisResult on the SkeletonAPI if result-data was found.
-	HandleAnalysisRequests(request []AnalysisRequestV1) error
+	HandleAnalysisRequests(request []AnalysisRequest) error
 
 	// GetManufacturerTestList is called when the Skeleton requires a list of testnames (strings)
 	// as known to be valid by the manfucaturer of this instrument
@@ -40,13 +40,13 @@ type SkeletonAPI interface {
 	LogDebug(instrumentID uuid.UUID, msg string)
 
 	// GetAnalysisRequestWithNoResults - return those requests that have no results yet
-	GetAnalysisRequestWithNoResults(currentPage, itemsPerPage int) (requests []AnalysisRequestV1, maxPages int, err error)
-	GetAnalysisRequestsBySampleCode(sampleCode string) ([]AnalysisRequestV1, error)
+	GetAnalysisRequestWithNoResults(currentPage, itemsPerPage int) (requests []AnalysisRequest, maxPages int, err error)
+	GetAnalysisRequestsBySampleCode(sampleCode string) ([]AnalysisRequest, error)
 
 	// GetAnalysisRequestsBySampleCodes - Return a list of Analysisrequests that contains the sampleCodes
 	// Empty List if nothing is found. Error occurs only on Database-error
-	GetAnalysisRequestsBySampleCodes(sampleCodes []string) ([]AnalysisRequestV1, error)
-	GetRequestMappingsByInstrumentID(instrumentID uuid.UUID) ([]RequestMappingV1, error)
+	GetAnalysisRequestsBySampleCodes(sampleCodes []string) ([]AnalysisRequest, error)
+	GetRequestMappingsByInstrumentID(instrumentID uuid.UUID) ([]RequestMapping, error)
 
 	// SubmitAnalysisResult - Submit results to Skeleton and/or Cerberus,
 	//
@@ -57,24 +57,24 @@ type SkeletonAPI interface {
 	//  * SubmitTypeStoreOnly = Store the results and do not send to cerberus
 	// By default this function batches the transmissions by collecting them and
 	// use the batch-endpoint of cerberus for performance reasons
-	SubmitAnalysisResult(ctx context.Context, resultData AnalysisResultV1, submitTypes ...SubmitType) error
+	SubmitAnalysisResult(ctx context.Context, resultData AnalysisResult, submitTypes ...SubmitType) error
 
 	// GetInstrument returns all the settings regarding an instrument
 	// contains AnalyteMappings[] and RequestMappings[]
-	GetInstrument(instrumentID uuid.UUID) (InstrumentV1, error)
+	GetInstrument(instrumentID uuid.UUID) (Instrument, error)
 
 	// GetInstruments - Returns a list of instruments configured for this Driverclass
 	// contains AnalyteMappings[] and RequestMappings[]
-	GetInstruments() ([]InstrumentV1, error)
+	GetInstruments() ([]Instrument, error)
 
 	// FindAnalyteByManufacturerTestCode - Search for the analyte that is mapped (check ui for more info)
 	// Returns the mapping or model.EmptyAnalyteMapping
-	FindAnalyteByManufacturerTestCode(instrument InstrumentV1, testCode string) AnalyteMappingV1
+	FindAnalyteByManufacturerTestCode(instrument Instrument, testCode string) AnalyteMapping
 
 	// FindResultMapping - Helper function to search for the RESULT mapping
 	// Resultmappings can be made via the ui to translate results
 	// e.g. "+" -> "pos" to be used in a pein datatype
-	FindResultMapping(searchvalue string, mapping []ResultMappingV1) (string, error)
+	FindResultMapping(searchvalue string, mapping []ResultMapping) (string, error)
 
 	// Start - MUST BE CALLED ON STARTUP
 	// - migrates skeleton database
