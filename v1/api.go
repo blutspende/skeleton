@@ -2,7 +2,14 @@ package v1
 
 import (
 	"context"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/authmanager"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/clients"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/config"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/db"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/migrator"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/model"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/repositories"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/services"
 
 	bloodlabNet "github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net"
 	"github.com/google/uuid"
@@ -80,4 +87,18 @@ type SkeletonAPI interface {
 	// - migrates skeleton database
 	// - launches goroutines for analysis request/result processing
 	Start(ctx context.Context, db *sqlx.DB, schemaName string) error
+}
+
+func New(sqlConn *sqlx.DB, dbSchema string, config *config.Configuration) (SkeletonAPI, error) {
+	authManager := authmanager.NewAuthManager(config,
+		clients.NewRestyClient(context.Background(), config, true))
+	authManager.StartClientCredentialTask(context.Background())
+	internalApiRestyClient := clients.NewRestyClientWithAuthManager(context.Background(), config, authManager)
+	cerberusClient, err := clients.NewCerberusV1Client(config.CerberusURL, internalApiRestyClient)
+	analysisService := services.NewAnalysisService()
+	if err != nil {
+		return nil, err
+	}
+	dbConn := db.CreateDbConnector(sqlConn)
+	return services.New(migrator.NewSkeletonMigrator(), analysisService, repositories.NewAnalysisRepository(dbConn, dbSchema), cerberusClient), nil
 }

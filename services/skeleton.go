@@ -3,15 +3,11 @@ package services
 import (
 	"context"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/clients"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/config"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/db"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/migrator"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/model"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/repositories"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/v1"
 	"time"
-
-	authmanager "github.com/DRK-Blutspende-BaWueHe/skeleton/authmanager"
 
 	"github.com/jmoiron/sqlx"
 
@@ -166,18 +162,4 @@ func New(migrator migrator.SkeletonMigrator, analysisService AnalysisService, an
 		resultsChan:        make(chan model.AnalysisResultV1, 500),
 		resultBatchesChan:  make(chan []model.AnalysisResultV1, 10),
 	}
-}
-
-func NewV1Default(sqlConn *sqlx.DB, dbSchema string, config *config.Configuration) (v1.SkeletonAPI, error) {
-	authManager := authmanager.NewAuthManager(config,
-		clients.NewRestyClient(context.Background(), config, true))
-	authManager.StartClientCredentialTask(context.Background())
-	internalApiRestyClient := clients.NewRestyClientWithAuthManager(context.Background(), config, authManager)
-	cerberusClient, err := clients.NewCerberusV1Client(config.CerberusURL, internalApiRestyClient)
-	analysisService := NewAnalysisService()
-	if err != nil {
-		return nil, err
-	}
-	dbConn := db.CreateDbConnector(sqlConn)
-	return New(migrator.NewSkeletonMigrator(), analysisService, repositories.NewAnalysisRepository(dbConn, dbSchema), cerberusClient), nil
 }
