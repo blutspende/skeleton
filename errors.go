@@ -1,4 +1,21 @@
-package i18n
+package skeleton
+
+import (
+	"fmt"
+	"skeleton/i18n"
+)
+
+var (
+	CanNotValidateResult = fmt.Errorf(i18n.CanNotValidateResult)
+	InvalidResultType    = fmt.Errorf(i18n.InvalidResultType)
+	OrderAlreadySent     = fmt.Errorf(i18n.OrderAlreadySent)
+
+	ErrSendResultBatchFailed          = fmt.Errorf(i18n.MsgSendResultBatchFailed)
+	ErrSendResultBatchPartiallyFailed = fmt.Errorf(i18n.MsgSendResultBatchPartiallyFailed)
+	ErrUnmarshalResponseFailed        = fmt.Errorf(i18n.MsgUnmarshalResponseFailed)
+	ErrUnmarshalErrorResponseFailed   = fmt.Errorf(i18n.MsgUnmarshalErrorResponseFailed)
+	ReceiveError                      = fmt.Errorf(i18n.MsgErrorInSkeleton)
+)
 
 const (
 	ApiStartMsg           = "API server astm has been started"
@@ -46,10 +63,7 @@ const (
 	InvalidDataOfRequestMapping  = "the data of request mapping is invalid"
 	OldChannelMappingFoundInList = "old channel mapping not found in given list"
 
-	CanNotValidateResult = "can not validate result, because no mapping found"
-	InvalidResultType    = "wrong result type"
-	CanNotGetOIDCConfig  = "can not get OIDC config"
-	OrderAlreadySent     = "order is already sent, skip it"
+	CanNotGetOIDCConfig = "can not get OIDC config"
 
 	MsgSendResultBatchFailed          = "send result batch to cerberus failed"
 	MsgSendResultBatchPartiallyFailed = "send result batch to cerberus partially Failed"

@@ -1,15 +1,14 @@
 package skeleton
 
 import (
-	"astm/skeleton/auth"
-	"astm/skeleton/clients"
-	"astm/skeleton/config"
-	"astm/skeleton/db"
-	"astm/skeleton/migrator"
-	"astm/skeleton/repositories"
-	"astm/skeleton/services"
-	"astm/skeletonapi"
 	"context"
+	"skeleton/auth"
+	"skeleton/clients"
+	"skeleton/config"
+	"skeleton/db"
+	"skeleton/migrator"
+	"skeleton/repositories"
+	"skeleton/services"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -19,13 +18,13 @@ import (
 )
 
 type skeleton struct {
-	callBackHandler    skeletonapi.SkeletonCallbackHandlerV1
+	callBackHandler    SkeletonCallbackHandlerV1
 	migrator           migrator.SkeletonMigrator
 	analysisService    services.AnalysisService
 	analysisRepository repositories.AnalysisRepository
-	resultsBuffer      []skeletonapi.AnalysisResultV1
-	resultsChan        chan skeletonapi.AnalysisResultV1
-	resultBatchesChan  chan []skeletonapi.AnalysisResultV1
+	resultsBuffer      []AnalysisResultV1
+	resultsChan        chan AnalysisResultV1
+	resultBatchesChan  chan []AnalysisResultV1
 	cerberusClient     clients.CerberusV1
 }
 
