@@ -3,16 +3,16 @@ package services_test
 import (
 	"context"
 	"fmt"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/config"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/db"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/migrator"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/model"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/repositories"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/services"
 	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/assert"
-	"skeleton/config"
-	"skeleton/db"
-	"skeleton/migrator"
-	"skeleton/model"
-	"skeleton/repositories"
-	"skeleton/services"
 	"testing"
 	"time"
 )
@@ -47,8 +47,9 @@ func TestSubmitAnalysisResult(t *testing.T) {
 	analysisRepository := repositories.NewAnalysisRepository(dbConn, schemaName)
 
 	analysisService := services.NewAnalysisService()
+	cerberusClientMock := cerberusClientMock{}
 
-	skeleton := services.New(migrator.NewSkeletonMigrator(), analysisService, analysisRepository, &cerberusClientMock{})
+	skeleton := services.New(migrator.NewSkeletonMigrator(), analysisService, analysisRepository,&cerberusClientMock)
 	analysisRequests := []model.AnalysisRequestV1{
 		{
 			ID:             uuid.New(),
@@ -94,6 +95,8 @@ func TestSubmitAnalysisResult(t *testing.T) {
 		RetryCount:               0,
 	})
 	assert.Nil(t, err)
+	time.Sleep(4 * time.Second)
+	assert.Equal(t, 1, len(cerberusClientMock.AnalysisResults))
 }
 
 type cerberusClientMock struct {
@@ -106,10 +109,11 @@ func (m *cerberusClientMock) RegisterInstrument(instrument model.InstrumentV1) e
 }
 
 func (m *cerberusClientMock) PostAnalysisResultBatch(analysisResults []model.AnalysisResultV1) ([]model.AnalysisResultCreateStatusV1, error) {
-	analysisResults = append(analysisResults, analysisResults...)
+	m.AnalysisResults = append(m.AnalysisResults, analysisResults...)
 	resp := make([]model.AnalysisResultCreateStatusV1, len(analysisResults))
 	for i := range resp {
 		resp[i].Success = true
 	}
+	m.ResponseStatuses = resp
 	return resp, nil
 }

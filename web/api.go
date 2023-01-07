@@ -3,10 +3,10 @@ package web
 import (
 	"fmt"
 	"net/http/pprof"
-	"skeleton/authmanager"
-	"skeleton/config"
-	"skeleton/services"
-	"skeleton/web/middleware"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/authmanager"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/config"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/services"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/web/middleware"
 	"sync"
 
 	"github.com/rs/zerolog"

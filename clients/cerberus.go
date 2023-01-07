@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/model"
+	v1 "github.com/DRK-Blutspende-BaWueHe/skeleton/v1"
 	"net/http"
-	"skeleton/model"
-	v1 "skeleton/v1"
 	"time"
 
 	"github.com/google/uuid"

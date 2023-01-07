@@ -2,7 +2,7 @@ package services
 
 import (
 	"context"
-	v1 "skeleton/model"
+	v1 "github.com/DRK-Blutspende-BaWueHe/skeleton/model"
 )
 
 type AnalysisService interface {

@@ -4,8 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"skeleton/db"
-	v1 "skeleton/model"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/db"
+	v1 "github.com/DRK-Blutspende-BaWueHe/skeleton/model"
 	"time"
 
 	"github.com/google/uuid"

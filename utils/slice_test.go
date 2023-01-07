@@ -1,7 +1,7 @@
 package utils_test
 
 import (
-	"skeleton/utils"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/utils"
 	"testing"
 
 	"github.com/stretchr/testify/assert"

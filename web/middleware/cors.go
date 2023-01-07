@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"skeleton/config"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/config"
 	"strings"
 
 	"github.com/gin-contrib/cors"

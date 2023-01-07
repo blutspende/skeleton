@@ -2,16 +2,16 @@ package services
 
 import (
 	"context"
-	"skeleton/clients"
-	"skeleton/config"
-	"skeleton/db"
-	"skeleton/migrator"
-	"skeleton/model"
-	"skeleton/repositories"
-	"skeleton/v1"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/clients"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/config"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/db"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/migrator"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/model"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/repositories"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/v1"
 	"time"
 
-	authmanager "skeleton/authmanager"
+	authmanager "github.com/DRK-Blutspende-BaWueHe/skeleton/authmanager"
 
 	"github.com/jmoiron/sqlx"
 

@@ -3,7 +3,7 @@ package authmanager
 import (
 	"context"
 	"errors"
-	"skeleton/config"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/config"
 	"strings"
 	"sync"
 	"time"

@@ -2,7 +2,7 @@ package db
 
 import (
 	"fmt"
-	"skeleton/config"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/config"
 
 	"github.com/jmoiron/sqlx"
 	// Need this import for sqlx

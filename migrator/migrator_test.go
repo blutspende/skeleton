@@ -7,7 +7,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	_ "github.com/proullon/ramsql/driver"
 	"github.com/stretchr/testify/assert"
-	"skeleton/migrator"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/migrator"
 	"testing"
 )
 

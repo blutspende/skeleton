@@ -2,7 +2,7 @@ package v1
 
 import (
 	"context"
-	"skeleton/model"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/model"
 
 	bloodlabNet "github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net"
 	"github.com/google/uuid"

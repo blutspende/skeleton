@@ -2,7 +2,7 @@ package middleware
 
 import (
 	"net/http"
-	authmanager "skeleton/authmanager"
+	authmanager "github.com/DRK-Blutspende-BaWueHe/skeleton/authmanager"
 	"strings"
 	"time"
 

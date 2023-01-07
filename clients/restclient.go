@@ -4,9 +4,9 @@ import (
 	"context"
 	"crypto/tls"
 
-	authmanager "skeleton/authmanager"
+	authmanager "github.com/DRK-Blutspende-BaWueHe/skeleton/authmanager"
 
-	"skeleton/config"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/config"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
