@@ -1,4 +1,4 @@
-package v1
+package skeleton
 
 import (
 	"context"
@@ -18,7 +18,7 @@ import (
 
 type SkeletonError error
 
-// SkeletonCallbackHandlerV1 - must implement an Eventhandler to react on Events triggered by Sekelton
+// SkeletonCallbackHandlerV1 - must implement an Eventhandler to react on Events triggered by Skeleton
 type SkeletonCallbackHandlerV1 interface {
 	// HandleIncomingInstrumentData is called when the Instrument has send a message and this one needs to get processed
 	// This method is blocking. The synchroneous processing should be as quick as possible and pass
@@ -86,7 +86,7 @@ type SkeletonAPI interface {
 	// Start - MUST BE CALLED ON STARTUP
 	// - migrates skeleton database
 	// - launches goroutines for analysis request/result processing
-	Start(ctx context.Context, db *sqlx.DB, schemaName string) error
+	Start() error
 }
 
 func New(sqlConn *sqlx.DB, dbSchema string) (SkeletonAPI, error) {
@@ -104,5 +104,5 @@ func New(sqlConn *sqlx.DB, dbSchema string) (SkeletonAPI, error) {
 		return nil, err
 	}
 	dbConn := db.CreateDbConnector(sqlConn)
-	return services.New(migrator.NewSkeletonMigrator(), analysisService, repositories.NewAnalysisRepository(dbConn, dbSchema), cerberusClient), nil
+	return NewSkeleton(sqlConn, dbSchema, migrator.NewSkeletonMigrator(), analysisService, repositories.NewAnalysisRepository(dbConn, dbSchema), cerberusClient), nil
 }

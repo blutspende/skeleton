@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/db"
-	v1 "github.com/DRK-Blutspende-BaWueHe/skeleton/model"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/model"
 	"time"
 
 	"github.com/google/uuid"
@@ -26,9 +26,9 @@ type analysisRequestDAO struct {
 
 type subjectInfoDAO struct {
 	ID                uuid.UUID        `db:"id"`
-	AnalysisRequestID uuid.UUID        `db:"analysis_request_id"`
-	Type              v1.SubjectTypeV1 `db:"type"`
-	DateOfBirth       sql.NullTime     `db:"date_of_birth"`
+	AnalysisRequestID uuid.UUID           `db:"analysis_request_id"`
+	Type              model.SubjectTypeV1 `db:"type"`
+	DateOfBirth       sql.NullTime        `db:"date_of_birth"`
 	FirstName         sql.NullString   `db:"first_name"`
 	LastName          sql.NullString   `db:"last_name"`
 	DonorID           sql.NullString   `db:"donor_id"`
@@ -44,10 +44,10 @@ type analysisResultDAO struct {
 	InstrumentID      uuid.UUID         `db:"instrument_id"`
 	InstrumentRunID   uuid.UUID         `db:"instrument_run_id"`
 	ResultRecordID    uuid.UUID         `db:"result_record_id"`
-	Result     string            `db:"result"`
-	Status     v1.ResultStatusV1 `db:"status"`
-	ResultMode v1.ResultModeV1   `db:"mode"`
-	YieldedAt  time.Time         `db:"yielded_at"`
+	Result     string               `db:"result"`
+	Status     model.ResultStatusV1 `db:"status"`
+	ResultMode model.ResultModeV1   `db:"mode"`
+	YieldedAt  time.Time            `db:"yielded_at"`
 	ValidUntil        time.Time         `db:"valid_until"`
 	Operator          string            `db:"operator"`
 	Edited            bool              `db:"edited"`
@@ -96,9 +96,9 @@ type reagentInfoDAO struct {
 	ShelfLife               time.Time      `db:"shelfLife"`
 	LotNo                   string         `db:"lot_no"`
 	ManufacturerName        string         `db:"manufacturer_name"`
-	ReagentManufacturerDate time.Time      `db:"reagent_manufacturer_date"`
-	ReagentType             v1.ReagentType `db:"reagent_type"`
-	UseUntil                time.Time      `db:"use_until"`
+	ReagentManufacturerDate time.Time         `db:"reagent_manufacturer_date"`
+	ReagentType             model.ReagentType `db:"reagent_type"`
+	UseUntil                time.Time         `db:"use_until"`
 	DateCreated             time.Time      `db:"date_created"`
 }
 
@@ -117,12 +117,12 @@ type warningDAO struct {
 }
 
 type AnalysisRepository interface {
-	CreateAnalysisRequestsBatch(ctx context.Context, analysisRequests []v1.AnalysisRequestV1) ([]uuid.UUID, error)
-	GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string) (map[string][]v1.AnalysisRequestV1, error)
-	CreateSubjectsBatch(ctx context.Context, subjectInfosByAnalysisRequestID map[uuid.UUID]v1.SubjectInfoV1) (map[uuid.UUID]uuid.UUID, error)
-	GetSubjectsByAnalysisRequestIDs(ctx context.Context, analysisRequestIDs []uuid.UUID) (map[uuid.UUID]v1.SubjectInfoV1, error)
+	CreateAnalysisRequestsBatch(ctx context.Context, analysisRequests []model.AnalysisRequestV1) ([]uuid.UUID, error)
+	GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string) (map[string][]model.AnalysisRequestV1, error)
+	CreateSubjectsBatch(ctx context.Context, subjectInfosByAnalysisRequestID map[uuid.UUID]model.SubjectInfoV1) (map[uuid.UUID]uuid.UUID, error)
+	GetSubjectsByAnalysisRequestIDs(ctx context.Context, analysisRequestIDs []uuid.UUID) (map[uuid.UUID]model.SubjectInfoV1, error)
 
-	CreateAnalysisResultsBatch(ctx context.Context, analysisResults []v1.AnalysisResultV1) ([]uuid.UUID, error)
+	CreateAnalysisResultsBatch(ctx context.Context, analysisResults []model.AnalysisResultV1) ([]uuid.UUID, error)
 	UpdateResultTransmissionData(ctx context.Context, analysisResultID uuid.UUID, success bool, errorMessage string) error
 
 	CreateTransaction() (db.DbConnector, error)
@@ -141,7 +141,7 @@ func NewAnalysisRepository(db db.DbConnector, dbSchema string) AnalysisRepositor
 	}
 }
 
-func (r *analysisRepository) CreateAnalysisRequestsBatch(ctx context.Context, analysisRequests []v1.AnalysisRequestV1) ([]uuid.UUID, error) {
+func (r *analysisRepository) CreateAnalysisRequestsBatch(ctx context.Context, analysisRequests []model.AnalysisRequestV1) ([]uuid.UUID, error) {
 	if len(analysisRequests) == 0 {
 		return []uuid.UUID{}, nil
 	}
@@ -159,7 +159,7 @@ func (r *analysisRepository) CreateAnalysisRequestsBatch(ctx context.Context, an
 	return ids, nil
 }
 
-func (r *analysisRepository) CreateSubjectsBatch(ctx context.Context, subjectInfosByAnalysisRequestID map[uuid.UUID]v1.SubjectInfoV1) (map[uuid.UUID]uuid.UUID, error) {
+func (r *analysisRepository) CreateSubjectsBatch(ctx context.Context, subjectInfosByAnalysisRequestID map[uuid.UUID]model.SubjectInfoV1) (map[uuid.UUID]uuid.UUID, error) {
 	idsMap := make(map[uuid.UUID]uuid.UUID)
 	if len(subjectInfosByAnalysisRequestID) == 0 {
 		return idsMap, nil
@@ -182,8 +182,8 @@ func (r *analysisRepository) CreateSubjectsBatch(ctx context.Context, subjectInf
 	return idsMap, nil
 }
 
-func (r *analysisRepository) GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string) (map[string][]v1.AnalysisRequestV1, error) {
-	analysisRequestsBySampleCodes := make(map[string][]v1.AnalysisRequestV1)
+func (r *analysisRepository) GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string) (map[string][]model.AnalysisRequestV1, error) {
+	analysisRequestsBySampleCodes := make(map[string][]model.AnalysisRequestV1)
 	if len(sampleCodes) == 0 {
 		return analysisRequestsBySampleCodes, nil
 	}
@@ -210,7 +210,7 @@ func (r *analysisRepository) GetAnalysisRequestsBySampleCodes(ctx context.Contex
 			return analysisRequestsBySampleCodes, err
 		}
 		if _, ok := analysisRequestsBySampleCodes[request.SampleCode]; !ok {
-			analysisRequestsBySampleCodes[request.SampleCode] = make([]v1.AnalysisRequestV1, 0)
+			analysisRequestsBySampleCodes[request.SampleCode] = make([]model.AnalysisRequestV1, 0)
 		}
 		analysisRequestsBySampleCodes[request.SampleCode] = append(analysisRequestsBySampleCodes[request.SampleCode], convertAnalysisRequestDAOToAnalysisRequest(request))
 	}
@@ -218,8 +218,8 @@ func (r *analysisRepository) GetAnalysisRequestsBySampleCodes(ctx context.Contex
 	return analysisRequestsBySampleCodes, err
 }
 
-func (r *analysisRepository) GetSubjectsByAnalysisRequestIDs(ctx context.Context, analysisRequestIDs []uuid.UUID) (map[uuid.UUID]v1.SubjectInfoV1, error) {
-	subjectsMap := make(map[uuid.UUID]v1.SubjectInfoV1)
+func (r *analysisRepository) GetSubjectsByAnalysisRequestIDs(ctx context.Context, analysisRequestIDs []uuid.UUID) (map[uuid.UUID]model.SubjectInfoV1, error) {
+	subjectsMap := make(map[uuid.UUID]model.SubjectInfoV1)
 	if len(analysisRequestIDs) == 0 {
 		return subjectsMap, nil
 	}
@@ -237,7 +237,7 @@ func (r *analysisRepository) GetSubjectsByAnalysisRequestIDs(ctx context.Context
 		err = rows.StructScan(&subjectDao)
 		if err != nil {
 			log.Error().Err(err).Msg("scan subject info failed")
-			return map[uuid.UUID]v1.SubjectInfoV1{}, err
+			return map[uuid.UUID]model.SubjectInfoV1{}, err
 		}
 		subjectsMap[subjectDao.AnalysisRequestID] = convertSubjectDAOToSubjectInfo(subjectDao)
 	}
@@ -245,15 +245,28 @@ func (r *analysisRepository) GetSubjectsByAnalysisRequestIDs(ctx context.Context
 
 }
 
-func (r *analysisRepository) CreateAnalysisResultsBatch(ctx context.Context, analysisResults []v1.AnalysisResultV1) ([]uuid.UUID, error) {
+func (r *analysisRepository) CreateAnalysisResultsBatch(ctx context.Context, analysisResults []model.AnalysisResultV1) ([]uuid.UUID, error) {
+	ids := make([]uuid.UUID, len(analysisResults))
+	if len(analysisResults) == 0 {
+		return ids, nil
+	}
+	query := fmt.Sprintf(`INSERT INTO %s.analysis_results(id, analysis_request_id, analyte_mapping_id, instrument_id, instrument_run_id, result_record_id, "result", status, mode, yielded_at, valid_until, operator, edited, edit_reason)
+		VALUES(:id, :analysis_request_id, :analyte_mapping_id, :instrument_id, :instrument_run_id, :result_record_id, :result, :status, :mode, :yielded_at, :valid_until, :operator, :edited, :edit_reason)`, r.dbSchema)
+	_, err := r.db.NamedExecContext(ctx, query, convertAnalysisResultsToDAOs(analysisResults))
+	if err != nil {
+		log.Error().Err(err).Msg("Can not create RequestData")
+		return []uuid.UUID{}, err
+	}
+
+	return ids, nil
 	return nil, nil
 }
 
-func (r *analysisRepository) createExtraValues(ctx context.Context, extraValuesByAnalysisRequestIDs map[uuid.UUID][]v1.ExtraValueV1) error {
+func (r *analysisRepository) createExtraValues(ctx context.Context, extraValuesByAnalysisRequestIDs map[uuid.UUID][]model.ExtraValueV1) error {
 	return nil
 }
 
-func (r *analysisRepository) createChannelResult(ctx context.Context, extraValuesByAnalysisRequestIDs map[uuid.UUID][]v1.ExtraValueV1) error {
+func (r *analysisRepository) createChannelResult(ctx context.Context, extraValuesByAnalysisRequestIDs map[uuid.UUID][]model.ExtraValueV1) error {
 	return nil
 }
 
@@ -289,7 +302,7 @@ func (r *analysisRepository) WithTransaction(tx db.DbConnector) AnalysisReposito
 	return &txRepo
 }
 
-func convertAnalysisRequestsToDAOs(analysisRequests []v1.AnalysisRequestV1) []analysisRequestDAO {
+func convertAnalysisRequestsToDAOs(analysisRequests []model.AnalysisRequestV1) []analysisRequestDAO {
 	analysisRequestDAOs := make([]analysisRequestDAO, len(analysisRequests))
 	for i := range analysisRequestDAOs {
 		analysisRequestDAOs[i] = convertAnalysisRequestToDAO(analysisRequests[i])
@@ -297,7 +310,7 @@ func convertAnalysisRequestsToDAOs(analysisRequests []v1.AnalysisRequestV1) []an
 	return analysisRequestDAOs
 }
 
-func convertAnalysisRequestToDAO(analysisRequest v1.AnalysisRequestV1) analysisRequestDAO {
+func convertAnalysisRequestToDAO(analysisRequest model.AnalysisRequestV1) analysisRequestDAO {
 	return analysisRequestDAO{
 		ID:             analysisRequest.ID,
 		WorkItemID:     analysisRequest.WorkItemID,
@@ -310,15 +323,15 @@ func convertAnalysisRequestToDAO(analysisRequest v1.AnalysisRequestV1) analysisR
 	}
 }
 
-func convertAnalysisRequestDAOsToAnalysisRequests(analysisRequestDAOs []analysisRequestDAO) []v1.AnalysisRequestV1 {
-	analysisRequests := make([]v1.AnalysisRequestV1, len(analysisRequestDAOs))
+func convertAnalysisRequestDAOsToAnalysisRequests(analysisRequestDAOs []analysisRequestDAO) []model.AnalysisRequestV1 {
+	analysisRequests := make([]model.AnalysisRequestV1, len(analysisRequestDAOs))
 	for i := range analysisRequestDAOs {
 		analysisRequests[i] = convertAnalysisRequestDAOToAnalysisRequest(analysisRequestDAOs[i])
 	}
 	return analysisRequests
 }
 
-func convertAnalysisResultToDAO(analysisResult v1.AnalysisResultV1) analysisResultDAO {
+func convertAnalysisResultToDAO(analysisResult model.AnalysisResultV1) analysisResultDAO {
 	return analysisResultDAO{
 		ID:                analysisResult.ID,
 		AnalysisRequestID: analysisResult.AnalysisRequest.ID,
@@ -337,7 +350,15 @@ func convertAnalysisResultToDAO(analysisResult v1.AnalysisResultV1) analysisResu
 	}
 }
 
-func convertChannelResultToDAO(channelResult v1.ChannelResultV1, analysisResultID uuid.UUID) channelResultDAO {
+func convertAnalysisResultsToDAOs(analysisResults []model.AnalysisResultV1) []analysisResultDAO {
+	DAOs:= make([]analysisResultDAO, len(analysisResults))
+	for i := range analysisResults {
+		DAOs[i] = convertAnalysisResultToDAO(analysisResults[i])
+	}
+	return DAOs
+}
+
+func convertChannelResultToDAO(channelResult model.ChannelResultV1, analysisResultID uuid.UUID) channelResultDAO {
 	return channelResultDAO{
 		ID:                    channelResult.ID,
 		AnalysisResultID:      analysisResultID,
@@ -363,8 +384,8 @@ func convertImageToDAOs() {
 
 }
 
-func convertAnalysisRequestDAOToAnalysisRequest(analysisRequest analysisRequestDAO) v1.AnalysisRequestV1 {
-	return v1.AnalysisRequestV1{
+func convertAnalysisRequestDAOToAnalysisRequest(analysisRequest analysisRequestDAO) model.AnalysisRequestV1 {
+	return model.AnalysisRequestV1{
 		ID:             analysisRequest.ID,
 		WorkItemID:     analysisRequest.WorkItemID,
 		AnalyteID:      analysisRequest.AnalyteID,
@@ -376,7 +397,7 @@ func convertAnalysisRequestDAOToAnalysisRequest(analysisRequest analysisRequestD
 	}
 }
 
-func convertSubjectToDAO(subject v1.SubjectInfoV1, analysisRequestID uuid.UUID) subjectInfoDAO {
+func convertSubjectToDAO(subject model.SubjectInfoV1, analysisRequestID uuid.UUID) subjectInfoDAO {
 	dao := subjectInfoDAO{
 		AnalysisRequestID: analysisRequestID,
 		Type:              subject.Type,
@@ -405,8 +426,8 @@ func convertSubjectToDAO(subject v1.SubjectInfoV1, analysisRequestID uuid.UUID) 
 	return dao
 }
 
-func convertSubjectDAOToSubjectInfo(subject subjectInfoDAO) v1.SubjectInfoV1 {
-	subjectInfo := v1.SubjectInfoV1{
+func convertSubjectDAOToSubjectInfo(subject subjectInfoDAO) model.SubjectInfoV1 {
+	subjectInfo := model.SubjectInfoV1{
 		Type: subject.Type,
 	}
 	if subject.DateOfBirth.Valid {

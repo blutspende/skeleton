@@ -5,6 +5,9 @@ import (
     "database/sql"
     "github.com/jmoiron/sqlx"
     "github.com/rs/zerolog/log"
+
+    // Need this import for sqlx
+    _ "github.com/lib/pq"
 )
 
 type DbConnector interface {

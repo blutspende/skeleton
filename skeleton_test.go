@@ -1,9 +1,9 @@
-package services_test
+package skeleton_test
 
 import (
 	"context"
 	"fmt"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/config"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/db"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/migrator"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/model"
@@ -35,13 +35,6 @@ func TestSubmitAnalysisResult(t *testing.T) {
 	_, err = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
 	assert.Nil(t, err)
 
-	testConfig := config.Configuration{}
-	testConfig.PostgresDB.Host = "localhost"
-	testConfig.PostgresDB.Port = 5432
-	testConfig.PostgresDB.User = "postgres"
-	testConfig.PostgresDB.Pass = "postgres"
-	testConfig.PostgresDB.Database = "postgres"
-	testConfig.PostgresDB.SSLMode = "disable"
 
 	dbConn := db.CreateDbConnector(sqlConn)
 	analysisRepository := repositories.NewAnalysisRepository(dbConn, schemaName)
@@ -49,7 +42,7 @@ func TestSubmitAnalysisResult(t *testing.T) {
 	analysisService := services.NewAnalysisService()
 	cerberusClientMock := cerberusClientMock{}
 
-	skeleton := services.New(migrator.NewSkeletonMigrator(), analysisService, analysisRepository,&cerberusClientMock)
+	skeletonInstance := skeleton.NewSkeleton(sqlConn, schemaName, migrator.NewSkeletonMigrator(), analysisService, analysisRepository,&cerberusClientMock)
 	analysisRequests := []model.AnalysisRequestV1{
 		{
 			ID:             uuid.New(),
@@ -66,7 +59,7 @@ func TestSubmitAnalysisResult(t *testing.T) {
 	_, err = analysisService.CreateAnalysisRequests(context.TODO(), analysisRequests)
 	assert.Nil(t, err)
 
-	err = skeleton.SubmitAnalysisResult(context.TODO(), model.AnalysisResultV1{
+	err = skeletonInstance.SubmitAnalysisResult(context.TODO(), model.AnalysisResultV1{
 		ID:              uuid.UUID{},
 		AnalysisRequest: analysisRequests[0],
 		AnalyteMapping: model.AnalyteMappingV1{

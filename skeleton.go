@@ -1,4 +1,4 @@
-package services
+package skeleton
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/migrator"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/model"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/repositories"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/v1"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/services"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -16,9 +16,11 @@ import (
 )
 
 type skeleton struct {
-	callBackHandler    v1.SkeletonCallbackHandlerV1
+	sqlConn *sqlx.DB
+	dbSchema        string
+	callBackHandler SkeletonCallbackHandlerV1
 	migrator           migrator.SkeletonMigrator
-	analysisService    AnalysisService
+	analysisService    services.AnalysisService
 	analysisRepository repositories.AnalysisRepository
 	resultsBuffer      []model.AnalysisResultV1
 	resultsChan        chan model.AnalysisResultV1
@@ -26,10 +28,10 @@ type skeleton struct {
 	cerberusClient     clients.CerberusV1
 }
 
-func (s *skeleton) SetCallbackHandler(eventHandler v1.SkeletonCallbackHandlerV1) {
+func (s *skeleton) SetCallbackHandler(eventHandler SkeletonCallbackHandlerV1) {
 	s.callBackHandler = eventHandler
 }
-func (s *skeleton) GetCallbackHandler() v1.SkeletonCallbackHandlerV1 {
+func (s *skeleton) GetCallbackHandler() SkeletonCallbackHandlerV1 {
 	return s.callBackHandler
 }
 
@@ -96,14 +98,14 @@ func (s *skeleton) migrateUp(ctx context.Context, db *sqlx.DB, schemaName string
 	return s.migrator.Run(ctx, db, schemaName)
 }
 
-func (s *skeleton) Start(ctx context.Context, db *sqlx.DB, schemaName string) error {
-	err := s.migrateUp(ctx, db, schemaName)
+func (s *skeleton) Start() error {
+	err := s.migrateUp(context.Background(), s.sqlConn, s.dbSchema)
 	if err != nil {
 		return err
 	}
 
-	go s.processAnalysisResults(ctx)
-	go s.processAnalysisResultBatches(ctx)
+	go s.processAnalysisResults(context.Background())
+	go s.processAnalysisResultBatches(context.Background())
 	return nil
 }
 
@@ -152,8 +154,10 @@ func (s *skeleton) processAnalysisResultBatches(ctx context.Context) {
 	}
 }
 
-func New(migrator migrator.SkeletonMigrator, analysisService AnalysisService, analysisRepository repositories.AnalysisRepository, cerberusClient clients.CerberusV1) v1.SkeletonAPI {
+func NewSkeleton(sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, analysisService services.AnalysisService, analysisRepository repositories.AnalysisRepository, cerberusClient clients.CerberusV1) SkeletonAPI {
 	return &skeleton{
+		sqlConn:sqlConn,
+		dbSchema: dbSchema,
 		migrator:           migrator,
 		analysisService:    analysisService,
 		analysisRepository: analysisRepository,

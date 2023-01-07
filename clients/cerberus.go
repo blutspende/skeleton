@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/model"
-	v1 "github.com/DRK-Blutspende-BaWueHe/skeleton/v1"
 	"net/http"
 	"time"
 
@@ -13,6 +12,13 @@ import (
 
 	"github.com/go-resty/resty/v2"
 	"github.com/rs/zerolog/log"
+)
+
+const (
+	MsgSendResultBatchFailed = "send result batch failed"
+)
+var (
+	ErrSendResultBatchFailed = errors.New(MsgSendResultBatchFailed)
 )
 
 type CerberusV1 interface {
@@ -23,7 +29,6 @@ type CerberusV1 interface {
 type cerberusV1 struct {
 	client      *resty.Client
 	cerberusUrl string
-	// ciaHistoryService service.CIAHttpHistory
 }
 
 type errorResponseV1TO struct {
@@ -248,7 +253,7 @@ func (cia *cerberusV1) PostAnalysisResultBatch(analysisResults []model.AnalysisR
 		Post(cia.cerberusUrl + "/v1/analysis-results/batch")
 
 	if err != nil {
-		return nil, fmt.Errorf("%s (%w)", v1.ErrSendResultBatchFailed, err)
+		return nil, fmt.Errorf("%s (%w)", ErrSendResultBatchFailed, err)
 		// log.Error().Err(err).Msg(i18n.MsgSendResultBatchFailed)
 		//requestBody, _ := json.Marshal(analysisResultsTOs)
 		//TODO:Better soltion for request-logging cia.ciaHistoryService.Create(model.TYPE_AnalysisResultBatch, err.Error(), string(requestBody), 0, nil, analysisResultIDs)
