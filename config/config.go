@@ -14,14 +14,6 @@ const MsgFailedToReadConfiguration         = "failed to read configuration"
 var ErrFailedToReadConfiguration = errors.New(MsgFailedToReadConfiguration)
 
 type Configuration struct {
-	PostgresDB struct {
-		Host     string `envconfig:"DB_SERVER" required:"true" default:"127.0.0.1"`
-		Port     uint32 `envconfig:"DB_PORT" required:"true" default:"5432"`
-		User     string `envconfig:"DB_USER" required:"true" default:"postgres"`
-		Pass     string `envconfig:"DB_PASS" required:"true"`
-		Database string `envconfig:"DB_DATABASE" required:"true"`
-		SSLMode  string `envconfig:"DB_SSL_MODE" required:"true"`
-	}
 	InstrumentSettings struct {
 		MemoryLogSize int `envconfig:"TCP_MEMORY_LOG_SIZE" required:"true" default:"500"`
 	}

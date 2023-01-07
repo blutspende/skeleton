@@ -89,11 +89,15 @@ type SkeletonAPI interface {
 	Start(ctx context.Context, db *sqlx.DB, schemaName string) error
 }
 
-func New(sqlConn *sqlx.DB, dbSchema string, config *config.Configuration) (SkeletonAPI, error) {
-	authManager := authmanager.NewAuthManager(config,
-		clients.NewRestyClient(context.Background(), config, true))
+func New(sqlConn *sqlx.DB, dbSchema string) (SkeletonAPI, error) {
+	config, err := config.ReadConfiguration()
+	if err != nil {
+		return nil, err
+	}
+	authManager := authmanager.NewAuthManager(&config,
+		clients.NewRestyClient(context.Background(), &config, true))
 	authManager.StartClientCredentialTask(context.Background())
-	internalApiRestyClient := clients.NewRestyClientWithAuthManager(context.Background(), config, authManager)
+	internalApiRestyClient := clients.NewRestyClientWithAuthManager(context.Background(), &config, authManager)
 	cerberusClient, err := clients.NewCerberusV1Client(config.CerberusURL, internalApiRestyClient)
 	analysisService := services.NewAnalysisService()
 	if err != nil {
