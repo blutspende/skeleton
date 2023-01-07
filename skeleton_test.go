@@ -34,11 +34,12 @@ func TestSubmitAnalysisResult(t *testing.T) {
 
 	dbConn := db.CreateDbConnector(sqlConn)
 	analysisRepository := skeleton.NewAnalysisRepository(dbConn, schemaName)
+	instrumentRepository := skeleton.NewInstrumentRepository(dbConn, schemaName)
 
 	analysisService := skeleton.NewAnalysisService()
 	cerberusClientMock := cerberusClientMock{}
 
-	skeletonInstance := skeleton.NewSkeleton(sqlConn, schemaName, migrator.NewSkeletonMigrator(), analysisService, analysisRepository, &cerberusClientMock)
+	skeletonInstance := skeleton.NewSkeleton(sqlConn, schemaName, migrator.NewSkeletonMigrator(), analysisRepository, instrumentRepository, &cerberusClientMock)
 	func() {
 		err = skeletonInstance.Start()
 		assert.Nil(t, err)
@@ -101,6 +102,13 @@ func TestSubmitAnalysisResult(t *testing.T) {
 	assert.Equal(t, analysisRequests[0].AnalyteID, cerberusClientMock.AnalysisResults[0].AnalysisRequest.AnalyteID)
 	assert.Equal(t, instrumentID, cerberusClientMock.AnalysisResults[0].Instrument.ID)
 	assert.Equal(t, analysisResult.Result, cerberusClientMock.AnalysisResults[0].Result)
+}
+
+func TestRegisterProtocol(t *testing.T) {
+	//TODO
+	// register protocol
+	// register instrument with mentioned protocol (call endpoint ???) -> expect to pass
+	// try register instrument with random protocolID -> expect to fail
 }
 
 type cerberusClientMock struct {

@@ -16,8 +16,8 @@ type skeleton struct {
 	dbSchema           string
 	callBackHandler    SkeletonCallbackHandlerV1
 	migrator           migrator.SkeletonMigrator
-	analysisService    AnalysisService
 	analysisRepository AnalysisRepository
+	instrumentRepository InstrumentRepository
 	resultsBuffer      []AnalysisResult
 	resultsChan        chan AnalysisResult
 	resultBatchesChan  chan []AnalysisResult
@@ -90,6 +90,10 @@ func (s *skeleton) FindResultMapping(searchvalue string, mapping []ResultMapping
 	return "", nil
 }
 
+func (s *skeleton) RegisterProtocol(ctx context.Context, id uuid.UUID, name string, description string) error {
+	return s.instrumentRepository.UpsertSupportedProtocol(ctx, id, name, description)
+}
+
 func (s *skeleton) migrateUp(ctx context.Context, db *sqlx.DB, schemaName string) error {
 	return s.migrator.Run(ctx, db, schemaName)
 }
@@ -150,13 +154,13 @@ func (s *skeleton) processAnalysisResultBatches(ctx context.Context) {
 	}
 }
 
-func NewSkeleton(sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, analysisService AnalysisService, analysisRepository AnalysisRepository, cerberusClient CerberusV1) SkeletonAPI {
+func NewSkeleton(sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, analysisRepository AnalysisRepository, instrumentRepository InstrumentRepository, cerberusClient CerberusV1) SkeletonAPI {
 	return &skeleton{
 		sqlConn:            sqlConn,
 		dbSchema:           dbSchema,
 		migrator:           migrator,
-		analysisService:    analysisService,
 		analysisRepository: analysisRepository,
+		instrumentRepository: instrumentRepository,
 		cerberusClient:     cerberusClient,
 		resultsBuffer:      make([]AnalysisResult, 0, 500),
 		resultsChan:        make(chan AnalysisResult, 500),

@@ -76,6 +76,9 @@ type SkeletonAPI interface {
 	// e.g. "+" -> "pos" to be used in a pein datatype
 	FindResultMapping(searchvalue string, mapping []ResultMapping) (string, error)
 
+	// RegisterProtocol - Registers
+	RegisterProtocol(ctx context.Context, id uuid.UUID, name string, description string) error
+
 	// Start - MUST BE CALLED ON STARTUP
 	// - migrates skeleton database
 	// - launches goroutines for analysis request/result processing
@@ -92,10 +95,9 @@ func New(sqlConn *sqlx.DB, dbSchema string) (SkeletonAPI, error) {
 	authManager.StartClientCredentialTask(context.Background())
 	internalApiRestyClient := NewRestyClientWithAuthManager(context.Background(), &config, authManager)
 	cerberusClient, err := NewCerberusV1Client(config.CerberusURL, internalApiRestyClient)
-	analysisService := NewAnalysisService()
 	if err != nil {
 		return nil, err
 	}
 	dbConn := db.CreateDbConnector(sqlConn)
-	return NewSkeleton(sqlConn, dbSchema, migrator.NewSkeletonMigrator(), analysisService, NewAnalysisRepository(dbConn, dbSchema), cerberusClient), nil
+	return NewSkeleton(sqlConn, dbSchema, migrator.NewSkeletonMigrator(), NewAnalysisRepository(dbConn, dbSchema),NewInstrumentRepository(dbConn, dbSchema), cerberusClient), nil
 }
