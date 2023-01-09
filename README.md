@@ -6,6 +6,7 @@ Skeleton for Bloodlab drivermodel
 ### Analysis-Request
 Received by skeleton from cerberus on /v1/analysisRequest/batch [POST]
 
+```json body
 workItemId     uuid.UUID Reference to the WorkitemId
 analyteId      uuid.UUID Reference to the Analyte 
 sampleCode     string The Samplecode
@@ -13,7 +14,7 @@ materialId    uuid.UUID Reference to the (ordered) MaterialId
 laboratoryId   uuid.UUID Laboratory 
 validUntilTime time.Time Upper time-limit until which the request should be regarded as valid
 subject        (obsolete)
-
+```
 
 ### Analysis-Result
 Each request is supposed to be answered by a Result-Response whenever results are available
