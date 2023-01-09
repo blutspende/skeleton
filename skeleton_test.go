@@ -19,9 +19,9 @@ func TestSubmitAnalysisResult(t *testing.T) {
 	postgres.Start()
 	defer postgres.Stop()
 	sqlConn, err := sqlx.Connect("postgres", "host=localhost port=5432 user=postgres password=postgres dbname=postgres sslmode=disable")
+	assert.Nil(t, err)
 
 	schemaName := "testSubmitAnalysisResults"
-	assert.Nil(t, err)
 
 	_, err = sqlConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
 	assert.Nil(t, err)
@@ -67,7 +67,6 @@ func TestSubmitAnalysisResult(t *testing.T) {
 		AnalysisRequest: analysisRequests[0],
 		AnalyteMapping: skeleton.AnalyteMapping{
 			AnalyteID:    analysisRequests[0].ID,
-			InstrumentID: instrumentID,
 		},
 		Instrument: skeleton.Instrument{
 			ID: instrumentID,
@@ -102,6 +101,38 @@ func TestSubmitAnalysisResult(t *testing.T) {
 	assert.Equal(t, analysisRequests[0].AnalyteID, cerberusClientMock.AnalysisResults[0].AnalysisRequest.AnalyteID)
 	assert.Equal(t, instrumentID, cerberusClientMock.AnalysisResults[0].Instrument.ID)
 	assert.Equal(t, analysisResult.Result, cerberusClientMock.AnalysisResults[0].Result)
+}
+
+func TestCreateInstrument(t *testing.T) {
+	postgres := embeddedpostgres.NewDatabase()
+	postgres.Start()
+	defer postgres.Stop()
+	sqlConn, err := sqlx.Connect("postgres", "host=localhost port=5432 user=postgres password=postgres dbname=postgres sslmode=disable")
+	assert.Nil(t, err)
+
+	schemaName := "testSubmitAnalysisResults"
+
+	_, err = sqlConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
+	assert.Nil(t, err)
+
+	_, err = sqlConn.Exec(fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schemaName))
+	assert.Nil(t, err)
+
+	_, err = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
+	assert.Nil(t, err)
+
+	dbConn := db.CreateDbConnector(sqlConn)
+	analysisRepository := skeleton.NewAnalysisRepository(dbConn, schemaName)
+	instrumentRepository := skeleton.NewInstrumentRepository(dbConn, schemaName)
+
+	cerberusClientMock := cerberusClientMock{}
+
+	skeletonInstance := skeleton.NewSkeleton(sqlConn, schemaName, migrator.NewSkeletonMigrator(), analysisRepository, instrumentRepository, &cerberusClientMock)
+	func() {
+		err = skeletonInstance.Start()
+		assert.Nil(t, err)
+	}()
+
 }
 
 func TestRegisterProtocol(t *testing.T) {

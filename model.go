@@ -110,11 +110,24 @@ type ChannelResult struct {
 	Images                []Image
 }
 
+type ConnectionMode string
+
+const (
+	TCPClientMode ConnectionMode = "TCP_CLIENT_ONLY"
+	TCPServerMode ConnectionMode = "TCP_SERVER_ONLY"
+	FTP           ConnectionMode = "FTP_SFTP"
+	HTTP          ConnectionMode = "HTTP"
+	TCPMixed      ConnectionMode = "TCP_MIXED"
+)
+
 type Instrument struct {
 	ID                 uuid.UUID
 	Name               string
 	ProtocolID         uuid.UUID
 	ProtocolName       Protocol
+	Enabled            bool
+	ConnectionMode     ConnectionMode
+	ResultMode         ResultMode
 	CaptureResults     bool
 	CaptureDiagnostics bool
 	ReplyToQuery       bool
@@ -122,17 +135,18 @@ type Instrument struct {
 	FileEncoding       string
 	Timezone           string
 	Hostname           string
-	ClientPort         int
-	ResultMode         ResultMode
+	ClientPort         *int
 	AnalyteMappings    []AnalyteMapping
 	RequestMappings    []RequestMapping
+	CreatedAt          time.Time
+	ModifiedAt         *time.Time
+	DeletedAt          *time.Time
 }
 
 type Protocol string
 
 type AnalyteMapping struct {
 	ID                uuid.UUID
-	InstrumentID      uuid.UUID
 	InstrumentAnalyte string
 	AnalyteID         uuid.UUID
 	ChannelMappings   []ChannelMapping
@@ -144,25 +158,22 @@ type ChannelMapping struct {
 	ID                uuid.UUID
 	InstrumentChannel string
 	ChannelID         uuid.UUID
-	AnalyteMappingID  uuid.UUID
 }
 
 // ResultMapping - Maps a ManufacturerTestCode to an AnalyteId (cerberus)
 type ResultMapping struct {
-	ID               uuid.UUID
-	AnalyteMappingID uuid.UUID
-	Key              string
-	Value            string
+	ID    uuid.UUID
+	Key   string
+	Value string
+	Index int
 }
 
 // RequestMapping - Maps ManufacturerTestCode (on Instrument) to one or more Analytes (cerberus)
 // for transmission to instrument
 type RequestMapping struct {
-	ID                       uuid.UUID
-	Code                     string
-	InstrumentID             uuid.UUID
-	SupportedProtocolID      uuid.UUID
-	RequestMappingAnalyteIDs []uuid.UUID
+	ID         uuid.UUID
+	Code       string
+	AnalyteIDs []uuid.UUID
 }
 
 type UploadLogStatus string

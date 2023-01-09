@@ -99,5 +99,5 @@ func New(sqlConn *sqlx.DB, dbSchema string) (SkeletonAPI, error) {
 		return nil, err
 	}
 	dbConn := db.CreateDbConnector(sqlConn)
-	return NewSkeleton(sqlConn, dbSchema, migrator.NewSkeletonMigrator(), NewAnalysisRepository(dbConn, dbSchema),NewInstrumentRepository(dbConn, dbSchema), cerberusClient), nil
+	return NewSkeleton(sqlConn, dbSchema, migrator.NewSkeletonMigrator(), NewAnalysisRepository(dbConn, dbSchema), NewInstrumentRepository(dbConn, dbSchema), cerberusClient), nil
 }

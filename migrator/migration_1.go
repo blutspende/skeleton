@@ -740,7 +740,7 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_instruments
 (
 	id uuid NOT NULL,
 	protocol_id uuid NOT NULL,
-	name TEXT NOT NULL,
+	"name" TEXT NOT NULL,
 	hostname TEXT NOT NULL,
 	client_port int,
 	enabled bool NOT NULL DEFAULT FALSE,
@@ -753,8 +753,9 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_instruments
 	sent_to_cerberus bool NOT NULL DEFAULT FALSE,
 	timezone TEXT NOT NULL DEFAULT 'Europe/Berlin',
 	file_encoding TEXT NOT NULL DEFAULT 'ASCII',
-	created timestamp NOT NULL DEFAULT now(),
-	deleted timestamp NULL,
+	created_at timestamp NOT NULL DEFAULT now(),
+    modified_at timestamp NULL,
+	deleted_at timestamp NULL,
 	CONSTRAINT sk_pk_instruments PRIMARY KEY (id),
 	CONSTRAINT sk_fk_connection_mode_instruments FOREIGN KEY (connection_mode) REFERENCES <SCHEMA_PLACEHOLDER>.sk_connection_modes (name),
 	CONSTRAINT sk_fk_running_mode__instruments FOREIGN KEY (running_mode) REFERENCES <SCHEMA_PLACEHOLDER>.sk_running_modes (name),
@@ -809,6 +810,7 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_channel_mappings
 	channel_id uuid NOT NULL,
 	analyte_mapping_id uuid NOT NULL,
 	created_at timestamp DEFAULT now(),
+    modified_at timestamp,
 	deleted_at timestamp,
 	CONSTRAINT "sk_pk_channel_mapping_id" PRIMARY KEY (id),
 	CONSTRAINT "sk_fk_analyte_mapping_id__id" FOREIGN KEY (analyte_mapping_id) REFERENCES <SCHEMA_PLACEHOLDER>.sk_analyte_mappings (id)
@@ -871,27 +873,26 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_request_mappings
 (
 	id uuid NOT NULL DEFAULT uuid_generate_v4(),
 	code TEXT NOT NULL,
-	supported_protocol_id uuid NOT NULL,
 	instrument_id uuid NOT NULL,
 	created_at timestamp DEFAULT now(),
+    modified_at timestamp,
+    deleted_at timestamp,
 	CONSTRAINT "sk_pk_request_mappings" PRIMARY KEY (id),
-	CONSTRAINT "sk_unique_code_supported_protocol_id_instrument_id" UNIQUE (
-		code,
-		supported_protocol_id,
-		instrument_id
-	),
-	CONSTRAINT "sk_fk_instrument_id__id" FOREIGN KEY (instrument_id) REFERENCES <SCHEMA_PLACEHOLDER>.sk_instruments (id),
-	CONSTRAINT "sk_fk_supported_protocol_id__id" FOREIGN KEY (supported_protocol_id) REFERENCES <SCHEMA_PLACEHOLDER>.sk_supported_protocols (id)
+	CONSTRAINT "sk_unique_code_instrument_id" UNIQUE (code, instrument_id),
+	CONSTRAINT "sk_fk_instrument_id__id" FOREIGN KEY (instrument_id) REFERENCES <SCHEMA_PLACEHOLDER>.sk_instruments (id)
 );
 
-CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_request_mapping_analyte
+CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_request_mapping_analytes
 (
 	id uuid NOT NULL DEFAULT uuid_generate_v4(),
 	analyte_id uuid NOT NULL,
 	request_mapping_id uuid NOT NULL,
 	created_at timestamp DEFAULT now(),
+    modified_at timestamp,
+    deleted_at timestamp,
 	CONSTRAINT "sk_pk_request_mapping_analyte_id" PRIMARY KEY (id),
-	CONSTRAINT "sk_fk_request_mapping_id__id" FOREIGN KEY (request_mapping_id) REFERENCES <SCHEMA_PLACEHOLDER>.sk_request_mappings (id)
+	CONSTRAINT "sk_fk_request_mapping_id__id" FOREIGN KEY (request_mapping_id) REFERENCES <SCHEMA_PLACEHOLDER>.sk_request_mappings (id),
+    CONSTRAINT "sk_unique_request_mapping_analytes" UNIQUE (request_mapping_id, analyte_id)
 );
 
 CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_request_mapping_sent

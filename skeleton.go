@@ -12,16 +12,16 @@ import (
 )
 
 type skeleton struct {
-	sqlConn            *sqlx.DB
-	dbSchema           string
-	callBackHandler    SkeletonCallbackHandlerV1
-	migrator           migrator.SkeletonMigrator
-	analysisRepository AnalysisRepository
+	sqlConn              *sqlx.DB
+	dbSchema             string
+	callBackHandler      SkeletonCallbackHandlerV1
+	migrator             migrator.SkeletonMigrator
+	analysisRepository   AnalysisRepository
 	instrumentRepository InstrumentRepository
-	resultsBuffer      []AnalysisResult
-	resultsChan        chan AnalysisResult
-	resultBatchesChan  chan []AnalysisResult
-	cerberusClient     CerberusV1
+	resultsBuffer        []AnalysisResult
+	resultsChan          chan AnalysisResult
+	resultBatchesChan    chan []AnalysisResult
+	cerberusClient       CerberusV1
 }
 
 func (s *skeleton) SetCallbackHandler(eventHandler SkeletonCallbackHandlerV1) {
@@ -156,14 +156,14 @@ func (s *skeleton) processAnalysisResultBatches(ctx context.Context) {
 
 func NewSkeleton(sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, analysisRepository AnalysisRepository, instrumentRepository InstrumentRepository, cerberusClient CerberusV1) SkeletonAPI {
 	return &skeleton{
-		sqlConn:            sqlConn,
-		dbSchema:           dbSchema,
-		migrator:           migrator,
-		analysisRepository: analysisRepository,
+		sqlConn:              sqlConn,
+		dbSchema:             dbSchema,
+		migrator:             migrator,
+		analysisRepository:   analysisRepository,
 		instrumentRepository: instrumentRepository,
-		cerberusClient:     cerberusClient,
-		resultsBuffer:      make([]AnalysisResult, 0, 500),
-		resultsChan:        make(chan AnalysisResult, 500),
-		resultBatchesChan:  make(chan []AnalysisResult, 10),
+		cerberusClient:       cerberusClient,
+		resultsBuffer:        make([]AnalysisResult, 0, 500),
+		resultsChan:          make(chan AnalysisResult, 500),
+		resultBatchesChan:    make(chan []AnalysisResult, 10),
 	}
 }
