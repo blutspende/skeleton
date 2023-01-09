@@ -142,6 +142,11 @@ type instrumentRepository struct {
 }
 
 type InstrumentRepository interface {
+	CreateInstrument(ctx context.Context, instrument Instrument) (uuid.UUID, error)
+	GetInstruments(ctx context.Context) ([]Instrument, error)
+	GetInstrumentByID(ctx context.Context, id uuid.UUID) (Instrument, error)
+	UpdateInstrument(ctx context.Context, instrument Instrument) error
+	DeleteInstrument(ctx context.Context, id uuid.UUID) error
 	UpsertSupportedProtocol(ctx context.Context, id uuid.UUID, name string, description string) error
 }
 

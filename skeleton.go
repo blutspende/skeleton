@@ -75,11 +75,11 @@ func (s *skeleton) SubmitAnalysisResult(ctx context.Context, resultData Analysis
 }
 
 func (s *skeleton) GetInstrument(instrumentID uuid.UUID) (Instrument, error) {
-	return Instrument{}, nil
+	return s.instrumentRepository.GetInstrumentByID(context.TODO(), instrumentID)
 }
 
 func (s *skeleton) GetInstruments() ([]Instrument, error) {
-	return []Instrument{}, nil
+	return s.instrumentRepository.GetInstruments(context.TODO())
 }
 
 func (s *skeleton) FindAnalyteByManufacturerTestCode(instrument Instrument, testCode string) AnalyteMapping {
