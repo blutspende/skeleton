@@ -598,7 +598,7 @@ func (r *instrumentRepository) createAnalyteMappings(ctx context.Context, analyt
 	if len(analyteMappings) == 0 {
 		return ids, nil
 	}
-	query := fmt.Sprintf(`INSERT INTO %s.sk_analyte_mappings(:id, instrument_id, instrument_analyte, analyte_id) VALUES(:id, :instrument_id, :instrument_analyte, :analyte_id);`, r.dbSchema)
+	query := fmt.Sprintf(`INSERT INTO %s.sk_analyte_mappings(id, instrument_id, instrument_analyte, analyte_id) VALUES(:id, :instrument_id, :instrument_analyte, :analyte_id);`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, convertAnalyteMappingsToDAOs(analyteMappings, instrumentID))
 	if err != nil {
 		log.Error().Err(err).Msg(msgCreateAnalyteMappingsFailed)
@@ -664,8 +664,8 @@ func (r *instrumentRepository) createChannelMappings(ctx context.Context, channe
 		channelMappings[i].ID = uuid.New()
 		ids[i] = channelMappings[i].ID
 	}
-	query := fmt.Sprintf(`INSERT INTO %s.sk_channel_mappings(id, instrument_channel, channel_id, analyte_mapping_id, created_at) 
-		VALUES(:id, :instrument_channel, :channel_id, :analyte_mapping_id, timezone('utc',now()));`, r.dbSchema)
+	query := fmt.Sprintf(`INSERT INTO %s.sk_channel_mappings(id, instrument_channel, channel_id, analyte_mapping_id) 
+		VALUES(:id, :instrument_channel, :channel_id, :analyte_mapping_id);`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, convertChannelMappingsToDAOs(channelMappings, analyteMappingID))
 	if err != nil {
 		log.Error().Err(err).Msg(msgCreateChannelMappingsFailed)
@@ -698,7 +698,7 @@ func (r *instrumentRepository) getChannelMappings(ctx context.Context, analyteMa
 }
 
 func (r *instrumentRepository) updateChannelMapping(ctx context.Context, channelMapping ChannelMapping) error {
-	query := fmt.Sprintf(`UDPATE %s.sk_channel_mappings SET instrument_channel = :instrument_channel, channel_id = :channel_id, modified_at = timezone('utc', now()) WHERE id = :id`, r.dbSchema)
+	query := fmt.Sprintf(`UDPATE %s.sk_channel_mappings SET instrument_channel = :instrument_channel, channel_id = :channel_id, modified_at = timezone('utc', now()) WHERE id = :id;`, r.dbSchema)
 	dao := convertChannelMappingToDAO(channelMapping, uuid.Nil)
 	_, err := r.db.ExecContext(ctx, query, dao)
 	if err != nil {
@@ -731,8 +731,8 @@ func (r *instrumentRepository) createResultMappings(ctx context.Context, resultM
 		resultMappings[i].ID = uuid.New()
 		ids[i] = resultMappings[i].ID
 	}
-	query := fmt.Sprintf(`INSERT INTO %s.sk_result_mappings(id, analyte_mapping_id, key, value, index, created_at) 
-		VALUES(:id, :analyte_mapping_id, :key, :value, :index, timezone('utc', now()));`, r.dbSchema)
+	query := fmt.Sprintf(`INSERT INTO %s.sk_result_mappings(id, analyte_mapping_id, "key", "value", "index") 
+		VALUES(:id, :analyte_mapping_id, :key, :value, :index);`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, convertResultMappingsToDAOs(resultMappings, analyteMappingID))
 	if err != nil {
 		log.Error().Err(err).Msg(msgCreateChannelMappingsFailed)
@@ -765,7 +765,7 @@ func (r *instrumentRepository) getResultMappings(ctx context.Context, analyteMap
 }
 
 func (r *instrumentRepository) updateResultMapping(ctx context.Context, resultMapping ResultMapping) error {
-	query := fmt.Sprintf(`UDPATE %s.sk_result_mappings SET key = :key, value = :value, index = :index, modified_at = timezone('utc', now()) WHERE id = :id`, r.dbSchema)
+	query := fmt.Sprintf(`UDPATE %s.sk_result_mappings SET "key" = :key, "value" = :value, "index" = :index, modified_at = timezone('utc', now()) WHERE id = :id`, r.dbSchema)
 	dao := convertResultMappingToDAO(resultMapping, uuid.Nil)
 	_, err := r.db.ExecContext(ctx, query, dao)
 	if err != nil {
@@ -798,8 +798,8 @@ func (r *instrumentRepository) createRequestMappings(ctx context.Context, reques
 		requestMappings[i].ID = uuid.New()
 		ids[i] = requestMappings[i].ID
 	}
-	query := fmt.Sprintf(`INSERT INTO %s.sk_request_mappings(id, code, instrument_id, created_at) 
-		VALUES(:id, :code, :instrument_id, timezone('utc', now()));`, r.dbSchema)
+	query := fmt.Sprintf(`INSERT INTO %s.sk_request_mappings(id, code, instrument_id) 
+		VALUES(:id, :code, :instrument_id);`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, convertRequestMappingsToDAOs(requestMappings, instrumentID))
 	if err != nil {
 		log.Error().Err(err).Msg(msgCreateAnalyteMappingsFailed)
@@ -822,8 +822,8 @@ func (r *instrumentRepository) upsertRequestMappingAnalytes(ctx context.Context,
 			})
 		}
 	}
-	query := fmt.Sprintf(`INSERT INTO %s.sk_request_mapping_analytes(id, analyte_id, request_mapping_id, created_at) 
-		VALUES(:id, :analyte_id, :request_mapping_id, :created_at) ON CONFLICT ON CONSTRAINT sk_unique_request_mapping_analytes DO NOTHING;`, r.dbSchema)
+	query := fmt.Sprintf(`INSERT INTO %s.sk_request_mapping_analytes(id, analyte_id, request_mapping_id) 
+		VALUES(:id, :analyte_id, :request_mapping_id) ON CONFLICT ON CONSTRAINT sk_unique_request_mapping_analytes DO NOTHING;`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, requestMappingAnalyteDAOs)
 	if err != nil {
 		log.Error().Err(err).Msg(msgCreateAnalyteMappingsFailed)
@@ -833,35 +833,12 @@ func (r *instrumentRepository) upsertRequestMappingAnalytes(ctx context.Context,
 }
 
 func (r *instrumentRepository) updateRequestMapping(ctx context.Context, requestMapping RequestMapping) error {
-	query := fmt.Sprintf(`UDPATE %s.sk_result_mappings SET code = :code, modified_at = timezone('utc', now()) WHERE id = :id`, r.dbSchema)
+	query := fmt.Sprintf(`UDPATE %s.sk_result_mappings SET code = :code, modified_at = timezone('utc', now()) WHERE id = :id;`, r.dbSchema)
 	dao := convertRequestMappingToDAO(requestMapping, uuid.Nil)
 	_, err := r.db.ExecContext(ctx, query, dao)
 	if err != nil {
 		log.Error().Err(err).Msg(msgUpdateRequestMappingFailed)
 		return ErrUpdateRequestMappingFailed
-	}
-	return nil
-}
-
-func (r *instrumentRepository) deleteRequestMappingAnalytes(ctx context.Context, requestMappingID uuid.UUID, analyteIDs []uuid.UUID) error {
-	query := fmt.Sprintf(`UPDATE %s.sk_request_mapping_analytes SET deleted_at = timezone('utc', now()) WHERE request_mapping_id = ? AND analyte_id IN (?);`, r.dbSchema)
-	query, args, _ := sqlx.In(query, requestMappingID, analyteIDs)
-	query = r.db.Rebind(query)
-	_, err := r.db.ExecContext(ctx, query, args...)
-	if err != nil {
-		log.Error().Err(err).Msg(msgDeleteRequestMappingAnalytesFailed)
-		return ErrDeleteRequestMappingAnalytesFailed
-	}
-	return nil
-}
-
-func (r *instrumentRepository) deleteRequestMappings(ctx context.Context, requestMappingIDs []uuid.UUID) error {
-	query := fmt.Sprintf(`UPDATE %s.sk_request_mappings SET deleted_at = timezone('utc', now()) WHERE id IN (?);`, r.dbSchema)
-	query, args, _ := sqlx.In(query, requestMappingIDs)
-	_, err := r.db.ExecContext(ctx, query, args...)
-	if err != nil {
-		log.Error().Err(err).Msg(msgDeleteRequestMappingsFailed)
-		return ErrDeleteRequestMappingsFailed
 	}
 	return nil
 }
@@ -909,6 +886,29 @@ func (r *instrumentRepository) getRequestMappingAnalytes(ctx context.Context, re
 		analyteIDsByRequestMappingIDs[requestMappingID] = append(analyteIDsByRequestMappingIDs[requestMappingID], analyteID)
 	}
 	return analyteIDsByRequestMappingIDs, nil
+}
+
+func (r *instrumentRepository) deleteRequestMappings(ctx context.Context, requestMappingIDs []uuid.UUID) error {
+	query := fmt.Sprintf(`UPDATE %s.sk_request_mappings SET deleted_at = timezone('utc', now()) WHERE id IN (?);`, r.dbSchema)
+	query, args, _ := sqlx.In(query, requestMappingIDs)
+	_, err := r.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		log.Error().Err(err).Msg(msgDeleteRequestMappingsFailed)
+		return ErrDeleteRequestMappingsFailed
+	}
+	return nil
+}
+
+func (r *instrumentRepository) deleteRequestMappingAnalytes(ctx context.Context, requestMappingID uuid.UUID, analyteIDs []uuid.UUID) error {
+	query := fmt.Sprintf(`UPDATE %s.sk_request_mapping_analytes SET deleted_at = timezone('utc', now()) WHERE request_mapping_id = ? AND analyte_id IN (?);`, r.dbSchema)
+	query, args, _ := sqlx.In(query, requestMappingID, analyteIDs)
+	query = r.db.Rebind(query)
+	_, err := r.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		log.Error().Err(err).Msg(msgDeleteRequestMappingAnalytesFailed)
+		return ErrDeleteRequestMappingAnalytesFailed
+	}
+	return nil
 }
 
 func convertRequestMappingDaoToAnalyteMapping(dao requestMappingDAO) RequestMapping {
