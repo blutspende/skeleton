@@ -505,7 +505,7 @@ func (r *instrumentRepository) createInstrument(ctx context.Context, instrument 
 }
 
 func (r *instrumentRepository) getInstruments(ctx context.Context) ([]Instrument, error) {
-	query := `SELECT * FROM %s.sk_instruments WHERE deleted_at IS NULL ORDER BY name;`
+	query := fmt.Sprintf(`SELECT * FROM %s.sk_instruments WHERE deleted_at IS NULL ORDER BY name;`, r.dbSchema)
 	rows, err := r.db.QueryxContext(ctx, query)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetInstrumentsFailed)

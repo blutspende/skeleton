@@ -60,6 +60,9 @@ func TestSubmitAnalysisResult(t *testing.T) {
 	_, err = analysisService.CreateAnalysisRequests(context.TODO(), analysisRequests)
 	assert.Nil(t, err)
 
+	//TODO
+	//create instrument + analytemapping
+
 	instrumentID := uuid.New()
 
 	analysisResult := skeleton.AnalysisResult{

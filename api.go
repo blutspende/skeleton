@@ -40,6 +40,8 @@ type SkeletonAPI interface {
 	LogDebug(instrumentID uuid.UUID, msg string)
 
 	// GetAnalysisRequestWithNoResults - return those requests that have no results yet
+
+	//TODO maybe remove
 	GetAnalysisRequestWithNoResults(currentPage, itemsPerPage int) (requests []AnalysisRequest, maxPages int, err error)
 	GetAnalysisRequestsBySampleCode(sampleCode string) ([]AnalysisRequest, error)
 
