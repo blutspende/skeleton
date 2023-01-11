@@ -1,0 +1,540 @@
+package web
+
+import (
+	"github.com/DRK-Blutspende-BaWueHe/skeleton"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/utils"
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
+	"net/http"
+)
+
+type instrumentTO struct {
+	ID                 uuid.UUID               `json:"id"`
+	Name               string                  `json:"name"`
+	ProtocolID         uuid.UUID               `json:"protocolId"`
+	ProtocolName       skeleton.Protocol       `json:"type"`
+	Enabled            bool                    `json:"enabled"`
+	ConnectionMode     skeleton.ConnectionMode `json:"connectionMode"`
+	ResultMode         skeleton.ResultMode     `json:"runningMode"`
+	CaptureResults     bool                    `json:"captureResults"`
+	CaptureDiagnostics bool                    `json:"captureDiagnostics"`
+	ReplyToQuery       bool                    `json:"replyToQuery"`
+	Status             string                  `json:"status"`
+	FileEncoding       string                  `json:"fileEncoding"`
+	Timezone           string                  `json:"timezone"`
+	Hostname           string                  `json:"hostname"`
+	ClientPort         *int                    `json:"clientPort"`
+	AnalyteMappings    []analyteMappingTO      `json:"analyteMappings"`
+	RequestMappings    []requestMappingTO      `json:"requestMappings"`
+}
+
+type listInstrumentTO struct {
+	ID           uuid.UUID           `json:"id"`
+	Name         string              `json:"name"`
+	ProtocolName skeleton.Protocol   `json:"type"`
+	Status       string              `json:"status"`
+	ResultMode   skeleton.ResultMode `json:"runningMode"`
+}
+
+type analyteMappingTO struct {
+	ID                uuid.UUID           `json:"id"`
+	InstrumentAnalyte string              `json:"instrumentAnalyte"`
+	AnalyteID         uuid.UUID           `json:"analyteId"`
+	ChannelMappings   []channelMappingTO  `json:"channelMappings"`
+	ResultMappings    []resultMappingTO   `json:"resultMappings"`
+	ResultType        skeleton.ResultType `json:"resultType"`
+}
+
+type requestMappingTO struct {
+	ID         uuid.UUID   `json:"id"`
+	Code       string      `json:"code"`
+	AnalyteIDs []uuid.UUID `json:"requestMappingAnalyteIds"`
+}
+
+type channelMappingTO struct {
+	ID                uuid.UUID `json:"id"`
+	InstrumentChannel string    `json:"instrumentChannel"`
+	ChannelID         uuid.UUID `json:"channelId"`
+}
+
+type resultMappingTO struct {
+	ID    uuid.UUID `json:"id"`
+	Key   string    `json:"key"`
+	Value string    `json:"value"`
+	Index int       `json:"index"`
+}
+
+type protocolAbilityTO struct {
+	ConnectionMode          skeleton.ConnectionMode `json:"connectionMode"`
+	Abilities               []skeleton.Ability      `json:"abilities"`
+	RequestMappingAvailable bool                    `json:"requestMappingAvailable"`
+}
+
+type supportedProtocolTO struct {
+	ID                uuid.UUID           `json:"id"`
+	Name              skeleton.Protocol   `json:"name"`
+	Description       *string             `json:"description"`
+	ProtocolAbilities []protocolAbilityTO `json:"protocolAbilities"`
+}
+
+func (api *api) GetInstruments(c *gin.Context) {
+	instruments, err := api.instrumentService.GetInstruments(c)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, "GetInstruments Error")
+		return
+	}
+
+	instrumentTOs := make([]listInstrumentTO, len(instruments))
+
+	for i, instrument := range instruments {
+		instrumentTOs[i] = convertInstrumentToListInstrumentTO(instrument)
+	}
+
+	c.JSON(http.StatusOK, instrumentTOs)
+}
+
+func (api *api) GetInstrumentByID(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("instrumentId"))
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, "GetInstrumentByID Error")
+		return
+	}
+
+	instrument, err := api.instrumentService.GetInstrumentByID(c, id)
+	if err != nil {
+		if err == skeleton.ErrInstrumentNotFound {
+			c.AbortWithStatus(http.StatusNotFound)
+		}
+		c.AbortWithStatusJSON(http.StatusInternalServerError, "GetInstrumentByID Error")
+		return
+	}
+
+	c.JSON(http.StatusOK, convertInstrumentToInstrumentTO(instrument))
+}
+
+func (api *api) CreateInstrument(c *gin.Context) {
+	instrumentTO := instrumentTO{}
+	err := c.ShouldBindJSON(&instrumentTO)
+	if err != nil {
+		log.Error().Err(err).Msg("Create instrument failed! Can't parse request body!")
+		c.JSON(http.StatusBadRequest, "CreateInstrument Error")
+		return
+	}
+
+	instrument := convertInstrumentTOToInstrument(instrumentTO)
+
+	if !isRequestMappingValid(instrument) {
+		log.Error().Msg("RequestMapping is not Valid")
+		c.JSON(http.StatusBadRequest, "CreateInstrument Error")
+		return
+	}
+
+	savedInstrumentID, err := api.instrumentService.CreateInstrument(c, instrument)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, "CreateInstrument Error")
+		return
+	}
+
+	// Todo
+	//api.instrumentTransferService.EnqueueInstrument(savedInstrumentID)
+
+	c.JSON(http.StatusOK, savedInstrumentID)
+}
+
+//func (api *api) UpdateInstrument(c *gin.Context) {
+//	instrument := apiModel.InstrumentDTO{}
+//
+//	err := c.ShouldBindJSON(&instrument)
+//	if err != nil {
+//		log.Error().Err(err).Msg("PutInstrument: Can't bind request body!")
+//		c.JSON(http.StatusBadRequest, api_errors.InvalidRequestBody)
+//		return
+//	}
+//
+//	updatedInstrument, err := api.instrumentService.UpdateInstrument(api.mapInstrumentDTOToInstrument(instrument))
+//	if err != nil {
+//		log.Error().Err(err).Msg("PutInstrument: Failed to update instrument!")
+//		c.JSON(http.StatusInternalServerError, api_errors.InternalServerError)
+//		return
+//	}
+//
+//	err = api.inMemInstruments.UpdateInstrument(updatedInstrument)
+//	if err != nil {
+//		log.Debug().Err(err).Msg("Can not update instrument in inMemory instruments")
+//	}
+//
+//	api.instrumentTransferService.EnqueueInstrument(updatedInstrument.ID)
+//
+//	c.JSON(http.StatusOK, api.mapInstrumentToInstrumentDTO(*updatedInstrument))
+//}
+
+func (api *api) DeleteInstrument(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("instrumentId"))
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, "DeleteInstrument Error")
+		return
+	}
+
+	err = api.instrumentService.DeleteInstrument(c, id)
+	if err != nil {
+		if err == skeleton.ErrInstrumentNotFound {
+			c.AbortWithStatus(http.StatusNotFound)
+		}
+		c.AbortWithStatusJSON(http.StatusInternalServerError, "Error")
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+func (api *api) GetSupportedProtocols(c *gin.Context) {
+	supportedInstruments, err := api.instrumentService.GetSupportedProtocols(c)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, "GetSupportedProtocols Error")
+		return
+	}
+
+	c.JSON(http.StatusOK, convertSupportedProtocolsToSupportedProtocolTOs(supportedInstruments))
+}
+
+func (api *api) GetProtocolAbilities(c *gin.Context) {
+	protocolID, err := uuid.Parse(c.Param("protocolVersionID"))
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, "GetProtocolAbilities Error")
+		return
+	}
+
+	protocolAbilities, err := api.instrumentService.GetProtocolAbilities(c, protocolID)
+	if err != nil {
+		c.AbortWithStatus(http.StatusNotFound)
+		return
+	}
+
+	c.JSON(http.StatusOK, convertProtocolAbilitiesToProtocolAbilitiesTOs(protocolAbilities))
+}
+
+//// AddRequestToTransferQueue
+//// @Summary Add Request to Transfer Queue
+//// @Description Add a Request to the transfer queue to retransmit again
+//// @Tags AnalysisRequest
+//// @Produce json
+//// @Param requestID path string true "ID of the Request"
+//// @Success 200 "OK"
+//// @Failure 400 "Bad Request"
+//// @Failure 500 {object} model.HTTPError "Internal Server Error"
+//// @Router /v1/instruments/request/{requestID}/add-to-queue [GET]
+//func (api *api) AddRequestToTransferQueue(c *gin.Context) {
+//	requestID, err := uuid.Parse(c.Param("requestID"))
+//	if err != nil {
+//		log.Error().Err(err).Msg("AddRequestToTransferQueue: invalid requestID parameter")
+//		c.JSON(http.StatusBadRequest, api_errors.ErrInvalidIDParameter)
+//		return
+//	}
+//
+//	request, err := h.analysisRequestService.GetRequestByID(requestID)
+//	if err != nil {
+//		if err == sql.ErrNoRows {
+//			c.Status(http.StatusOK)
+//			return
+//		}
+//
+//		log.Error().Err(err).Msg("Can not fetch requestID")
+//		c.JSON(http.StatusInternalServerError, api_errors.InternalServerError)
+//		return
+//	}
+//
+//	skeletonRequest := mapAnalysisRequestToSkeletonAnalysisRequest(request)
+//	h.analysisRequestService.RetriggerTransferOfRequest(skeletonRequest)
+//
+//	c.Status(http.StatusOK)
+//}
+//
+//// GetChannelResultsForRequest
+//// @Summary Get Channel Results for requestID
+//// @Description Get Channel Results for requestID
+//// @Tags AnalysisRequest
+//// @Produce json
+//// @Param requestID path string true "ID of the Request"
+//// @Success 200 {object} []model.ChannelResultDetailTO "OK"
+//// @Failure 400 "Bad Request"
+//// @Failure 500 string string "Internal Server Error"
+//// @Router /v1/instruments/channel-results/{requestID} [GET]
+//func (api *api) GetChannelResultsForRequest(c *gin.Context) {
+//	requestID, err := uuid.Parse(c.Param("requestID"))
+//	if err != nil {
+//		log.Error().Err(err).Msg("GetCIAHTTPRequestHistory: invalid requestID parameter")
+//		c.Status(http.StatusBadRequest)
+//		return
+//	}
+//
+//	_, err = h.analysisRequestService.GetRequestByID(requestID)
+//	if err != nil {
+//		if err == sql.ErrNoRows {
+//			c.Status(http.StatusNotFound)
+//			return
+//		}
+//		log.Error().Err(err).Msg("Can not get request by given ID")
+//		c.JSON(http.StatusBadRequest, "Can not get request by ID")
+//		return
+//	}
+//
+//	c.JSON(http.StatusOK, []model.ChannelResultDetailTO{})
+//}
+//
+//func (api *api) AddTransmissionsBatchToTransferQueue(c *gin.Context) {
+//	var transmissionBatchData apiModel.TransmissionBatch
+//
+//	err := c.ShouldBindJSON(&transmissionBatchData)
+//	if err != nil {
+//		c.AbortWithStatusJSON(http.StatusBadRequest, api_errors.InvalidRequestBody)
+//		return
+//	}
+//
+//	sampleCodes, err := h.analysisResultService.GetSampleCodesByBatchIDs(transmissionBatchData.TransmissionIDs)
+//	if err != nil {
+//		c.AbortWithStatusJSON(http.StatusBadRequest, api_errors.InternalServerError)
+//		return
+//	}
+//
+//	if len(sampleCodes) > 0 {
+//		err = h.analysisRequestService.RetriggerResultTransferBySampleCodes(sampleCodes)
+//		if err != nil {
+//			log.Error().Err(err).Msg("Can not retrigger Transfer for sampleCodes")
+//			c.AbortWithStatusJSON(http.StatusBadRequest, api_errors.InternalServerError)
+//			return
+//		}
+//	}
+//
+//	c.Status(http.StatusOK)
+//}
+
+func convertInstrumentToListInstrumentTO(instrument skeleton.Instrument) listInstrumentTO {
+	return listInstrumentTO{
+		ID:           instrument.ID,
+		Name:         instrument.Name,
+		ProtocolName: instrument.ProtocolName,
+		Status:       instrument.Status,
+		ResultMode:   instrument.ResultMode,
+	}
+}
+
+func convertInstrumentTOToInstrument(instrumentTO instrumentTO) skeleton.Instrument {
+	model := skeleton.Instrument{
+		ID:                 instrumentTO.ID,
+		Name:               instrumentTO.Name,
+		ProtocolID:         instrumentTO.ProtocolID,
+		ProtocolName:       instrumentTO.ProtocolName,
+		Enabled:            instrumentTO.Enabled,
+		ConnectionMode:     instrumentTO.ConnectionMode,
+		ResultMode:         instrumentTO.ResultMode,
+		CaptureResults:     instrumentTO.CaptureResults,
+		CaptureDiagnostics: instrumentTO.CaptureDiagnostics,
+		ReplyToQuery:       instrumentTO.ReplyToQuery,
+		Status:             instrumentTO.Status,
+		FileEncoding:       instrumentTO.FileEncoding,
+		Timezone:           instrumentTO.Timezone,
+		Hostname:           instrumentTO.Hostname,
+		ClientPort:         instrumentTO.ClientPort,
+		AnalyteMappings:    make([]skeleton.AnalyteMapping, len(instrumentTO.AnalyteMappings)),
+		RequestMappings:    make([]skeleton.RequestMapping, len(instrumentTO.RequestMappings)),
+	}
+
+	for i, analyteMapping := range instrumentTO.AnalyteMappings {
+		model.AnalyteMappings[i] = convertAnalyteMappingTOToAnalyteMapping(analyteMapping)
+	}
+
+	for i, requestMapping := range instrumentTO.RequestMappings {
+		model.RequestMappings[i] = convertRequestMappingTOToRequestMapping(requestMapping)
+	}
+
+	return model
+}
+
+func convertInstrumentToInstrumentTO(instrument skeleton.Instrument) instrumentTO {
+	model := instrumentTO{
+		ID:                 instrument.ID,
+		Name:               instrument.Name,
+		ProtocolID:         instrument.ProtocolID,
+		ProtocolName:       instrument.ProtocolName,
+		Enabled:            instrument.Enabled,
+		ConnectionMode:     instrument.ConnectionMode,
+		ResultMode:         instrument.ResultMode,
+		CaptureResults:     instrument.CaptureResults,
+		CaptureDiagnostics: instrument.CaptureDiagnostics,
+		ReplyToQuery:       instrument.ReplyToQuery,
+		Status:             instrument.Status,
+		FileEncoding:       instrument.FileEncoding,
+		Timezone:           instrument.Timezone,
+		Hostname:           instrument.Hostname,
+		ClientPort:         instrument.ClientPort,
+		AnalyteMappings:    make([]analyteMappingTO, len(instrument.AnalyteMappings)),
+		RequestMappings:    make([]requestMappingTO, len(instrument.RequestMappings)),
+	}
+
+	for i, analyteMapping := range instrument.AnalyteMappings {
+		model.AnalyteMappings[i] = convertAnalyteMappingToAnalyteMappingTO(analyteMapping)
+	}
+
+	for i, requestMapping := range instrument.RequestMappings {
+		model.RequestMappings[i] = convertRequestMappingToRequestMappingTO(requestMapping)
+	}
+
+	return model
+}
+
+func convertAnalyteMappingTOToAnalyteMapping(analyteMappingTO analyteMappingTO) skeleton.AnalyteMapping {
+	model := skeleton.AnalyteMapping{
+		ID:                analyteMappingTO.ID,
+		InstrumentAnalyte: analyteMappingTO.InstrumentAnalyte,
+		AnalyteID:         analyteMappingTO.AnalyteID,
+		ChannelMappings:   make([]skeleton.ChannelMapping, len(analyteMappingTO.ChannelMappings)),
+		ResultMappings:    make([]skeleton.ResultMapping, len(analyteMappingTO.ResultMappings)),
+		ResultType:        analyteMappingTO.ResultType,
+	}
+
+	for i, channelMapping := range analyteMappingTO.ChannelMappings {
+		model.ChannelMappings[i] = convertChannelMappingTOToChannelMapping(channelMapping)
+	}
+
+	for i, resultMapping := range analyteMappingTO.ResultMappings {
+		model.ResultMappings[i] = convertResultMappingTOToResultMapping(resultMapping)
+	}
+
+	return model
+}
+
+func convertAnalyteMappingToAnalyteMappingTO(analyteMapping skeleton.AnalyteMapping) analyteMappingTO {
+	model := analyteMappingTO{
+		ID:                analyteMapping.ID,
+		InstrumentAnalyte: analyteMapping.InstrumentAnalyte,
+		AnalyteID:         analyteMapping.AnalyteID,
+		ChannelMappings:   make([]channelMappingTO, len(analyteMapping.ChannelMappings)),
+		ResultMappings:    make([]resultMappingTO, len(analyteMapping.ResultMappings)),
+		ResultType:        analyteMapping.ResultType,
+	}
+
+	for i, channelMapping := range analyteMapping.ChannelMappings {
+		model.ChannelMappings[i] = convertChannelMappingToChannelMappingTO(channelMapping)
+	}
+
+	for i, resultMapping := range analyteMapping.ResultMappings {
+		model.ResultMappings[i] = convertResultMappingToResultMappingTO(resultMapping)
+	}
+
+	return model
+}
+
+func convertRequestMappingTOToRequestMapping(requestMappingTO requestMappingTO) skeleton.RequestMapping {
+	return skeleton.RequestMapping{
+		ID:         requestMappingTO.ID,
+		Code:       requestMappingTO.Code,
+		AnalyteIDs: requestMappingTO.AnalyteIDs,
+	}
+}
+
+func convertRequestMappingToRequestMappingTO(requestMapping skeleton.RequestMapping) requestMappingTO {
+	return requestMappingTO{
+		ID:         requestMapping.ID,
+		Code:       requestMapping.Code,
+		AnalyteIDs: requestMapping.AnalyteIDs,
+	}
+}
+
+func convertChannelMappingTOToChannelMapping(channelMappingTO channelMappingTO) skeleton.ChannelMapping {
+	return skeleton.ChannelMapping{
+		ID:                channelMappingTO.ID,
+		InstrumentChannel: channelMappingTO.InstrumentChannel,
+		ChannelID:         channelMappingTO.ChannelID,
+	}
+}
+
+func convertChannelMappingToChannelMappingTO(channelMapping skeleton.ChannelMapping) channelMappingTO {
+	return channelMappingTO{
+		ID:                channelMapping.ID,
+		InstrumentChannel: channelMapping.InstrumentChannel,
+		ChannelID:         channelMapping.ChannelID,
+	}
+}
+
+func convertResultMappingTOToResultMapping(resultMappingTO resultMappingTO) skeleton.ResultMapping {
+	return skeleton.ResultMapping{
+		ID:    resultMappingTO.ID,
+		Key:   resultMappingTO.Key,
+		Value: resultMappingTO.Value,
+		Index: resultMappingTO.Index,
+	}
+}
+
+func convertResultMappingToResultMappingTO(resultMapping skeleton.ResultMapping) resultMappingTO {
+	return resultMappingTO{
+		ID:    resultMapping.ID,
+		Key:   resultMapping.Key,
+		Value: resultMapping.Value,
+		Index: resultMapping.Index,
+	}
+}
+
+func convertSupportedProtocolToSupportedProtocolTO(supportedProtocol skeleton.SupportedProtocol) supportedProtocolTO {
+	to := supportedProtocolTO{
+		ID:                supportedProtocol.ID,
+		Name:              supportedProtocol.Name,
+		Description:       supportedProtocol.Description,
+		ProtocolAbilities: make([]protocolAbilityTO, len(supportedProtocol.ProtocolAbilities)),
+	}
+	for i := range supportedProtocol.ProtocolAbilities {
+		to.ProtocolAbilities[i] = convertProtocolAbilityToProtocolAbilityTO(supportedProtocol.ProtocolAbilities[i])
+	}
+	return to
+}
+
+func convertSupportedProtocolsToSupportedProtocolTOs(supportedProtocols []skeleton.SupportedProtocol) []supportedProtocolTO {
+	tos := make([]supportedProtocolTO, len(supportedProtocols))
+	for i := range supportedProtocols {
+		tos[i] = convertSupportedProtocolToSupportedProtocolTO(supportedProtocols[i])
+	}
+	return tos
+}
+
+func convertProtocolAbilityToProtocolAbilitiesTO(protocolAbility skeleton.ProtocolAbility) protocolAbilityTO {
+	to := protocolAbilityTO{
+		ConnectionMode:          protocolAbility.ConnectionMode,
+		Abilities:               protocolAbility.Abilities,
+		RequestMappingAvailable: protocolAbility.RequestMappingAvailable,
+	}
+	return to
+}
+
+func convertProtocolAbilitiesToProtocolAbilitiesTOs(protocolAbilities []skeleton.ProtocolAbility) []protocolAbilityTO {
+	tos := make([]protocolAbilityTO, len(protocolAbilities))
+	for i := range protocolAbilities {
+		tos[i] = convertProtocolAbilityToProtocolAbilitiesTO(protocolAbilities[i])
+	}
+	return tos
+}
+
+func convertProtocolAbilityToProtocolAbilityTO(protocolAbility skeleton.ProtocolAbility) protocolAbilityTO {
+	return protocolAbilityTO{
+		ConnectionMode:          protocolAbility.ConnectionMode,
+		Abilities:               protocolAbility.Abilities,
+		RequestMappingAvailable: protocolAbility.RequestMappingAvailable,
+	}
+}
+
+// Todo ZsN - Improve this
+func isRequestMappingValid(instrument skeleton.Instrument) bool {
+	requestMappings := instrument.RequestMappings
+	codes := make([]string, 0)
+	for _, requestMapping := range requestMappings {
+		if len(requestMapping.AnalyteIDs) < 1 {
+			return false
+		}
+
+		// Check if only each code is once created
+		if utils.SliceContains(requestMapping.Code, codes) {
+			return false
+		}
+		codes = append(codes, requestMapping.Code)
+	}
+	return true
+}

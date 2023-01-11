@@ -1035,4 +1035,21 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_instrument_request_upload_log
 	CONSTRAINT "sk_pk_instrument_request_upload_log_id" PRIMARY KEY (id),
 	CONSTRAINT "sk_fk_transfer_instrument__id" FOREIGN KEY (instrument_id) REFERENCES <SCHEMA_PLACEHOLDER>.sk_instruments (id),
 	CONSTRAINT "sk_fk_transfer_analysis_request_id__id" FOREIGN KEY (analysis_request_id) REFERENCES <SCHEMA_PLACEHOLDER>.sk_analysis_requests (id)
-);`
+);
+
+CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_protocol_abilities
+(
+    id uuid NOT NULL DEFAULT uuid_generate_v4(),
+	protocol_id uuid NOT NULL,
+	connection_mode TEXT NOT NULL,
+    abilities TEXT NOT NULL,
+	request_mapping_available bool NOT NULL DEFAULT FALSE,
+	created_at timestamp DEFAULT now(),
+	modified_at timestamp,
+    deleted_at timestamp,
+	CONSTRAINT "sk_pk_protocol_abilities" PRIMARY KEY (id),
+	CONSTRAINT "sk_fk_protocol_id__id" FOREIGN KEY (protocol_id) REFERENCES <SCHEMA_PLACEHOLDER>.sk_supported_protocols (id)
+);
+
+CREATE UNIQUE INDEX sk_un_protocol_abilities ON <SCHEMA_PLACEHOLDER>.sk_protocol_abilities (protocol_id, connection_mode, deleted_at)
+WHERE deleted_at IS NOT NULL;`

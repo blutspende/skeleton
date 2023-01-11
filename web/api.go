@@ -17,9 +17,10 @@ type Api interface {
 }
 
 type api struct {
-	config          *skeleton.Configuration
-	engine          *gin.Engine
-	analysisService skeleton.AnalysisService
+	config            *skeleton.Configuration
+	engine            *gin.Engine
+	analysisService   skeleton.AnalysisService
+	instrumentService skeleton.InstrumentService
 	/*healthHandler               handlers.HealthHandler
 	instrumentsHandler          handlers.Instruments
 	analyteMappingHandler       handlers.AnalyteMapping

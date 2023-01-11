@@ -267,3 +267,24 @@ const (
 	NumberEncoding_CommaAndThousands        NumberEncoding = "CommaAndThousands"        // 1.500,40
 	NumberEncoding_PointAndThousandsAsComma NumberEncoding = "PointAndThousandsAsComma" // 1,200.23
 )
+
+type SupportedProtocol struct {
+	ID                uuid.UUID
+	Name              Protocol
+	Description       *string
+	ProtocolAbilities []ProtocolAbility
+}
+
+type ProtocolAbility struct {
+	ConnectionMode          ConnectionMode
+	Abilities               []Ability
+	RequestMappingAvailable bool
+}
+
+type Ability string
+
+const (
+	CanAcceptResultsAbility      Ability = "CAN_ACCEPT_RESULTS"
+	CanReplyToQueryAbility       Ability = "CAN_REPLY_TO_QUERY"
+	CanCaptureDiagnosticsAbility Ability = "CAN_CAPTURE_DIAGNOSTICS"
+)

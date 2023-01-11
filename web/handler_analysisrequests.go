@@ -55,11 +55,11 @@ type analysisRequestStatusTO struct {
 // @Failure 400 {object} model.HTTPError "Bad Request"
 // @Router /v1/int/analysisRequest/batch [POST]
 // @Router /v1/analysisRequest/batch [POST]
-func (h *api) CreateAnalysisRequestBatch(c *gin.Context) {
+func (api *api) CreateAnalysisRequestBatch(c *gin.Context) {
 
 	requeststart := time.Now()
-	h.createAnalysisRequestMutex.Lock()
-	defer h.createAnalysisRequestMutex.Unlock()
+	api.createAnalysisRequestMutex.Lock()
+	defer api.createAnalysisRequestMutex.Unlock()
 
 	log.Debug().Msg("CreateAnalysisRequestBatch - desperate debug session: entering this http handler")
 
@@ -109,7 +109,7 @@ func (h *api) CreateAnalysisRequestBatch(c *gin.Context) {
 		}
 	}
 
-	analysisRequestStatus, err := h.analysisService.CreateAnalysisRequests(c, analysisRequests)
+	analysisRequestStatus, err := api.analysisService.CreateAnalysisRequests(c, analysisRequests)
 	if err != nil {
 		log.Error().Err(err).Msg("")
 		c.JSON(http.StatusInternalServerError, ErrInternalServerError)
