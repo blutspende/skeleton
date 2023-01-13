@@ -1,12 +1,13 @@
 package web
 
 import (
+	"net/http"
+
 	"github.com/DRK-Blutspende-BaWueHe/skeleton"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
-	"net/http"
 )
 
 type instrumentTO struct {
@@ -118,7 +119,7 @@ func (api *api) CreateInstrument(c *gin.Context) {
 	err := c.ShouldBindJSON(&instrumentTO)
 	if err != nil {
 		log.Error().Err(err).Msg("Create instrument failed! Can't parse request body!")
-		c.JSON(http.StatusBadRequest, "CreateInstrument Error")
+		c.AbortWithStatusJSON(http.StatusBadRequest, "CreateInstrument Error")
 		return
 	}
 
@@ -126,13 +127,13 @@ func (api *api) CreateInstrument(c *gin.Context) {
 
 	if !isRequestMappingValid(instrument) {
 		log.Error().Msg("RequestMapping is not Valid")
-		c.JSON(http.StatusBadRequest, "CreateInstrument Error")
+		c.AbortWithStatusJSON(http.StatusBadRequest, "CreateInstrument Error")
 		return
 	}
 
 	savedInstrumentID, err := api.instrumentService.CreateInstrument(c, instrument)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, "CreateInstrument Error")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, "CreateInstrument Error")
 		return
 	}
 
@@ -142,32 +143,34 @@ func (api *api) CreateInstrument(c *gin.Context) {
 	c.JSON(http.StatusOK, savedInstrumentID)
 }
 
-//func (api *api) UpdateInstrument(c *gin.Context) {
-//	instrument := apiModel.InstrumentDTO{}
-//
-//	err := c.ShouldBindJSON(&instrument)
-//	if err != nil {
-//		log.Error().Err(err).Msg("PutInstrument: Can't bind request body!")
-//		c.JSON(http.StatusBadRequest, api_errors.InvalidRequestBody)
-//		return
-//	}
-//
-//	updatedInstrument, err := api.instrumentService.UpdateInstrument(api.mapInstrumentDTOToInstrument(instrument))
-//	if err != nil {
-//		log.Error().Err(err).Msg("PutInstrument: Failed to update instrument!")
-//		c.JSON(http.StatusInternalServerError, api_errors.InternalServerError)
-//		return
-//	}
-//
-//	err = api.inMemInstruments.UpdateInstrument(updatedInstrument)
-//	if err != nil {
-//		log.Debug().Err(err).Msg("Can not update instrument in inMemory instruments")
-//	}
-//
-//	api.instrumentTransferService.EnqueueInstrument(updatedInstrument.ID)
-//
-//	c.JSON(http.StatusOK, api.mapInstrumentToInstrumentDTO(*updatedInstrument))
-//}
+func (api *api) UpdateInstrument(c *gin.Context) {
+	instrumentTO := instrumentTO{}
+
+	err := c.ShouldBindJSON(&instrumentTO)
+	if err != nil {
+		log.Error().Err(err).Msg("Update instrument failed! Can't bind request body!")
+		c.AbortWithStatusJSON(http.StatusBadRequest, "api_errors.InvalidRequestBody")
+		return
+	}
+
+	instrument := convertInstrumentTOToInstrument(instrumentTO)
+
+	err = api.instrumentService.UpdateInstrument(c, instrument)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, "api_errors.InternalServerError")
+		return
+	}
+
+	//err = api.inMemInstruments.UpdateInstrument(updatedInstrument)
+	//if err != nil {
+	//	log.Debug().Err(err).Msg("Can not update instrument in inMemory instruments")
+	//}
+
+	// Todo
+	//api.instrumentTransferService.EnqueueInstrument(updatedInstrument.ID)
+
+	c.Status(http.StatusNoContent)
+}
 
 func (api *api) DeleteInstrument(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("instrumentId"))

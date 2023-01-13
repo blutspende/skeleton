@@ -33,16 +33,15 @@ type api struct {
 }
 
 func (api *api) Run() error {
-
 	if api.config.EnableTLS {
 		return api.engine.RunTLS(fmt.Sprintf("bloodlab:%d", api.config.APIPort), api.config.BloodlabCertPath, api.config.BloodlabKeyPath)
-	} else {
-		return api.engine.Run(fmt.Sprintf(":%d", api.config.APIPort))
 	}
+
+	return api.engine.Run(fmt.Sprintf(":%d", api.config.APIPort))
 }
 
 func NewAPI(config *skeleton.Configuration, authManager skeleton.AuthManager,
-	analysisService skeleton.AnalysisService) Api {
+	analysisService skeleton.AnalysisService, instrumentService skeleton.InstrumentService) Api {
 
 	if config.LogLevel <= zerolog.DebugLevel {
 		gin.SetMode(gin.DebugMode)
@@ -54,9 +53,10 @@ func NewAPI(config *skeleton.Configuration, authManager skeleton.AuthManager,
 	engine.Use(gin.Recovery())
 
 	api := api{
-		config:          config,
-		engine:          engine,
-		analysisService: analysisService,
+		config:            config,
+		engine:            engine,
+		analysisService:   analysisService,
+		instrumentService: instrumentService,
 		/*healthHandler:               healthHandler,
 		instrumentsHandler:          instrumentsHandler,
 		analyteMappingHandler:       analyteMappingHandler,
@@ -80,23 +80,20 @@ func NewAPI(config *skeleton.Configuration, authManager skeleton.AuthManager,
 		v1Group.Use(authMiddleWare)
 	}
 
-	v1Group.GET("/")
-	/*
-		instrumentsGroup := v1Group.Group("/instruments")
-		{
-			instrumentsGroup.GET("", api.instrumentsHandler.GetInstruments)
-			instrumentsGroup.POST("", api.instrumentsHandler.PostInstrument)
-			instrumentsGroup.GET("/:instrumentID", api.instrumentsHandler.GetInstrumentByID)
-			instrumentsGroup.GET("/:instrumentID/requests", api.requestVisualizationHandler.GetAnalysisRequests)
-			instrumentsGroup.GET("/:instrumentID/results", api.requestVisualizationHandler.GetAnalysisResults)
-			instrumentsGroup.GET("/channel-results/:requestID", api.analysisRequestHandler.GetChannelResultsForRequest)
-			instrumentsGroup.GET("/:instrumentID/list/transmissions", api.instrumentsHandler.GetListOfTransmission)
-			instrumentsGroup.PUT("/:instrumentID", api.instrumentsHandler.PutInstrument)
-			instrumentsGroup.DELETE("/:instrumentID", api.instrumentsHandler.DeleteInstrument)
-			instrumentsGroup.POST("/request/:requestID/add-to-queue", api.analysisRequestHandler.AddRequestToTransferQueue)
-			instrumentsGroup.POST("/request/add-message-batch-to-queue", api.analysisRequestHandler.AddTransmissionsBatchToTransferQueue)
-		}
-	*/
+	instrumentsGroup := v1Group.Group("/instruments")
+	{
+		instrumentsGroup.GET("", api.GetInstruments)
+		instrumentsGroup.POST("", api.CreateInstrument)
+		instrumentsGroup.GET("/:instrumentId", api.GetInstrumentByID)
+		//instrumentsGroup.GET("/:instrumentID/requests", api.GetAnalysisRequests)
+		//instrumentsGroup.GET("/:instrumentID/results", api.GetAnalysisResults)
+		//instrumentsGroup.GET("/channel-results/:requestID", api.GetChannelResultsForRequest)
+		//instrumentsGroup.GET("/:instrumentID/list/transmissions", api.GetListOfTransmission)
+		instrumentsGroup.PUT("/:instrumentId", api.UpdateInstrument)
+		instrumentsGroup.DELETE("/:instrumentId", api.DeleteInstrument)
+		//instrumentsGroup.POST("/request/:requestID/add-to-queue", api.AddRequestToTransferQueue)
+		//instrumentsGroup.POST("/request/add-message-batch-to-queue", api.AddTransmissionsBatchToTransferQueue)
+	}
 	/*
 		mappingGroup := v1Group.Group("/:analyteMappingID")
 		{
@@ -118,14 +115,14 @@ func NewAPI(config *skeleton.Configuration, authManager skeleton.AuthManager,
 			messagesGroup.GET("", api.instrumentsHandler.GetMessages)
 		}
 	*/
-	/*
-		protocolVersions := v1Group.Group("/protocol-versions")
-		{
-			protocolVersions.GET("", api.instrumentsHandler.GetSupportedInstrumentTypes)
-			protocolVersions.GET("/:protocolVersionID/abilities", api.instrumentsHandler.GetAbilities)
-			protocolVersions.GET("/:protocolVersionID/manufacturer-tests", api.instrumentsHandler.GetSupportedTestnames)
-		}
-	*/
+
+	protocolVersions := v1Group.Group("/protocol-versions")
+	{
+		protocolVersions.GET("", api.GetSupportedProtocols)
+		protocolVersions.GET("/:protocolVersionID/abilities", api.GetProtocolAbilities)
+		//protocolVersions.GET("/:protocolVersionID/manufacturer-tests", api.instrumentsHandler.GetSupportedTestnames)
+	}
+
 	/*
 		analysisRequests := v1Group.Group("analysis-requests")
 		analysisRequests.POST("", api.analysisRequestHandler.CreateAnalysisRequest)

@@ -3,6 +3,7 @@ package skeleton
 import (
 	"context"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/migrator"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/web"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -16,6 +17,7 @@ type skeleton struct {
 	dbSchema             string
 	callBackHandler      SkeletonCallbackHandlerV1
 	migrator             migrator.SkeletonMigrator
+	api                  web.Api
 	analysisRepository   AnalysisRepository
 	instrumentRepository InstrumentRepository
 	resultsBuffer        []AnalysisResult
@@ -86,7 +88,7 @@ func (s *skeleton) FindAnalyteByManufacturerTestCode(instrument Instrument, test
 	return AnalyteMapping{}
 }
 
-func (s *skeleton) FindResultMapping(searchvalue string, mapping []ResultMapping) (string, error) {
+func (s *skeleton) FindResultMapping(searchValue string, mapping []ResultMapping) (string, error) {
 	return "", nil
 }
 
@@ -106,6 +108,14 @@ func (s *skeleton) Start() error {
 
 	go s.processAnalysisResults(context.Background())
 	go s.processAnalysisResultBatches(context.Background())
+
+	// Todo - cancellable context what is passed to the routines above too
+	err = s.api.Run()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to start API")
+		return err
+	}
+
 	return nil
 }
 
@@ -154,11 +164,12 @@ func (s *skeleton) processAnalysisResultBatches(ctx context.Context) {
 	}
 }
 
-func NewSkeleton(sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, analysisRepository AnalysisRepository, instrumentRepository InstrumentRepository, cerberusClient CerberusV1) SkeletonAPI {
+func NewSkeleton(sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api web.Api, analysisRepository AnalysisRepository, instrumentRepository InstrumentRepository, cerberusClient CerberusV1) SkeletonAPI {
 	return &skeleton{
 		sqlConn:              sqlConn,
 		dbSchema:             dbSchema,
 		migrator:             migrator,
+		api:                  api,
 		analysisRepository:   analysisRepository,
 		instrumentRepository: instrumentRepository,
 		cerberusClient:       cerberusClient,

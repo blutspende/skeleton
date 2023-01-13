@@ -2,14 +2,8 @@ package skeleton
 
 import (
 	"context"
-
 	"github.com/google/uuid"
 )
-
-type instrumentService struct {
-	instrumentRepository instrumentRepository
-	dbSchema             string
-}
 
 type InstrumentService interface {
 	CreateInstrument(ctx context.Context, instrument Instrument) (uuid.UUID, error)
@@ -21,6 +15,16 @@ type InstrumentService interface {
 	UpsertSupportedProtocol(ctx context.Context, id uuid.UUID, name string, description string) error
 	GetProtocolAbilities(ctx context.Context, protocolID uuid.UUID) ([]ProtocolAbility, error)
 	UpsertProtocolAbilities(ctx context.Context, protocolID uuid.UUID, protocolAbilities []ProtocolAbility) error
+}
+
+type instrumentService struct {
+	instrumentRepository InstrumentRepository
+}
+
+func NewInstrumentService(instrumentRepository InstrumentRepository) InstrumentService {
+	return &instrumentService{
+		instrumentRepository: instrumentRepository,
+	}
 }
 
 func (s *instrumentService) CreateInstrument(ctx context.Context, instrument Instrument) (uuid.UUID, error) {
@@ -186,7 +190,7 @@ func (s *instrumentService) GetInstrumentByID(ctx context.Context, id uuid.UUID)
 }
 
 func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Instrument) error {
-	oldInstrument, err := s.GetInstrumentByID(ctx, instrument.ID) // todo kell e a repo vagy sem???
+	oldInstrument, err := s.GetInstrumentByID(ctx, instrument.ID)
 	if err != nil {
 		return err
 	}

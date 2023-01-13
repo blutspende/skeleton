@@ -5,6 +5,7 @@ import (
 	bloodlabNet "github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/db"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/migrator"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/web"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 )
@@ -101,5 +102,8 @@ func New(sqlConn *sqlx.DB, dbSchema string) (SkeletonAPI, error) {
 		return nil, err
 	}
 	dbConn := db.CreateDbConnector(sqlConn)
-	return NewSkeleton(sqlConn, dbSchema, migrator.NewSkeletonMigrator(), NewAnalysisRepository(dbConn, dbSchema), NewInstrumentRepository(dbConn, dbSchema), cerberusClient), nil
+	analysisRepository := NewAnalysisRepository(dbConn, dbSchema)
+	instrumentRepository := NewInstrumentRepository(dbConn, dbSchema)
+	api := web.NewAPI(&config, authManager, NewAnalysisService(analysisRepository), NewInstrumentService(instrumentRepository))
+	return NewSkeleton(sqlConn, dbSchema, migrator.NewSkeletonMigrator(), api, analysisRepository, instrumentRepository, cerberusClient), nil
 }
