@@ -26,8 +26,6 @@ func TestCreateInstrument(t *testing.T) {
 	_, _ = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
 	migrator := migrator.NewSkeletonMigrator()
 	_ = migrator.Run(context.Background(), sqlConn, schemaName)
-	_, _ = sqlConn.Exec(fmt.Sprintf(`-- INSERT INTO %s.sk_analyte_mappings (id, instrument_id, instrument_analyte, analyte_id, result_type) VALUES ('1d56018c-2fac-444d-b049-d5fc9975d04b', '00000000-0000-0000-0000-000000000000', 'HIVDUO-R', 'd9fb6732-4474-40d7-b44f-369de36540c7', 'pein');`, schemaName))
-	//_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_result_mappings (id, "key", "value", "index") VALUES ('b5fbad6c-ef41-4c3a-aaa6-84cf4a1c112d', '1', 'pos', 0);`, schemaName))
 	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
 
 	config := config.Configuration{
@@ -37,15 +35,9 @@ func TestCreateInstrument(t *testing.T) {
 		ApplicationName: "Instrument API Test",
 		TCPListenerPort: 5401,
 	}
-	//authManager := NewAuthManager(&config, NewRestyClient(context.Background(), &config, false))
 	dbConn := db.CreateDbConnector(sqlConn)
-	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
 	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
-	analysisService := NewAnalysisService(analysisRepository)
 	instrumentService := NewInstrumentService(instrumentRepository)
-
-	//_, _ = dbConn.Exec(`INSERT INTO instrument_test.sk_instruments (id, protocol_id, "name", hostname, client_port, enabled, connection_mode, running_mode)
-	//		VALUES ('68f34e1d-1faa-4101-9e79-a743b420ab4e', '58f34e1d-1faa-4101-9e79-a743b420ab4e', 'test', '192.168.1.10', '5401', true, 'TCP_MIXED', 'TEST');`)
 
 	responseRecorder := &httptest.ResponseRecorder{}
 	c, engine := gin.CreateTestContext(responseRecorder)
@@ -107,12 +99,9 @@ func TestCreateInstrument(t *testing.T) {
 	api := api{
 		config:            &config,
 		engine:            engine,
-		analysisService:   analysisService,
 		instrumentService: instrumentService,
 	}
 	engine.POST("/v1/instruments", api.CreateInstrument)
-
-	//newAPI(engine, &config, authManager, analysisService, instrumentService)
 
 	engine.ServeHTTP(responseRecorder, c.Request)
 
