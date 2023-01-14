@@ -179,7 +179,7 @@ type InstrumentRepository interface {
 	GetSupportedProtocols(ctx context.Context) ([]SupportedProtocol, error)
 	UpsertSupportedProtocol(ctx context.Context, id uuid.UUID, name string, description string) error
 	GetProtocolAbilities(ctx context.Context, protocolID uuid.UUID) ([]ProtocolAbility, error)
-	UpsertProtocolAbilities(ctx context.Context, instrumentID uuid.UUID, protocolAbilities []ProtocolAbility) error
+	UpsertProtocolAbilities(ctx context.Context, protocolID uuid.UUID, protocolAbilities []ProtocolAbility) error
 	CreateAnalyteMappings(ctx context.Context, analyteMappings []AnalyteMapping, instrumentID uuid.UUID) ([]uuid.UUID, error)
 	GetAnalyteMappings(ctx context.Context, instrumentIDs []uuid.UUID) (map[uuid.UUID][]AnalyteMapping, error)
 	UpdateAnalyteMapping(ctx context.Context, analyteMapping AnalyteMapping) error

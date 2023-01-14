@@ -12,9 +12,7 @@ type InstrumentService interface {
 	UpdateInstrument(ctx context.Context, instrument Instrument) error
 	DeleteInstrument(ctx context.Context, id uuid.UUID) error
 	GetSupportedProtocols(ctx context.Context) ([]SupportedProtocol, error)
-	UpsertSupportedProtocol(ctx context.Context, id uuid.UUID, name string, description string) error
 	GetProtocolAbilities(ctx context.Context, protocolID uuid.UUID) ([]ProtocolAbility, error)
-	UpsertProtocolAbilities(ctx context.Context, protocolID uuid.UUID, protocolAbilities []ProtocolAbility) error
 }
 
 type instrumentService struct {
@@ -373,14 +371,6 @@ func (s *instrumentService) GetSupportedProtocols(ctx context.Context) ([]Suppor
 	return supportedProtocols, nil
 }
 
-func (s *instrumentService) UpsertSupportedProtocol(ctx context.Context, id uuid.UUID, name string, description string) error {
-	return s.instrumentRepository.UpsertSupportedProtocol(ctx, id, name, description)
-}
-
 func (s *instrumentService) GetProtocolAbilities(ctx context.Context, protocolID uuid.UUID) ([]ProtocolAbility, error) {
 	return s.instrumentRepository.GetProtocolAbilities(ctx, protocolID)
-}
-
-func (s *instrumentService) UpsertProtocolAbilities(ctx context.Context, protocolID uuid.UUID, protocolAbilities []ProtocolAbility) error {
-	return s.instrumentRepository.UpsertProtocolAbilities(ctx, protocolID, protocolAbilities)
 }

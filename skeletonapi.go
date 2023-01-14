@@ -78,7 +78,7 @@ type SkeletonAPI interface {
 	FindResultMapping(searchValue string, mapping []ResultMapping) (string, error)
 
 	// RegisterProtocol - Registers
-	RegisterProtocol(ctx context.Context, id uuid.UUID, name string, description string) error
+	RegisterProtocol(ctx context.Context, id uuid.UUID, name string, description string, abilities []ProtocolAbility) error
 
 	// Start - MUST BE CALLED ON STARTUP
 	// - migrates skeleton database

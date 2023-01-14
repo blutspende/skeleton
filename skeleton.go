@@ -95,8 +95,12 @@ func (s *skeleton) FindResultMapping(searchValue string, mapping []ResultMapping
 	return "", nil
 }
 
-func (s *skeleton) RegisterProtocol(ctx context.Context, id uuid.UUID, name string, description string) error {
-	return s.instrumentRepository.UpsertSupportedProtocol(ctx, id, name, description)
+func (s *skeleton) RegisterProtocol(ctx context.Context, id uuid.UUID, name string, description string, abilities []ProtocolAbility) error {
+	err := s.instrumentRepository.UpsertSupportedProtocol(ctx, id, name, description)
+	if err != nil {
+		return err
+	}
+	return s.instrumentRepository.UpsertProtocolAbilities(ctx, id, abilities)
 }
 
 func (s *skeleton) migrateUp(ctx context.Context, db *sqlx.DB, schemaName string) error {
