@@ -100,16 +100,11 @@ func (s *skeleton) migrateUp(ctx context.Context, db *sqlx.DB, schemaName string
 }
 
 func (s *skeleton) Start() error {
-	err := s.migrateUp(context.Background(), s.sqlConn, s.dbSchema)
-	if err != nil {
-		return err
-	}
-
 	go s.processAnalysisResults(context.Background())
 	go s.processAnalysisResultBatches(context.Background())
 
 	// Todo - cancellable context what is passed to the routines above too
-	err = s.api.Run()
+	err := s.api.Run()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to start API")
 		return err
@@ -163,8 +158,8 @@ func (s *skeleton) processAnalysisResultBatches(ctx context.Context) {
 	}
 }
 
-func NewSkeleton(sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api GinApi, analysisRepository AnalysisRepository, instrumentRepository InstrumentRepository, cerberusClient CerberusV1) SkeletonAPI {
-	return &skeleton{
+func NewSkeleton(sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api GinApi, analysisRepository AnalysisRepository, instrumentRepository InstrumentRepository, cerberusClient CerberusV1) (SkeletonAPI, error) {
+	skeleton := &skeleton{
 		sqlConn:              sqlConn,
 		dbSchema:             dbSchema,
 		migrator:             migrator,
@@ -176,4 +171,11 @@ func NewSkeleton(sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMi
 		resultsChan:          make(chan AnalysisResult, 500),
 		resultBatchesChan:    make(chan []AnalysisResult, 10),
 	}
+
+	err := skeleton.migrateUp(context.Background(), skeleton.sqlConn, skeleton.dbSchema)
+	if err != nil {
+		return nil, err
+	}
+
+	return skeleton, nil
 }
