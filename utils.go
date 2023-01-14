@@ -29,3 +29,16 @@ func StandardizeEUDecimalValue(in string) string {
 
 	return in
 }
+
+//LookupResultMapping - Based on the Resultmappings (made in UI) translate a reulst value to its expected value
+//by example "+" -> "pos" or "?" -> "inv" etc...
+func LookupResultMapping(analyteMapping AnalyteMapping, valueFromInstrument string) string {
+
+	for _, resultMappedKeyValue := range analyteMapping.ResultMappings {
+		if resultMappedKeyValue.Key == valueFromInstrument {
+			return resultMappedKeyValue.Value
+		}
+	}
+
+	return valueFromInstrument
+}
