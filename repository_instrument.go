@@ -661,6 +661,9 @@ func (r *instrumentRepository) UpsertRequestMappingAnalytes(ctx context.Context,
 			})
 		}
 	}
+	if len(requestMappingAnalyteDAOs) < 1 {
+		return nil
+	}
 	query := fmt.Sprintf(`INSERT INTO %s.sk_request_mapping_analytes(id, analyte_id, request_mapping_id) 
 		VALUES(:id, :analyte_id, :request_mapping_id) ON CONFLICT ON CONSTRAINT sk_unique_request_mapping_analytes DO NOTHING;`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, requestMappingAnalyteDAOs)
