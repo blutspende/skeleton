@@ -26,22 +26,26 @@ func NewInstrumentService(instrumentRepository InstrumentRepository) InstrumentS
 }
 
 func (s *instrumentService) CreateInstrument(ctx context.Context, instrument Instrument) (uuid.UUID, error) {
-	id, err := s.instrumentRepository.CreateInstrument(ctx, instrument)
+	transaction, err := s.instrumentRepository.CreateTransaction()
+	if err != nil {
+		return uuid.UUID{}, err
+	}
+	id, err := s.instrumentRepository.WithTransaction(transaction).CreateInstrument(ctx, instrument)
 	if err != nil {
 		return uuid.Nil, err
 	}
-	analyteMappingIDs, err := s.instrumentRepository.CreateAnalyteMappings(ctx, instrument.AnalyteMappings, id)
+	analyteMappingIDs, err := s.instrumentRepository.WithTransaction(transaction).CreateAnalyteMappings(ctx, instrument.AnalyteMappings, id)
 	for i, analyteMappingID := range analyteMappingIDs {
-		_, err = s.instrumentRepository.CreateChannelMappings(ctx, instrument.AnalyteMappings[i].ChannelMappings, analyteMappingID)
+		_, err = s.instrumentRepository.WithTransaction(transaction).CreateChannelMappings(ctx, instrument.AnalyteMappings[i].ChannelMappings, analyteMappingID)
 		if err != nil {
 			return uuid.Nil, err
 		}
-		_, err = s.instrumentRepository.CreateResultMappings(ctx, instrument.AnalyteMappings[i].ResultMappings, analyteMappingID)
+		_, err = s.instrumentRepository.WithTransaction(transaction).CreateResultMappings(ctx, instrument.AnalyteMappings[i].ResultMappings, analyteMappingID)
 		if err != nil {
 			return uuid.Nil, err
 		}
 	}
-	requestMappingIDs, err := s.instrumentRepository.CreateRequestMappings(ctx, instrument.RequestMappings, id)
+	requestMappingIDs, err := s.instrumentRepository.WithTransaction(transaction).CreateRequestMappings(ctx, instrument.RequestMappings, id)
 	if err != nil {
 		return uuid.Nil, err
 	}
@@ -49,7 +53,7 @@ func (s *instrumentService) CreateInstrument(ctx context.Context, instrument Ins
 	for i, requestMappingID := range requestMappingIDs {
 		analyteIDsByRequestMappingIDs[requestMappingID] = instrument.RequestMappings[i].AnalyteIDs
 	}
-	err = s.instrumentRepository.UpsertRequestMappingAnalytes(ctx, analyteIDsByRequestMappingIDs)
+	err = s.instrumentRepository.WithTransaction(transaction).UpsertRequestMappingAnalytes(ctx, analyteIDsByRequestMappingIDs)
 	if err != nil {
 		return uuid.Nil, err
 	}

@@ -201,6 +201,9 @@ type InstrumentRepository interface {
 	GetRequestMappingAnalytes(ctx context.Context, requestMappingIDs []uuid.UUID) (map[uuid.UUID][]uuid.UUID, error)
 	DeleteRequestMappings(ctx context.Context, requestMappingIDs []uuid.UUID) error
 	DeleteRequestMappingAnalytes(ctx context.Context, requestMappingID uuid.UUID, analyteIDs []uuid.UUID) error
+
+	CreateTransaction() (db.DbConnector, error)
+	WithTransaction(tx db.DbConnector) InstrumentRepository
 }
 
 func (r *instrumentRepository) CreateInstrument(ctx context.Context, instrument Instrument) (uuid.UUID, error) {
@@ -751,6 +754,16 @@ func (r *instrumentRepository) DeleteRequestMappingAnalytes(ctx context.Context,
 		return ErrDeleteRequestMappingAnalytesFailed
 	}
 	return nil
+}
+
+func (r *instrumentRepository) CreateTransaction() (db.DbConnector, error) {
+	return r.db.CreateTransactionConnector()
+}
+
+func (r *instrumentRepository) WithTransaction(tx db.DbConnector) InstrumentRepository {
+	txRepo := *r
+	txRepo.db = tx
+	return &txRepo
 }
 
 func convertRequestMappingDaoToAnalyteMapping(dao requestMappingDAO) RequestMapping {
