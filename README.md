@@ -48,3 +48,10 @@ images                   []imageV1TO
 ```
 
 ### UI 
+
+
+### Versioning strategy
+The versioning of this library is semantic with <major>.<minor>.<micro>-versions. When contributing changes increment 
+  1. <micro>-version for every fix that changes nothing in the structure nor behaviour of the library e.g. adding tests, adding debug output etc.
+  2. <minor>-version for every change in the behaviour of existing functonality.
+  3. <major>-version for every change in the interface itself. 
