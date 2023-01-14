@@ -2,6 +2,7 @@ package skeleton
 
 import (
 	"context"
+
 	config2 "github.com/DRK-Blutspende-BaWueHe/skeleton/config"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/db"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/migrator"
@@ -42,7 +43,7 @@ type SkeletonAPI interface {
 
 	// GetAnalysisRequestsBySampleCodes - Return a list of AnalysisRequests that contains the sampleCodes
 	// Empty List if nothing is found. Error occurs only on Database-error
-	GetAnalysisRequestsBySampleCodes(sampleCodes []string) ([]AnalysisRequest, error)
+	GetAnalysisRequestsBySampleCodes(sampleCodes []string) (map[string][]AnalysisRequest, error)
 	GetRequestMappingsByInstrumentID(instrumentID uuid.UUID) ([]RequestMapping, error)
 
 	// SubmitAnalysisResult - Submit results to Skeleton and/or Cerberus,
@@ -71,6 +72,9 @@ type SkeletonAPI interface {
 	// FindAnalyteByManufacturerTestCode - Search for the analyte that is mapped (check ui for more info)
 	// Returns the mapping or model.EmptyAnalyteMapping
 	FindAnalyteByManufacturerTestCode(instrument Instrument, testCode string) AnalyteMapping
+
+	// FindResultEntities - Convienient: Lookup Instrument, AnalysisRequest and ResulteMapping for the analyte at once
+	FindResultEntities(InstrumentID uuid.UUID, SampleCode string, ManufacturerTestCode string) (Instrument, []AnalysisRequest, AnalyteMapping, error)
 
 	// FindResultMapping - Helper function to search for the RESULT mapping
 	// ResultMappings can be made via the ui to translate results

@@ -2,8 +2,9 @@ package skeleton
 
 import (
 	"context"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/migrator"
 	"time"
+
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/migrator"
 
 	"github.com/jmoiron/sqlx"
 
@@ -50,11 +51,23 @@ func (s *skeleton) GetAnalysisRequestWithNoResults(currentPage, itemsPerPage int
 }
 
 func (s *skeleton) GetAnalysisRequestsBySampleCode(sampleCode string) ([]AnalysisRequest, error) {
-	return []AnalysisRequest{}, nil
+
+	analysisRequests, err := s.analysisRepository.GetAnalysisRequestsBySampleCodes(context.TODO(), []string{sampleCode})
+	if err != nil {
+		return []AnalysisRequest{}, nil
+	}
+
+	return analysisRequests[sampleCode], nil
 }
 
-func (s *skeleton) GetAnalysisRequestsBySampleCodes(sampleCodes []string) ([]AnalysisRequest, error) {
-	return []AnalysisRequest{}, nil
+func (s *skeleton) GetAnalysisRequestsBySampleCodes(sampleCodes []string) (map[string][]AnalysisRequest, error) {
+
+	analysisRequests, err := s.analysisRepository.GetAnalysisRequestsBySampleCodes(context.TODO(), sampleCodes)
+	if err != nil {
+		return map[string][]AnalysisRequest{}, nil
+	}
+
+	return analysisRequests, nil
 }
 
 func (s *skeleton) GetRequestMappingsByInstrumentID(instrumentID uuid.UUID) ([]RequestMapping, error) {
@@ -93,6 +106,35 @@ func (s *skeleton) FindAnalyteByManufacturerTestCode(instrument Instrument, test
 
 func (s *skeleton) FindResultMapping(searchValue string, mapping []ResultMapping) (string, error) {
 	return "", nil
+}
+
+func (s *skeleton) FindResultEntities(InstrumentID uuid.UUID, sampleCode string, ManufacturerTestCode string) (Instrument, []AnalysisRequest, AnalyteMapping, error) {
+	instrument, err := s.GetInstrument(InstrumentID)
+	if err != nil {
+		return Instrument{}, []AnalysisRequest{}, AnalyteMapping{}, err
+	}
+
+	analyteMapping := AnalyteMapping{}
+	for _, mapping := range instrument.AnalyteMappings {
+		if mapping.InstrumentAnalyte == ManufacturerTestCode {
+			analyteMapping = mapping
+			break
+		}
+	}
+
+	allAnalysisRequests, err := s.GetAnalysisRequestsBySampleCode(sampleCode) // if there are none, that shouldnt be an error but an empty array
+	if err != nil {
+		return Instrument{}, []AnalysisRequest{}, AnalyteMapping{}, err
+	}
+
+	analysisRequests := []AnalysisRequest{}
+	for _, ar := range allAnalysisRequests {
+		if ar.AnalyteID == analyteMapping.AnalyteID {
+			analysisRequests = append(analysisRequests, ar)
+		}
+	}
+
+	return instrument, analysisRequests, analyteMapping, nil
 }
 
 func (s *skeleton) RegisterProtocol(ctx context.Context, id uuid.UUID, name string, description string, abilities []ProtocolAbility) error {
