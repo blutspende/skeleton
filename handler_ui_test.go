@@ -52,7 +52,7 @@ func TestCreateInstrument(t *testing.T) {
   "captureResults": true,
   "captureDiagnostics": true,
   "replyToQuery": true,
-  "status": "offline",
+  "status": "OFFLINE",
   "connectionMode": "TCP_SERVER_ONLY",
   "runningMode": "TEST",
   "analyteMappings": [
@@ -145,7 +145,7 @@ func TestCreateInstrumentWithoutRequestMapping(t *testing.T) {
   "captureResults": true,
   "captureDiagnostics": true,
   "replyToQuery": true,
-  "status": "offline",
+  "status": "OFFLINE",
   "connectionMode": "TCP_SERVER_ONLY",
   "runningMode": "TEST",
   "analyteMappings": [
@@ -232,7 +232,7 @@ func TestGetInstruments(t *testing.T) {
   "captureResults": true,
   "captureDiagnostics": true,
   "replyToQuery": true,
-  "status": "offline",
+  "status": "OFFLINE",
   "connectionMode": "TCP_SERVER_ONLY",
   "runningMode": "TEST",
   "analyteMappings": [

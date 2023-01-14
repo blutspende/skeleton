@@ -749,7 +749,7 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_instruments
 	captureresults bool NOT NULL DEFAULT TRUE,
 	capturediagnostics bool NOT NULL DEFAULT TRUE,
 	replytoquery bool NOT NULL DEFAULT FALSE,
-	status TEXT NOT NULL DEFAULT 'offline',
+	status TEXT NOT NULL DEFAULT 'OFFLINE',
 	sent_to_cerberus bool NOT NULL DEFAULT FALSE,
 	timezone TEXT NOT NULL DEFAULT 'Europe/Berlin',
 	file_encoding TEXT NOT NULL DEFAULT 'ASCII',
