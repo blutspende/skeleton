@@ -28,25 +28,29 @@ func NewInstrumentService(instrumentRepository InstrumentRepository) InstrumentS
 func (s *instrumentService) CreateInstrument(ctx context.Context, instrument Instrument) (uuid.UUID, error) {
 	transaction, err := s.instrumentRepository.CreateTransaction()
 	if err != nil {
-		return uuid.UUID{}, err
+		return uuid.Nil, err
 	}
 	id, err := s.instrumentRepository.WithTransaction(transaction).CreateInstrument(ctx, instrument)
 	if err != nil {
+		_ = transaction.Rollback()
 		return uuid.Nil, err
 	}
 	analyteMappingIDs, err := s.instrumentRepository.WithTransaction(transaction).CreateAnalyteMappings(ctx, instrument.AnalyteMappings, id)
 	for i, analyteMappingID := range analyteMappingIDs {
 		_, err = s.instrumentRepository.WithTransaction(transaction).CreateChannelMappings(ctx, instrument.AnalyteMappings[i].ChannelMappings, analyteMappingID)
 		if err != nil {
+			_ = transaction.Rollback()
 			return uuid.Nil, err
 		}
 		_, err = s.instrumentRepository.WithTransaction(transaction).CreateResultMappings(ctx, instrument.AnalyteMappings[i].ResultMappings, analyteMappingID)
 		if err != nil {
+			_ = transaction.Rollback()
 			return uuid.Nil, err
 		}
 	}
 	requestMappingIDs, err := s.instrumentRepository.WithTransaction(transaction).CreateRequestMappings(ctx, instrument.RequestMappings, id)
 	if err != nil {
+		_ = transaction.Rollback()
 		return uuid.Nil, err
 	}
 	analyteIDsByRequestMappingIDs := make(map[uuid.UUID][]uuid.UUID)
@@ -54,6 +58,11 @@ func (s *instrumentService) CreateInstrument(ctx context.Context, instrument Ins
 		analyteIDsByRequestMappingIDs[requestMappingID] = instrument.RequestMappings[i].AnalyteIDs
 	}
 	err = s.instrumentRepository.WithTransaction(transaction).UpsertRequestMappingAnalytes(ctx, analyteIDsByRequestMappingIDs)
+	if err != nil {
+		_ = transaction.Rollback()
+		return uuid.Nil, err
+	}
+	err = transaction.Commit()
 	if err != nil {
 		return uuid.Nil, err
 	}
