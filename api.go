@@ -1,109 +1,149 @@
 package skeleton
 
 import (
-	"context"
-	bloodlabNet "github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/db"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/migrator"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/web"
-	"github.com/google/uuid"
-	"github.com/jmoiron/sqlx"
+	"fmt"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/config"
+	middleware2 "github.com/DRK-Blutspende-BaWueHe/skeleton/middleware"
+	"net/http/pprof"
+	"sync"
+
+	"github.com/gin-gonic/gin"
+	"github.com/rs/zerolog"
 )
 
-type SkeletonError error
-
-// SkeletonCallbackHandlerV1 - must implement an Eventhandler to react on Events triggered by Skeleton
-type SkeletonCallbackHandlerV1 interface {
-	// HandleIncomingInstrumentData is called when the Instrument has send a message and this one needs to get processed
-	// This method is blocking. The synchroneous processing should be as quick as possible and pass
-	// the further process to an asynchroneous job
-	HandleIncomingInstrumentData(incomingBytes []byte, session bloodlabNet.Session, instrumentID uuid.UUID, remoteSourceAddress string) error
-
-	// HandleAnalysisRequests is called when the Sekeleton needs to resolve an updated AnalysisRequest
-	// based on data that was probably not processed before. This function is supposed to trigger a
-	// SkeletionAPI.SubmitAnalysisResult on the SkeletonAPI if result-data was found.
-	HandleAnalysisRequests(request []AnalysisRequest) error
-
-	// GetManufacturerTestList is called when the Skeleton requires a list of testnames (strings)
-	// as known to be valid by the manfucaturer of this instrument
-	GetManufacturerTestList() ([]SupportedManufacturerTests, error)
+type api struct {
+	config            *config.Configuration
+	engine            *gin.Engine
+	analysisService   AnalysisService
+	instrumentService InstrumentService
+	/*healthHandler               handlers.HealthHandler
+	instrumentsHandler          handlers.Instruments
+	analyteMappingHandler       handlers.AnalyteMapping
+	requestVisualizationHandler handlers.RequestVisualization
+	resultMappingHandler        handlers.ResultMapping
+	analysisRequestHandler      handlers.AnalysisRequest
+	requestMapping              handlers.RequestMapping
+	channelMapping              handlers.ChannelMapping*/
+	createAnalysisRequestMutex sync.Mutex
 }
 
-// SkeletonAPI is the interface for accessing the skeleton driver capabilities
-type SkeletonAPI interface {
-	SetCallbackHandler(eventHandler SkeletonCallbackHandlerV1)
-	GetCallbackHandler() SkeletonCallbackHandlerV1
-	// Log : (info) logging to ui console
-	Log(instrumentID uuid.UUID, msg string)
-	// Log : (error) logging to ui console
-	LogError(instrumentID uuid.UUID, err error)
-	// Log : (debug) logging to ui console
-	LogDebug(instrumentID uuid.UUID, msg string)
+func (api *api) Run() error {
+	if api.config.EnableTLS {
+		return api.engine.RunTLS(fmt.Sprintf("bloodlab:%d", api.config.APIPort), api.config.BloodlabCertPath, api.config.BloodlabKeyPath)
+	}
 
-	// GetAnalysisRequestWithNoResults - return those requests that have no results yet
-
-	//TODO maybe remove
-	GetAnalysisRequestWithNoResults(currentPage, itemsPerPage int) (requests []AnalysisRequest, maxPages int, err error)
-	GetAnalysisRequestsBySampleCode(sampleCode string) ([]AnalysisRequest, error)
-
-	// GetAnalysisRequestsBySampleCodes - Return a list of Analysisrequests that contains the sampleCodes
-	// Empty List if nothing is found. Error occurs only on Database-error
-	GetAnalysisRequestsBySampleCodes(sampleCodes []string) ([]AnalysisRequest, error)
-	GetRequestMappingsByInstrumentID(instrumentID uuid.UUID) ([]RequestMapping, error)
-
-	// SubmitAnalysisResult - Submit results to Skeleton and/or Cerberus,
-	//
-	// SubmitTypes:
-	//  * <No Parameter given> = SubmitTypeBatchStoreAndSend (default)
-	//  * SubmitTypeBatchStoreAndSend = Batch request and send with a 3 second delay
-	//  * SubmitTypeInstantStoreAndSend = Instantly send the Result
-	//  * SubmitTypeStoreOnly = Store the results and do not send to cerberus
-	// By default this function batches the transmissions by collecting them and
-	// use the batch-endpoint of cerberus for performance reasons
-	SubmitAnalysisResult(ctx context.Context, resultData AnalysisResult, submitTypes ...SubmitType) error
-
-	// GetInstrument returns all the settings regarding an instrument
-	// contains AnalyteMappings[] and RequestMappings[]
-	GetInstrument(instrumentID uuid.UUID) (Instrument, error)
-
-	// GetInstruments - Returns a list of instruments configured for this Driverclass
-	// contains AnalyteMappings[] and RequestMappings[]
-	GetInstruments() ([]Instrument, error)
-
-	// FindAnalyteByManufacturerTestCode - Search for the analyte that is mapped (check ui for more info)
-	// Returns the mapping or model.EmptyAnalyteMapping
-	FindAnalyteByManufacturerTestCode(instrument Instrument, testCode string) AnalyteMapping
-
-	// FindResultMapping - Helper function to search for the RESULT mapping
-	// Resultmappings can be made via the ui to translate results
-	// e.g. "+" -> "pos" to be used in a pein datatype
-	FindResultMapping(searchvalue string, mapping []ResultMapping) (string, error)
-
-	// RegisterProtocol - Registers
-	RegisterProtocol(ctx context.Context, id uuid.UUID, name string, description string) error
-
-	// Start - MUST BE CALLED ON STARTUP
-	// - migrates skeleton database
-	// - launches goroutines for analysis request/result processing
-	Start() error
+	return api.engine.Run(fmt.Sprintf(":%d", api.config.APIPort))
 }
 
-func New(sqlConn *sqlx.DB, dbSchema string) (SkeletonAPI, error) {
-	config, err := ReadConfiguration()
-	if err != nil {
-		return nil, err
+func NewAPI(config *config.Configuration, authManager AuthManager, analysisService AnalysisService, instrumentService InstrumentService) GinApi {
+	return newAPI(gin.New(), config, authManager, analysisService, instrumentService)
+}
+
+func newAPI(engine *gin.Engine, config *config.Configuration, authManager AuthManager,
+	analysisService AnalysisService, instrumentService InstrumentService) GinApi {
+
+	if config.LogLevel <= zerolog.DebugLevel {
+		gin.SetMode(gin.DebugMode)
+	} else {
+		gin.SetMode(gin.ReleaseMode)
 	}
-	authManager := NewAuthManager(&config,
-		NewRestyClient(context.Background(), &config, true))
-	authManager.StartClientCredentialTask(context.Background())
-	internalApiRestyClient := NewRestyClientWithAuthManager(context.Background(), &config, authManager)
-	cerberusClient, err := NewCerberusV1Client(config.CerberusURL, internalApiRestyClient)
-	if err != nil {
-		return nil, err
+
+	engine.Use(gin.Recovery())
+
+	api := api{
+		config:            config,
+		engine:            engine,
+		analysisService:   analysisService,
+		instrumentService: instrumentService,
+		/*healthHandler:               healthHandler,
+		instrumentsHandler:          instrumentsHandler,
+		analyteMappingHandler:       analyteMappingHandler,
+		requestVisualizationHandler: requestVisualizationHandler,
+		resultMappingHandler:        resultMappingHandler,
+		analysisRequestHandler:      analysisRequestHandler,
+		requestMapping:              requestMapping,
+		channelMapping:              channelMapping,*/
 	}
-	dbConn := db.CreateDbConnector(sqlConn)
-	analysisRepository := NewAnalysisRepository(dbConn, dbSchema)
-	instrumentRepository := NewInstrumentRepository(dbConn, dbSchema)
-	api := web.NewAPI(&config, authManager, NewAnalysisService(analysisRepository), NewInstrumentService(instrumentRepository))
-	return NewSkeleton(sqlConn, dbSchema, migrator.NewSkeletonMigrator(), api, analysisRepository, instrumentRepository, cerberusClient), nil
+
+	corsMiddleWare := middleware2.CreateCorsMiddleware(config)
+	engine.Use(corsMiddleWare)
+
+	root := engine.Group("")
+	root.GET("/health", api.GetHealth)
+
+	v1Group := root.Group("v1")
+
+	if api.config.Authorization {
+		authMiddleWare := middleware2.CheckAuth(authManager)
+		v1Group.Use(authMiddleWare)
+	}
+
+	instrumentsGroup := v1Group.Group("/instruments")
+	{
+		instrumentsGroup.GET("", api.GetInstruments)
+		instrumentsGroup.POST("", api.CreateInstrument)
+		instrumentsGroup.GET("/:instrumentId", api.GetInstrumentByID)
+		//instrumentsGroup.GET("/:instrumentID/requests", api.GetAnalysisRequests)
+		//instrumentsGroup.GET("/:instrumentID/results", api.GetAnalysisResults)
+		//instrumentsGroup.GET("/channel-results/:requestID", api.GetChannelResultsForRequest)
+		//instrumentsGroup.GET("/:instrumentID/list/transmissions", api.GetListOfTransmission)
+		instrumentsGroup.PUT("/:instrumentId", api.UpdateInstrument)
+		instrumentsGroup.DELETE("/:instrumentId", api.DeleteInstrument)
+		//instrumentsGroup.POST("/request/:requestID/add-to-queue", api.AddRequestToTransferQueue)
+		//instrumentsGroup.POST("/request/add-message-batch-to-queue", api.AddTransmissionsBatchToTransferQueue)
+	}
+	/*
+		mappingGroup := v1Group.Group("/:analyteMappingID")
+		{
+			mappingGroup.PUT("/result-mappings", api.resultMappingHandler.UpdateResultMapping)
+			mappingGroup.PUT("/channel-mappings", api.channelMapping.UpdateChannelMapping)
+		}
+	*/
+	/*
+		requestMappingGroup := instrumentsGroup.Group("/:instrumentID/request-mapping")
+		{
+			requestMappingGroup.POST("", api.requestMapping.CreateMapping)
+			requestMappingGroup.PUT("", api.requestMapping.UpdateMapping)
+			requestMappingGroup.DELETE("/:mappingID", api.requestMapping.DeleteMapping)
+		}
+	*/
+	/*
+		messagesGroup := instrumentsGroup.Group("/:instrumentID/messages")
+		{
+			messagesGroup.GET("", api.instrumentsHandler.GetMessages)
+		}
+	*/
+
+	protocolVersions := v1Group.Group("/protocol-versions")
+	{
+		protocolVersions.GET("", api.GetSupportedProtocols)
+		protocolVersions.GET("/:protocolVersionID/abilities", api.GetProtocolAbilities)
+		//protocolVersions.GET("/:protocolVersionID/manufacturer-tests", api.instrumentsHandler.GetSupportedTestnames)
+	}
+
+	/*
+		analysisRequests := v1Group.Group("analysis-requests")
+		analysisRequests.POST("", api.analysisRequestHandler.CreateAnalysisRequest)
+		analysisRequests.POST("/batch", api.analysisRequestHandler.CreateAnalysisRequestBatch)
+	*/
+	// Development-option enables debugger, this can have side-effects
+	if api.config.Development {
+		debug := root.Group("/debug/pprof")
+		{
+			debug.GET("/", gin.WrapF(pprof.Index))
+			debug.GET("/cmdline", gin.WrapF(pprof.Cmdline))
+			debug.GET("/profile", gin.WrapF(pprof.Profile))
+			debug.GET("/symbol", gin.WrapF(pprof.Symbol))
+			debug.GET("/trace", gin.WrapF(pprof.Trace))
+			debug.GET("/allocs", gin.WrapH(pprof.Handler("allocs")))
+			debug.GET("/block", gin.WrapH(pprof.Handler("block")))
+			debug.GET("/goroutine", gin.WrapH(pprof.Handler("goroutine")))
+			debug.GET("/heap", gin.WrapH(pprof.Handler("heap")))
+			debug.GET("/mutex", gin.WrapH(pprof.Handler("mutex")))
+			debug.GET("/threadcreate", gin.WrapH(pprof.Handler("threadcreate")))
+			debug.POST("/symbol", gin.WrapF(pprof.Symbol))
+		}
+	}
+
+	return &api
 }

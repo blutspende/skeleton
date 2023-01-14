@@ -1,7 +1,6 @@
-package web
+package skeleton
 
 import (
-	v1 "github.com/DRK-Blutspende-BaWueHe/skeleton"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
@@ -72,7 +71,7 @@ func (api *api) CreateAnalysisRequestBatch(c *gin.Context) {
 	}
 
 	// Map TO to model
-	analysisRequests := make([]v1.AnalysisRequest, len(analysisRequestTOs))
+	analysisRequests := make([]AnalysisRequest, len(analysisRequestTOs))
 	for i := range analysisRequestTOs {
 		analysisRequests[i].ID = uuid.Nil
 		analysisRequests[i].WorkItemID = analysisRequestTOs[i].WorkItemID
@@ -83,7 +82,7 @@ func (api *api) CreateAnalysisRequestBatch(c *gin.Context) {
 		analysisRequests[i].ValidUntilTime = analysisRequestTOs[i].ValidUntilTime
 		analysisRequests[i].CreatedAt = time.Time{}
 		if analysisRequestTOs[i].Subject != nil {
-			subject := v1.SubjectInfo{
+			subject := SubjectInfo{
 				Type:         "",
 				DateOfBirth:  analysisRequestTOs[i].Subject.DateOfBirth,
 				FirstName:    analysisRequestTOs[i].Subject.FirstName,
@@ -95,11 +94,11 @@ func (api *api) CreateAnalysisRequestBatch(c *gin.Context) {
 			}
 			switch analysisRequestTOs[i].Subject.Type {
 			case "DONOR":
-				subject.Type = v1.Donor
+				subject.Type = Donor
 			case "PERSONAL":
-				subject.Type = v1.Personal
+				subject.Type = Personal
 			case "PSEUDONYMIZED":
-				subject.Type = v1.Pseudonym
+				subject.Type = Pseudonym
 			default:
 				log.Error().Err(err).Msg(ErrInvalidSubjectTypeProvidedInAnalysisRequest.Message)
 				//TODO: Add logcom: notify some groups

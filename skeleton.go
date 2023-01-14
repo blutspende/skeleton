@@ -3,7 +3,6 @@ package skeleton
 import (
 	"context"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/migrator"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/web"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -17,7 +16,7 @@ type skeleton struct {
 	dbSchema             string
 	callBackHandler      SkeletonCallbackHandlerV1
 	migrator             migrator.SkeletonMigrator
-	api                  web.Api
+	api                  GinApi
 	analysisRepository   AnalysisRepository
 	instrumentRepository InstrumentRepository
 	resultsBuffer        []AnalysisResult
@@ -164,7 +163,7 @@ func (s *skeleton) processAnalysisResultBatches(ctx context.Context) {
 	}
 }
 
-func NewSkeleton(sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api web.Api, analysisRepository AnalysisRepository, instrumentRepository InstrumentRepository, cerberusClient CerberusV1) SkeletonAPI {
+func NewSkeleton(sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api GinApi, analysisRepository AnalysisRepository, instrumentRepository InstrumentRepository, cerberusClient CerberusV1) SkeletonAPI {
 	return &skeleton{
 		sqlConn:              sqlConn,
 		dbSchema:             dbSchema,

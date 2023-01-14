@@ -1,4 +1,4 @@
-package web
+package skeleton
 
 import (
 	"net/http"
@@ -18,7 +18,7 @@ type healthCheck struct {
 	ApiVersion []string `json:"apiVersion"`
 }
 
-func (h *api) GetHealth(c *gin.Context) {
+func (api *api) GetHealth(c *gin.Context) {
 	defaultInfo := healthCheck{
 		Service: "astm",
 		Status:  "running",

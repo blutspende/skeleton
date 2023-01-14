@@ -1,9 +1,8 @@
-package web
+package skeleton
 
 import (
 	"net/http"
 
-	"github.com/DRK-Blutspende-BaWueHe/skeleton"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -11,40 +10,40 @@ import (
 )
 
 type instrumentTO struct {
-	ID                 uuid.UUID               `json:"id"`
-	Name               string                  `json:"name"`
-	ProtocolID         uuid.UUID               `json:"protocolId"`
-	ProtocolName       skeleton.Protocol       `json:"type"`
-	Enabled            bool                    `json:"enabled"`
-	ConnectionMode     skeleton.ConnectionMode `json:"connectionMode"`
-	ResultMode         skeleton.ResultMode     `json:"runningMode"`
-	CaptureResults     bool                    `json:"captureResults"`
-	CaptureDiagnostics bool                    `json:"captureDiagnostics"`
-	ReplyToQuery       bool                    `json:"replyToQuery"`
-	Status             string                  `json:"status"`
-	FileEncoding       string                  `json:"fileEncoding"`
-	Timezone           string                  `json:"timezone"`
-	Hostname           string                  `json:"hostname"`
-	ClientPort         *int                    `json:"clientPort"`
-	AnalyteMappings    []analyteMappingTO      `json:"analyteMappings"`
-	RequestMappings    []requestMappingTO      `json:"requestMappings"`
+	ID                 uuid.UUID          `json:"id"`
+	Name               string             `json:"name"`
+	ProtocolID         uuid.UUID          `json:"protocolId"`
+	ProtocolName       Protocol           `json:"type"`
+	Enabled            bool               `json:"enabled"`
+	ConnectionMode     ConnectionMode     `json:"connectionMode"`
+	ResultMode         ResultMode         `json:"runningMode"`
+	CaptureResults     bool               `json:"captureResults"`
+	CaptureDiagnostics bool               `json:"captureDiagnostics"`
+	ReplyToQuery       bool               `json:"replyToQuery"`
+	Status             string             `json:"status"`
+	FileEncoding       string             `json:"fileEncoding"`
+	Timezone           string             `json:"timezone"`
+	Hostname           string             `json:"hostname"`
+	ClientPort         *int               `json:"clientPort"`
+	AnalyteMappings    []analyteMappingTO `json:"analyteMappings"`
+	RequestMappings    []requestMappingTO `json:"requestMappings"`
 }
 
 type listInstrumentTO struct {
-	ID           uuid.UUID           `json:"id"`
-	Name         string              `json:"name"`
-	ProtocolName skeleton.Protocol   `json:"type"`
-	Status       string              `json:"status"`
-	ResultMode   skeleton.ResultMode `json:"runningMode"`
+	ID           uuid.UUID  `json:"id"`
+	Name         string     `json:"name"`
+	ProtocolName Protocol   `json:"type"`
+	Status       string     `json:"status"`
+	ResultMode   ResultMode `json:"runningMode"`
 }
 
 type analyteMappingTO struct {
-	ID                uuid.UUID           `json:"id"`
-	InstrumentAnalyte string              `json:"instrumentAnalyte"`
-	AnalyteID         uuid.UUID           `json:"analyteId"`
-	ChannelMappings   []channelMappingTO  `json:"channelMappings"`
-	ResultMappings    []resultMappingTO   `json:"resultMappings"`
-	ResultType        skeleton.ResultType `json:"resultType"`
+	ID                uuid.UUID          `json:"id"`
+	InstrumentAnalyte string             `json:"instrumentAnalyte"`
+	AnalyteID         uuid.UUID          `json:"analyteId"`
+	ChannelMappings   []channelMappingTO `json:"channelMappings"`
+	ResultMappings    []resultMappingTO  `json:"resultMappings"`
+	ResultType        ResultType         `json:"resultType"`
 }
 
 type requestMappingTO struct {
@@ -67,14 +66,14 @@ type resultMappingTO struct {
 }
 
 type protocolAbilityTO struct {
-	ConnectionMode          skeleton.ConnectionMode `json:"connectionMode"`
-	Abilities               []skeleton.Ability      `json:"abilities"`
-	RequestMappingAvailable bool                    `json:"requestMappingAvailable"`
+	ConnectionMode          ConnectionMode `json:"connectionMode"`
+	Abilities               []Ability      `json:"abilities"`
+	RequestMappingAvailable bool           `json:"requestMappingAvailable"`
 }
 
 type supportedProtocolTO struct {
 	ID                uuid.UUID           `json:"id"`
-	Name              skeleton.Protocol   `json:"name"`
+	Name              Protocol            `json:"name"`
 	Description       *string             `json:"description"`
 	ProtocolAbilities []protocolAbilityTO `json:"protocolAbilities"`
 }
@@ -104,7 +103,7 @@ func (api *api) GetInstrumentByID(c *gin.Context) {
 
 	instrument, err := api.instrumentService.GetInstrumentByID(c, id)
 	if err != nil {
-		if err == skeleton.ErrInstrumentNotFound {
+		if err == ErrInstrumentNotFound {
 			c.AbortWithStatus(http.StatusNotFound)
 		}
 		c.AbortWithStatusJSON(http.StatusInternalServerError, "GetInstrumentByID Error")
@@ -181,7 +180,7 @@ func (api *api) DeleteInstrument(c *gin.Context) {
 
 	err = api.instrumentService.DeleteInstrument(c, id)
 	if err != nil {
-		if err == skeleton.ErrInstrumentNotFound {
+		if err == ErrInstrumentNotFound {
 			c.AbortWithStatus(http.StatusNotFound)
 		}
 		c.AbortWithStatusJSON(http.StatusInternalServerError, "Error")
@@ -215,6 +214,22 @@ func (api *api) GetProtocolAbilities(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, convertProtocolAbilitiesToProtocolAbilitiesTOs(protocolAbilities))
+}
+
+func (api *api) GetManufacturalTests(c *gin.Context) {
+	//instrumentId, err := uuid.Parse(c.Param("instrumentId"))
+	//if err != nil {
+	//	c.AbortWithStatusJSON(http.StatusBadRequest, "GetProtocolAbilities Error")
+	//	return
+	//}
+
+	//`select distinct manufacturerTest FROM sk_etc_results where instrumentId = `
+	tests := []string{
+		"first",
+		"second",
+	}
+
+	c.JSON(http.StatusOK, tests)
 }
 
 //// AddRequestToTransferQueue
@@ -312,7 +327,7 @@ func (api *api) GetProtocolAbilities(c *gin.Context) {
 //	c.Status(http.StatusOK)
 //}
 
-func convertInstrumentToListInstrumentTO(instrument skeleton.Instrument) listInstrumentTO {
+func convertInstrumentToListInstrumentTO(instrument Instrument) listInstrumentTO {
 	return listInstrumentTO{
 		ID:           instrument.ID,
 		Name:         instrument.Name,
@@ -322,8 +337,8 @@ func convertInstrumentToListInstrumentTO(instrument skeleton.Instrument) listIns
 	}
 }
 
-func convertInstrumentTOToInstrument(instrumentTO instrumentTO) skeleton.Instrument {
-	model := skeleton.Instrument{
+func convertInstrumentTOToInstrument(instrumentTO instrumentTO) Instrument {
+	model := Instrument{
 		ID:                 instrumentTO.ID,
 		Name:               instrumentTO.Name,
 		ProtocolID:         instrumentTO.ProtocolID,
@@ -339,8 +354,8 @@ func convertInstrumentTOToInstrument(instrumentTO instrumentTO) skeleton.Instrum
 		Timezone:           instrumentTO.Timezone,
 		Hostname:           instrumentTO.Hostname,
 		ClientPort:         instrumentTO.ClientPort,
-		AnalyteMappings:    make([]skeleton.AnalyteMapping, len(instrumentTO.AnalyteMappings)),
-		RequestMappings:    make([]skeleton.RequestMapping, len(instrumentTO.RequestMappings)),
+		AnalyteMappings:    make([]AnalyteMapping, len(instrumentTO.AnalyteMappings)),
+		RequestMappings:    make([]RequestMapping, len(instrumentTO.RequestMappings)),
 	}
 
 	for i, analyteMapping := range instrumentTO.AnalyteMappings {
@@ -354,7 +369,7 @@ func convertInstrumentTOToInstrument(instrumentTO instrumentTO) skeleton.Instrum
 	return model
 }
 
-func convertInstrumentToInstrumentTO(instrument skeleton.Instrument) instrumentTO {
+func convertInstrumentToInstrumentTO(instrument Instrument) instrumentTO {
 	model := instrumentTO{
 		ID:                 instrument.ID,
 		Name:               instrument.Name,
@@ -386,13 +401,13 @@ func convertInstrumentToInstrumentTO(instrument skeleton.Instrument) instrumentT
 	return model
 }
 
-func convertAnalyteMappingTOToAnalyteMapping(analyteMappingTO analyteMappingTO) skeleton.AnalyteMapping {
-	model := skeleton.AnalyteMapping{
+func convertAnalyteMappingTOToAnalyteMapping(analyteMappingTO analyteMappingTO) AnalyteMapping {
+	model := AnalyteMapping{
 		ID:                analyteMappingTO.ID,
 		InstrumentAnalyte: analyteMappingTO.InstrumentAnalyte,
 		AnalyteID:         analyteMappingTO.AnalyteID,
-		ChannelMappings:   make([]skeleton.ChannelMapping, len(analyteMappingTO.ChannelMappings)),
-		ResultMappings:    make([]skeleton.ResultMapping, len(analyteMappingTO.ResultMappings)),
+		ChannelMappings:   make([]ChannelMapping, len(analyteMappingTO.ChannelMappings)),
+		ResultMappings:    make([]ResultMapping, len(analyteMappingTO.ResultMappings)),
 		ResultType:        analyteMappingTO.ResultType,
 	}
 
@@ -407,7 +422,7 @@ func convertAnalyteMappingTOToAnalyteMapping(analyteMappingTO analyteMappingTO) 
 	return model
 }
 
-func convertAnalyteMappingToAnalyteMappingTO(analyteMapping skeleton.AnalyteMapping) analyteMappingTO {
+func convertAnalyteMappingToAnalyteMappingTO(analyteMapping AnalyteMapping) analyteMappingTO {
 	model := analyteMappingTO{
 		ID:                analyteMapping.ID,
 		InstrumentAnalyte: analyteMapping.InstrumentAnalyte,
@@ -428,15 +443,15 @@ func convertAnalyteMappingToAnalyteMappingTO(analyteMapping skeleton.AnalyteMapp
 	return model
 }
 
-func convertRequestMappingTOToRequestMapping(requestMappingTO requestMappingTO) skeleton.RequestMapping {
-	return skeleton.RequestMapping{
+func convertRequestMappingTOToRequestMapping(requestMappingTO requestMappingTO) RequestMapping {
+	return RequestMapping{
 		ID:         requestMappingTO.ID,
 		Code:       requestMappingTO.Code,
 		AnalyteIDs: requestMappingTO.AnalyteIDs,
 	}
 }
 
-func convertRequestMappingToRequestMappingTO(requestMapping skeleton.RequestMapping) requestMappingTO {
+func convertRequestMappingToRequestMappingTO(requestMapping RequestMapping) requestMappingTO {
 	return requestMappingTO{
 		ID:         requestMapping.ID,
 		Code:       requestMapping.Code,
@@ -444,15 +459,15 @@ func convertRequestMappingToRequestMappingTO(requestMapping skeleton.RequestMapp
 	}
 }
 
-func convertChannelMappingTOToChannelMapping(channelMappingTO channelMappingTO) skeleton.ChannelMapping {
-	return skeleton.ChannelMapping{
+func convertChannelMappingTOToChannelMapping(channelMappingTO channelMappingTO) ChannelMapping {
+	return ChannelMapping{
 		ID:                channelMappingTO.ID,
 		InstrumentChannel: channelMappingTO.InstrumentChannel,
 		ChannelID:         channelMappingTO.ChannelID,
 	}
 }
 
-func convertChannelMappingToChannelMappingTO(channelMapping skeleton.ChannelMapping) channelMappingTO {
+func convertChannelMappingToChannelMappingTO(channelMapping ChannelMapping) channelMappingTO {
 	return channelMappingTO{
 		ID:                channelMapping.ID,
 		InstrumentChannel: channelMapping.InstrumentChannel,
@@ -460,8 +475,8 @@ func convertChannelMappingToChannelMappingTO(channelMapping skeleton.ChannelMapp
 	}
 }
 
-func convertResultMappingTOToResultMapping(resultMappingTO resultMappingTO) skeleton.ResultMapping {
-	return skeleton.ResultMapping{
+func convertResultMappingTOToResultMapping(resultMappingTO resultMappingTO) ResultMapping {
+	return ResultMapping{
 		ID:    resultMappingTO.ID,
 		Key:   resultMappingTO.Key,
 		Value: resultMappingTO.Value,
@@ -469,7 +484,7 @@ func convertResultMappingTOToResultMapping(resultMappingTO resultMappingTO) skel
 	}
 }
 
-func convertResultMappingToResultMappingTO(resultMapping skeleton.ResultMapping) resultMappingTO {
+func convertResultMappingToResultMappingTO(resultMapping ResultMapping) resultMappingTO {
 	return resultMappingTO{
 		ID:    resultMapping.ID,
 		Key:   resultMapping.Key,
@@ -478,7 +493,7 @@ func convertResultMappingToResultMappingTO(resultMapping skeleton.ResultMapping)
 	}
 }
 
-func convertSupportedProtocolToSupportedProtocolTO(supportedProtocol skeleton.SupportedProtocol) supportedProtocolTO {
+func convertSupportedProtocolToSupportedProtocolTO(supportedProtocol SupportedProtocol) supportedProtocolTO {
 	to := supportedProtocolTO{
 		ID:                supportedProtocol.ID,
 		Name:              supportedProtocol.Name,
@@ -491,7 +506,7 @@ func convertSupportedProtocolToSupportedProtocolTO(supportedProtocol skeleton.Su
 	return to
 }
 
-func convertSupportedProtocolsToSupportedProtocolTOs(supportedProtocols []skeleton.SupportedProtocol) []supportedProtocolTO {
+func convertSupportedProtocolsToSupportedProtocolTOs(supportedProtocols []SupportedProtocol) []supportedProtocolTO {
 	tos := make([]supportedProtocolTO, len(supportedProtocols))
 	for i := range supportedProtocols {
 		tos[i] = convertSupportedProtocolToSupportedProtocolTO(supportedProtocols[i])
@@ -499,7 +514,7 @@ func convertSupportedProtocolsToSupportedProtocolTOs(supportedProtocols []skelet
 	return tos
 }
 
-func convertProtocolAbilityToProtocolAbilitiesTO(protocolAbility skeleton.ProtocolAbility) protocolAbilityTO {
+func convertProtocolAbilityToProtocolAbilitiesTO(protocolAbility ProtocolAbility) protocolAbilityTO {
 	to := protocolAbilityTO{
 		ConnectionMode:          protocolAbility.ConnectionMode,
 		Abilities:               protocolAbility.Abilities,
@@ -508,7 +523,7 @@ func convertProtocolAbilityToProtocolAbilitiesTO(protocolAbility skeleton.Protoc
 	return to
 }
 
-func convertProtocolAbilitiesToProtocolAbilitiesTOs(protocolAbilities []skeleton.ProtocolAbility) []protocolAbilityTO {
+func convertProtocolAbilitiesToProtocolAbilitiesTOs(protocolAbilities []ProtocolAbility) []protocolAbilityTO {
 	tos := make([]protocolAbilityTO, len(protocolAbilities))
 	for i := range protocolAbilities {
 		tos[i] = convertProtocolAbilityToProtocolAbilitiesTO(protocolAbilities[i])
@@ -516,7 +531,7 @@ func convertProtocolAbilitiesToProtocolAbilitiesTOs(protocolAbilities []skeleton
 	return tos
 }
 
-func convertProtocolAbilityToProtocolAbilityTO(protocolAbility skeleton.ProtocolAbility) protocolAbilityTO {
+func convertProtocolAbilityToProtocolAbilityTO(protocolAbility ProtocolAbility) protocolAbilityTO {
 	return protocolAbilityTO{
 		ConnectionMode:          protocolAbility.ConnectionMode,
 		Abilities:               protocolAbility.Abilities,
@@ -525,7 +540,7 @@ func convertProtocolAbilityToProtocolAbilityTO(protocolAbility skeleton.Protocol
 }
 
 // Todo ZsN - Improve this
-func isRequestMappingValid(instrument skeleton.Instrument) bool {
+func isRequestMappingValid(instrument Instrument) bool {
 	requestMappings := instrument.RequestMappings
 	codes := make([]string, 0)
 	for _, requestMapping := range requestMappings {

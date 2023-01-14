@@ -1,5 +1,10 @@
 package migrator
 
+//INSERT INTO	<SCHEMA_PLACEHOLDER>.sk_running_modes(name)
+//VALUES ('TEST'),
+//('VALIDATION'),
+//('PRODUCTION');
+
 const migration_1 = `
 CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_running_modes
 (
@@ -8,8 +13,8 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_running_modes
 );
 
 INSERT INTO	<SCHEMA_PLACEHOLDER>.sk_running_modes(name)
-VALUES ('TEST'),
-       ('VALIDATION'),
+VALUES ('SIMULATION'),
+       ('QUALIFY'),
        ('PRODUCTION');
 
 CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_connection_modes
@@ -148,24 +153,24 @@ VALUES ('ISO 8859-1'),
 ('ISO158Lap'),
 ('ISO159JISX02121990'),
 ('ISO646Danish'),
-('USDK '),
-('DKUS '),
-('KSC5636 '),
-('Unicode11UTF7 '),
-('ISO2022CN '),
-('ISO2022CNEXT '),
-('UTF8 '),
-('ISO885913 '),
-('ISO885914 '),
-('ISO885915 '),
-('ISO885916 '),
-('GBK '),
-('GB18030 '),
-('OSDEBCDICDF0415 '),
-('OSDEBCDICDF03IRV '),
-('OSDEBCDICDF041 '),
-('ISO115481 '),
-('KZ1048 '),
+('USDK'),
+('DKUS'),
+('KSC5636'),
+('Unicode11UTF7'),
+('ISO2022CN'),
+('ISO2022CNEXT'),
+('UTF8'),
+('ISO885913'),
+('ISO885914'),
+('ISO885915'),
+('ISO885916'),
+('GBK'),
+('GB18030'),
+('OSDEBCDICDF0415'),
+('OSDEBCDICDF03IRV'),
+('OSDEBCDICDF041'),
+('ISO115481'),
+('KZ1048'),
 ('Unicode'),
 ('UCS4'),
 ('UnicodeASCII'),

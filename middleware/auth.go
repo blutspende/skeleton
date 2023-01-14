@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	authmanager "github.com/DRK-Blutspende-BaWueHe/skeleton"
+	"github.com/MicahParks/keyfunc"
 	"net/http"
 	"strings"
 	"time"
@@ -10,8 +10,12 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 )
 
+type JWKSProvider interface {
+	GetJWKS() (*keyfunc.JWKS, error)
+}
+
 // CheckAuth - Token Validator for api requests
-func CheckAuth(authManager authmanager.AuthManager) gin.HandlerFunc {
+func CheckAuth(jwksProvider JWKSProvider) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.Request.Header.Get("Authorization")
 		token := strings.Split(authHeader, "Bearer ")
@@ -21,7 +25,7 @@ func CheckAuth(authManager authmanager.AuthManager) gin.HandlerFunc {
 			return
 		}
 
-		jwks, err := authManager.GetJWKS()
+		jwks, err := jwksProvider.GetJWKS()
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, ErrOpenIDConfiguration)
 			return

@@ -100,6 +100,7 @@ type analyteMappingDAO struct {
 	InstrumentID      uuid.UUID    `db:"instrument_id"`
 	InstrumentAnalyte string       `db:"instrument_analyte"`
 	AnalyteID         uuid.UUID    `db:"analyte_id"`
+	ResultType        ResultType   `db:"result_type"`
 	CreatedAt         time.Time    `db:"created_at"`
 	ModifiedAt        sql.NullTime `db:"modified_at"`
 	DeletedAt         sql.NullTime `db:"deleted_at"`
@@ -199,7 +200,7 @@ type InstrumentRepository interface {
 
 func (r *instrumentRepository) CreateInstrument(ctx context.Context, instrument Instrument) (uuid.UUID, error) {
 	query := fmt.Sprintf(`INSERT INTO %s.sk_instruments(id, protocol_id, "name", hostname, client_port, enabled, connection_mode, running_mode, captureresults, capturediagnostics, replytoquery, status, sent_to_cerberus, timezone, file_encoding) 
-		VALUES(id, :protocol_id, :name, :hostname, :client_port, :enabled, :connection_mode, :running_mode, :captureresults, :capturediagnostics, :replytoquery, :status, :sent_to_cerberus, :timezone, :file_encoding);`, r.dbSchema)
+		VALUES(:id, :protocol_id, :name, :hostname, :client_port, :enabled, :connection_mode, :running_mode, :captureresults, :capturediagnostics, :replytoquery, :status, :sent_to_cerberus, :timezone, :file_encoding);`, r.dbSchema)
 	instrument.ID = uuid.New()
 
 	dao, err := convertInstrumentToDAO(instrument)
@@ -397,15 +398,18 @@ func (r *instrumentRepository) UpsertProtocolAbilities(ctx context.Context, prot
 }
 
 func (r *instrumentRepository) CreateAnalyteMappings(ctx context.Context, analyteMappings []AnalyteMapping, instrumentID uuid.UUID) ([]uuid.UUID, error) {
-	ids := make([]uuid.UUID, len(analyteMappings))
 	if len(analyteMappings) == 0 {
-		return ids, nil
+		return []uuid.UUID{}, nil
 	}
-	query := fmt.Sprintf(`INSERT INTO %s.sk_analyte_mappings(id, instrument_id, instrument_analyte, analyte_id) VALUES(:id, :instrument_id, :instrument_analyte, :analyte_id);`, r.dbSchema)
+	query := fmt.Sprintf(`INSERT INTO %s.sk_analyte_mappings(id, instrument_id, instrument_analyte, analyte_id, result_type) VALUES(:id, :instrument_id, :instrument_analyte, :analyte_id, :result_type);`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, convertAnalyteMappingsToDAOs(analyteMappings, instrumentID))
 	if err != nil {
 		log.Error().Err(err).Msg(msgCreateAnalyteMappingsFailed)
-		return ids, ErrCreateAnalyteMappingsFailed
+		return []uuid.UUID{}, ErrCreateAnalyteMappingsFailed
+	}
+	ids := make([]uuid.UUID, len(analyteMappings))
+	for i := range analyteMappings {
+		ids[i] = analyteMappings[i].ID
 	}
 	return ids, nil
 }
@@ -811,6 +815,7 @@ func convertAnalyteMappingToDAO(analyteMapping AnalyteMapping, instrumentID uuid
 		InstrumentID:      instrumentID,
 		InstrumentAnalyte: analyteMapping.InstrumentAnalyte,
 		AnalyteID:         analyteMapping.AnalyteID,
+		ResultType:        analyteMapping.ResultType,
 	}
 }
 
@@ -926,7 +931,7 @@ func convertProtocolAbilitiesToDAOs(protocolAbilities []ProtocolAbility, protoco
 func convertProtocolAbilityDAOToProtocolAbility(dao protocolAbilityDAO) ProtocolAbility {
 	return ProtocolAbility{
 		ConnectionMode:          ConnectionMode(dao.ConnectionMode),
-		Abilities:               utils.SplitStringToEnumArray[[]Ability](dao.Abilities, ","),
+		Abilities:               utils.SplitStringToEnumArray[Ability](dao.Abilities, ","),
 		RequestMappingAvailable: dao.RequestMappingAvailable,
 	}
 }

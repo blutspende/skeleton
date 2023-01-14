@@ -1,14 +1,14 @@
 package middleware
 
 import (
-	"github.com/DRK-Blutspende-BaWueHe/skeleton"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/config"
 	"strings"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
-func CreateCorsMiddleware(config *skeleton.Configuration) gin.HandlerFunc {
+func CreateCorsMiddleware(config *config.Configuration) gin.HandlerFunc {
 	corsConfig := cors.DefaultConfig()
 	corsConfig.AllowAllOrigins = !config.Authorization
 	corsConfig.AllowCredentials = true

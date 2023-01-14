@@ -3,6 +3,7 @@ package skeleton
 import (
 	"context"
 	"crypto/tls"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/config"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -10,7 +11,7 @@ import (
 	"github.com/go-resty/resty/v2"
 )
 
-func NewRestyClient(ctx context.Context, configuration *Configuration, useProxy bool) *resty.Client {
+func NewRestyClient(ctx context.Context, configuration *config.Configuration, useProxy bool) *resty.Client {
 	client := resty.New().
 		OnBeforeRequest(configureRequest(ctx, configuration))
 
@@ -26,7 +27,7 @@ func NewRestyClient(ctx context.Context, configuration *Configuration, useProxy 
 	return client
 }
 
-func NewRestyClientWithAuthManager(ctx context.Context, configuration *Configuration, authManager AuthManager) *resty.Client {
+func NewRestyClientWithAuthManager(ctx context.Context, configuration *config.Configuration, authManager AuthManager) *resty.Client {
 	client := resty.New().
 		OnBeforeRequest(configureRequest(ctx, configuration)).
 		OnBeforeRequest(func(client *resty.Client, request *resty.Request) error {
@@ -48,7 +49,7 @@ func NewRestyClientWithAuthManager(ctx context.Context, configuration *Configura
 	return client
 }
 
-func configureRequest(ctx context.Context, configuration *Configuration) resty.RequestMiddleware {
+func configureRequest(ctx context.Context, configuration *config.Configuration) resty.RequestMiddleware {
 	return func(client *resty.Client, request *resty.Request) error {
 		request.SetContext(ctx)
 		if configuration.LogLevel == zerolog.DebugLevel {

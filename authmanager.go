@@ -3,6 +3,7 @@ package skeleton
 import (
 	"context"
 	"errors"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/config"
 	"strings"
 	"sync"
 	"time"
@@ -21,7 +22,7 @@ type AuthManager interface {
 }
 
 type authManager struct {
-	configuration         *Configuration
+	configuration         *config.Configuration
 	restClient            *resty.Client
 	jwks                  *keyfunc.JWKS
 	oidc                  *OpenIDConfiguration
@@ -29,7 +30,7 @@ type authManager struct {
 	tokenEndpointResponse *TokenEndpointResponse
 }
 
-func NewAuthManager(configuration *Configuration, restClient *resty.Client) AuthManager {
+func NewAuthManager(configuration *config.Configuration, restClient *resty.Client) AuthManager {
 	keycloakManager := &authManager{
 		configuration: configuration,
 		restClient:    restClient,

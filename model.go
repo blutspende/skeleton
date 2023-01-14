@@ -10,6 +10,10 @@ const (
 	Universal_Lis2A2 Protocol = "Universal Lis2A2 (Generic)"
 )
 
+type GinApi interface {
+	Run() error
+}
+
 // AnalysisRequestResponseItemV1 - Response of the AnalysisService to indicate the status of the requests
 type AnalysisRequestStatus struct {
 	AnalysisRequest *AnalysisRequest
@@ -17,7 +21,7 @@ type AnalysisRequestStatus struct {
 }
 
 // AnalysisRequest - Analysis Request as processed by our AnalysisService
-// Do not use in implentation directly
+// Do not use in implementation directly
 type AnalysisRequest struct {
 	ID             uuid.UUID
 	WorkItemID     uuid.UUID
@@ -288,3 +292,7 @@ const (
 	CanReplyToQueryAbility       Ability = "CAN_REPLY_TO_QUERY"
 	CanCaptureDiagnosticsAbility Ability = "CAN_CAPTURE_DIAGNOSTICS"
 )
+
+func (a Ability) String() string {
+	return string(a)
+}

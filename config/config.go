@@ -1,4 +1,4 @@
-package skeleton
+package config
 
 import (
 	"encoding/base64"
