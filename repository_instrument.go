@@ -486,7 +486,7 @@ func (r *instrumentRepository) GetAnalyteMappings(ctx context.Context, instrumen
 }
 
 func (r *instrumentRepository) UpdateAnalyteMapping(ctx context.Context, analyteMapping AnalyteMapping) error {
-	query := fmt.Sprintf(`UDPATE %s.sk_analyte_mappings SET instrument_analyte = :instrument_analyte, analyte_id = :analyte_id, modified_at = timezone('utc', now()) WHERE id = :id`, r.dbSchema)
+	query := fmt.Sprintf(`UPDATE %s.sk_analyte_mappings SET instrument_analyte = :instrument_analyte, analyte_id = :analyte_id, modified_at = timezone('utc', now()) WHERE id = :id`, r.dbSchema)
 	dao := convertAnalyteMappingToDAO(analyteMapping, uuid.Nil)
 	_, err := r.db.ExecContext(ctx, query, dao)
 	if err != nil {
@@ -500,7 +500,7 @@ func (r *instrumentRepository) DeleteAnalyteMappings(ctx context.Context, ids []
 	if len(ids) == 0 {
 		return nil
 	}
-	query := fmt.Sprintf(`UDPATE %s.sk_analyte_mappings SET deleted_at = timezone('utc', now()) WHERE id IN (?);`, r.dbSchema)
+	query := fmt.Sprintf(`UPDATE %s.sk_analyte_mappings SET deleted_at = timezone('utc', now()) WHERE id IN (?);`, r.dbSchema)
 	query, args, _ := sqlx.In(query, ids)
 	_, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
@@ -553,7 +553,7 @@ func (r *instrumentRepository) GetChannelMappings(ctx context.Context, analyteMa
 }
 
 func (r *instrumentRepository) UpdateChannelMapping(ctx context.Context, channelMapping ChannelMapping) error {
-	query := fmt.Sprintf(`UDPATE %s.sk_channel_mappings SET instrument_channel = :instrument_channel, channel_id = :channel_id, modified_at = timezone('utc', now()) WHERE id = :id;`, r.dbSchema)
+	query := fmt.Sprintf(`UPDATE %s.sk_channel_mappings SET instrument_channel = :instrument_channel, channel_id = :channel_id, modified_at = timezone('utc', now()) WHERE id = :id;`, r.dbSchema)
 	dao := convertChannelMappingToDAO(channelMapping, uuid.Nil)
 	_, err := r.db.ExecContext(ctx, query, dao)
 	if err != nil {
@@ -567,7 +567,7 @@ func (r *instrumentRepository) DeleteChannelMappings(ctx context.Context, ids []
 	if len(ids) == 0 {
 		return nil
 	}
-	query := fmt.Sprintf(`UDPATE %s.sk_channel_mappings SET deleted_at = timezone('utc', now()) WHERE id IN (?);`, r.dbSchema)
+	query := fmt.Sprintf(`UPDATE %s.sk_channel_mappings SET deleted_at = timezone('utc', now()) WHERE id IN (?);`, r.dbSchema)
 	query, args, _ := sqlx.In(query, ids)
 	_, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
@@ -620,7 +620,7 @@ func (r *instrumentRepository) GetResultMappings(ctx context.Context, analyteMap
 }
 
 func (r *instrumentRepository) UpdateResultMapping(ctx context.Context, resultMapping ResultMapping) error {
-	query := fmt.Sprintf(`UDPATE %s.sk_result_mappings SET "key" = :key, "value" = :value, "index" = :index, modified_at = timezone('utc', now()) WHERE id = :id`, r.dbSchema)
+	query := fmt.Sprintf(`UPDATE %s.sk_result_mappings SET "key" = :key, "value" = :value, "index" = :index, modified_at = timezone('utc', now()) WHERE id = :id`, r.dbSchema)
 	dao := convertResultMappingToDAO(resultMapping, uuid.Nil)
 	_, err := r.db.ExecContext(ctx, query, dao)
 	if err != nil {
@@ -634,7 +634,7 @@ func (r *instrumentRepository) DeleteResultMappings(ctx context.Context, ids []u
 	if len(ids) == 0 {
 		return nil
 	}
-	query := fmt.Sprintf(`UDPATE %s.sk_result_mappings SET deleted_at = timezone('utc', now()) WHERE id IN (?);`, r.dbSchema)
+	query := fmt.Sprintf(`UPDATE %s.sk_result_mappings SET deleted_at = timezone('utc', now()) WHERE id IN (?);`, r.dbSchema)
 	query, args, _ := sqlx.In(query, ids)
 	_, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
@@ -691,7 +691,7 @@ func (r *instrumentRepository) UpsertRequestMappingAnalytes(ctx context.Context,
 }
 
 func (r *instrumentRepository) UpdateRequestMapping(ctx context.Context, requestMapping RequestMapping) error {
-	query := fmt.Sprintf(`UDPATE %s.sk_result_mappings SET code = :code, modified_at = timezone('utc', now()) WHERE id = :id;`, r.dbSchema)
+	query := fmt.Sprintf(`UPDATE %s.sk_result_mappings SET code = :code, modified_at = timezone('utc', now()) WHERE id = :id;`, r.dbSchema)
 	dao := convertRequestMappingToDAO(requestMapping, uuid.Nil)
 	_, err := r.db.ExecContext(ctx, query, dao)
 	if err != nil {
