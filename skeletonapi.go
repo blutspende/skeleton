@@ -12,20 +12,20 @@ import (
 
 type SkeletonError error
 
-// SkeletonCallbackHandlerV1 - must implement an Eventhandler to react on Events triggered by Skeleton
+// SkeletonCallbackHandlerV1 - must implement an EventHandler to react on Events triggered by Skeleton
 type SkeletonCallbackHandlerV1 interface {
 	// HandleIncomingInstrumentData is called when the Instrument has sent a message and this one needs to get processed
-	// This method is blocking. The synchroneous processing should be as quick as possible and pass
-	// the further process to an asynchroneous job
+	// This method is blocking. The synchronous processing should be as quick as possible and pass
+	// the further process to an asynchronous job
 	HandleIncomingInstrumentData(incomingBytes []byte, session bloodlabNet.Session, instrumentID uuid.UUID, remoteSourceAddress string) error
 
-	// HandleAnalysisRequests is called when the Sekeleton needs to resolve an updated AnalysisRequest
+	// HandleAnalysisRequests is called when the Skeleton needs to resolve an updated AnalysisRequest
 	// based on data that was probably not processed before. This function is supposed to trigger a
-	// SkeletionAPI.SubmitAnalysisResult on the SkeletonAPI if result-data was found.
+	// SkeletonAPI.SubmitAnalysisResult on the SkeletonAPI if result-data was found.
 	HandleAnalysisRequests(request []AnalysisRequest) error
 
-	// GetManufacturerTestList is called when the Skeleton requires a list of testnames (strings)
-	// as known to be valid by the manfucaturer of this instrument
+	// GetManufacturerTestList is called when the Skeleton requires a list of test names (strings)
+	// as known to be valid by the manufacturer of this instrument
 	GetManufacturerTestList() ([]SupportedManufacturerTests, error)
 }
 
@@ -46,7 +46,7 @@ type SkeletonAPI interface {
 	GetAnalysisRequestWithNoResults(currentPage, itemsPerPage int) (requests []AnalysisRequest, maxPages int, err error)
 	GetAnalysisRequestsBySampleCode(sampleCode string) ([]AnalysisRequest, error)
 
-	// GetAnalysisRequestsBySampleCodes - Return a list of Analysisrequests that contains the sampleCodes
+	// GetAnalysisRequestsBySampleCodes - Return a list of AnalysisRequests that contains the sampleCodes
 	// Empty List if nothing is found. Error occurs only on Database-error
 	GetAnalysisRequestsBySampleCodes(sampleCodes []string) ([]AnalysisRequest, error)
 	GetRequestMappingsByInstrumentID(instrumentID uuid.UUID) ([]RequestMapping, error)
@@ -66,7 +66,7 @@ type SkeletonAPI interface {
 	// contains AnalyteMappings[] and RequestMappings[]
 	GetInstrument(instrumentID uuid.UUID) (Instrument, error)
 
-	// GetInstruments - Returns a list of instruments configured for this Driverclass
+	// GetInstruments - Returns a list of instruments configured for this Driver class
 	// contains AnalyteMappings[] and RequestMappings[]
 	GetInstruments() ([]Instrument, error)
 
@@ -75,9 +75,9 @@ type SkeletonAPI interface {
 	FindAnalyteByManufacturerTestCode(instrument Instrument, testCode string) AnalyteMapping
 
 	// FindResultMapping - Helper function to search for the RESULT mapping
-	// Resultmappings can be made via the ui to translate results
+	// ResultMappings can be made via the ui to translate results
 	// e.g. "+" -> "pos" to be used in a pein datatype
-	FindResultMapping(searchvalue string, mapping []ResultMapping) (string, error)
+	FindResultMapping(searchValue string, mapping []ResultMapping) (string, error)
 
 	// RegisterProtocol - Registers
 	RegisterProtocol(ctx context.Context, id uuid.UUID, name string, description string) error

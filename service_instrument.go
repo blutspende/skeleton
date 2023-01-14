@@ -359,7 +359,18 @@ func (s *instrumentService) DeleteInstrument(ctx context.Context, id uuid.UUID) 
 }
 
 func (s *instrumentService) GetSupportedProtocols(ctx context.Context) ([]SupportedProtocol, error) {
-	return s.instrumentRepository.GetSupportedProtocols(ctx)
+	supportedProtocols, err := s.instrumentRepository.GetSupportedProtocols(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for i := range supportedProtocols {
+		abilities, err := s.instrumentRepository.GetProtocolAbilities(ctx, supportedProtocols[i].ID)
+		if err != nil {
+			return nil, err
+		}
+		supportedProtocols[i].ProtocolAbilities = abilities
+	}
+	return supportedProtocols, nil
 }
 
 func (s *instrumentService) UpsertSupportedProtocol(ctx context.Context, id uuid.UUID, name string, description string) error {
