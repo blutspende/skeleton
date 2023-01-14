@@ -154,6 +154,7 @@ type supportedProtocolDAO struct {
 }
 
 type protocolAbilityDAO struct {
+	ID                      uuid.UUID    `db:"id"`
 	ProtocolID              uuid.UUID    `db:"protocol_id"`
 	ConnectionMode          string       `db:"connection_mode"`
 	Abilities               string       `db:"abilities"`
