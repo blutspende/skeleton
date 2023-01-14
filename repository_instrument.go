@@ -819,9 +819,11 @@ func convertInstrumentDaoToInstrument(dao instrumentDAO) (Instrument, error) {
 		return instrument, ErrInvalidConnectionMode
 	}
 	switch dao.RunningMode {
-	case "SIMULATION":
+	case "TEST":
+		//case "SIMULATION":
 		instrument.ResultMode = Simulation
-	case "QUALIFY":
+	case "VALIDATION":
+		//case "QUALIFY":
 		instrument.ResultMode = Qualify
 	case "PRODUCTION":
 		instrument.ResultMode = Production

@@ -51,9 +51,9 @@ type ResultMode string
 
 const (
 	// Simulated results will not be transmitted to Cerberus and stay within the driver
-	Simulation ResultMode = "SIMULATION"
+	Simulation ResultMode = "TEST" // Todo - SIMULATION
 	// Qualification Results are transmitted to cerberus but not returned to any EIA interface
-	Qualify ResultMode = "QUALIFY"
+	Qualify ResultMode = "VALIDATION" // Todo - QUALIFY
 	// Production allows the results to be returned via EIA
 	Production ResultMode = "PRODUCTION"
 )

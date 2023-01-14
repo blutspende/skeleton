@@ -1,10 +1,5 @@
 package migrator
 
-//INSERT INTO	<SCHEMA_PLACEHOLDER>.sk_running_modes(name)
-//VALUES ('TEST'),
-//('VALIDATION'),
-//('PRODUCTION');
-
 const migration_1 = `
 CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_running_modes
 (
@@ -13,8 +8,8 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_running_modes
 );
 
 INSERT INTO	<SCHEMA_PLACEHOLDER>.sk_running_modes(name)
-VALUES ('SIMULATION'),
-       ('QUALIFY'),
+VALUES ('TEST'),
+       ('VALIDATION'),
        ('PRODUCTION');
 
 CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_connection_modes

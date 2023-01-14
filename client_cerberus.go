@@ -192,9 +192,11 @@ func (cia *cerberusV1) PostAnalysisResultBatch(analysisResults []AnalysisResult)
 
 		switch ar.Instrument.ResultMode {
 		case Simulation:
-			analysisResultTO.Mode = "SIMULATION"
+			//analysisResultTO.Mode = "SIMULATION"
+			analysisResultTO.Mode = "TEST"
 		case Qualify:
-			analysisResultTO.Mode = "QUALIFY"
+			//analysisResultTO.Mode = "QUALIFY"
+			analysisResultTO.Mode = "VALIDATION"
 		case Production:
 			analysisResultTO.Mode = "PRODUCTION"
 		default:
