@@ -113,6 +113,20 @@ func (api *api) GetInstrumentByID(c *gin.Context) {
 	c.JSON(http.StatusOK, convertInstrumentToInstrumentTO(instrument))
 }
 
+func (api *api) GetInstrumentByIP(c *gin.Context) {
+	ip := c.Param("ip")
+	instrument, err := api.instrumentService.GetInstrumentByIP(c, ip)
+	if err != nil {
+		if err == ErrInstrumentNotFound {
+			c.AbortWithStatus(http.StatusNotFound)
+		}
+		c.AbortWithStatusJSON(http.StatusInternalServerError, "GetInstrumentByIP Error")
+		return
+	}
+
+	c.JSON(http.StatusOK, convertInstrumentToInstrumentTO(instrument))
+}
+
 func (api *api) CreateInstrument(c *gin.Context) {
 	instrumentTO := instrumentTO{}
 	err := c.ShouldBindJSON(&instrumentTO)

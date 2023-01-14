@@ -21,6 +21,7 @@ const (
 	msgGetInstrumentsFailed               = "get instruments failed"
 	msgGetInstrumentChangesFailed         = "get changed instruments failed"
 	msgGetInstrumentByIDFailed            = "get instrument by id failed"
+	msgGetInstrumentByIPFailed            = "get instrument by IP failed"
 	msgInstrumentNotFound                 = "instrument not found"
 	msgUpdateInstrumentFailed             = "update instrument failed"
 	msgDeleteInstrumentFailed             = "delete instrument failed"
@@ -51,6 +52,7 @@ var (
 	ErrGetInstrumentsFailed               = errors.New(msgGetInstrumentsFailed)
 	ErrGetInstrumentChangesFailed         = errors.New(msgGetInstrumentChangesFailed)
 	ErrGetInstrumentByIDFailed            = errors.New(msgGetInstrumentByIDFailed)
+	ErrGetInstrumentByIPFailed            = errors.New(msgGetInstrumentByIPFailed)
 	ErrInstrumentNotFound                 = errors.New(msgInstrumentNotFound)
 	ErrUpdateInstrumentFailed             = errors.New(msgUpdateInstrumentFailed)
 	ErrDeleteInstrumentFailed             = errors.New(msgDeleteInstrumentFailed)
@@ -171,6 +173,7 @@ type InstrumentRepository interface {
 	GetInstruments(ctx context.Context) ([]Instrument, error)
 	GetInstrumentChanges(ctx context.Context, timeFrom time.Time) ([]Instrument, error)
 	GetInstrumentByID(ctx context.Context, id uuid.UUID) (Instrument, error)
+	GetInstrumentByIP(ctx context.Context, ip string) (Instrument, error)
 	UpdateInstrument(ctx context.Context, instrument Instrument) error
 	DeleteInstrument(ctx context.Context, id uuid.UUID) error
 	GetSupportedProtocols(ctx context.Context) ([]SupportedProtocol, error)
@@ -283,6 +286,30 @@ func (r *instrumentRepository) GetInstrumentByID(ctx context.Context, id uuid.UU
 	if err != nil {
 		log.Error().Err(row.Err()).Msg(msgGetInstrumentByIDFailed)
 		return instrument, ErrGetInstrumentByIDFailed
+	}
+	instrument, err = convertInstrumentDaoToInstrument(dao)
+	if err != nil {
+		return instrument, err
+	}
+	return instrument, nil
+}
+
+func (r *instrumentRepository) GetInstrumentByIP(ctx context.Context, ip string) (Instrument, error) {
+	query := fmt.Sprintf(`SELECT * FROM %s.sk_instruments WHERE hostname = $1 AND deleted_at IS NULL;`, r.dbSchema)
+	var instrument Instrument
+	row := r.db.QueryRowxContext(ctx, query, ip)
+	if row.Err() != nil {
+		if row.Err() == sql.ErrNoRows {
+			return instrument, ErrInstrumentNotFound
+		}
+		log.Error().Err(row.Err()).Msg(msgGetInstrumentByIPFailed)
+		return instrument, ErrGetInstrumentByIPFailed
+	}
+	var dao instrumentDAO
+	err := row.StructScan(&dao)
+	if err != nil {
+		log.Error().Err(row.Err()).Msg(msgGetInstrumentByIPFailed)
+		return instrument, ErrGetInstrumentByIPFailed
 	}
 	instrument, err = convertInstrumentDaoToInstrument(dao)
 	if err != nil {
