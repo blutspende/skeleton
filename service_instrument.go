@@ -9,22 +9,28 @@ type InstrumentService interface {
 	CreateInstrument(ctx context.Context, instrument Instrument) (uuid.UUID, error)
 	GetInstruments(ctx context.Context) ([]Instrument, error)
 	GetInstrumentByID(ctx context.Context, id uuid.UUID) (Instrument, error)
+	GetInstrumentByIP(ctx context.Context, ip string) (Instrument, error)
 	UpdateInstrument(ctx context.Context, instrument Instrument) error
 	DeleteInstrument(ctx context.Context, id uuid.UUID) error
 	GetSupportedProtocols(ctx context.Context) ([]SupportedProtocol, error)
 	GetProtocolAbilities(ctx context.Context, protocolID uuid.UUID) ([]ProtocolAbility, error)
 	GetManufacturerTests(ctx context.Context, instrumentID uuid.UUID, protocolID uuid.UUID) ([]SupportedManufacturerTests, error)
+	UpsertSupportedProtocol(ctx context.Context, id uuid.UUID, name string, description string) error
+	UpsertProtocolAbilities(ctx context.Context, protocolID uuid.UUID, protocolAbilities []ProtocolAbility) error
+	UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error
 }
 
 type instrumentService struct {
 	instrumentRepository InstrumentRepository
-	manager              Manager
+	manager              CallbackManager
+	instrumentCache      InstrumentCache
 }
 
-func NewInstrumentService(instrumentRepository InstrumentRepository, manager Manager) InstrumentService {
+func NewInstrumentService(instrumentRepository InstrumentRepository, manager CallbackManager, instrumentCache InstrumentCache) InstrumentService {
 	return &instrumentService{
 		instrumentRepository: instrumentRepository,
 		manager:              manager,
+		instrumentCache:      instrumentCache,
 	}
 }
 
@@ -69,10 +75,15 @@ func (s *instrumentService) CreateInstrument(ctx context.Context, instrument Ins
 	if err != nil {
 		return uuid.Nil, err
 	}
+	s.instrumentCache.Invalidate()
 	return id, nil
 }
 
 func (s *instrumentService) GetInstruments(ctx context.Context) ([]Instrument, error) {
+	if instruments := s.instrumentCache.GetAll(); len(instruments) > 0 {
+		return instruments, nil
+	}
+
 	instruments, err := s.instrumentRepository.GetInstruments(ctx)
 	if err != nil {
 		return nil, err
@@ -143,10 +154,17 @@ func (s *instrumentService) GetInstruments(ctx context.Context) ([]Instrument, e
 	for requestMappingID, analyteIDs := range requestMappingAnalyteIDs {
 		requestMappingsByIDs[requestMappingID].AnalyteIDs = analyteIDs
 	}
+
+	s.instrumentCache.Set(instruments)
+
 	return instruments, nil
 }
 
 func (s *instrumentService) GetInstrumentByID(ctx context.Context, id uuid.UUID) (Instrument, error) {
+	if instrument, ok := s.instrumentCache.GetByID(id); ok {
+		return instrument, nil
+	}
+
 	instrument, err := s.instrumentRepository.GetInstrumentByID(ctx, id)
 	if err != nil {
 		return instrument, err
@@ -206,7 +224,15 @@ func (s *instrumentService) GetInstrumentByID(ctx context.Context, id uuid.UUID)
 	for requestMappingID, analyteIDs := range requestMappingAnalyteIDs {
 		requestMappingsByIDs[requestMappingID].AnalyteIDs = analyteIDs
 	}
+
 	return instrument, nil
+}
+
+func (s *instrumentService) GetInstrumentByIP(ctx context.Context, ip string) (Instrument, error) {
+	if instrument, ok := s.instrumentCache.GetByIP(ip); ok {
+		return instrument, nil
+	}
+	return s.instrumentRepository.GetInstrumentByIP(ctx, ip)
 }
 
 func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Instrument) error {
@@ -371,11 +397,17 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 	if err != nil {
 		return err
 	}
+	s.instrumentCache.Invalidate()
 	return nil
 }
 
 func (s *instrumentService) DeleteInstrument(ctx context.Context, id uuid.UUID) error {
-	return s.instrumentRepository.DeleteInstrument(ctx, id)
+	err := s.instrumentRepository.DeleteInstrument(ctx, id)
+	if err != nil {
+		return err
+	}
+	s.instrumentCache.Invalidate()
+	return nil
 }
 
 func (s *instrumentService) GetSupportedProtocols(ctx context.Context) ([]SupportedProtocol, error) {
@@ -406,4 +438,16 @@ func (s *instrumentService) GetManufacturerTests(ctx context.Context, instrument
 		return []SupportedManufacturerTests{}, nil
 	}
 	return tests, nil
+}
+
+func (s *instrumentService) UpsertSupportedProtocol(ctx context.Context, id uuid.UUID, name string, description string) error {
+	return s.instrumentRepository.UpsertSupportedProtocol(ctx, id, name, description)
+}
+
+func (s *instrumentService) UpsertProtocolAbilities(ctx context.Context, protocolID uuid.UUID, protocolAbilities []ProtocolAbility) error {
+	return s.instrumentRepository.UpsertProtocolAbilities(ctx, protocolID, protocolAbilities)
+}
+
+func (s *instrumentService) UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error {
+	return s.instrumentRepository.UpdateInstrumentStatus(ctx, id, status)
 }

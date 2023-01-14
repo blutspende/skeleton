@@ -12,18 +12,17 @@ import (
 )
 
 type skeleton struct {
-	sqlConn              *sqlx.DB
-	dbSchema             string
-	migrator             migrator.SkeletonMigrator
-	api                  GinApi
-	analysisRepository   AnalysisRepository
-	instrumentRepository InstrumentRepository
-	instrumentService    InstrumentService
-	resultsBuffer        []AnalysisResult
-	resultsChan          chan AnalysisResult
-	resultBatchesChan    chan []AnalysisResult
-	cerberusClient       CerberusV1
-	manager              Manager
+	sqlConn            *sqlx.DB
+	dbSchema           string
+	migrator           migrator.SkeletonMigrator
+	api                GinApi
+	analysisRepository AnalysisRepository
+	instrumentService  InstrumentService
+	resultsBuffer      []AnalysisResult
+	resultsChan        chan AnalysisResult
+	resultBatchesChan  chan []AnalysisResult
+	cerberusClient     CerberusV1
+	manager            CallbackManager
 }
 
 func (s *skeleton) SetCallbackHandler(eventHandler SkeletonCallbackHandlerV1) {
@@ -77,15 +76,15 @@ func (s *skeleton) SubmitAnalysisResult(ctx context.Context, resultData Analysis
 }
 
 func (s *skeleton) GetInstrument(instrumentID uuid.UUID) (Instrument, error) {
-	return s.instrumentRepository.GetInstrumentByID(context.TODO(), instrumentID)
+	return s.instrumentService.GetInstrumentByID(context.TODO(), instrumentID)
 }
 
 func (s *skeleton) GetInstrumentByIP(ip string) (Instrument, error) {
-	return s.instrumentRepository.GetInstrumentByIP(context.TODO(), ip)
+	return s.instrumentService.GetInstrumentByIP(context.TODO(), ip)
 }
 
 func (s *skeleton) GetInstruments() ([]Instrument, error) {
-	return s.instrumentRepository.GetInstruments(context.TODO())
+	return s.instrumentService.GetInstruments(context.TODO())
 }
 
 func (s *skeleton) FindAnalyteByManufacturerTestCode(instrument Instrument, testCode string) AnalyteMapping {
@@ -97,15 +96,15 @@ func (s *skeleton) FindResultMapping(searchValue string, mapping []ResultMapping
 }
 
 func (s *skeleton) RegisterProtocol(ctx context.Context, id uuid.UUID, name string, description string, abilities []ProtocolAbility) error {
-	err := s.instrumentRepository.UpsertSupportedProtocol(ctx, id, name, description)
+	err := s.instrumentService.UpsertSupportedProtocol(ctx, id, name, description)
 	if err != nil {
 		return err
 	}
-	return s.instrumentRepository.UpsertProtocolAbilities(ctx, id, abilities)
+	return s.instrumentService.UpsertProtocolAbilities(ctx, id, abilities)
 }
 
 func (s *skeleton) SetOnlineStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error {
-	return s.instrumentRepository.UpdateInstrumentStatus(ctx, id, status)
+	return s.instrumentService.UpdateInstrumentStatus(ctx, id, status)
 }
 
 func (s *skeleton) migrateUp(ctx context.Context, db *sqlx.DB, schemaName string) error {
@@ -171,25 +170,30 @@ func (s *skeleton) processAnalysisResultBatches(ctx context.Context) {
 	}
 }
 
-func NewSkeleton(sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api GinApi, analysisRepository AnalysisRepository, instrumentRepository InstrumentRepository, manager Manager, cerberusClient CerberusV1) (SkeletonAPI, error) {
+func NewSkeleton(sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api GinApi, analysisRepository AnalysisRepository, instrumentService InstrumentService, manager CallbackManager, cerberusClient CerberusV1) (SkeletonAPI, error) {
 	skeleton := &skeleton{
-		sqlConn:              sqlConn,
-		dbSchema:             dbSchema,
-		migrator:             migrator,
-		api:                  api,
-		analysisRepository:   analysisRepository,
-		instrumentRepository: instrumentRepository,
-		manager:              manager,
-		cerberusClient:       cerberusClient,
-		resultsBuffer:        make([]AnalysisResult, 0, 500),
-		resultsChan:          make(chan AnalysisResult, 500),
-		resultBatchesChan:    make(chan []AnalysisResult, 10),
+		sqlConn:            sqlConn,
+		dbSchema:           dbSchema,
+		migrator:           migrator,
+		api:                api,
+		analysisRepository: analysisRepository,
+		instrumentService:  instrumentService,
+		manager:            manager,
+		cerberusClient:     cerberusClient,
+		resultsBuffer:      make([]AnalysisResult, 0, 500),
+		resultsChan:        make(chan AnalysisResult, 500),
+		resultBatchesChan:  make(chan []AnalysisResult, 10),
 	}
 
 	err := skeleton.migrateUp(context.Background(), skeleton.sqlConn, skeleton.dbSchema)
 	if err != nil {
 		return nil, err
 	}
+
+	// Note: Cache instruments on startup
+	go func() {
+		_, _ = instrumentService.GetInstruments(context.Background())
+	}()
 
 	return skeleton, nil
 }

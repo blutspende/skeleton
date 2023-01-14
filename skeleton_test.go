@@ -62,9 +62,10 @@ func TestSubmitAnalysisResult(t *testing.T) {
 	instrumentRepository := skeleton.NewInstrumentRepository(dbConn, schemaName)
 
 	analysisService := skeleton.NewAnalysisService(analysisRepository)
+	instrumentService := skeleton.NewInstrumentService(instrumentRepository, nil, nil)
 	cerberusClientMock := cerberusClientMock{}
 
-	skeletonInstance, _ := skeleton.NewSkeleton(sqlConn, schemaName, migrator.NewSkeletonMigrator(), nil, analysisRepository, instrumentRepository, nil, &cerberusClientMock)
+	skeletonInstance, _ := skeleton.NewSkeleton(sqlConn, schemaName, migrator.NewSkeletonMigrator(), nil, analysisRepository, instrumentService, nil, &cerberusClientMock)
 	func() {
 		err = skeletonInstance.Start()
 		assert.Nil(t, err)

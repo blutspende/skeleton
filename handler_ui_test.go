@@ -37,7 +37,7 @@ func TestCreateInstrument(t *testing.T) {
 	}
 	dbConn := db.CreateDbConnector(sqlConn)
 	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
-	instrumentService := NewInstrumentService(instrumentRepository, NewManager())
+	instrumentService := NewInstrumentService(instrumentRepository, NewCallbackManager(), NewInstrumentCache())
 
 	responseRecorder := &httptest.ResponseRecorder{}
 	c, engine := gin.CreateTestContext(responseRecorder)
@@ -130,7 +130,7 @@ func TestCreateInstrumentWithoutRequestMapping(t *testing.T) {
 	}
 	dbConn := db.CreateDbConnector(sqlConn)
 	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
-	instrumentService := NewInstrumentService(instrumentRepository, NewManager())
+	instrumentService := NewInstrumentService(instrumentRepository, NewCallbackManager(), NewInstrumentCache())
 
 	responseRecorder := &httptest.ResponseRecorder{}
 	c, engine := gin.CreateTestContext(responseRecorder)
@@ -217,7 +217,7 @@ func TestGetInstruments(t *testing.T) {
 	}
 	dbConn := db.CreateDbConnector(sqlConn)
 	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
-	instrumentService := NewInstrumentService(instrumentRepository, NewManager())
+	instrumentService := NewInstrumentService(instrumentRepository, NewCallbackManager(), NewInstrumentCache())
 
 	responseRecorder := &httptest.ResponseRecorder{}
 	c, engine := gin.CreateTestContext(responseRecorder)
