@@ -93,8 +93,8 @@ func (api *api) GetInstruments(c *gin.Context) {
 
 	instrumentTOs := make([]listInstrumentTO, len(instruments))
 
-	for i, instrument := range instruments {
-		instrumentTOs[i] = convertInstrumentToListInstrumentTO(instrument)
+	for i := range instruments {
+		instrumentTOs[i] = convertInstrumentToListInstrumentTO(instruments[i])
 	}
 
 	c.JSON(http.StatusOK, instrumentTOs)
@@ -365,13 +365,16 @@ func convertInstrumentTOToInstrument(instrumentTO instrumentTO) Instrument {
 		CaptureResults:     instrumentTO.CaptureResults,
 		CaptureDiagnostics: instrumentTO.CaptureDiagnostics,
 		ReplyToQuery:       instrumentTO.ReplyToQuery,
-		Status:             instrumentTO.Status,
 		FileEncoding:       instrumentTO.FileEncoding,
 		Timezone:           instrumentTO.Timezone,
 		Hostname:           instrumentTO.Hostname,
 		ClientPort:         instrumentTO.ClientPort,
 		AnalyteMappings:    make([]AnalyteMapping, len(instrumentTO.AnalyteMappings)),
 		RequestMappings:    make([]RequestMapping, len(instrumentTO.RequestMappings)),
+	}
+
+	if instrumentTO.Status == "" {
+		model.Status = string(InstrumentOffline)
 	}
 
 	for i, analyteMapping := range instrumentTO.AnalyteMappings {
