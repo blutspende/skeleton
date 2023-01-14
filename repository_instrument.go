@@ -416,10 +416,13 @@ func (r *instrumentRepository) UpsertProtocolAbilities(ctx context.Context, prot
 		VALUES(:protocol_id, :connection_mode, :abilities, :request_mapping_available) ON CONFLICT (protocol_id, connection_mode)
 		DO UPDATE SET abilities = :abilities, request_mapping_available = :request_mapping_available, modified_at = timezone('utc', now());`, r.dbSchema)
 	protocolAbilityDAOs := convertProtocolAbilitiesToDAOs(protocolAbilities, protocolID)
-	_, err := r.db.NamedExecContext(ctx, query, protocolAbilityDAOs)
-	if err != nil {
-		log.Error().Err(err).Msg(msgUpsertProtocolAbilitiesFailed)
-		return ErrUpsertProtocolAbilitiesFailed
+	// Todo - check and improve it cuz gives error with batch insert. Old and fixed(?): https://github.com/jmoiron/sqlx/issues/505
+	for _, protocolAbility := range protocolAbilityDAOs {
+		_, err := r.db.NamedExecContext(ctx, query, protocolAbility)
+		if err != nil {
+			log.Error().Err(err).Msg(msgUpsertProtocolAbilitiesFailed)
+			return ErrUpsertProtocolAbilitiesFailed
+		}
 	}
 	return nil
 }
