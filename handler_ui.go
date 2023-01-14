@@ -245,7 +245,7 @@ func (api *api) GetManufacturerTests(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, tests)
+	c.JSON(http.StatusOK, convertSupportedManufacturerTestsToSupportedManufacturerTestTOs(tests))
 }
 
 //// AddRequestToTransferQueue
@@ -556,6 +556,22 @@ func convertProtocolAbilityToProtocolAbilityTO(protocolAbility ProtocolAbility) 
 		Abilities:               protocolAbility.Abilities,
 		RequestMappingAvailable: protocolAbility.RequestMappingAvailable,
 	}
+}
+
+func convertSupportedManufacturerTestToSupportedManufacturerTestTO(supportedManufacturerTest SupportedManufacturerTests) supportedManufacturerTestTO {
+	return supportedManufacturerTestTO{
+		TestName:          supportedManufacturerTest.TestName,
+		Channels:          supportedManufacturerTest.Channels,
+		ValidResultValues: supportedManufacturerTest.ValidResultValues,
+	}
+}
+
+func convertSupportedManufacturerTestsToSupportedManufacturerTestTOs(supportedManufacturerTests []SupportedManufacturerTests) []supportedManufacturerTestTO {
+	tos := make([]supportedManufacturerTestTO, len(supportedManufacturerTests))
+	for i := range supportedManufacturerTests {
+		tos[i] = convertSupportedManufacturerTestToSupportedManufacturerTestTO(supportedManufacturerTests[i])
+	}
+	return tos
 }
 
 // Todo ZsN - Improve this
