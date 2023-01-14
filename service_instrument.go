@@ -13,15 +13,18 @@ type InstrumentService interface {
 	DeleteInstrument(ctx context.Context, id uuid.UUID) error
 	GetSupportedProtocols(ctx context.Context) ([]SupportedProtocol, error)
 	GetProtocolAbilities(ctx context.Context, protocolID uuid.UUID) ([]ProtocolAbility, error)
+	GetManufacturerTests(ctx context.Context, instrumentID uuid.UUID, protocolID uuid.UUID) ([]SupportedManufacturerTests, error)
 }
 
 type instrumentService struct {
 	instrumentRepository InstrumentRepository
+	manager              Manager
 }
 
-func NewInstrumentService(instrumentRepository InstrumentRepository) InstrumentService {
+func NewInstrumentService(instrumentRepository InstrumentRepository, manager Manager) InstrumentService {
 	return &instrumentService{
 		instrumentRepository: instrumentRepository,
+		manager:              manager,
 	}
 }
 
@@ -386,4 +389,15 @@ func (s *instrumentService) GetSupportedProtocols(ctx context.Context) ([]Suppor
 
 func (s *instrumentService) GetProtocolAbilities(ctx context.Context, protocolID uuid.UUID) ([]ProtocolAbility, error) {
 	return s.instrumentRepository.GetProtocolAbilities(ctx, protocolID)
+}
+
+func (s *instrumentService) GetManufacturerTests(ctx context.Context, instrumentID uuid.UUID, protocolID uuid.UUID) ([]SupportedManufacturerTests, error) {
+	tests, err := s.manager.GetCallbackHandler().GetManufacturerTestList(instrumentID, protocolID)
+	if err != nil {
+		return nil, err
+	}
+	if len(tests) < 1 {
+		return []SupportedManufacturerTests{}, nil
+	}
+	return tests, nil
 }

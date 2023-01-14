@@ -20,7 +20,7 @@ type SkeletonCallbackHandlerV1 interface {
 
 	// GetManufacturerTestList is called when the Skeleton requires a list of test names (strings)
 	// as known to be valid by the manufacturer of this instrument
-	GetManufacturerTestList() ([]SupportedManufacturerTests, error)
+	GetManufacturerTestList(instrumentId uuid.UUID, protocolId uuid.UUID) ([]SupportedManufacturerTests, error)
 }
 
 // SkeletonAPI is the interface for accessing the skeleton driver capabilities
@@ -80,6 +80,8 @@ type SkeletonAPI interface {
 	// RegisterProtocol - Registers
 	RegisterProtocol(ctx context.Context, id uuid.UUID, name string, description string, abilities []ProtocolAbility) error
 
+	SetOnlineStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error
+
 	// Start - MUST BE CALLED ON STARTUP
 	// - migrates skeleton database
 	// - launches goroutines for analysis request/result processing
@@ -100,8 +102,11 @@ func New(sqlConn *sqlx.DB, dbSchema string) (SkeletonAPI, error) {
 		return nil, err
 	}
 	dbConn := db.CreateDbConnector(sqlConn)
+	manager := NewManager()
 	analysisRepository := NewAnalysisRepository(dbConn, dbSchema)
 	instrumentRepository := NewInstrumentRepository(dbConn, dbSchema)
-	api := NewAPI(&config, authManager, NewAnalysisService(analysisRepository), NewInstrumentService(instrumentRepository))
-	return NewSkeleton(sqlConn, dbSchema, migrator.NewSkeletonMigrator(), api, analysisRepository, instrumentRepository, cerberusClient)
+	analysisService := NewAnalysisService(analysisRepository)
+	instrumentService := NewInstrumentService(instrumentRepository, manager)
+	api := NewAPI(&config, authManager, analysisService, instrumentService)
+	return NewSkeleton(sqlConn, dbSchema, migrator.NewSkeletonMigrator(), api, analysisRepository, instrumentRepository, manager, cerberusClient)
 }

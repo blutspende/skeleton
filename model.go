@@ -296,3 +296,11 @@ const (
 func (a Ability) String() string {
 	return string(a)
 }
+
+type InstrumentStatus string
+
+const (
+	InstrumentOffline InstrumentStatus = "OFFLINE"
+	InstrumentReady   InstrumentStatus = "READY"
+	InstrumentOnline  InstrumentStatus = "ONLINE"
+)

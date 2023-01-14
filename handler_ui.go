@@ -78,6 +78,12 @@ type supportedProtocolTO struct {
 	ProtocolAbilities []protocolAbilityTO `json:"protocolAbilities"`
 }
 
+type supportedManufacturerTestTO struct {
+	TestName          string   `json:"testName"`
+	Channels          []string `json:"channels"`
+	ValidResultValues []string `json:"validResultValues"`
+}
+
 func (api *api) GetInstruments(c *gin.Context) {
 	instruments, err := api.instrumentService.GetInstruments(c)
 	if err != nil {
@@ -201,7 +207,7 @@ func (api *api) GetSupportedProtocols(c *gin.Context) {
 }
 
 func (api *api) GetProtocolAbilities(c *gin.Context) {
-	protocolID, err := uuid.Parse(c.Param("protocolVersionID"))
+	protocolID, err := uuid.Parse(c.Param("protocolVersionId"))
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, "GetProtocolAbilities Error")
 		return
@@ -216,17 +222,27 @@ func (api *api) GetProtocolAbilities(c *gin.Context) {
 	c.JSON(http.StatusOK, convertProtocolAbilitiesToProtocolAbilitiesTOs(protocolAbilities))
 }
 
-func (api *api) GetManufacturalTests(c *gin.Context) {
-	//instrumentId, err := uuid.Parse(c.Param("instrumentId"))
-	//if err != nil {
-	//	c.AbortWithStatusJSON(http.StatusBadRequest, "GetProtocolAbilities Error")
-	//	return
-	//}
+func (api *api) GetManufacturerTests(c *gin.Context) {
+	protocolID, err := uuid.Parse(c.Param("protocolVersionId"))
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, "GetProtocolAbilities Error")
+		return
+	}
 
-	//`select distinct manufacturerTest FROM sk_etc_results where instrumentId = `
-	tests := []string{
-		"first",
-		"second",
+	instrumentID := uuid.Nil
+	instrumentIDString, ok := c.GetQuery("instrumentId")
+	if ok {
+		instrumentID, err = uuid.Parse(instrumentIDString)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, "malformed instrument ID")
+			return
+		}
+	}
+
+	tests, err := api.instrumentService.GetManufacturerTests(c, instrumentID, protocolID)
+	if err != nil {
+		c.AbortWithStatus(http.StatusBadRequest)
+		return
 	}
 
 	c.JSON(http.StatusOK, tests)

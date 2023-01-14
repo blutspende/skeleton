@@ -117,8 +117,8 @@ func newAPI(engine *gin.Engine, config *config.Configuration, authManager AuthMa
 	protocolVersions := v1Group.Group("/protocol-versions")
 	{
 		protocolVersions.GET("", api.GetSupportedProtocols)
-		protocolVersions.GET("/:protocolVersionID/abilities", api.GetProtocolAbilities)
-		//protocolVersions.GET("/:protocolVersionID/manufacturer-tests", api.instrumentsHandler.GetSupportedTestnames)
+		protocolVersions.GET("/:protocolVersionId/abilities", api.GetProtocolAbilities)
+		protocolVersions.GET("/:protocolVersionId/manufacturer-tests", api.GetManufacturerTests)
 	}
 
 	/*

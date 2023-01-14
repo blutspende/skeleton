@@ -14,22 +14,23 @@ import (
 type skeleton struct {
 	sqlConn              *sqlx.DB
 	dbSchema             string
-	callBackHandler      SkeletonCallbackHandlerV1
 	migrator             migrator.SkeletonMigrator
 	api                  GinApi
 	analysisRepository   AnalysisRepository
 	instrumentRepository InstrumentRepository
+	instrumentService    InstrumentService
 	resultsBuffer        []AnalysisResult
 	resultsChan          chan AnalysisResult
 	resultBatchesChan    chan []AnalysisResult
 	cerberusClient       CerberusV1
+	manager              Manager
 }
 
 func (s *skeleton) SetCallbackHandler(eventHandler SkeletonCallbackHandlerV1) {
-	s.callBackHandler = eventHandler
+	s.manager.SetCallbackHandler(eventHandler)
 }
 func (s *skeleton) GetCallbackHandler() SkeletonCallbackHandlerV1 {
-	return s.callBackHandler
+	return s.manager.GetCallbackHandler()
 }
 
 func (s *skeleton) Log(instrumentID uuid.UUID, msg string) {
@@ -103,6 +104,10 @@ func (s *skeleton) RegisterProtocol(ctx context.Context, id uuid.UUID, name stri
 	return s.instrumentRepository.UpsertProtocolAbilities(ctx, id, abilities)
 }
 
+func (s *skeleton) SetOnlineStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error {
+	return s.instrumentRepository.UpdateInstrumentStatus(ctx, id, status)
+}
+
 func (s *skeleton) migrateUp(ctx context.Context, db *sqlx.DB, schemaName string) error {
 	return s.migrator.Run(ctx, db, schemaName)
 }
@@ -111,7 +116,7 @@ func (s *skeleton) Start() error {
 	go s.processAnalysisResults(context.Background())
 	go s.processAnalysisResultBatches(context.Background())
 
-	// Todo - cancellable context what is passed to the routines above too
+	// Todo - use cancellable context what is passed to the routines above too
 	err := s.api.Run()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to start API")
@@ -166,7 +171,7 @@ func (s *skeleton) processAnalysisResultBatches(ctx context.Context) {
 	}
 }
 
-func NewSkeleton(sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api GinApi, analysisRepository AnalysisRepository, instrumentRepository InstrumentRepository, cerberusClient CerberusV1) (SkeletonAPI, error) {
+func NewSkeleton(sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api GinApi, analysisRepository AnalysisRepository, instrumentRepository InstrumentRepository, manager Manager, cerberusClient CerberusV1) (SkeletonAPI, error) {
 	skeleton := &skeleton{
 		sqlConn:              sqlConn,
 		dbSchema:             dbSchema,
@@ -174,6 +179,7 @@ func NewSkeleton(sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMi
 		api:                  api,
 		analysisRepository:   analysisRepository,
 		instrumentRepository: instrumentRepository,
+		manager:              manager,
 		cerberusClient:       cerberusClient,
 		resultsBuffer:        make([]AnalysisResult, 0, 500),
 		resultsChan:          make(chan AnalysisResult, 500),

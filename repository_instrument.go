@@ -28,6 +28,7 @@ const (
 	msgDeleteInstrumentFailed             = "delete instrument failed"
 	msgUpsertSupportedProtocolFailed      = "upsert supported protocol failed"
 	msgUpsertProtocolAbilitiesFailed      = "upsert protocol abilities failed"
+	msgUpdateInstrumentStatusFailed       = "update instrument status failed"
 	msgCreateAnalyteMappingsFailed        = "create analyte mappings failed"
 	msgGetAnalyteMappingsFailed           = "get analyte mappings failed"
 	msgUpdateAnalyteMappingFailed         = "update analyte mapping failed"
@@ -59,6 +60,7 @@ var (
 	ErrDeleteInstrumentFailed             = errors.New(msgDeleteInstrumentFailed)
 	ErrUpsertSupportedProtocolFailed      = errors.New(msgUpsertSupportedProtocolFailed)
 	ErrUpsertProtocolAbilitiesFailed      = errors.New(msgUpsertProtocolAbilitiesFailed)
+	ErrUpdateInstrumentStatusFailed       = errors.New(msgUpdateInstrumentStatusFailed)
 	ErrCreateAnalyteMappingsFailed        = errors.New(msgCreateAnalyteMappingsFailed)
 	ErrGetAnalyteMappingsFailed           = errors.New(msgGetAnalyteMappingsFailed)
 	ErrUpdateAnalyteMappingFailed         = errors.New(msgUpdateAnalyteMappingFailed)
@@ -182,6 +184,7 @@ type InstrumentRepository interface {
 	UpsertSupportedProtocol(ctx context.Context, id uuid.UUID, name string, description string) error
 	GetProtocolAbilities(ctx context.Context, protocolID uuid.UUID) ([]ProtocolAbility, error)
 	UpsertProtocolAbilities(ctx context.Context, protocolID uuid.UUID, protocolAbilities []ProtocolAbility) error
+	UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error
 	CreateAnalyteMappings(ctx context.Context, analyteMappings []AnalyteMapping, instrumentID uuid.UUID) ([]uuid.UUID, error)
 	GetAnalyteMappings(ctx context.Context, instrumentIDs []uuid.UUID) (map[uuid.UUID][]AnalyteMapping, error)
 	UpdateAnalyteMapping(ctx context.Context, analyteMapping AnalyteMapping) error
@@ -428,6 +431,16 @@ func (r *instrumentRepository) UpsertProtocolAbilities(ctx context.Context, prot
 			log.Error().Err(err).Msg(msgUpsertProtocolAbilitiesFailed)
 			return ErrUpsertProtocolAbilitiesFailed
 		}
+	}
+	return nil
+}
+
+func (r *instrumentRepository) UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error {
+	query := fmt.Sprintf(`UPDATE %s.sk_instruments SET status = $2 WHERE id = $1;`, r.dbSchema)
+	_, err := r.db.ExecContext(ctx, query, id, status)
+	if err != nil {
+		log.Error().Err(err).Msg(msgUpdateInstrumentStatusFailed)
+		return ErrUpdateInstrumentStatusFailed
 	}
 	return nil
 }
