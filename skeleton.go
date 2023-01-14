@@ -79,6 +79,10 @@ func (s *skeleton) GetInstrument(instrumentID uuid.UUID) (Instrument, error) {
 	return s.instrumentRepository.GetInstrumentByID(context.TODO(), instrumentID)
 }
 
+func (s *skeleton) GetInstrumentByIP(ip string) (Instrument, error) {
+	return s.instrumentRepository.GetInstrumentByIP(context.TODO(), ip)
+}
+
 func (s *skeleton) GetInstruments() ([]Instrument, error) {
 	return s.instrumentRepository.GetInstruments(context.TODO())
 }

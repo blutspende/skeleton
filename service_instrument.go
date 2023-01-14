@@ -9,7 +9,6 @@ type InstrumentService interface {
 	CreateInstrument(ctx context.Context, instrument Instrument) (uuid.UUID, error)
 	GetInstruments(ctx context.Context) ([]Instrument, error)
 	GetInstrumentByID(ctx context.Context, id uuid.UUID) (Instrument, error)
-	GetInstrumentByIP(ctx context.Context, ip string) (Instrument, error)
 	UpdateInstrument(ctx context.Context, instrument Instrument) error
 	DeleteInstrument(ctx context.Context, id uuid.UUID) error
 	GetSupportedProtocols(ctx context.Context) ([]SupportedProtocol, error)
@@ -132,15 +131,62 @@ func (s *instrumentService) GetInstrumentByID(ctx context.Context, id uuid.UUID)
 	if err != nil {
 		return instrument, err
 	}
-	return s.loadInstrumentData(ctx, instrument)
-}
-
-func (s *instrumentService) GetInstrumentByIP(ctx context.Context, ip string) (Instrument, error) {
-	instrument, err := s.instrumentRepository.GetInstrumentByIP(ctx, ip)
+	instrumentIDs := []uuid.UUID{instrument.ID}
+	analyteMappingsByInstrumentID, err := s.instrumentRepository.GetAnalyteMappings(ctx, instrumentIDs)
 	if err != nil {
 		return instrument, err
 	}
-	return s.loadInstrumentData(ctx, instrument)
+	analyteMappingsIDs := make([]uuid.UUID, 0)
+	analyteMappingIDInstrumentIDMap := make(map[uuid.UUID]uuid.UUID)
+	analyteMappingsByIDs := make(map[uuid.UUID]*AnalyteMapping)
+
+	for instrumentID, analyteMappings := range analyteMappingsByInstrumentID {
+		instrument.AnalyteMappings = analyteMappings
+		for i := range instrument.AnalyteMappings {
+			analyteMappingsIDs = append(analyteMappingsIDs, analyteMappings[i].ID)
+			analyteMappingIDInstrumentIDMap[analyteMappings[i].ID] = instrumentID
+			analyteMappingsByIDs[analyteMappings[i].ID] = &instrument.AnalyteMappings[i]
+		}
+	}
+	channelMappingsByAnalyteMappingID, err := s.instrumentRepository.GetChannelMappings(ctx, analyteMappingsIDs)
+	if err != nil {
+		return instrument, err
+	}
+	for analyteMappingID, channelMappings := range channelMappingsByAnalyteMappingID {
+		analyteMappingsByIDs[analyteMappingID].ChannelMappings = channelMappings
+	}
+
+	resultMappingsByAnalyteMappingID, err := s.instrumentRepository.GetResultMappings(ctx, analyteMappingsIDs)
+	if err != nil {
+		return instrument, err
+	}
+	for analyteMappingID, resultMappings := range resultMappingsByAnalyteMappingID {
+		analyteMappingsByIDs[analyteMappingID].ResultMappings = resultMappings
+	}
+
+	requestMappingsByInstrumentID, err := s.instrumentRepository.GetRequestMappings(ctx, instrumentIDs)
+	if err != nil {
+		return instrument, err
+	}
+	requestMappingIDs := make([]uuid.UUID, 0)
+	requestMappingsByIDs := make(map[uuid.UUID]*RequestMapping)
+	for _, requestMappings := range requestMappingsByInstrumentID {
+		instrument.RequestMappings = requestMappings
+		for i := range instrument.RequestMappings {
+			requestMappingIDs = append(requestMappingIDs, requestMappings[i].ID)
+			requestMappingsByIDs[requestMappings[i].ID] = &instrument.RequestMappings[i]
+		}
+	}
+
+	requestMappingAnalyteIDs, err := s.instrumentRepository.GetRequestMappingAnalytes(ctx, requestMappingIDs)
+	if err != nil {
+		return instrument, err
+	}
+
+	for requestMappingID, analyteIDs := range requestMappingAnalyteIDs {
+		requestMappingsByIDs[requestMappingID].AnalyteIDs = analyteIDs
+	}
+	return instrument, nil
 }
 
 func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Instrument) error {
@@ -337,63 +383,4 @@ func (s *instrumentService) GetProtocolAbilities(ctx context.Context, protocolID
 
 func (s *instrumentService) UpsertProtocolAbilities(ctx context.Context, protocolID uuid.UUID, protocolAbilities []ProtocolAbility) error {
 	return s.instrumentRepository.UpsertProtocolAbilities(ctx, protocolID, protocolAbilities)
-}
-
-func (s *instrumentService) loadInstrumentData(ctx context.Context, instrument Instrument) (Instrument, error) {
-	instrumentIDs := []uuid.UUID{instrument.ID}
-	analyteMappingsByInstrumentID, err := s.instrumentRepository.GetAnalyteMappings(ctx, instrumentIDs)
-	if err != nil {
-		return instrument, err
-	}
-	analyteMappingsIDs := make([]uuid.UUID, 0)
-	analyteMappingIDInstrumentIDMap := make(map[uuid.UUID]uuid.UUID)
-	analyteMappingsByIDs := make(map[uuid.UUID]*AnalyteMapping)
-
-	for instrumentID, analyteMappings := range analyteMappingsByInstrumentID {
-		instrument.AnalyteMappings = analyteMappings
-		for i := range instrument.AnalyteMappings {
-			analyteMappingsIDs = append(analyteMappingsIDs, analyteMappings[i].ID)
-			analyteMappingIDInstrumentIDMap[analyteMappings[i].ID] = instrumentID
-			analyteMappingsByIDs[analyteMappings[i].ID] = &instrument.AnalyteMappings[i]
-		}
-	}
-	channelMappingsByAnalyteMappingID, err := s.instrumentRepository.GetChannelMappings(ctx, analyteMappingsIDs)
-	if err != nil {
-		return instrument, err
-	}
-	for analyteMappingID, channelMappings := range channelMappingsByAnalyteMappingID {
-		analyteMappingsByIDs[analyteMappingID].ChannelMappings = channelMappings
-	}
-
-	resultMappingsByAnalyteMappingID, err := s.instrumentRepository.GetResultMappings(ctx, analyteMappingsIDs)
-	if err != nil {
-		return instrument, err
-	}
-	for analyteMappingID, resultMappings := range resultMappingsByAnalyteMappingID {
-		analyteMappingsByIDs[analyteMappingID].ResultMappings = resultMappings
-	}
-
-	requestMappingsByInstrumentID, err := s.instrumentRepository.GetRequestMappings(ctx, instrumentIDs)
-	if err != nil {
-		return instrument, err
-	}
-	requestMappingIDs := make([]uuid.UUID, 0)
-	requestMappingsByIDs := make(map[uuid.UUID]*RequestMapping)
-	for _, requestMappings := range requestMappingsByInstrumentID {
-		instrument.RequestMappings = requestMappings
-		for i := range instrument.RequestMappings {
-			requestMappingIDs = append(requestMappingIDs, requestMappings[i].ID)
-			requestMappingsByIDs[requestMappings[i].ID] = &instrument.RequestMappings[i]
-		}
-	}
-
-	requestMappingAnalyteIDs, err := s.instrumentRepository.GetRequestMappingAnalytes(ctx, requestMappingIDs)
-	if err != nil {
-		return instrument, err
-	}
-
-	for requestMappingID, analyteIDs := range requestMappingAnalyteIDs {
-		requestMappingsByIDs[requestMappingID].AnalyteIDs = analyteIDs
-	}
-	return instrument, nil
 }

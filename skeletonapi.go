@@ -66,6 +66,10 @@ type SkeletonAPI interface {
 	// contains AnalyteMappings[] and RequestMappings[]
 	GetInstrument(instrumentID uuid.UUID) (Instrument, error)
 
+	// GetInstrumentByIP returns all the settings regarding an instrument
+	// contains AnalyteMappings[] and RequestMappings[]
+	GetInstrumentByIP(ip string) (Instrument, error)
+
 	// GetInstruments - Returns a list of instruments configured for this Driver class
 	// contains AnalyteMappings[] and RequestMappings[]
 	GetInstruments() ([]Instrument, error)
