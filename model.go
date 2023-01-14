@@ -70,14 +70,14 @@ const (
 type ResultType string // nolint
 
 const (
-	Int            ResultType = "int"
-	Decimal        ResultType = "decimal"
-	BoundedDecimal ResultType = "boundedDecimal"
-	String         ResultType = "string"
-	Pein           ResultType = "pein"
-	React          ResultType = "react"
-	InValid        ResultType = "invalid"
-	Enum           ResultType = "enum"
+	DataType_Int            ResultType = "int"
+	DataType_Decimal        ResultType = "decimal"
+	DataType_BoundedDecimal ResultType = "boundedDecimal"
+	DataType_String         ResultType = "string"
+	DataType_Pein           ResultType = "pein"
+	DataType_React          ResultType = "react"
+	DataType_InValid        ResultType = "invalid"
+	DataType_Enum           ResultType = "enum"
 )
 
 type ReagentType string
