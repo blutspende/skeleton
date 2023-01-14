@@ -81,6 +81,12 @@ func (s *instrumentService) GetInstruments(ctx context.Context) ([]Instrument, e
 	instrumentsByIDs := make(map[uuid.UUID]*Instrument)
 	analyteMappingsByIDs := make(map[uuid.UUID]*AnalyteMapping)
 	for i := range instruments {
+		protocol, err := s.instrumentRepository.GetProtocolByID(ctx, instruments[i].ID)
+		if err != nil {
+			return nil, err
+		}
+		instruments[i].ProtocolName = protocol.Name
+
 		instrumentIDs[i] = instruments[i].ID
 		instrumentsByIDs[instruments[i].ID] = &instruments[i]
 	}

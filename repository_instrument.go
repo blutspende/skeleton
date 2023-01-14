@@ -26,6 +26,7 @@ const (
 	msgInstrumentNotFound                 = "instrument not found"
 	msgUpdateInstrumentFailed             = "update instrument failed"
 	msgDeleteInstrumentFailed             = "delete instrument failed"
+	msgGetProtocolByIDFailed              = "get protocol by ID failed"
 	msgUpsertSupportedProtocolFailed      = "upsert supported protocol failed"
 	msgUpsertProtocolAbilitiesFailed      = "upsert protocol abilities failed"
 	msgUpdateInstrumentStatusFailed       = "update instrument status failed"
@@ -58,6 +59,7 @@ var (
 	ErrInstrumentNotFound                 = errors.New(msgInstrumentNotFound)
 	ErrUpdateInstrumentFailed             = errors.New(msgUpdateInstrumentFailed)
 	ErrDeleteInstrumentFailed             = errors.New(msgDeleteInstrumentFailed)
+	ErrGetProtocolByIDFailed              = errors.New(msgGetProtocolByIDFailed)
 	ErrUpsertSupportedProtocolFailed      = errors.New(msgUpsertSupportedProtocolFailed)
 	ErrUpsertProtocolAbilitiesFailed      = errors.New(msgUpsertProtocolAbilitiesFailed)
 	ErrUpdateInstrumentStatusFailed       = errors.New(msgUpdateInstrumentStatusFailed)
@@ -180,6 +182,7 @@ type InstrumentRepository interface {
 	GetInstrumentByIP(ctx context.Context, ip string) (Instrument, error)
 	UpdateInstrument(ctx context.Context, instrument Instrument) error
 	DeleteInstrument(ctx context.Context, id uuid.UUID) error
+	GetProtocolByID(ctx context.Context, id uuid.UUID) (SupportedProtocol, error)
 	GetSupportedProtocols(ctx context.Context) ([]SupportedProtocol, error)
 	UpsertSupportedProtocol(ctx context.Context, id uuid.UUID, name string, description string) error
 	GetProtocolAbilities(ctx context.Context, protocolID uuid.UUID) ([]ProtocolAbility, error)
@@ -352,6 +355,18 @@ func (r *instrumentRepository) DeleteInstrument(ctx context.Context, id uuid.UUI
 		return ErrDeleteInstrumentFailed
 	}
 	return nil
+}
+
+func (r *instrumentRepository) GetProtocolByID(ctx context.Context, id uuid.UUID) (SupportedProtocol, error) {
+	query := fmt.Sprintf(`SELECT * FROM %s.sk_supported_protocols WHERE id = $1;`, r.dbSchema)
+	row := r.db.QueryRowxContext(ctx, query, id)
+	var dao supportedProtocolDAO
+	err := row.StructScan(&dao)
+	if err != nil {
+		log.Error().Err(err).Msg(msgGetProtocolByIDFailed)
+		return SupportedProtocol{}, ErrGetProtocolByIDFailed
+	}
+	return convertSupportedProtocolDAOToSupportedProtocol(dao), nil
 }
 
 func (r *instrumentRepository) GetSupportedProtocols(ctx context.Context) ([]SupportedProtocol, error) {
