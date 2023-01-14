@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/utils"
+	"strings"
 	"time"
 
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/db"
@@ -964,7 +965,7 @@ func convertProtocolAbilitiesToDAOs(protocolAbilities []ProtocolAbility, protoco
 func convertProtocolAbilityDAOToProtocolAbility(dao protocolAbilityDAO) ProtocolAbility {
 	return ProtocolAbility{
 		ConnectionMode:          ConnectionMode(dao.ConnectionMode),
-		Abilities:               utils.SplitStringToEnumArray[Ability](dao.Abilities, ","),
+		Abilities:               splitStringToEnumArray(dao.Abilities, ","),
 		RequestMappingAvailable: dao.RequestMappingAvailable,
 	}
 }
@@ -974,4 +975,13 @@ func NewInstrumentRepository(db db.DbConnector, dbSchema string) InstrumentRepos
 		db:       db,
 		dbSchema: dbSchema,
 	}
+}
+
+func splitStringToEnumArray(value string, separator string) []Ability {
+	stringItems := strings.Split(value, separator)
+	items := make([]Ability, len(stringItems))
+	for i := range stringItems {
+		items[i] = Ability(stringItems[i])
+	}
+	return items
 }
