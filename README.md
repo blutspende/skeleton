@@ -4,8 +4,8 @@ Skeleton for Bloodlab drivermodel
 
 ### Receiving a Transmission and finding the right instrument
 ```golang
-  remoteAddress, _ := session.RemoteAddress()
-	instrument, err := s.skeleton.GetInstrumentByIP(remoteAddress)
+remoteAddress, _ := session.RemoteAddress()
+instrument, err := s.skeleton.GetInstrumentByIP(remoteAddress)
 ```
 
 ## API 
