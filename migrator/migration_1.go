@@ -1051,5 +1051,5 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_protocol_abilities
 	CONSTRAINT "sk_fk_protocol_id__id" FOREIGN KEY (protocol_id) REFERENCES <SCHEMA_PLACEHOLDER>.sk_supported_protocols (id)
 );
 
-CREATE UNIQUE INDEX sk_un_protocol_abilities ON <SCHEMA_PLACEHOLDER>.sk_protocol_abilities (protocol_id, connection_mode, deleted_at)
+CREATE UNIQUE INDEX sk_un_protocol_abilities ON <SCHEMA_PLACEHOLDER>.sk_protocol_abilities (protocol_id, connection_mode)
 WHERE deleted_at IS NOT NULL;`
