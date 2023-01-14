@@ -2,7 +2,6 @@ package skeleton
 
 import (
 	"context"
-	bloodlabNet "github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net"
 	config2 "github.com/DRK-Blutspende-BaWueHe/skeleton/config"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/db"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/migrator"
@@ -14,11 +13,6 @@ type SkeletonError error
 
 // SkeletonCallbackHandlerV1 - must implement an EventHandler to react on Events triggered by Skeleton
 type SkeletonCallbackHandlerV1 interface {
-	// HandleIncomingInstrumentData is called when the Instrument has sent a message and this one needs to get processed
-	// This method is blocking. The synchronous processing should be as quick as possible and pass
-	// the further process to an asynchronous job
-	HandleIncomingInstrumentData(incomingBytes []byte, session bloodlabNet.Session, instrumentID uuid.UUID, remoteSourceAddress string) error
-
 	// HandleAnalysisRequests is called when the Skeleton needs to resolve an updated AnalysisRequest
 	// based on data that was probably not processed before. This function is supposed to trigger a
 	// SkeletonAPI.SubmitAnalysisResult on the SkeletonAPI if result-data was found.
