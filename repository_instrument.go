@@ -608,6 +608,7 @@ func (r *instrumentRepository) DeleteChannelMappings(ctx context.Context, ids []
 	}
 	query := fmt.Sprintf(`UPDATE %s.sk_channel_mappings SET deleted_at = timezone('utc', now()) WHERE id IN (?);`, r.dbSchema)
 	query, args, _ := sqlx.In(query, ids)
+	query = r.db.Rebind(query)
 	_, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgDeleteChannelMappingFailed)
@@ -677,6 +678,7 @@ func (r *instrumentRepository) DeleteResultMappings(ctx context.Context, ids []u
 	}
 	query := fmt.Sprintf(`UPDATE %s.sk_result_mappings SET deleted_at = timezone('utc', now()) WHERE id IN (?);`, r.dbSchema)
 	query, args, _ := sqlx.In(query, ids)
+	query = r.db.Rebind(query)
 	_, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgDeleteResultMappingFailed)
@@ -768,6 +770,7 @@ func (r *instrumentRepository) GetRequestMappings(ctx context.Context, instrumen
 func (r *instrumentRepository) GetRequestMappingAnalytes(ctx context.Context, requestMappingIDs []uuid.UUID) (map[uuid.UUID][]uuid.UUID, error) {
 	query := fmt.Sprintf(`SELECT request_mapping_id, analyte_id FROM %s.sk_request_mapping_analytes WHERE request_mapping_id IN (?);`, r.dbSchema)
 	query, args, _ := sqlx.In(query, requestMappingIDs)
+	query = r.db.Rebind(query)
 	rows, err := r.db.QueryxContext(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetRequestMappingAnalytesFailed)
@@ -790,6 +793,7 @@ func (r *instrumentRepository) GetRequestMappingAnalytes(ctx context.Context, re
 func (r *instrumentRepository) DeleteRequestMappings(ctx context.Context, requestMappingIDs []uuid.UUID) error {
 	query := fmt.Sprintf(`UPDATE %s.sk_request_mappings SET deleted_at = timezone('utc', now()) WHERE id IN (?);`, r.dbSchema)
 	query, args, _ := sqlx.In(query, requestMappingIDs)
+	query = r.db.Rebind(query)
 	_, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgDeleteRequestMappingsFailed)
