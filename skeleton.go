@@ -81,6 +81,7 @@ func (s *skeleton) SubmitAnalysisResult(ctx context.Context, resultData Analysis
 	}
 	_, err = s.analysisRepository.WithTransaction(tx).CreateAnalysisResultsBatch(ctx, []AnalysisResult{resultData})
 	if err != nil {
+		_ = tx.Rollback()
 		return err
 	}
 	if err = tx.Commit(); err != nil {
