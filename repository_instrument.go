@@ -532,8 +532,13 @@ func (r *instrumentRepository) DeleteAnalyteMappings(ctx context.Context, ids []
 		return nil
 	}
 	query := fmt.Sprintf(`UPDATE %s.sk_analyte_mappings SET deleted_at = timezone('utc', now()) WHERE id IN (?);`, r.dbSchema)
-	query, args, _ := sqlx.In(query, ids)
-	_, err := r.db.ExecContext(ctx, query, args...)
+	query, args, err := sqlx.In(query, ids)
+	if err != nil {
+		log.Error().Err(err).Msg(msgDeleteAnalyteMappingFailed)
+		return ErrDeleteAnalyteMappingFailed
+	}
+	log.Trace().Str("query", query).Interface("arguments", args).Msg("Assembled query")
+	_, err = r.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgDeleteAnalyteMappingFailed)
 		return ErrDeleteAnalyteMappingFailed
