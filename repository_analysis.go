@@ -250,6 +250,11 @@ func (r *analysisRepository) CreateAnalysisResultsBatch(ctx context.Context, ana
 	if len(analysisResults) == 0 {
 		return ids, nil
 	}
+	for i := range analysisResults {
+		if (analysisResults[i].ID == uuid.UUID{}) || (analysisResults[i].ID == uuid.Nil) {
+			analysisResults[i].ID = uuid.New()
+		}
+	}
 	query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_results(id, analysis_request_id, analyte_mapping_id, instrument_id, instrument_run_id, result_record_id, "result", status, mode, yielded_at, valid_until, operator, edited, edit_reason)
 		VALUES(:id, :analysis_request_id, :analyte_mapping_id, :instrument_id, :instrument_run_id, :result_record_id, :result, :status, :mode, :yielded_at, :valid_until, :operator, :edited, :edit_reason)`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, convertAnalysisResultsToDAOs(analysisResults))
