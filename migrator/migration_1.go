@@ -908,7 +908,7 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_request_mapping_sent
 CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_analysis_results
 (
 	id uuid NOT NULL DEFAULT uuid_generate_v4(),
-	analysis_request_id uuid NOT NULL,
+	analysis_request_id uuid NOT NULL DEFAULT('00000000-0000-0000-0000-000000000000'),
 	analyte_mapping_id uuid NOT NULL,
 	instrument_id uuid NOT NULL,
 	instrument_run_id uuid NOT NULL,
