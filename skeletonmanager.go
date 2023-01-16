@@ -7,36 +7,41 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-type instrumentEvent int
+type instrumentEventType int
 
 const (
 	InstrumentAddedEvent = 1 << iota
 	InstrumentUpdatedEvent
 )
 
-func (ie instrumentEvent) IsOneOf(event instrumentEvent) bool {
+func (ie instrumentEventType) IsOneOf(event instrumentEventType) bool {
 	return event&ie != 0
 }
 
-func (ie instrumentEvent) IsExactly(event instrumentEvent) bool {
+func (ie instrumentEventType) IsExactly(event instrumentEventType) bool {
 	return event == ie
 }
 
 type InstrumentQueueListener interface {
-	ProcessInstrumentEvent(instrumentID uuid.UUID, event instrumentEvent)
+	ProcessInstrumentEvent(instrumentID uuid.UUID, event instrumentEventType)
 }
 
 type Manager interface {
-	EnqueueInstrument(id uuid.UUID, event instrumentEvent)
-	RegisterInstrumentQueueListener(listener InstrumentQueueListener, events ...instrumentEvent)
+	EnqueueInstrument(id uuid.UUID, event instrumentEventType)
+	RegisterInstrumentQueueListener(listener InstrumentQueueListener, events ...instrumentEventType)
 
 	SetCallbackHandler(eventHandler SkeletonCallbackHandlerV1)
 	GetCallbackHandler() SkeletonCallbackHandlerV1
 }
 
+type instrumentEvent struct {
+	instrumentID uuid.UUID
+	event        instrumentEventType
+}
+
 type manager struct {
-	instrumentIDChan              chan uuid.UUID
-	instrumentQueueListeners      map[instrumentEvent][]InstrumentQueueListener
+	instrumentEventChan           chan instrumentEvent
+	instrumentQueueListeners      map[instrumentEventType][]InstrumentQueueListener
 	instrumentQueueListenersMutex sync.Mutex
 	callbackEventHandler          SkeletonCallbackHandlerV1
 	callbackEventHandlerMutex     sync.Mutex
@@ -44,8 +49,8 @@ type manager struct {
 
 func NewCallbackManager() Manager {
 	skeletonManager := &manager{
-		instrumentIDChan:         make(chan uuid.UUID, 0),
-		instrumentQueueListeners: make(map[instrumentEvent][]InstrumentQueueListener, 0),
+		instrumentEventChan:      make(chan instrumentEvent, 0),
+		instrumentQueueListeners: make(map[instrumentEventType][]InstrumentQueueListener, 0),
 	}
 
 	go skeletonManager.listenOnInstruments()
@@ -65,11 +70,14 @@ func (sm *manager) GetCallbackHandler() SkeletonCallbackHandlerV1 {
 	return sm.callbackEventHandler
 }
 
-func (sm *manager) EnqueueInstrument(id uuid.UUID, event instrumentEvent) {
-	sm.instrumentIDChan <- id
+func (sm *manager) EnqueueInstrument(id uuid.UUID, event instrumentEventType) {
+	sm.instrumentEventChan <- instrumentEvent{
+		instrumentID: id,
+		event:        event,
+	}
 }
 
-func (sm *manager) RegisterInstrumentQueueListener(listener InstrumentQueueListener, events ...instrumentEvent) {
+func (sm *manager) RegisterInstrumentQueueListener(listener InstrumentQueueListener, events ...instrumentEventType) {
 	sm.instrumentQueueListenersMutex.Lock()
 	defer sm.instrumentQueueListenersMutex.Unlock()
 	for _, event := range events {
@@ -84,19 +92,20 @@ func (sm *manager) RegisterInstrumentQueueListener(listener InstrumentQueueListe
 func (sm *manager) listenOnInstruments() {
 	for {
 		select {
-		case id, ok := <-sm.instrumentIDChan:
+		case instrumentEvent, ok := <-sm.instrumentEventChan:
 			{
 				if !ok {
 					log.Error().Msg("Failed to read from instrument ID channel")
 					break
 				}
 				sm.instrumentQueueListenersMutex.Lock()
-				for event, listeners := range sm.instrumentQueueListeners {
+				listeners, ok := sm.instrumentQueueListeners[instrumentEvent.event]
+				sm.instrumentQueueListenersMutex.Unlock()
+				if ok {
 					for i := range listeners {
-						listeners[i].ProcessInstrumentEvent(id, event)
+						listeners[i].ProcessInstrumentEvent(instrumentEvent.instrumentID, instrumentEvent.event)
 					}
 				}
-				sm.instrumentQueueListenersMutex.Unlock()
 			}
 		}
 	}

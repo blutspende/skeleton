@@ -463,7 +463,7 @@ func (s *instrumentService) UpdateInstrumentStatus(ctx context.Context, id uuid.
 	return s.instrumentRepository.UpdateInstrumentStatus(ctx, id, status)
 }
 
-func (s *instrumentService) ProcessInstrumentEvent(instrumentID uuid.UUID, event instrumentEvent) {
+func (s *instrumentService) ProcessInstrumentEvent(instrumentID uuid.UUID, event instrumentEventType) {
 	if event.IsOneOf(InstrumentAddedEvent | InstrumentUpdatedEvent) {
 		log.Debug().Msg("Invalidating instrument cache")
 		s.instrumentCache.Invalidate()

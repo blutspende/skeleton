@@ -292,18 +292,3 @@ func TestGetInstruments(t *testing.T) {
 		t.Errorf("Expected status %d, got %d", http.StatusOK, responseRecorder.Code)
 	}
 }
-
-type cerberusClientMock struct {
-	registerInstrumentFunc func(instrument Instrument) error
-}
-
-func (m *cerberusClientMock) RegisterInstrument(instrument Instrument) error {
-	if m.registerInstrumentFunc == nil {
-		return nil
-	}
-	return m.registerInstrumentFunc(instrument)
-}
-
-func (m *cerberusClientMock) PostAnalysisResultBatch(analysisResults []AnalysisResult) ([]AnalysisResultCreateStatusV1, error) {
-	return nil, nil
-}
