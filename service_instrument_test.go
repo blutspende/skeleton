@@ -33,9 +33,9 @@ func TestRegisterCreatedInstrument(t *testing.T) {
 		PermittedOrigin:                  "*",
 		ApplicationName:                  "Register instrument retry test",
 		TCPListenerPort:                  5401,
-		InstrumentTransferRetryDelayInMs: 100,
+		InstrumentTransferRetryDelayInMs: 50,
 	}
-	testDoneCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	testDoneCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	registerInstrumentAfterTrialCount := 3
 	dbConn := db.CreateDbConnector(sqlConn)
 	cerberusClientMock := &cerberusClientMock{
