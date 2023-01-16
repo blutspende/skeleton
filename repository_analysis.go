@@ -187,7 +187,7 @@ func (r *analysisRepository) GetAnalysisRequestsBySampleCodes(ctx context.Contex
 	if len(sampleCodes) == 0 {
 		return analysisRequestsBySampleCodes, nil
 	}
-	query := fmt.Sprintf(`SELECT * FROM %s.analysis_request 
+	query := fmt.Sprintf(`SELECT * FROM %s.sk_analysis_requests 
 					WHERE sample_code in (?)
 					AND valid_until_time <= timezone('utc',now());`, r.dbSchema)
 
