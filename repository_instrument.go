@@ -477,6 +477,11 @@ func (r *instrumentRepository) CreateAnalyteMappings(ctx context.Context, analyt
 	if len(analyteMappings) == 0 {
 		return []uuid.UUID{}, nil
 	}
+	for i := range analyteMappings {
+		if (analyteMappings[i].ID == uuid.UUID{}) || (analyteMappings[i].ID == uuid.Nil) {
+			analyteMappings[i].ID = uuid.New()
+		}
+	}
 	query := fmt.Sprintf(`INSERT INTO %s.sk_analyte_mappings(id, instrument_id, instrument_analyte, analyte_id, result_type) VALUES(:id, :instrument_id, :instrument_analyte, :analyte_id, :result_type);`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, convertAnalyteMappingsToDAOs(analyteMappings, instrumentID))
 	if err != nil {
