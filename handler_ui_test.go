@@ -30,16 +30,17 @@ func TestCreateInstrument(t *testing.T) {
 	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
 
 	config := config.Configuration{
-		APIPort:         5000,
-		Authorization:   false,
-		PermittedOrigin: "*",
-		ApplicationName: "Instrument API Test",
-		TCPListenerPort: 5401,
+		APIPort:                          5000,
+		Authorization:                    false,
+		PermittedOrigin:                  "*",
+		ApplicationName:                  "Instrument API Test",
+		TCPListenerPort:                  5401,
+		InstrumentTransferRetryDelayInMs: 100,
 	}
 	dbConn := db.CreateDbConnector(sqlConn)
-	cerberus, _ := NewCerberusClient("TODO", resty.New())
+	cerberusClientMock := &cerberusClientMock{}
 	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
-	instrumentService := NewInstrumentService(&config, instrumentRepository, NewCallbackManager(), NewInstrumentCache(), cerberus)
+	instrumentService := NewInstrumentService(&config, instrumentRepository, NewCallbackManager(), NewInstrumentCache(), cerberusClientMock)
 
 	responseRecorder := &httptest.ResponseRecorder{}
 	c, engine := gin.CreateTestContext(responseRecorder)
@@ -290,4 +291,19 @@ func TestGetInstruments(t *testing.T) {
 	if responseRecorder.Code != http.StatusOK {
 		t.Errorf("Expected status %d, got %d", http.StatusOK, responseRecorder.Code)
 	}
+}
+
+type cerberusClientMock struct {
+	registerInstrumentFunc func(instrument Instrument) error
+}
+
+func (m *cerberusClientMock) RegisterInstrument(instrument Instrument) error {
+	if m.registerInstrumentFunc == nil {
+		return nil
+	}
+	return m.registerInstrumentFunc(instrument)
+}
+
+func (m *cerberusClientMock) PostAnalysisResultBatch(analysisResults []AnalysisResult) ([]AnalysisResultCreateStatusV1, error) {
+	return nil, nil
 }

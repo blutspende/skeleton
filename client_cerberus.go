@@ -37,11 +37,6 @@ type errorResponseTO struct {
 	Errors  []string `json:"errors"`
 }
 
-type cerberusInstrumentTO struct {
-	ID   uuid.UUID `json:"id"`
-	Name string    `json:"name"`
-}
-
 type ciaInstrumentTO struct {
 	ID   uuid.UUID `json:"id"`
 	Name string    `json:"name"`
@@ -123,14 +118,14 @@ func NewCerberusClient(cerberusUrl string, restyClient *resty.Client) (Cerberus,
 
 // RegisterInstrument Update cerberus with changed instrument-information
 func (c *cerberus) RegisterInstrument(instrument Instrument) error {
-	instrumentDTO := ciaInstrumentTO{
+	ciaInstrumentTO := ciaInstrumentTO{
 		ID:   instrument.ID,
 		Name: instrument.Name,
 	}
 
 	resp, err := c.client.R().
 		SetHeader("Content-Type", "application/json").
-		SetBody(instrumentDTO).
+		SetBody(ciaInstrumentTO).
 		Post(c.cerberusUrl + "/v1/instruments")
 
 	if err != nil && resp == nil {

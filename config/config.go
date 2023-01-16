@@ -32,7 +32,7 @@ type Configuration struct {
 	ApplicationName                   string        `envconfig:"APPLICATION_NAME" default:"astm"`
 	TCPListenerPort                   int           `envconfig:"TCP_LISTENER_PORT" required:"true" default:"5000"`
 	LocalEnvironment                  bool          `envconfig:"LOCAL_ENVIRONMENT" default:"false"`
-	InstrumentTransferRetryDelay      int           `envconfig:"INSTRUMENT_TRANSFER_DELAY" default:"10"`
+	InstrumentTransferRetryDelayInMs  int           `envconfig:"INSTRUMENT_TRANSFER_DELAY" default:"600000"`
 	CerberusURL                       string        `envconfig:"CERBERUS_URL" required:"true" default:"localhost"`
 	DeaURL                            string        `envconfig:"DEA_URL" required:"true" default:"localhost"`
 	LookBackDays                      int           `envconfig:"LOOK_BACK_DAYS" default:"14"`

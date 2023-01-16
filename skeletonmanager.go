@@ -23,7 +23,7 @@ func (ie instrumentEvent) IsExactly(event instrumentEvent) bool {
 }
 
 type InstrumentQueueListener interface {
-	ProcessInstrument(instrumentID uuid.UUID, event instrumentEvent)
+	ProcessInstrumentEvent(instrumentID uuid.UUID, event instrumentEvent)
 }
 
 type Manager interface {
@@ -93,7 +93,7 @@ func (sm *manager) listenOnInstruments() {
 				sm.instrumentQueueListenersMutex.Lock()
 				for event, listeners := range sm.instrumentQueueListeners {
 					for i := range listeners {
-						listeners[i].ProcessInstrument(id, event)
+						listeners[i].ProcessInstrumentEvent(id, event)
 					}
 				}
 				sm.instrumentQueueListenersMutex.Unlock()

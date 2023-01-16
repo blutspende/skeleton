@@ -463,7 +463,7 @@ func (s *instrumentService) UpdateInstrumentStatus(ctx context.Context, id uuid.
 	return s.instrumentRepository.UpdateInstrumentStatus(ctx, id, status)
 }
 
-func (s *instrumentService) ProcessInstrument(instrumentID uuid.UUID, event instrumentEvent) {
+func (s *instrumentService) ProcessInstrumentEvent(instrumentID uuid.UUID, event instrumentEvent) {
 	if event.IsOneOf(InstrumentAddedEvent | InstrumentUpdatedEvent) {
 		log.Debug().Msg("Invalidating instrument cache")
 		s.instrumentCache.Invalidate()
@@ -503,7 +503,7 @@ func (s *instrumentService) registerInstrument(ctx context.Context, instrumentID
 func (s *instrumentService) retryInstrumentRegistration(ctx context.Context, id uuid.UUID) {
 	log.Debug().Msg("Starting instrument registration retry task")
 	timeoutContext, cancel := context.WithTimeout(ctx, 48*time.Hour)
-	ticker := time.NewTicker(time.Duration(s.config.InstrumentTransferRetryDelay) * time.Minute)
+	ticker := time.NewTicker(time.Duration(s.config.InstrumentTransferRetryDelayInMs) * time.Millisecond)
 	go func() {
 		for {
 			select {
