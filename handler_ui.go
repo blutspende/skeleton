@@ -163,14 +163,6 @@ func (api *api) UpdateInstrument(c *gin.Context) {
 		return
 	}
 
-	//err = api.inMemInstruments.UpdateInstrument(updatedInstrument)
-	//if err != nil {
-	//	log.Debug().Err(err).Msg("Can not update instrument in inMemory instruments")
-	//}
-
-	// Todo
-	//api.instrumentTransferService.EnqueueInstrument(updatedInstrument.ID)
-
 	c.Status(http.StatusNoContent)
 }
 
@@ -243,6 +235,23 @@ func (api *api) GetManufacturerTests(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, convertSupportedManufacturerTestsToSupportedManufacturerTestTOs(tests))
+}
+
+func (api *api) GetAnalysisRequests(c *gin.Context) {
+	//instrumentID, err := uuid.Parse(c.Param("instrumentId"))
+	//if err != nil {
+	//	c.AbortWithStatusJSON(http.StatusBadRequest, "DeleteInstrument Error")
+	//	return
+	//}
+	//
+	//var pageable Pageable
+	//err = c.ShouldBindQuery(&pageable)
+	//if err != nil {
+	//	c.AbortWithStatusJSON(http.StatusBadRequest, "malformed pageable data")
+	//	return
+	//}
+	//
+	//c.JSON(http.StatusOK)
 }
 
 //// AddRequestToTransferQueue

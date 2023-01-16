@@ -10,8 +10,17 @@ import (
 type instrumentEvent int
 
 const (
-	InstrumentAddedEvent = iota
+	InstrumentAddedEvent = 1 << iota
+	InstrumentUpdatedEvent
 )
+
+func (ie instrumentEvent) IsOneOf(event instrumentEvent) bool {
+	return event&ie != 0
+}
+
+func (ie instrumentEvent) IsExactly(event instrumentEvent) bool {
+	return event == ie
+}
 
 type InstrumentQueueListener interface {
 	ProcessInstrument(instrumentID uuid.UUID, event instrumentEvent)

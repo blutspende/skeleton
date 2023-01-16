@@ -24,21 +24,23 @@ type InstrumentService interface {
 }
 
 type instrumentService struct {
+	config               *config.Configuration
 	instrumentRepository InstrumentRepository
 	manager              Manager
 	instrumentCache      InstrumentCache
 	cerberusClient       Cerberus
 }
 
-func NewInstrumentService(instrumentRepository InstrumentRepository, manager Manager, instrumentCache InstrumentCache, cerberusClient Cerberus) InstrumentService {
+func NewInstrumentService(config *config.Configuration, instrumentRepository InstrumentRepository, manager Manager, instrumentCache InstrumentCache, cerberusClient Cerberus) InstrumentService {
 	service := &instrumentService{
+		config:               config,
 		instrumentRepository: instrumentRepository,
 		manager:              manager,
 		instrumentCache:      instrumentCache,
 		cerberusClient:       cerberusClient,
 	}
 
-	manager.RegisterInstrumentQueueListener(service, InstrumentAddedEvent)
+	manager.RegisterInstrumentQueueListener(service, InstrumentAddedEvent, InstrumentUpdatedEvent)
 
 	return service
 }
@@ -84,7 +86,6 @@ func (s *instrumentService) CreateInstrument(ctx context.Context, instrument Ins
 	if err != nil {
 		return uuid.Nil, err
 	}
-	s.instrumentCache.Invalidate()
 	s.manager.EnqueueInstrument(id, InstrumentAddedEvent)
 	return id, nil
 }
@@ -407,7 +408,7 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 	if err != nil {
 		return err
 	}
-	s.instrumentCache.Invalidate()
+	s.manager.EnqueueInstrument(instrument.ID, InstrumentUpdatedEvent)
 	return nil
 }
 
@@ -463,7 +464,12 @@ func (s *instrumentService) UpdateInstrumentStatus(ctx context.Context, id uuid.
 }
 
 func (s *instrumentService) ProcessInstrument(instrumentID uuid.UUID, event instrumentEvent) {
-	if event == InstrumentAddedEvent {
+	if event.IsOneOf(InstrumentAddedEvent | InstrumentUpdatedEvent) {
+		log.Debug().Msg("Invalidating instrument cache")
+		s.instrumentCache.Invalidate()
+		log.Trace().Msg("Invalidated instrument cache")
+
+		log.Debug().Msg("Registering instrument in Cerberus")
 		if retry, err := s.registerInstrument(context.Background(), instrumentID); err != nil {
 			if retry {
 				s.retryInstrumentRegistration(context.Background(), instrumentID)
@@ -497,7 +503,7 @@ func (s *instrumentService) registerInstrument(ctx context.Context, instrumentID
 func (s *instrumentService) retryInstrumentRegistration(ctx context.Context, id uuid.UUID) {
 	log.Debug().Msg("Starting instrument registration retry task")
 	timeoutContext, cancel := context.WithTimeout(ctx, 48*time.Hour)
-	ticker := time.NewTicker(time.Duration(config.Settings.InstrumentTransferRetryDelay) * time.Minute)
+	ticker := time.NewTicker(time.Duration(s.config.InstrumentTransferRetryDelay) * time.Minute)
 	go func() {
 		for {
 			select {
