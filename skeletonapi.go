@@ -101,7 +101,7 @@ func New(sqlConn *sqlx.DB, dbSchema string) (SkeletonAPI, error) {
 		NewRestyClient(context.Background(), &config, true))
 	authManager.StartClientCredentialTask(context.Background())
 	internalApiRestyClient := NewRestyClientWithAuthManager(context.Background(), &config, authManager)
-	cerberusClient, err := NewCerberusV1Client(config.CerberusURL, internalApiRestyClient)
+	cerberusClient, err := NewCerberusClient(config.CerberusURL, internalApiRestyClient)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +111,7 @@ func New(sqlConn *sqlx.DB, dbSchema string) (SkeletonAPI, error) {
 	analysisRepository := NewAnalysisRepository(dbConn, dbSchema)
 	instrumentRepository := NewInstrumentRepository(dbConn, dbSchema)
 	analysisService := NewAnalysisService(analysisRepository)
-	instrumentService := NewInstrumentService(instrumentRepository, manager, instrumentCache)
+	instrumentService := NewInstrumentService(instrumentRepository, manager, instrumentCache, cerberusClient)
 	api := NewAPI(&config, authManager, analysisService, instrumentService)
 	return NewSkeleton(sqlConn, dbSchema, migrator.NewSkeletonMigrator(), api, analysisRepository, instrumentService, manager, cerberusClient)
 }

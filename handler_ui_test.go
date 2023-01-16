@@ -9,6 +9,7 @@ import (
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/migrator"
 	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
 	"github.com/gin-gonic/gin"
+	"github.com/go-resty/resty/v2"
 	"github.com/jmoiron/sqlx"
 	"net/http"
 	"net/http/httptest"
@@ -36,8 +37,9 @@ func TestCreateInstrument(t *testing.T) {
 		TCPListenerPort: 5401,
 	}
 	dbConn := db.CreateDbConnector(sqlConn)
+	cerberus, _ := NewCerberusClient("TODO", resty.New())
 	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
-	instrumentService := NewInstrumentService(instrumentRepository, NewCallbackManager(), NewInstrumentCache())
+	instrumentService := NewInstrumentService(instrumentRepository, NewCallbackManager(), NewInstrumentCache(), cerberus)
 
 	responseRecorder := &httptest.ResponseRecorder{}
 	c, engine := gin.CreateTestContext(responseRecorder)
@@ -129,8 +131,9 @@ func TestCreateInstrumentWithoutRequestMapping(t *testing.T) {
 		TCPListenerPort: 5401,
 	}
 	dbConn := db.CreateDbConnector(sqlConn)
+	cerberus, _ := NewCerberusClient("TODO", resty.New())
 	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
-	instrumentService := NewInstrumentService(instrumentRepository, NewCallbackManager(), NewInstrumentCache())
+	instrumentService := NewInstrumentService(instrumentRepository, NewCallbackManager(), NewInstrumentCache(), cerberus)
 
 	responseRecorder := &httptest.ResponseRecorder{}
 	c, engine := gin.CreateTestContext(responseRecorder)
@@ -216,8 +219,9 @@ func TestGetInstruments(t *testing.T) {
 		TCPListenerPort: 5401,
 	}
 	dbConn := db.CreateDbConnector(sqlConn)
+	cerberus, _ := NewCerberusClient("TODO", resty.New())
 	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
-	instrumentService := NewInstrumentService(instrumentRepository, NewCallbackManager(), NewInstrumentCache())
+	instrumentService := NewInstrumentService(instrumentRepository, NewCallbackManager(), NewInstrumentCache(), cerberus)
 
 	responseRecorder := &httptest.ResponseRecorder{}
 	c, engine := gin.CreateTestContext(responseRecorder)

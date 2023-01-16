@@ -2,7 +2,10 @@ package skeleton
 
 import (
 	"context"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/config"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
+	"time"
 )
 
 type InstrumentService interface {
@@ -22,16 +25,22 @@ type InstrumentService interface {
 
 type instrumentService struct {
 	instrumentRepository InstrumentRepository
-	manager              CallbackManager
+	manager              Manager
 	instrumentCache      InstrumentCache
+	cerberusClient       Cerberus
 }
 
-func NewInstrumentService(instrumentRepository InstrumentRepository, manager CallbackManager, instrumentCache InstrumentCache) InstrumentService {
-	return &instrumentService{
+func NewInstrumentService(instrumentRepository InstrumentRepository, manager Manager, instrumentCache InstrumentCache, cerberusClient Cerberus) InstrumentService {
+	service := &instrumentService{
 		instrumentRepository: instrumentRepository,
 		manager:              manager,
 		instrumentCache:      instrumentCache,
+		cerberusClient:       cerberusClient,
 	}
+
+	manager.RegisterInstrumentQueueListener(service, InstrumentAddedEvent)
+
+	return service
 }
 
 func (s *instrumentService) CreateInstrument(ctx context.Context, instrument Instrument) (uuid.UUID, error) {
@@ -76,6 +85,7 @@ func (s *instrumentService) CreateInstrument(ctx context.Context, instrument Ins
 		return uuid.Nil, err
 	}
 	s.instrumentCache.Invalidate()
+	s.manager.EnqueueInstrument(id, InstrumentAddedEvent)
 	return id, nil
 }
 
@@ -450,4 +460,61 @@ func (s *instrumentService) UpsertProtocolAbilities(ctx context.Context, protoco
 
 func (s *instrumentService) UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error {
 	return s.instrumentRepository.UpdateInstrumentStatus(ctx, id, status)
+}
+
+func (s *instrumentService) ProcessInstrument(instrumentID uuid.UUID, event instrumentEvent) {
+	if event == InstrumentAddedEvent {
+		if retry, err := s.registerInstrument(context.Background(), instrumentID); err != nil {
+			if retry {
+				s.retryInstrumentRegistration(context.Background(), instrumentID)
+			}
+		}
+	}
+}
+
+func (s *instrumentService) registerInstrument(ctx context.Context, instrumentID uuid.UUID) (bool, error) {
+	instrument, err := s.instrumentRepository.GetInstrumentByID(ctx, instrumentID)
+	if err != nil {
+		log.Error().Err(err).Str("instrumentID", instrumentID.String()).Msg("failed to get instrument!")
+		return false, err
+	}
+
+	err = s.cerberusClient.RegisterInstrument(instrument)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to send instrument to cerberus: " + instrumentID.String())
+		return true, err
+	}
+
+	err = s.instrumentRepository.MarkAsSentToCerberus(ctx, instrumentID)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to mark instrument as sent to cerberus: " + instrumentID.String())
+		return false, err
+	}
+
+	return false, nil
+}
+
+func (s *instrumentService) retryInstrumentRegistration(ctx context.Context, id uuid.UUID) {
+	log.Debug().Msg("Starting instrument registration retry task")
+	timeoutContext, cancel := context.WithTimeout(ctx, 48*time.Hour)
+	ticker := time.NewTicker(time.Duration(config.Settings.InstrumentTransferRetryDelay) * time.Minute)
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				ticker.Stop()
+				return
+			case <-timeoutContext.Done():
+				ticker.Stop()
+				return
+			case <-ticker.C:
+				if retry, err := s.registerInstrument(timeoutContext, id); err != nil {
+					if retry {
+						break
+					}
+				}
+				cancel()
+			}
+		}
+	}()
 }

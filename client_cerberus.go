@@ -21,39 +21,44 @@ var (
 	ErrSendResultBatchFailed = errors.New(MsgSendResultBatchFailed)
 )
 
-type CerberusV1 interface {
+type Cerberus interface {
 	RegisterInstrument(instrument Instrument) error
 	PostAnalysisResultBatch(analysisResults []AnalysisResult) ([]AnalysisResultCreateStatusV1, error)
 }
 
-type cerberusV1 struct {
+type cerberus struct {
 	client      *resty.Client
 	cerberusUrl string
 }
 
-type errorResponseV1TO struct {
+type errorResponseTO struct {
 	Code    string   `json:"code"`
 	Message string   `json:"message"`
-	Errors  []string `json:"errors,omitempty"`
+	Errors  []string `json:"errors"`
 }
 
-type ciaInstrumentV1TO struct {
+type cerberusInstrumentTO struct {
 	ID   uuid.UUID `json:"id"`
 	Name string    `json:"name"`
 }
 
-type extraValueV1TO struct {
+type ciaInstrumentTO struct {
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
+}
+
+type extraValueTO struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
 }
 
-type createAnalysisResultResponseItemV1TO struct {
+type createAnalysisResultResponseItemTO struct {
 	ID         uuid.NullUUID `json:"id"`
 	WorkItemID uuid.UUID     `json:"workItemId"`
 	Error      *string       `json:"error"`
 }
 
-type channelResultV1TO struct {
+type channelResultTO struct {
 	ChannelID             uuid.UUID         `json:"channelId"`
 	QualitativeResult     string            `json:"qualitativeResult"`
 	QualitativeResultEdit bool              `json:"edited"`
@@ -61,28 +66,28 @@ type channelResultV1TO struct {
 	Images                []imageV1TO       `json:"images"`
 }
 
-type analysisResultV1TO struct {
-	WorkingItemID            uuid.UUID         `json:"workItemId"`
-	ValidUntil               time.Time         `json:"validUntil"`
-	Status                   string            `json:"status"`
-	Mode                     string            `json:"mode"`
-	ResultYieldDateTime      time.Time         `json:"resultYieldDateTime"`
-	ExaminedMaterial         uuid.UUID         `json:"examinedMaterial"`
-	Result                   string            `json:"result"`
-	Operator                 string            `json:"operator"`
-	TechnicalReleaseDateTime time.Time         `json:"technicalReleaseDateTime"`
-	InstrumentID             uuid.UUID         `json:"instrumentId"`
-	InstrumentRunID          uuid.UUID         `json:"instrumentRunId" `
-	ReagentInfos             []reagentInfoV1TO `json:"reagentInfos"`
+type analysisResultTO struct {
+	WorkingItemID            uuid.UUID       `json:"workItemId"`
+	ValidUntil               time.Time       `json:"validUntil"`
+	Status                   string          `json:"status"`
+	Mode                     string          `json:"mode"`
+	ResultYieldDateTime      time.Time       `json:"resultYieldDateTime"`
+	ExaminedMaterial         uuid.UUID       `json:"examinedMaterial"`
+	Result                   string          `json:"result"`
+	Operator                 string          `json:"operator"`
+	TechnicalReleaseDateTime time.Time       `json:"technicalReleaseDateTime"`
+	InstrumentID             uuid.UUID       `json:"instrumentId"`
+	InstrumentRunID          uuid.UUID       `json:"instrumentRunId" `
+	ReagentInfos             []reagentInfoTO `json:"reagentInfos"`
 	// OrderRef                 string              `json:"orderRef"`
-	RunCounter  int              `json:"runCounter" `
-	ExtraValues []extraValueV1TO `json:"extraValues"`
-	Edited      bool             `json:"resultEdit"`
-	EditReason  string           `json:"editReason"`
+	RunCounter  int            `json:"runCounter" `
+	ExtraValues []extraValueTO `json:"extraValues"`
+	Edited      bool           `json:"resultEdit"`
+	EditReason  string         `json:"editReason"`
 	//TODO:REMOVE : WarnFlag                 bool                `json:"warnFlag"`
-	Warnings       []string            `json:"warnings"`
-	ChannelResults []channelResultV1TO `json:"channelResults"`
-	Images         []imageV1TO         `json:"images"`
+	Warnings       []string          `json:"warnings"`
+	ChannelResults []channelResultTO `json:"channelResults"`
+	Images         []imageV1TO       `json:"images"`
 }
 
 type imageV1TO struct {
@@ -91,7 +96,7 @@ type imageV1TO struct {
 	Description *string   `json:"description,omitempty"`
 }
 
-type reagentInfoV1TO struct {
+type reagentInfoTO struct {
 	SerialNumber            string    `json:"serialNo"`
 	Name                    string    `json:"name"`
 	Code                    string    `json:"code"`
@@ -105,41 +110,39 @@ type reagentInfoV1TO struct {
 	DateCreated             time.Time `json:"dateCreated"`
 }
 
-func NewCerberusV1Client(cerberusUrl string, restyClient *resty.Client) (CerberusV1, error) {
-
+func NewCerberusClient(cerberusUrl string, restyClient *resty.Client) (Cerberus, error) {
 	if cerberusUrl == "" {
 		return nil, fmt.Errorf("basepath for cerberus must be set. check your configurationf or CerberusURL")
 	}
 
-	return &cerberusV1{
+	return &cerberus{
 		client:      restyClient,
 		cerberusUrl: cerberusUrl,
-		//TODO REMOVE ciaHistoryService: ciaHistoryService,
 	}, nil
 }
 
-// RegisterInstrument UPdate cerberus with changed instrument-information
-func (cia *cerberusV1) RegisterInstrument(instrument Instrument) error {
-	instrumentDTO := ciaInstrumentV1TO{
+// RegisterInstrument Update cerberus with changed instrument-information
+func (c *cerberus) RegisterInstrument(instrument Instrument) error {
+	instrumentDTO := ciaInstrumentTO{
 		ID:   instrument.ID,
 		Name: instrument.Name,
 	}
 
-	resp, err := cia.client.R().
+	resp, err := c.client.R().
 		SetHeader("Content-Type", "application/json").
 		SetBody(instrumentDTO).
-		Post(cia.cerberusUrl + "/v1/instruments")
+		Post(c.cerberusUrl + "/v1/instruments")
 
 	if err != nil && resp == nil {
-		log.Error().Err(err).Msg("Can not call internal cerberus api")
+		log.Error().Err(err).Msg("Failed to call Cerberus API")
 		return err
 	}
 
 	if resp.StatusCode() != http.StatusNoContent {
-		errReps := errorResponseV1TO{}
+		errReps := errorResponseTO{}
 		err = json.Unmarshal(resp.Body(), &errReps)
 		if err != nil {
-			log.Error().Err(err).Msg("Can not unmarshal error of resp")
+			log.Error().Err(err).Msg("Failed to unmarshal error of response")
 			return err
 		}
 		return errors.New(errReps.Message + "(" + errReps.Code + ")")
@@ -149,17 +152,17 @@ func (cia *cerberusV1) RegisterInstrument(instrument Instrument) error {
 }
 
 // PostAnalysisResultBatch Submit a list of Analysisresults to Cerberus
-func (cia *cerberusV1) PostAnalysisResultBatch(analysisResults []AnalysisResult) ([]AnalysisResultCreateStatusV1, error) {
+func (cia *cerberus) PostAnalysisResultBatch(analysisResults []AnalysisResult) ([]AnalysisResultCreateStatusV1, error) {
 
 	if len(analysisResults) == 0 {
 		return []AnalysisResultCreateStatusV1{}, nil
 	}
 
-	analysisResultsTOs := make([]analysisResultV1TO, 0)
+	analysisResultsTOs := make([]analysisResultTO, 0)
 
 	for _, ar := range analysisResults {
 
-		analysisResultTO := analysisResultV1TO{
+		analysisResultTO := analysisResultTO{
 			WorkingItemID:            ar.AnalysisRequest.WorkItemID,
 			ValidUntil:               ar.ValidUntil,
 			Status:                   "",
@@ -171,13 +174,13 @@ func (cia *cerberusV1) PostAnalysisResultBatch(analysisResults []AnalysisResult)
 			TechnicalReleaseDateTime: ar.TechnicalReleaseDateTime,
 			InstrumentID:             ar.Instrument.ID,
 			InstrumentRunID:          ar.InstrumentRunID,
-			ReagentInfos:             []reagentInfoV1TO{},
+			ReagentInfos:             []reagentInfoTO{},
 			RunCounter:               ar.RunCounter,
-			ExtraValues:              []extraValueV1TO{},
+			ExtraValues:              []extraValueTO{},
 			Edited:                   ar.Edited,
 			EditReason:               ar.EditReason,
 			Warnings:                 ar.Warnings,
-			ChannelResults:           []channelResultV1TO{},
+			ChannelResults:           []channelResultTO{},
 			//TODO Images                  : ar.Images,
 		}
 
@@ -204,7 +207,7 @@ func (cia *cerberusV1) PostAnalysisResultBatch(analysisResults []AnalysisResult)
 		}
 
 		for _, ev := range ar.ExtraValues {
-			extraValueTO := extraValueV1TO{
+			extraValueTO := extraValueTO{
 				Key:   ev.Key,
 				Value: ev.Value,
 			}
@@ -212,7 +215,7 @@ func (cia *cerberusV1) PostAnalysisResultBatch(analysisResults []AnalysisResult)
 		}
 
 		for _, cr := range ar.ChannelResults {
-			channelResultTO := channelResultV1TO{
+			channelResultTO := channelResultTO{
 				ChannelID:             cr.ChannelID,
 				QualitativeResult:     cr.QualitativeResult,
 				QualitativeResultEdit: cr.QualitativeResultEdit,
@@ -223,7 +226,7 @@ func (cia *cerberusV1) PostAnalysisResultBatch(analysisResults []AnalysisResult)
 		}
 
 		for _, ri := range ar.ReagentInfos {
-			reagentInfoTO := reagentInfoV1TO{
+			reagentInfoTO := reagentInfoTO{
 				SerialNumber:            ri.SerialNumber,
 				Name:                    ri.Name,
 				Code:                    ri.Code,
@@ -263,7 +266,7 @@ func (cia *cerberusV1) PostAnalysisResultBatch(analysisResults []AnalysisResult)
 
 	switch {
 	case resp.StatusCode() == http.StatusCreated, resp.StatusCode() == http.StatusAccepted:
-		responseItems := []createAnalysisResultResponseItemV1TO{}
+		responseItems := []createAnalysisResultResponseItemTO{}
 		err = json.Unmarshal(resp.Body(), responseItems)
 		if err != nil {
 			return nil, err
@@ -284,7 +287,7 @@ func (cia *cerberusV1) PostAnalysisResultBatch(analysisResults []AnalysisResult)
 		}
 		return returnAnalysisResultStatus, nil
 	case resp.StatusCode() == http.StatusInternalServerError:
-		errReps := errorResponseV1TO{}
+		errReps := errorResponseTO{}
 		err = json.Unmarshal(resp.Body(), &errReps)
 		if err != nil {
 			return nil, fmt.Errorf("can not unmarshal error of resp (%w)", err)

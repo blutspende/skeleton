@@ -26,6 +26,7 @@ const (
 	msgInstrumentNotFound                 = "instrument not found"
 	msgUpdateInstrumentFailed             = "update instrument failed"
 	msgDeleteInstrumentFailed             = "delete instrument failed"
+	msgMarkInstrumentSentToCerberusFailed = "mark instrument as sent to cerberus failed"
 	msgGetProtocolByIDFailed              = "get protocol by ID failed"
 	msgUpsertSupportedProtocolFailed      = "upsert supported protocol failed"
 	msgUpsertProtocolAbilitiesFailed      = "upsert protocol abilities failed"
@@ -59,6 +60,7 @@ var (
 	ErrInstrumentNotFound                 = errors.New(msgInstrumentNotFound)
 	ErrUpdateInstrumentFailed             = errors.New(msgUpdateInstrumentFailed)
 	ErrDeleteInstrumentFailed             = errors.New(msgDeleteInstrumentFailed)
+	ErrMarkInstrumentSentToCerberusFailed = errors.New(msgMarkInstrumentSentToCerberusFailed)
 	ErrGetProtocolByIDFailed              = errors.New(msgGetProtocolByIDFailed)
 	ErrUpsertSupportedProtocolFailed      = errors.New(msgUpsertSupportedProtocolFailed)
 	ErrUpsertProtocolAbilitiesFailed      = errors.New(msgUpsertProtocolAbilitiesFailed)
@@ -182,6 +184,7 @@ type InstrumentRepository interface {
 	GetInstrumentByIP(ctx context.Context, ip string) (Instrument, error)
 	UpdateInstrument(ctx context.Context, instrument Instrument) error
 	DeleteInstrument(ctx context.Context, id uuid.UUID) error
+	MarkAsSentToCerberus(ctx context.Context, id uuid.UUID) error
 	GetProtocolByID(ctx context.Context, id uuid.UUID) (SupportedProtocol, error)
 	GetSupportedProtocols(ctx context.Context) ([]SupportedProtocol, error)
 	UpsertSupportedProtocol(ctx context.Context, id uuid.UUID, name string, description string) error
@@ -353,6 +356,16 @@ func (r *instrumentRepository) DeleteInstrument(ctx context.Context, id uuid.UUI
 	if err != nil {
 		log.Error().Err(err).Msg(msgDeleteInstrumentFailed)
 		return ErrDeleteInstrumentFailed
+	}
+	return nil
+}
+
+func (r *instrumentRepository) MarkAsSentToCerberus(ctx context.Context, id uuid.UUID) error {
+	query := fmt.Sprintf(`UPDATE %s.sk_instruments SET sent_to_cerberus = TRUE WHERE id = $1;`, r.dbSchema)
+	_, err := r.db.ExecContext(ctx, query, id)
+	if err != nil {
+		log.Error().Err(err).Msg(msgMarkInstrumentSentToCerberusFailed)
+		return ErrMarkInstrumentSentToCerberusFailed
 	}
 	return nil
 }

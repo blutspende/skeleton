@@ -142,9 +142,6 @@ func (api *api) CreateInstrument(c *gin.Context) {
 		return
 	}
 
-	// Todo
-	//api.instrumentTransferService.EnqueueInstrument(savedInstrumentID)
-
 	c.JSON(http.StatusOK, savedInstrumentID)
 }
 

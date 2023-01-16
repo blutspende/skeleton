@@ -22,8 +22,8 @@ type skeleton struct {
 	resultsBuffer      []AnalysisResult
 	resultsChan        chan AnalysisResult
 	resultBatchesChan  chan []AnalysisResult
-	cerberusClient     CerberusV1
-	manager            CallbackManager
+	cerberusClient     Cerberus
+	manager            Manager
 }
 
 func (s *skeleton) SetCallbackHandler(eventHandler SkeletonCallbackHandlerV1) {
@@ -212,7 +212,7 @@ func (s *skeleton) processAnalysisResultBatches(ctx context.Context) {
 	}
 }
 
-func NewSkeleton(sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api GinApi, analysisRepository AnalysisRepository, instrumentService InstrumentService, manager CallbackManager, cerberusClient CerberusV1) (SkeletonAPI, error) {
+func NewSkeleton(sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api GinApi, analysisRepository AnalysisRepository, instrumentService InstrumentService, manager Manager, cerberusClient Cerberus) (SkeletonAPI, error) {
 	skeleton := &skeleton{
 		sqlConn:            sqlConn,
 		dbSchema:           dbSchema,
