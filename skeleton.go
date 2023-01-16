@@ -79,6 +79,9 @@ func (s *skeleton) SubmitAnalysisResult(ctx context.Context, resultData Analysis
 	if resultData.AnalyteMapping.ID == uuid.Nil {
 		return errors.New("analyte mapping ID is missing")
 	}
+	if resultData.Instrument.ID == uuid.Nil {
+		return errors.New("instrument ID is missing")
+	}
 
 	tx, err := s.analysisRepository.CreateTransaction()
 	if err != nil {
