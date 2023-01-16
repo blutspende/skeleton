@@ -753,7 +753,7 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_instruments
 	sent_to_cerberus bool NOT NULL DEFAULT FALSE,
 	timezone TEXT NOT NULL DEFAULT 'Europe/Berlin',
 	file_encoding TEXT NOT NULL DEFAULT 'ASCII',
-	created_at timestamp NOT NULL DEFAULT now(),
+	created_at timestamp NOT NULL DEFAULT timezone('utc', now()),
     modified_at timestamp NULL,
 	deleted_at timestamp NULL,
 	CONSTRAINT sk_pk_instruments PRIMARY KEY (id),
@@ -787,7 +787,7 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_analyte_mappings
 	instrument_analyte TEXT NOT NULL,
 	analyte_id uuid NOT NULL,
 	result_type TEXT NOT NULL,
-	created_at timestamp DEFAULT now(),
+	created_at timestamp DEFAULT timezone('utc', now()),
 	modified_at timestamp,
 	deleted_at timestamp,
 	CONSTRAINT sk_pk_analyte_mappings PRIMARY KEY (id),
@@ -809,7 +809,7 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_channel_mappings
 	instrument_channel TEXT NOT NULL,
 	channel_id uuid NOT NULL,
 	analyte_mapping_id uuid NOT NULL,
-	created_at timestamp DEFAULT now(),
+	created_at timestamp DEFAULT timezone('utc', now()),
     modified_at timestamp,
 	deleted_at timestamp,
 	CONSTRAINT "sk_pk_channel_mapping_id" PRIMARY KEY (id),
@@ -823,7 +823,7 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_result_mappings
 	"key" TEXT NOT NULL,
 	value TEXT NOT NULL,
 	"index" int DEFAULT 1,
-	created_at timestamp DEFAULT now(),
+	created_at timestamp DEFAULT timezone('utc', now()),
 	modified_at timestamp,
 	deleted_at timestamp,
 	CONSTRAINT "sk_pk_result_mapping_id" PRIMARY KEY (id),
@@ -839,7 +839,7 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_analysis_requests
 	material_id uuid NOT NULL,
 	laboratory_id uuid NOT NULL,
 	valid_until_time timestamp NOT NULL,
-	created_at timestamp NOT NULL DEFAULT now(),
+	created_at timestamp NOT NULL DEFAULT timezone('utc', now()),
 	CONSTRAINT sk_pk_analysis_requests PRIMARY KEY (id),
 	CONSTRAINT "sk_unique_workitem_id" UNIQUE (work_item_id)
 );
@@ -874,7 +874,7 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_request_mappings
 	id uuid NOT NULL DEFAULT uuid_generate_v4(),
 	code TEXT NOT NULL,
 	instrument_id uuid NOT NULL,
-	created_at timestamp DEFAULT now(),
+	created_at timestamp DEFAULT timezone('utc', now()),
     modified_at timestamp,
     deleted_at timestamp,
 	CONSTRAINT "sk_pk_request_mappings" PRIMARY KEY (id),
@@ -887,7 +887,7 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_request_mapping_analytes
 	id uuid NOT NULL DEFAULT uuid_generate_v4(),
 	analyte_id uuid NOT NULL,
 	request_mapping_id uuid NOT NULL,
-	created_at timestamp DEFAULT now(),
+	created_at timestamp DEFAULT timezone('utc', now()),
     modified_at timestamp,
     deleted_at timestamp,
 	CONSTRAINT "sk_pk_request_mapping_analyte_id" PRIMARY KEY (id),
@@ -900,7 +900,7 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_request_mapping_sent
 	id uuid NOT NULL DEFAULT uuid_generate_v4(),
 	sample_code TEXT NOT NULL,
 	request_mapping_id uuid NOT NULL,
-	created_at timestamp DEFAULT now(),
+	created_at timestamp DEFAULT timezone('utc', now()),
 	CONSTRAINT "sk_pk_request_mapping_sent_id" PRIMARY KEY (id),
 	CONSTRAINT "sk_fk_request_mapping_id__id" FOREIGN KEY (request_mapping_id) REFERENCES <SCHEMA_PLACEHOLDER>.sk_request_mappings (id)
 );
@@ -970,7 +970,7 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_analysis_result_reagent_infos(
 	reagent_manufacturer_date timestamp NOT NULL,
 	reagent_type varchar NOT NULL,
 	use_until timestamp NOT NULL,
-	date_created timestamp NOT NULL DEFAULT now(),
+	date_created timestamp NOT NULL DEFAULT timezone('utc', now()),
     CONSTRAINT sk_pk_analysis_result_reagent_infos PRIMARY KEY (id),
     CONSTRAINT sk_fk_analysis_result_reagent_infos_analysis_result FOREIGN KEY (analysis_result_id) REFERENCES <SCHEMA_PLACEHOLDER>.sk_analysis_results(id)
 );
@@ -1004,7 +1004,7 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_cia_http_history
 	status_code int DEFAULT 0,
 	response_body TEXT,
 	request_body TEXT NOT NULL,
-	created_at timestamp NOT NULL DEFAULT now(),
+	created_at timestamp NOT NULL DEFAULT timezone('utc', now()),
 	CONSTRAINT pk_cia_history_id_id PRIMARY KEY (id)
 );
 
@@ -1031,7 +1031,7 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_instrument_request_upload_log
 	status TEXT NOT NULL,
 	tcp_send_message TEXT NOT NULL,
 	send_date timestamp NULL,
-	created_at timestamp DEFAULT now(),
+	created_at timestamp DEFAULT timezone('utc', now()),
 	CONSTRAINT "sk_pk_instrument_request_upload_log_id" PRIMARY KEY (id),
 	CONSTRAINT "sk_fk_transfer_instrument__id" FOREIGN KEY (instrument_id) REFERENCES <SCHEMA_PLACEHOLDER>.sk_instruments (id),
 	CONSTRAINT "sk_fk_transfer_analysis_request_id__id" FOREIGN KEY (analysis_request_id) REFERENCES <SCHEMA_PLACEHOLDER>.sk_analysis_requests (id)
@@ -1044,7 +1044,7 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_protocol_abilities
 	connection_mode TEXT NOT NULL,
     abilities TEXT NOT NULL,
 	request_mapping_available bool NOT NULL DEFAULT FALSE,
-	created_at timestamp DEFAULT now(),
+	created_at timestamp DEFAULT timezone('utc', now()),
 	modified_at timestamp,
     deleted_at timestamp,
 	CONSTRAINT "sk_pk_protocol_abilities" PRIMARY KEY (id),
