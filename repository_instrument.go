@@ -477,20 +477,18 @@ func (r *instrumentRepository) CreateAnalyteMappings(ctx context.Context, analyt
 	if len(analyteMappings) == 0 {
 		return []uuid.UUID{}, nil
 	}
+	ids := make([]uuid.UUID, len(analyteMappings))
 	for i := range analyteMappings {
 		if (analyteMappings[i].ID == uuid.UUID{}) || (analyteMappings[i].ID == uuid.Nil) {
 			analyteMappings[i].ID = uuid.New()
 		}
+		ids[i] = analyteMappings[i].ID
 	}
 	query := fmt.Sprintf(`INSERT INTO %s.sk_analyte_mappings(id, instrument_id, instrument_analyte, analyte_id, result_type) VALUES(:id, :instrument_id, :instrument_analyte, :analyte_id, :result_type);`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, convertAnalyteMappingsToDAOs(analyteMappings, instrumentID))
 	if err != nil {
 		log.Error().Err(err).Msg(msgCreateAnalyteMappingsFailed)
 		return []uuid.UUID{}, ErrCreateAnalyteMappingsFailed
-	}
-	ids := make([]uuid.UUID, len(analyteMappings))
-	for i := range analyteMappings {
-		ids[i] = analyteMappings[i].ID
 	}
 	return ids, nil
 }
@@ -549,7 +547,9 @@ func (r *instrumentRepository) CreateChannelMappings(ctx context.Context, channe
 		return ids, nil
 	}
 	for i := range channelMappings {
-		channelMappings[i].ID = uuid.New()
+		if (channelMappings[i].ID == uuid.UUID{}) || (channelMappings[i].ID == uuid.Nil) {
+			channelMappings[i].ID = uuid.New()
+		}
 		ids[i] = channelMappings[i].ID
 	}
 	query := fmt.Sprintf(`INSERT INTO %s.sk_channel_mappings(id, instrument_channel, channel_id, analyte_mapping_id) 
@@ -616,7 +616,9 @@ func (r *instrumentRepository) CreateResultMappings(ctx context.Context, resultM
 		return ids, nil
 	}
 	for i := range resultMappings {
-		resultMappings[i].ID = uuid.New()
+		if (resultMappings[i].ID == uuid.UUID{}) || (resultMappings[i].ID == uuid.Nil) {
+			resultMappings[i].ID = uuid.New()
+		}
 		ids[i] = resultMappings[i].ID
 	}
 	query := fmt.Sprintf(`INSERT INTO %s.sk_result_mappings(id, analyte_mapping_id, "key", "value", "index") 
