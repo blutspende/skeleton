@@ -2,6 +2,7 @@ package skeleton
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/migrator"
@@ -75,6 +76,10 @@ func (s *skeleton) GetRequestMappingsByInstrumentID(instrumentID uuid.UUID) ([]R
 }
 
 func (s *skeleton) SubmitAnalysisResult(ctx context.Context, resultData AnalysisResult, submitTypes ...SubmitType) error {
+	if resultData.AnalyteMapping.ID == uuid.Nil {
+		return errors.New("analyte mapping ID is missing")
+	}
+
 	tx, err := s.analysisRepository.CreateTransaction()
 	if err != nil {
 		return err
