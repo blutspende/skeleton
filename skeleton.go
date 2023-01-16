@@ -83,7 +83,9 @@ func (s *skeleton) SubmitAnalysisResult(ctx context.Context, resultData Analysis
 	if err != nil {
 		return err
 	}
-
+	if err = tx.Commit(); err != nil {
+		return err
+	}
 	s.resultsChan <- resultData
 	return nil
 }
