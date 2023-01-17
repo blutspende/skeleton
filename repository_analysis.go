@@ -43,6 +43,7 @@ type analysisResultDAO struct {
 	AnalyteMappingID  uuid.UUID      `db:"analyte_mapping_id"`
 	InstrumentID      uuid.UUID      `db:"instrument_id"`
 	InstrumentRunID   uuid.UUID      `db:"instrument_run_id"`
+	SampleCode        string         `db:"sample_code"`
 	ResultRecordID    uuid.UUID      `db:"result_record_id"`
 	BatchID           uuid.UUID      `db:"batch_id"`
 	Result            string         `db:"result"`
@@ -392,8 +393,8 @@ func (r *analysisRepository) CreateAnalysisResultsBatch(ctx context.Context, ana
 			analysisResults[i].ID = uuid.New()
 		}
 	}
-	query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_results(id, analysis_request_id, analyte_mapping_id, instrument_id, instrument_run_id, result_record_id, batch_id, "result", status, mode, yielded_at, valid_until, operator, edited, edit_reason)
-		VALUES(:id, :analysis_request_id, :analyte_mapping_id, :instrument_id, :instrument_run_id, :result_record_id, :batch_id, :result, :status, :mode, :yielded_at, :valid_until, :operator, :edited, :edit_reason)`, r.dbSchema)
+	query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_results(id, analysis_request_id, analyte_mapping_id, instrument_id, sample_code, instrument_run_id, result_record_id, batch_id, "result", status, mode, yielded_at, valid_until, operator, edited, edit_reason)
+		VALUES(:id, :analysis_request_id, :analyte_mapping_id, :instrument_id, :sample_code, :instrument_run_id, :result_record_id, :batch_id, :result, :status, :mode, :yielded_at, :valid_until, :operator, :edited, :edit_reason)`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, convertAnalysisResultsToDAOs(analysisResults))
 	if err != nil {
 		log.Error().Err(err).Msg("create analysis result batch failed")
@@ -641,6 +642,7 @@ func convertAnalysisResultToDAO(analysisResult AnalysisResult) analysisResultDAO
 		AnalyteMappingID:  analysisResult.AnalyteMapping.ID,
 		InstrumentID:      analysisResult.Instrument.ID,
 		ResultMode:        analysisResult.Instrument.ResultMode,
+		SampleCode:        analysisResult.SampleCode,
 		InstrumentRunID:   analysisResult.InstrumentRunID,
 		ResultRecordID:    analysisResult.ResultRecordID,
 		BatchID:           analysisResult.BatchID,

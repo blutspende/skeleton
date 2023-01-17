@@ -202,6 +202,7 @@ type AnalysisResult struct {
 	AnalysisRequest AnalysisRequest
 	AnalyteMapping  AnalyteMapping
 	Instrument      Instrument
+	SampleCode      string
 	// ResultRecordID - reference to raw result record stored in an implementation-created table
 	ResultRecordID           uuid.UUID
 	BatchID                  uuid.UUID

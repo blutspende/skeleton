@@ -100,6 +100,7 @@ func TestSubmitAnalysisResult(t *testing.T) {
 		Instrument: skeleton.Instrument{
 			ID: instrumentID,
 		},
+		SampleCode:               "testSampleCode",
 		ResultRecordID:           uuid.UUID{},
 		Result:                   "pos",
 		Status:                   "",
