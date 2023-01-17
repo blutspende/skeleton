@@ -185,6 +185,7 @@ type InstrumentRepository interface {
 	UpdateInstrument(ctx context.Context, instrument Instrument) error
 	DeleteInstrument(ctx context.Context, id uuid.UUID) error
 	MarkAsSentToCerberus(ctx context.Context, id uuid.UUID) error
+	GetUnsentToCerberus(ctx context.Context) ([]uuid.UUID, error)
 	GetProtocolByID(ctx context.Context, id uuid.UUID) (SupportedProtocol, error)
 	GetSupportedProtocols(ctx context.Context) ([]SupportedProtocol, error)
 	UpsertSupportedProtocol(ctx context.Context, id uuid.UUID, name string, description string) error
@@ -368,6 +369,29 @@ func (r *instrumentRepository) MarkAsSentToCerberus(ctx context.Context, id uuid
 		return ErrMarkInstrumentSentToCerberusFailed
 	}
 	return nil
+}
+
+func (r *instrumentRepository) GetUnsentToCerberus(ctx context.Context) ([]uuid.UUID, error) {
+	query := `SELECT id FROM %s.sk_instruments WHERE sent_to_cerberus = false;`
+	rows, err := r.db.QueryxContext(ctx, query)
+	if err != nil {
+		log.Error().Err(err).Msg("Can not fetch unsent instrument IDs")
+		return []uuid.UUID{}, err
+	}
+	defer rows.Close()
+
+	instrumentIDs := make([]uuid.UUID, 0)
+	for rows.Next() {
+		instrumentID := uuid.UUID{}
+		err = rows.Scan(&instrumentID)
+		if err != nil {
+			log.Error().Err(err).Msg("Can not scan row")
+			return nil, err
+		}
+		instrumentIDs = append(instrumentIDs, instrumentID)
+	}
+
+	return instrumentIDs, nil
 }
 
 func (r *instrumentRepository) GetProtocolByID(ctx context.Context, id uuid.UUID) (SupportedProtocol, error) {

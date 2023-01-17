@@ -21,6 +21,7 @@ type InstrumentService interface {
 	UpsertSupportedProtocol(ctx context.Context, id uuid.UUID, name string, description string) error
 	UpsertProtocolAbilities(ctx context.Context, protocolID uuid.UUID, protocolAbilities []ProtocolAbility) error
 	UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error
+	EnqueueUnsentInstrumentsToCerberus(ctx context.Context)
 }
 
 type instrumentService struct {
@@ -40,7 +41,7 @@ func NewInstrumentService(config *config.Configuration, instrumentRepository Ins
 		cerberusClient:       cerberusClient,
 	}
 
-	manager.RegisterInstrumentQueueListener(service, InstrumentAddedEvent, InstrumentUpdatedEvent)
+	manager.RegisterInstrumentQueueListener(service, InstrumentAddedEvent, InstrumentUpdatedEvent, InstrumentAddRetryEvent)
 
 	return service
 }
@@ -463,18 +464,32 @@ func (s *instrumentService) UpdateInstrumentStatus(ctx context.Context, id uuid.
 	return s.instrumentRepository.UpdateInstrumentStatus(ctx, id, status)
 }
 
+func (s *instrumentService) EnqueueUnsentInstrumentsToCerberus(ctx context.Context) {
+	instrumentIDs, err := s.instrumentRepository.GetUnsentToCerberus(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to collect unsent instruments")
+	}
+
+	for i := range instrumentIDs {
+		s.manager.EnqueueInstrument(instrumentIDs[i], InstrumentAddRetryEvent)
+	}
+}
+
 func (s *instrumentService) ProcessInstrumentEvent(instrumentID uuid.UUID, event instrumentEventType) {
 	if event.IsOneOf(InstrumentAddedEvent | InstrumentUpdatedEvent) {
 		log.Debug().Msg("Invalidating instrument cache")
 		s.instrumentCache.Invalidate()
 		log.Trace().Msg("Invalidated instrument cache")
 
-		log.Debug().Msg("Registering instrument in Cerberus")
+		log.Debug().Str("instrumentID", instrumentID.String()).Msg("Registering instrument in Cerberus")
 		if retry, err := s.registerInstrument(context.Background(), instrumentID); err != nil {
 			if retry {
 				s.retryInstrumentRegistration(context.Background(), instrumentID)
 			}
 		}
+	} else if event.IsExactly(InstrumentAddRetryEvent) {
+		log.Debug().Str("instrumentID", instrumentID.String()).Msg("Retrying to register instrument in Cerberus")
+		_, _ = s.registerInstrument(context.Background(), instrumentID)
 	}
 }
 

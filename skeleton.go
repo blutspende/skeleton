@@ -163,6 +163,7 @@ func (s *skeleton) migrateUp(ctx context.Context, db *sqlx.DB, schemaName string
 }
 
 func (s *skeleton) Start() error {
+	go s.sendUnsentInstrumentsToCerberus(context.Background())
 	go s.processAnalysisResults(context.Background())
 	go s.processAnalysisResultBatches(context.Background())
 
@@ -174,6 +175,22 @@ func (s *skeleton) Start() error {
 	}
 
 	return nil
+}
+
+func (s *skeleton) sendUnsentInstrumentsToCerberus(ctx context.Context) {
+	ticker := time.NewTicker(10 * time.Minute)
+	for {
+		select {
+		case <-ctx.Done():
+			ticker.Stop()
+			return
+		case _, ok := <-ticker.C:
+			if !ok {
+				log.Error().Msg("Sending unsent instruments to Cerberus stopped")
+			}
+			s.instrumentService.EnqueueUnsentInstrumentsToCerberus(ctx)
+		}
+	}
 }
 
 func (s *skeleton) processAnalysisResults(ctx context.Context) {

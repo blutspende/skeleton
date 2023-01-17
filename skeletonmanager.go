@@ -12,6 +12,7 @@ type instrumentEventType int
 const (
 	InstrumentAddedEvent = 1 << iota
 	InstrumentUpdatedEvent
+	InstrumentAddRetryEvent
 )
 
 func (ie instrumentEventType) IsOneOf(event instrumentEventType) bool {
