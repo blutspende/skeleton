@@ -429,23 +429,21 @@ func (r *analysisRepository) GetSubjectsByAnalysisRequestIDs(ctx context.Context
 
 }
 
-func (r *analysisRepository) CreateAnalysisResultsBatch(ctx context.Context, analysisResults []AnalysisResult) ([]uuid.UUID, error) {
-	ids := make([]uuid.UUID, len(analysisResults))
+func (r *analysisRepository) CreateAnalysisResultsBatch(ctx context.Context, analysisResults []AnalysisResult) ([]AnalysisResult, error) {
 	if len(analysisResults) == 0 {
-		return ids, nil
+		return analysisResults, nil
 	}
 	for i := range analysisResults {
 		if (analysisResults[i].ID == uuid.UUID{}) || (analysisResults[i].ID == uuid.Nil) {
 			analysisResults[i].ID = uuid.New()
 		}
-		ids[i] = analysisResults[i].ID
 	}
 	query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_results(id, analyte_mapping_id, instrument_id, sample_code, instrument_run_id, result_record_id, batch_id, "result", status, mode, yielded_at, valid_until, operator, edited, edit_reason)
-		VALUES(:id, :analyte_mapping_id, :instrument_id, :sample_code, :instrument_run_id, :result_record_id, :batch_id, :result, :status, :mode, :yielded_at, :valid_until, :operator, :edited, :edit_reason)`, r.dbSchema)
+		VALUES(:id, :analyte_mapping_id, :instrument_id, :sample_code, :instrument_run_id, :result_record_id, :batch_id, :result, :status, :mode, :yielded_at, :valid_until, :operator, :edited, :edit_reason);`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, convertAnalysisResultsToDAOs(analysisResults))
 	if err != nil {
 		log.Error().Err(err).Msg("create analysis result batch failed")
-		return []uuid.UUID{}, err
+		return analysisResults, err
 	}
 
 	extraValuesMap := make(map[uuid.UUID][]ExtraValue)
@@ -454,44 +452,44 @@ func (r *analysisRepository) CreateAnalysisResultsBatch(ctx context.Context, ana
 	imagesMap := make(map[uuid.UUID]map[uuid.NullUUID][]Image)
 
 	for i := range analysisResults {
-		extraValuesMap[ids[i]] = analysisResults[i].ExtraValues
-		warningsMap[ids[i]] = analysisResults[i].Warnings
-		reagentInfosMap[ids[i]] = analysisResults[i].ReagentInfos
-		imagesMap[ids[i]] = make(map[uuid.NullUUID][]Image)
-		imagesMap[ids[i]][uuid.NullUUID{Valid: false}] = analysisResults[i].Images
+		extraValuesMap[analysisResults[i].ID] = analysisResults[i].ExtraValues
+		warningsMap[analysisResults[i].ID] = analysisResults[i].Warnings
+		reagentInfosMap[analysisResults[i].ID] = analysisResults[i].ReagentInfos
+		imagesMap[analysisResults[i].ID] = make(map[uuid.NullUUID][]Image)
+		imagesMap[analysisResults[i].ID][uuid.NullUUID{Valid: false}] = analysisResults[i].Images
 	}
 
 	err = r.createExtraValues(ctx, extraValuesMap)
 	if err != nil {
-		return []uuid.UUID{}, err
+		return analysisResults, err
 	}
 
 	for i := range analysisResults {
 		quantitativeChannelResultsMap := make(map[uuid.UUID]map[string]string)
 		channelImagesMap := make(map[uuid.NullUUID][]Image)
-		channelResultIDs, err := r.createChannelResults(ctx, analysisResults[i].ChannelResults, ids[i])
+		channelResultIDs, err := r.createChannelResults(ctx, analysisResults[i].ChannelResults, analysisResults[i].ID)
 		if err != nil {
-			return []uuid.UUID{}, err
+			return analysisResults, err
 		}
 		for j := range analysisResults[i].ChannelResults {
 			quantitativeChannelResultsMap[channelResultIDs[j]] = analysisResults[i].ChannelResults[j].QuantitativeResults
 			channelImagesMap[uuid.NullUUID{UUID: channelResultIDs[j], Valid: true}] = analysisResults[i].ChannelResults[j].Images
 		}
-		imagesMap[ids[i]] = channelImagesMap
+		imagesMap[analysisResults[i].ID] = channelImagesMap
 		err = r.createChannelResultQuantitativeValues(ctx, quantitativeChannelResultsMap)
 	}
 
 	err = r.createWarnings(ctx, warningsMap)
 	if err != nil {
-		return []uuid.UUID{}, err
+		return analysisResults, err
 	}
 
 	err = r.createImages(ctx, imagesMap)
 	if err != nil {
-		return []uuid.UUID{}, err
+		return analysisResults, err
 	}
 
-	return ids, nil
+	return analysisResults, nil
 }
 
 func (r *analysisRepository) createExtraValues(ctx context.Context, extraValuesByAnalysisRequestIDs map[uuid.UUID][]ExtraValue) error {
