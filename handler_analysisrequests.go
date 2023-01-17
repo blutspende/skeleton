@@ -59,8 +59,6 @@ func (api *api) CreateAnalysisRequestBatch(c *gin.Context) {
 	api.createAnalysisRequestMutex.Lock()
 	defer api.createAnalysisRequestMutex.Unlock()
 
-	log.Debug().Msg("CreateAnalysisRequestBatch - desperate debug session: entering this http handler")
-
 	var analysisRequestTOs []analysisRequestTO
 	err := c.BindJSON(&analysisRequestTOs)
 	if err != nil {
@@ -122,7 +120,7 @@ func (api *api) CreateAnalysisRequestBatch(c *gin.Context) {
 		}
 	}
 
-	log.Debug().
+	log.Trace().
 		Int64("Execution-time (ms)", time.Now().Sub(requestStart).Milliseconds()).
 		Msg("createAnalysisRequestBatch")
 
