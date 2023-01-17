@@ -138,6 +138,7 @@ type cerberusQueueItemDAO struct {
 	LastErrorAt    sql.NullTime `db:"last_error_at"`
 	RetryCount     int          `db:"retry_count"`
 	RetryNotBefore time.Time    `db:"retry_not_before"`
+	CreatedAt      time.Time    `db:"created_at"`
 }
 
 type AnalysisRepository interface {
