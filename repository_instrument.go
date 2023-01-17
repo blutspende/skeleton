@@ -964,6 +964,7 @@ func convertAnalyteMappingDaoToAnalyteMapping(dao analyteMappingDAO) AnalyteMapp
 		ID:                dao.ID,
 		InstrumentAnalyte: dao.InstrumentAnalyte,
 		AnalyteID:         dao.AnalyteID,
+		ResultType:        dao.ResultType,
 	}
 }
 
