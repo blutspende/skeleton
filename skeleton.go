@@ -93,7 +93,14 @@ func (s *skeleton) SubmitAnalysisResult(ctx context.Context, resultData Analysis
 	if err = tx.Commit(); err != nil {
 		return err
 	}
-	s.resultsChan <- resultData
+	analyteRequests, err := s.analysisRepository.GetAnalysisRequestsBySampleCodeAndAnalyteID(ctx, resultData.SampleCode, resultData.AnalyteMapping.AnalyteID)
+	if err != nil {
+		return err
+	}
+	for i := range analyteRequests {
+		resultData.AnalysisRequest = analyteRequests[i]
+		s.resultsChan <- resultData
+	}
 	return nil
 }
 
@@ -163,9 +170,11 @@ func (s *skeleton) migrateUp(ctx context.Context, db *sqlx.DB, schemaName string
 }
 
 func (s *skeleton) Start() error {
+	go s.cleanUpCerberusQueueItems(context.Background())
 	go s.sendUnsentInstrumentsToCerberus(context.Background())
 	go s.processAnalysisResults(context.Background())
 	go s.processAnalysisResultBatches(context.Background())
+	go s.submitAnalysisRequestsToCerberus(context.Background())
 
 	// Todo - use cancellable context what is passed to the routines above too
 	err := s.api.Run()
@@ -220,22 +229,33 @@ func (s *skeleton) processAnalysisResultBatches(ctx context.Context) {
 		if !ok {
 			log.Fatal().Msg("processing analysis result batches stopped: resultBatches channel closed")
 		}
-		creationStatuses, err := s.cerberusClient.PostAnalysisResultBatch(resultsBatch)
+		//creationStatuses, err := s.cerberusClient.PostAnalysisResultBatch(resultsBatch)
+		_, err := s.analysisRepository.CreateAnalysisResultQueueItem(ctx, resultsBatch)
 		if err != nil {
 			time.AfterFunc(30*time.Second, func() {
 				s.resultBatchesChan <- resultsBatch
 			})
 			continue
 		}
-		for i, status := range creationStatuses {
-			err = s.analysisRepository.UpdateResultTransmissionData(ctx, resultsBatch[i].ID, status.Success, status.ErrorMessage)
-			if !status.Success && resultsBatch[i].RetryCount < maxRetryCount {
-				time.AfterFunc(30*time.Second, func() {
-					s.resultsChan <- resultsBatch[i]
-				})
-			}
-		}
+		//for i, status := range creationStatuses {
+		//	err = s.analysisRepository.UpdateResultTransmissionData(ctx, resultsBatch[i].ID, status.Success, status.ErrorMessage)
+		//	if !status.Success && resultsBatch[i].RetryCount < maxRetryCount {
+		//		time.AfterFunc(30*time.Second, func() {
+		//			s.resultsChan <- resultsBatch[i]
+		//		})
+		//	}
+		//}
 	}
+}
+
+func (s *skeleton) cleanUpCerberusQueueItems(ctx context.Context) {
+	// Todo
+	//-- clean up old stuff
+	//delete from astm.sk_cerberus_queue_items where created_at < now()-interval '14 days';
+}
+
+func (s *skeleton) submitAnalysisRequestsToCerberus(ctx context.Context) {
+
 }
 
 func NewSkeleton(sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api GinApi, analysisRepository AnalysisRepository, instrumentService InstrumentService, manager Manager, cerberusClient Cerberus) (SkeletonAPI, error) {

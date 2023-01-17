@@ -908,7 +908,6 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_request_mapping_sent
 CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_analysis_results
 (
 	id uuid NOT NULL DEFAULT uuid_generate_v4(),
-	analysis_request_id uuid NOT NULL DEFAULT('00000000-0000-0000-0000-000000000000'),
 	analyte_mapping_id uuid NOT NULL,
 	instrument_id uuid NOT NULL,
     sample_code TEXT NOT NULL,
@@ -923,10 +922,6 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_analysis_results
     operator varchar NOT NULL,
     edited bool NOT NULL,
     edit_reason varchar,
-	error varchar,
-	error_timestamp timestamp NULL,
-	retry_count int4 NOT NULL DEFAULT 0,
-	sent_to_cerberus_at timestamp NULL,
 	CONSTRAINT sk_pk_analysis_result PRIMARY KEY (id)
 );
 
@@ -1052,4 +1047,17 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_protocol_abilities
 	CONSTRAINT "sk_fk_protocol_id__id" FOREIGN KEY (protocol_id) REFERENCES <SCHEMA_PLACEHOLDER>.sk_supported_protocols (id)
 );
 
-CREATE UNIQUE INDEX sk_un_protocol_abilities ON <SCHEMA_PLACEHOLDER>.sk_protocol_abilities (protocol_id, connection_mode, deleted_at);`
+CREATE UNIQUE INDEX sk_un_protocol_abilities ON <SCHEMA_PLACEHOLDER>.sk_protocol_abilities (protocol_id, connection_mode, deleted_at);
+
+CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_cerberus_queue_items
+(
+    queue_item_id uuid NOT NULL DEFAULT uuid_generate_v4(),
+    json_message TEXT NOT NULL,
+    last_http_status INT NOT NULL DEFAULT 0,
+    last_error TEXT NOT NULL DEFAULT '', 
+    last_error_at TIMESTAMP NOT NULL DEFAULT timezone('utc', now()),
+    retry_count INT NOT NULL DEFAULT 0,
+    retry_not_before TIMESTAMP NOT NULL DEFAULT timezone('utc', now()),
+    created_at TIMESTAMP NOT NULL DEFAULT timezone('utc', now()),
+  CONSTRAINT "sk_pk_cerberus_queue_items" PRIMARY KEY (queue_item_id)
+);`

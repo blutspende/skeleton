@@ -34,6 +34,16 @@ type AnalysisRequest struct {
 	SubjectInfo    *SubjectInfo
 }
 
+type CerberusQueueItem struct {
+	ID             uuid.UUID
+	JsonMessage    string
+	LastHTTPStatus int
+	LastError      string
+	LastErrorAt    time.Time
+	RetryCount     int
+	RetryNotBefore time.Time
+}
+
 // SubjectInfo - Additional Information about the subject for the AnalysisRequest
 // Do not use in implentation directly
 type SubjectInfo struct {

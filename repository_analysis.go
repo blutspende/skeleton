@@ -3,6 +3,7 @@ package skeleton
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/db"
 	"strings"
@@ -134,8 +135,19 @@ type analysisRequestInfoDAO struct {
 	InstrumentID      uuid.NullUUID  `db:"instrument_id"`
 }
 
+type cerberusQueueItemDAO struct {
+	ID             uuid.UUID `db:"queue_item_id"`
+	JsonMessage    string    `db:"json_message"`
+	LastHTTPStatus int       `db:"last_http_status"`
+	LastError      string    `db:"last_error"`
+	LastErrorAt    time.Time `db:"last_error_at"`
+	RetryCount     int       `db:"retry_count"`
+	RetryNotBefore time.Time `db:"retry_not_before"`
+}
+
 type AnalysisRepository interface {
 	CreateAnalysisRequestsBatch(ctx context.Context, analysisRequests []AnalysisRequest) ([]uuid.UUID, error)
+	GetAnalysisRequestsBySampleCodeAndAnalyteID(ctx context.Context, sampleCodes string, analyteID uuid.UUID) ([]AnalysisRequest, error)
 	GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string) (map[string][]AnalysisRequest, error)
 	GetAnalysisRequestsInfo(ctx context.Context, instrumentID uuid.UUID, pageable Pageable) ([]AnalysisRequestInfo, int, error)
 	//GetAnalysisRequestsForVisualization(ctx context.Context) (map[string][]AnalysisRequest, error)
@@ -144,6 +156,8 @@ type AnalysisRepository interface {
 
 	CreateAnalysisResultsBatch(ctx context.Context, analysisResults []AnalysisResult) ([]uuid.UUID, error)
 	UpdateResultTransmissionData(ctx context.Context, analysisResultID uuid.UUID, success bool, errorMessage string) error
+
+	CreateAnalysisResultQueueItem(ctx context.Context, analysisResults []AnalysisResult) (uuid.UUID, error)
 
 	CreateTransaction() (db.DbConnector, error)
 	WithTransaction(tx db.DbConnector) AnalysisRepository
@@ -209,6 +223,39 @@ func (r *analysisRepository) CreateSubjectsBatch(ctx context.Context, subjectInf
 	return idsMap, nil
 }
 
+func (r *analysisRepository) GetAnalysisRequestsBySampleCodeAndAnalyteID(ctx context.Context, sampleCode string, analyteID uuid.UUID) ([]AnalysisRequest, error) {
+	query := fmt.Sprintf(`SELECT sar.id, sar.work_item_id, sar.analyte_id, sar.sample_code, sar.material_id, sar.laboratory_id, sar.valid_until_time, sar.created_at
+					FROM %s.sk_analysis_requests sar
+					WHERE sar.sample_code = $1
+					AND sar.analyte_id = $2
+					AND sar.valid_until_time >= timezone('utc',now());`, r.dbSchema)
+
+	rows, err := r.db.QueryxContext(ctx, query, sampleCode, analyteID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			log.Trace().Msg("No analysis requests")
+			return []AnalysisRequest{}, nil
+		}
+		log.Error().Err(err).Msg("Can not search for AnalysisRequests")
+		return []AnalysisRequest{}, err
+	}
+	defer rows.Close()
+
+	analysisRequests := make([]AnalysisRequest, 0)
+	for rows.Next() {
+		request := analysisRequestDAO{}
+		err := rows.StructScan(&request)
+		if err != nil {
+			log.Error().Err(err).Msg("Can not scan data")
+			return []AnalysisRequest{}, err
+		}
+
+		analysisRequests = append(analysisRequests, convertAnalysisRequestDAOToAnalysisRequest(request))
+	}
+
+	return analysisRequests, err
+}
+
 func (r *analysisRepository) GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string) (map[string][]AnalysisRequest, error) {
 	analysisRequestsBySampleCodes := make(map[string][]AnalysisRequest)
 	if len(sampleCodes) == 0 {
@@ -216,7 +263,7 @@ func (r *analysisRepository) GetAnalysisRequestsBySampleCodes(ctx context.Contex
 	}
 	query := fmt.Sprintf(`SELECT * FROM %s.sk_analysis_requests 
 					WHERE sample_code in (?)
-					AND valid_until_time <= timezone('utc',now());`, r.dbSchema)
+					AND valid_until_time >= timezone('utc',now());`, r.dbSchema)
 
 	query, args, _ := sqlx.In(query, sampleCodes)
 	query = r.db.Rebind(query)
@@ -594,6 +641,30 @@ func (r *analysisRepository) UpdateResultTransmissionData(ctx context.Context, a
 		return err
 	}
 	return nil
+}
+
+func (r *analysisRepository) CreateAnalysisResultQueueItem(ctx context.Context, analysisResults []AnalysisResult) (uuid.UUID, error) {
+	if len(analysisResults) < 1 {
+		return uuid.Nil, nil
+	}
+
+	jsonData, err := json.Marshal(analysisResults)
+	if err != nil {
+		return uuid.Nil, nil
+	}
+
+	cerberusQueueItem := cerberusQueueItemDAO{
+		ID:          uuid.New(),
+		JsonMessage: string(jsonData),
+	}
+	query := fmt.Sprintf(`INSERT INTO %s.sk_cerberus_queue_items(id, json_message) VALUES (:id, :json_message);`, r.dbSchema)
+	_, err = r.db.NamedExecContext(ctx, query, cerberusQueueItem)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to create cerberus queue item")
+		return uuid.Nil, nil
+	}
+
+	return cerberusQueueItem.ID, nil
 }
 
 func (r *analysisRepository) CreateTransaction() (db.DbConnector, error) {
