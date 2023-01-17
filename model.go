@@ -226,7 +226,7 @@ type AnalysisResult struct {
 }
 
 type AnalysisResultCreateStatusV1 struct {
-	AnalyisResult            *AnalysisResult
+	AnalysisResult           *AnalysisResult
 	Success                  bool
 	ErrorMessage             string
 	CerberusAnalysisResultID uuid.NullUUID

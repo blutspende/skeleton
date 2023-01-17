@@ -270,7 +270,7 @@ func (cia *cerberus) PostAnalysisResultBatch(analysisResults []AnalysisResult) (
 		returnAnalysisResultStatus := []AnalysisResultCreateStatusV1{}
 		for i, responseItem := range responseItems {
 			analysisResultStatus := AnalysisResultCreateStatusV1{
-				AnalyisResult:            &analysisResults[i],
+				AnalysisResult:           &analysisResults[i],
 				Success:                  responseItem.ID.Valid,
 				ErrorMessage:             "",
 				CerberusAnalysisResultID: responseItem.ID,

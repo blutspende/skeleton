@@ -145,11 +145,17 @@ func (r *analysisRepository) CreateAnalysisRequestsBatch(ctx context.Context, an
 	if len(analysisRequests) == 0 {
 		return []uuid.UUID{}, nil
 	}
+	ids := make([]uuid.UUID, len(analysisRequests))
+	for i := range analysisRequests {
+		if (analysisRequests[i].ID == uuid.UUID{}) || (analysisRequests[i].ID == uuid.Nil) {
+			analysisRequests[i].ID = uuid.New()
+		}
+		ids[i] = analysisRequests[i].ID
+	}
 	query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_requests(id, work_item_id, analyte_id, sample_code, material_id, laboratory_id, valid_until_time)
 				VALUES(:id, :work_item_id, :analyte_id, :sample_code, :material_id, :laboratory_id, :valid_until_time) 
 				ON CONFLICT (work_item_id) DO 
 				UPDATE SET analyte_id = :analyte_id, sample_code = :sample_code, material_id = :material_id, laboratory_id = :laboratory_id, valid_until_time = :valid_until_time;`, r.dbSchema)
-	ids := make([]uuid.UUID, len(analysisRequests))
 	_, err := r.db.NamedExecContext(ctx, query, convertAnalysisRequestsToDAOs(analysisRequests))
 	if err != nil {
 		log.Error().Err(err).Msg("Can not create RequestData")
