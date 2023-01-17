@@ -23,7 +23,7 @@ var (
 
 type Cerberus interface {
 	RegisterInstrument(instrument Instrument) error
-	PostAnalysisResultBatch(analysisResults []AnalysisResult) ([]AnalysisResultCreateStatusV1, error)
+	PostAnalysisResultBatch(analysisResults []AnalysisResult) ([]AnalysisResultCreateStatus, error)
 }
 
 type cerberus struct {
@@ -147,10 +147,10 @@ func (c *cerberus) RegisterInstrument(instrument Instrument) error {
 }
 
 // PostAnalysisResultBatch Submit a list of Analysisresults to Cerberus
-func (cia *cerberus) PostAnalysisResultBatch(analysisResults []AnalysisResult) ([]AnalysisResultCreateStatusV1, error) {
+func (cia *cerberus) PostAnalysisResultBatch(analysisResults []AnalysisResult) ([]AnalysisResultCreateStatus, error) {
 
 	if len(analysisResults) == 0 {
-		return []AnalysisResultCreateStatusV1{}, nil
+		return []AnalysisResultCreateStatus{}, nil
 	}
 
 	analysisResultsTOs := make([]analysisResultTO, 0)
@@ -267,9 +267,9 @@ func (cia *cerberus) PostAnalysisResultBatch(analysisResults []AnalysisResult) (
 			return nil, err
 		}
 
-		returnAnalysisResultStatus := []AnalysisResultCreateStatusV1{}
+		returnAnalysisResultStatus := []AnalysisResultCreateStatus{}
 		for i, responseItem := range responseItems {
-			analysisResultStatus := AnalysisResultCreateStatusV1{
+			analysisResultStatus := AnalysisResultCreateStatus{
 				AnalysisResult:           &analysisResults[i],
 				Success:                  responseItem.ID.Valid,
 				ErrorMessage:             "",
@@ -294,7 +294,7 @@ func (cia *cerberus) PostAnalysisResultBatch(analysisResults []AnalysisResult) (
 }
 
 /*
-func (cia *cerberusV1) PostAnalysisResult(analysisResult v1.AnalysisResult) (v1.AnalysisResultCreateStatusV1, error) {
+func (cia *cerberusV1) PostAnalysisResult(analysisResult v1.AnalysisResult) (v1.AnalysisResultCreateStatus, error) {
 		var responseBodyStr string
 		requestBody, _ := json.Marshal(cia.mapAnalysisResultToAnalysisResultDTO(analysisResult))
 		requestBodyStr := string(requestBody)

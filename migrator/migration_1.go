@@ -1055,7 +1055,7 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_cerberus_queue_items
     json_message TEXT NOT NULL,
     last_http_status INT NOT NULL DEFAULT 0,
     last_error TEXT NOT NULL DEFAULT '', 
-    last_error_at TIMESTAMP NOT NULL DEFAULT timezone('utc', now()),
+    last_error_at TIMESTAMP,
     retry_count INT NOT NULL DEFAULT 0,
     retry_not_before TIMESTAMP NOT NULL DEFAULT timezone('utc', now()),
     created_at TIMESTAMP NOT NULL DEFAULT timezone('utc', now()),

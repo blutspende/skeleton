@@ -117,9 +117,6 @@ func TestSubmitAnalysisResult(t *testing.T) {
 		ExtraValues:              nil,
 		ReagentInfos:             nil,
 		Images:                   nil,
-		IsSentToCerberus:         false,
-		ErrorMessage:             "",
-		RetryCount:               0,
 	}
 
 	err = skeletonInstance.SubmitAnalysisResult(context.TODO(), analysisResult)
@@ -175,16 +172,16 @@ func TestRegisterProtocol(t *testing.T) {
 
 type cerberusClientMock struct {
 	AnalysisResults  []skeleton.AnalysisResult
-	ResponseStatuses []skeleton.AnalysisResultCreateStatusV1
+	ResponseStatuses []skeleton.AnalysisResultCreateStatus
 }
 
 func (m *cerberusClientMock) RegisterInstrument(instrument skeleton.Instrument) error {
 	return nil
 }
 
-func (m *cerberusClientMock) PostAnalysisResultBatch(analysisResults []skeleton.AnalysisResult) ([]skeleton.AnalysisResultCreateStatusV1, error) {
+func (m *cerberusClientMock) PostAnalysisResultBatch(analysisResults []skeleton.AnalysisResult) ([]skeleton.AnalysisResultCreateStatus, error) {
 	m.AnalysisResults = append(m.AnalysisResults, analysisResults...)
-	resp := make([]skeleton.AnalysisResultCreateStatusV1, len(analysisResults))
+	resp := make([]skeleton.AnalysisResultCreateStatus, len(analysisResults))
 	for i := range resp {
 		resp[i].Success = true
 	}

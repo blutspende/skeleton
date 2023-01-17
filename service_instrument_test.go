@@ -82,6 +82,6 @@ func (m *cerberusClientMock) RegisterInstrument(instrument Instrument) error {
 	return m.registerInstrumentFunc(instrument)
 }
 
-func (m *cerberusClientMock) PostAnalysisResultBatch(analysisResults []AnalysisResult) ([]AnalysisResultCreateStatusV1, error) {
+func (m *cerberusClientMock) PostAnalysisResultBatch(analysisResults []AnalysisResult) ([]AnalysisResultCreateStatus, error) {
 	return nil, nil
 }

@@ -2,6 +2,7 @@ package skeleton
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -239,7 +240,7 @@ func (s *skeleton) processAnalysisResultBatches(ctx context.Context) {
 			continue
 		}
 		//for i, status := range creationStatuses {
-		//	err = s.analysisRepository.UpdateResultTransmissionData(ctx, resultsBatch[i].ID, status.Success, status.ErrorMessage)
+		//	err = s.analysisRepository.UpdateAnalysisResultQueueItemStatus(ctx, resultsBatch[i].ID, status.Success, status.ErrorMessage)
 		//	if !status.Success && resultsBatch[i].RetryCount < maxRetryCount {
 		//		time.AfterFunc(30*time.Second, func() {
 		//			s.resultsChan <- resultsBatch[i]
@@ -256,7 +257,45 @@ func (s *skeleton) cleanUpCerberusQueueItems(ctx context.Context) {
 }
 
 func (s *skeleton) submitAnalysisRequestsToCerberus(ctx context.Context) {
+	ticker := time.NewTicker(60 * time.Second)
+	for {
+		select {
+		case <-ctx.Done():
+			ticker.Stop()
+			return
+		case <-ticker.C:
+			queueItems, err := s.analysisRepository.GetAnalysisResultQueueItems(ctx)
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to get cerberus queue items")
+			}
+			for _, queueItem := range queueItems {
+				var analysisResult []AnalysisResult
+				if err = json.Unmarshal([]byte(queueItem.JsonMessage), &analysisResult); err != nil {
+					log.Error().Err(err).Msg("Failed to unmarshal analysis results")
+					continue
+				}
 
+				_, err := s.cerberusClient.PostAnalysisResultBatch(analysisResult)
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to send analysis result to cerberus")
+					continue
+				}
+				utcNow := time.Now().UTC()
+				cerberusQueueItem := CerberusQueueItem{
+					ID:             queueItem.ID,
+					LastHTTPStatus: 500,
+					LastError:      "status.ErrorMessage",
+					LastErrorAt:    &utcNow,
+					RetryCount:     1,
+					RetryNotBefore: utcNow.Add(10 * time.Minute),
+				}
+				err = s.analysisRepository.UpdateAnalysisResultQueueItemStatus(ctx, cerberusQueueItem)
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to update the status of the cerberus queue item")
+				}
+			}
+		}
+	}
 }
 
 func NewSkeleton(sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api GinApi, analysisRepository AnalysisRepository, instrumentService InstrumentService, manager Manager, cerberusClient Cerberus) (SkeletonAPI, error) {

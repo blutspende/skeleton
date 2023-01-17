@@ -14,10 +14,10 @@ type cerberusBackendMock struct {
 func (cbm *cerberusBackendMock) RegisterInstrument(instrument v1.Instrument) error {
 	return nil
 }
-func (cbm *cerberusBackendMock) PostAnalysisResultBatch(analysisResults []v1.AnalysisResult) ([]v1.AnalysisResultCreateStatusV1, error) {
+func (cbm *cerberusBackendMock) PostAnalysisResultBatch(analysisResults []v1.AnalysisResult) ([]v1.AnalysisResultCreateStatus, error) {
 	cbm.SentAsBatch = true
 	cbm.StoredResultsThatWereSent = append(cbm.StoredResultsThatWereSent, analysisResults...)
-	return []v1.AnalysisResultCreateStatusV1{}, nil
+	return []v1.AnalysisResultCreateStatus{}, nil
 }
 
 func TestResultTransmission(t *testing.T) {

@@ -39,7 +39,7 @@ type CerberusQueueItem struct {
 	JsonMessage    string
 	LastHTTPStatus int
 	LastError      string
-	LastErrorAt    time.Time
+	LastErrorAt    *time.Time
 	RetryCount     int
 	RetryNotBefore time.Time
 }
@@ -231,12 +231,9 @@ type AnalysisResult struct {
 	ExtraValues              []ExtraValue
 	ReagentInfos             []ReagentInfo
 	Images                   []Image
-	IsSentToCerberus         bool
-	ErrorMessage             string
-	RetryCount               int
 }
 
-type AnalysisResultCreateStatusV1 struct {
+type AnalysisResultCreateStatus struct {
 	AnalysisResult           *AnalysisResult
 	Success                  bool
 	ErrorMessage             string

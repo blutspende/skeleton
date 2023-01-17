@@ -70,11 +70,21 @@ func nullUUIDToUUIDPointer(value uuid.NullUUID) *uuid.UUID {
 	return nil
 }
 
-func nullTimeToTimePoint(value sql.NullTime) *time.Time {
+func nullTimeToTimePointer(value sql.NullTime) *time.Time {
 	if value.Valid {
 		return &value.Time
 	}
 	return nil
+}
+
+func timePointerToNullTime(value *time.Time) sql.NullTime {
+	if value != nil {
+		return sql.NullTime{
+			Time:  *value,
+			Valid: true,
+		}
+	}
+	return sql.NullTime{}
 }
 
 func partition(totalLength int, partitionLength int, consumer func(low int, high int)) {
