@@ -3,7 +3,6 @@ package skeleton
 import (
 	"context"
 	"github.com/google/uuid"
-	"github.com/rs/zerolog/log"
 )
 
 type AnalysisService interface {
@@ -22,12 +21,10 @@ func NewAnalysisService(analysisRepository AnalysisRepository) AnalysisService {
 }
 
 func (as *analysisService) CreateAnalysisRequests(ctx context.Context, requests []AnalysisRequest) ([]AnalysisRequestStatus, error) {
-	createdRequestIDs, err := as.analysisRepository.CreateAnalysisRequestsBatch(ctx, requests)
+	_, err := as.analysisRepository.CreateAnalysisRequestsBatch(ctx, requests)
 	if err != nil {
 		return nil, err
 	}
-
-	log.Debug().Interface("savedAnalysisRequestIDs", createdRequestIDs).Msg("Saved analysis request IDs")
 
 	return []AnalysisRequestStatus{}, nil
 }
