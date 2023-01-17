@@ -152,14 +152,29 @@ func (r *analysisRepository) CreateAnalysisRequestsBatch(ctx context.Context, an
 		}
 		ids[i] = analysisRequests[i].ID
 	}
+
 	query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_requests(id, work_item_id, analyte_id, sample_code, material_id, laboratory_id, valid_until_time)
 				VALUES(:id, :work_item_id, :analyte_id, :sample_code, :material_id, :laboratory_id, :valid_until_time) 
 				ON CONFLICT (work_item_id) DO 
 				UPDATE SET analyte_id = :analyte_id, sample_code = :sample_code, material_id = :material_id, laboratory_id = :laboratory_id, valid_until_time = :valid_until_time;`, r.dbSchema)
-	_, err := r.db.NamedExecContext(ctx, query, convertAnalysisRequestsToDAOs(analysisRequests))
+
+	log.Trace().Int("batchSize", 500).Int("totalCount", len(analysisRequests)).
+		Msg("Saving analysis requests in batches")
+
+	var err error
+	partition(len(analysisRequests), 500, func(startIndex int, endIndex int) {
+		partition := analysisRequests[startIndex:endIndex]
+		if len(partition) < 1 {
+			return
+		}
+		_, err = r.db.NamedExecContext(ctx, query, convertAnalysisRequestsToDAOs(partition))
+		if err != nil {
+			log.Error().Err(err).Msg("Can not create RequestData")
+			return
+		}
+	})
 	if err != nil {
-		log.Error().Err(err).Msg("Can not create RequestData")
-		return []uuid.UUID{}, err
+		return []uuid.UUID{}, nil
 	}
 
 	return ids, nil

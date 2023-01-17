@@ -69,8 +69,6 @@ func (api *api) CreateAnalysisRequestBatch(c *gin.Context) {
 		return
 	}
 
-	log.Debug().Interface("data", analysisRequestTOs).Msg("Incoming analysis request from Cerberus")
-
 	// Map TO to model
 	analysisRequests := make([]AnalysisRequest, len(analysisRequestTOs))
 	for i := range analysisRequestTOs {
