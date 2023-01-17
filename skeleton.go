@@ -85,7 +85,7 @@ func (s *skeleton) SubmitAnalysisResult(ctx context.Context, resultData Analysis
 	if err != nil {
 		return err
 	}
-	_, err = s.analysisRepository.WithTransaction(tx).CreateAnalysisResultsBatch(ctx, []AnalysisResult{resultData})
+	savedResultDataList, err := s.analysisRepository.WithTransaction(tx).CreateAnalysisResultsBatch(ctx, []AnalysisResult{resultData})
 	if err != nil {
 		_ = tx.Rollback()
 		return err
@@ -93,13 +93,14 @@ func (s *skeleton) SubmitAnalysisResult(ctx context.Context, resultData Analysis
 	if err = tx.Commit(); err != nil {
 		return err
 	}
-	analyteRequests, err := s.analysisRepository.GetAnalysisRequestsBySampleCodeAndAnalyteID(ctx, resultData.SampleCode, resultData.AnalyteMapping.AnalyteID)
+	savedResultData := savedResultDataList[0]
+	analyteRequests, err := s.analysisRepository.GetAnalysisRequestsBySampleCodeAndAnalyteID(ctx, savedResultData.SampleCode, savedResultData.AnalyteMapping.AnalyteID)
 	if err != nil {
 		return err
 	}
 	for i := range analyteRequests {
-		resultData.AnalysisRequest = analyteRequests[i]
-		s.resultsChan <- resultData
+		savedResultData.AnalysisRequest = analyteRequests[i]
+		s.resultsChan <- savedResultData
 	}
 	return nil
 }
