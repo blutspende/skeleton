@@ -2,6 +2,7 @@ package skeleton
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/utils"
 	"github.com/gin-gonic/gin"
@@ -82,6 +83,24 @@ type supportedManufacturerTestTO struct {
 	TestName          string   `json:"testName"`
 	Channels          []string `json:"channels"`
 	ValidResultValues []string `json:"validResultValues"`
+}
+
+type analysisRequestInfoTO struct {
+	RequestID uuid.UUID `json:"requestId"`
+	//ResultID          *uuid.UUID `json:"-"`
+	SampleCode string    `json:"sampleCode"`
+	AnalyteID  uuid.UUID `json:"analyteId"`
+	//AnalyteMappingsID *uuid.UUID `json:"-"`
+	WorkItemID       uuid.UUID  `json:"workitemId"` // Todo
+	RequestCreatedAt time.Time  `json:"createdAt"`
+	TestName         *string    `json:"testName"`
+	TestResult       *string    `json:"testResult"`
+	BatchCreatedAt   *time.Time `json:"transmissionDate"`
+	Status           string     `json:"status"`
+	//SentToCerberusAt  *time.Time `json:"-"`
+	SourceIP string `json:"sourceIP"` // Todo
+	//InstrumentID      *uuid.UUID `json:"-"`
+	MappingError bool `json:"mappingError"`
 }
 
 func (api *api) GetInstruments(c *gin.Context) {
@@ -237,21 +256,27 @@ func (api *api) GetManufacturerTests(c *gin.Context) {
 	c.JSON(http.StatusOK, convertSupportedManufacturerTestsToSupportedManufacturerTestTOs(tests))
 }
 
-func (api *api) GetAnalysisRequests(c *gin.Context) {
-	//instrumentID, err := uuid.Parse(c.Param("instrumentId"))
-	//if err != nil {
-	//	c.AbortWithStatusJSON(http.StatusBadRequest, "DeleteInstrument Error")
-	//	return
-	//}
-	//
-	//var pageable Pageable
-	//err = c.ShouldBindQuery(&pageable)
-	//if err != nil {
-	//	c.AbortWithStatusJSON(http.StatusBadRequest, "malformed pageable data")
-	//	return
-	//}
-	//
-	//c.JSON(http.StatusOK)
+func (api *api) GetAnalysisRequestsInfo(c *gin.Context) {
+	instrumentID, err := uuid.Parse(c.Param("instrumentId"))
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, "GetAnalysisRequestsInfo Error")
+		return
+	}
+
+	var pageable Pageable
+	err = c.ShouldBindQuery(&pageable)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, "malformed pageable data")
+		return
+	}
+
+	analysisRequestInfoList, totalCount, err := api.analysisService.GetAnalysisRequestsInfo(c, instrumentID, pageable)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	c.JSON(http.StatusOK, NewPage(pageable, totalCount, convertAnalysisRequestInfoListToAnalysisRequestInfoTOList(analysisRequestInfoList)))
 }
 
 //// AddRequestToTransferQueue
@@ -576,6 +601,30 @@ func convertSupportedManufacturerTestsToSupportedManufacturerTestTOs(supportedMa
 	tos := make([]supportedManufacturerTestTO, len(supportedManufacturerTests))
 	for i := range supportedManufacturerTests {
 		tos[i] = convertSupportedManufacturerTestToSupportedManufacturerTestTO(supportedManufacturerTests[i])
+	}
+	return tos
+}
+
+func convertAnalysisRequestInfoToAnalysisRequestInfoTO(analysisRequestInfo AnalysisRequestInfo) analysisRequestInfoTO {
+	return analysisRequestInfoTO{
+		RequestID:        analysisRequestInfo.ID,
+		SampleCode:       analysisRequestInfo.SampleCode,
+		AnalyteID:        analysisRequestInfo.AnalyteID,
+		WorkItemID:       analysisRequestInfo.WorkItemID,
+		TestName:         analysisRequestInfo.TestName,
+		TestResult:       analysisRequestInfo.TestResult,
+		RequestCreatedAt: analysisRequestInfo.RequestCreatedAt,
+		BatchCreatedAt:   analysisRequestInfo.BatchCreatedAt,
+		Status:           analysisRequestInfo.Status,
+		SourceIP:         analysisRequestInfo.SourceIP,
+		MappingError:     analysisRequestInfo.MappingError,
+	}
+}
+
+func convertAnalysisRequestInfoListToAnalysisRequestInfoTOList(analysisRequestInfoList []AnalysisRequestInfo) []analysisRequestInfoTO {
+	tos := make([]analysisRequestInfoTO, len(analysisRequestInfoList))
+	for i := range analysisRequestInfoList {
+		tos[i] = convertAnalysisRequestInfoToAnalysisRequestInfoTO(analysisRequestInfoList[i])
 	}
 	return tos
 }

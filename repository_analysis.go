@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/db"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -116,9 +117,27 @@ type warningDAO struct {
 	Warning          string    `db:"warning"`
 }
 
+type analysisRequestInfoDAO struct {
+	RequestID         uuid.UUID      `db:"request_id"`
+	SampleCode        string         `db:"sample_code"`
+	WorkItemID        uuid.UUID      `db:"work_item_id"`
+	AnalyteID         uuid.UUID      `db:"analyte_id"`
+	RequestCreatedAt  time.Time      `db:"request_date"`
+	AnalyteMappingsID uuid.NullUUID  `db:"analyte_mapping_id"`
+	ResultID          uuid.NullUUID  `db:"result_id"`
+	TestName          sql.NullString `db:"test_name"`
+	TestResult        sql.NullString `db:"test_result"`
+	BatchCreatedAt    sql.NullTime   `db:"batch_created_at"`
+	SentToCerberusAt  sql.NullTime   `db:"sent_to_cerberus_at"`
+	SourceIP          sql.NullString `db:"source_ip"`
+	InstrumentID      uuid.NullUUID  `db:"instrument_id"`
+}
+
 type AnalysisRepository interface {
 	CreateAnalysisRequestsBatch(ctx context.Context, analysisRequests []AnalysisRequest) ([]uuid.UUID, error)
 	GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string) (map[string][]AnalysisRequest, error)
+	GetAnalysisRequestsInfo(ctx context.Context, instrumentID uuid.UUID, pageable Pageable) ([]AnalysisRequestInfo, int, error)
+	//GetAnalysisRequestsForVisualization(ctx context.Context) (map[string][]AnalysisRequest, error)
 	CreateSubjectsBatch(ctx context.Context, subjectInfosByAnalysisRequestID map[uuid.UUID]SubjectInfo) (map[uuid.UUID]uuid.UUID, error)
 	GetSubjectsByAnalysisRequestIDs(ctx context.Context, analysisRequestIDs []uuid.UUID) (map[uuid.UUID]SubjectInfo, error)
 
@@ -237,6 +256,117 @@ func (r *analysisRepository) GetAnalysisRequestsBySampleCodes(ctx context.Contex
 	}
 
 	return analysisRequestsBySampleCodes, err
+}
+
+func (r *analysisRepository) GetAnalysisRequestsInfo(ctx context.Context, instrumentID uuid.UUID, pageable Pageable) ([]AnalysisRequestInfo, int, error) {
+	query := `SELECT req.id AS request_id,
+	   req.sample_code AS sample_code,
+	   req.work_item_id AS work_item_id,
+	   req.analyte_id AS analyte_id,
+	   req.created_at as request_date,
+	   
+	   am.analyte_id as analyte_mapping_id,
+	   
+	   res.id AS result_id,
+	   res.test_name AS test_name,
+	   res."result" AS test_result,
+	   res.batch_created_at AS batch_created_at,
+	   res.sent_to_cerberus_at AS sent_to_cerberus_at,
+	   
+	   i.hostname as source_ip,
+	   i.id as instrument_id
+FROM %schema_name%.sk_analysis_requests req
+LEFT JOIN %schema_name%.sk_analysis_results res ON res.sample_code = req.sample_code AND res.analysis_request_id = req.id
+LEFT JOIN %schema_name%.sk_instruments i ON i.id = res.instrument_id
+LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = i.id AND req.analyte_id = am.analyte_id AND res.test_name = am.instrument_analyte
+WHERE res.instrument_id = :instrument_id`
+
+	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
+	countQuery := query
+
+	query += applyPagination(pageable, "req", "req.created_at DESC, req.id") + `;`
+
+	preparedValues := map[string]interface{}{
+		"instrument_id": instrumentID,
+		//"time_from":     filter.TimeFrom.UTC(),
+		//"limit":         filter.PageSize,
+		//"offset":        filter.PageNumber * filter.PageSize,
+	}
+
+	//filterQuery := ``
+	//
+	//if filter.Filter != "" {
+	//	namedValues["filter"] = filter.Filter + "%"
+	//	filterQuery += " AND req.sample_code like :filter "
+	//}
+	//
+	//if !filter.TimeFrom.IsZero() {
+	//	filterQuery += " AND req.created_at >= :time_from "
+	//}
+	//
+	//query += filterQuery
+	//
+	//if filter.Sort != "" {
+	//	splitSort := strings.Split(filter.Sort, " ")
+	//	sort := ""
+	//	direction := ""
+	//
+	//	if strings.ToLower(splitSort[1]) == "desc" {
+	//		direction = " desc"
+	//	} else {
+	//		direction = " asc"
+	//	}
+	//
+	//	switch splitSort[0] {
+	//	case "createdAt":
+	//		sort = "req.created_at"
+	//	case "sample_code":
+	//		sort = "req.sample_code"
+	//	case "testName":
+	//		sort = "test_name"
+	//	case "transmissionDate":
+	//		sort = "res.batch_created_at"
+	//	default:
+	//		sort = "req.created_at"
+	//	}
+	//
+	//	query += ` order by ` + sort + direction
+	//} else {
+	//	query += ` order by res.batch_created_at DESC `
+	//}
+	//
+	//query += ` Limit :limit Offset :offset`
+
+	rows, err := r.db.NamedQuery(query, preparedValues)
+	if err != nil {
+		log.Error().Err(err).Msg("Can not get analysis request list")
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	requestInfoList := make([]analysisRequestInfoDAO, 0)
+	for rows.Next() {
+		request := analysisRequestInfoDAO{}
+		err = rows.StructScan(&request)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to struct scan request")
+			return nil, 0, err
+		}
+		requestInfoList = append(requestInfoList, request)
+	}
+
+	stmt, err := r.db.PrepareNamed(countQuery)
+	if err != nil {
+		log.Error().Msg("Failed to prepare named count query")
+		return nil, 0, err
+	}
+	var count int
+	if err = stmt.QueryRowx(preparedValues).Scan(&count); err != nil {
+		log.Error().Msg("Failed to execute named count query")
+		return nil, 0, err
+	}
+
+	return convertRequestInfoDAOsToRequestInfos(requestInfoList), count, nil
 }
 
 func (r *analysisRepository) GetSubjectsByAnalysisRequestIDs(ctx context.Context, analysisRequestIDs []uuid.UUID) (map[uuid.UUID]SubjectInfo, error) {
@@ -721,4 +851,42 @@ func convertSubjectDAOToSubjectInfo(subject subjectInfoDAO) SubjectInfo {
 		subjectInfo.Pseudonym = &subject.Pseudonym.String
 	}
 	return subjectInfo
+}
+
+func convertRequestInfoDAOToRequestInfo(analysisRequestInfoDAO analysisRequestInfoDAO) AnalysisRequestInfo {
+	analysisRequestInfo := AnalysisRequestInfo{
+		ID:                analysisRequestInfoDAO.RequestID,
+		WorkItemID:        analysisRequestInfoDAO.WorkItemID,
+		AnalyteID:         analysisRequestInfoDAO.AnalyteID,
+		SampleCode:        analysisRequestInfoDAO.SampleCode,
+		RequestCreatedAt:  analysisRequestInfoDAO.RequestCreatedAt,
+		ResultID:          nullUUIDToUUIDPointer(analysisRequestInfoDAO.ResultID),
+		AnalyteMappingsID: nullUUIDToUUIDPointer(analysisRequestInfoDAO.AnalyteMappingsID),
+		TestName:          nullStringToStringPointer(analysisRequestInfoDAO.TestName),
+		TestResult:        nullStringToStringPointer(analysisRequestInfoDAO.TestName),
+		BatchCreatedAt:    nullTimeToTimePoint(analysisRequestInfoDAO.BatchCreatedAt),
+		Status:            AnalysisRequestStatusOpen,
+		SentToCerberusAt:  nullTimeToTimePoint(analysisRequestInfoDAO.SentToCerberusAt),
+		SourceIP:          nullStringToString(analysisRequestInfoDAO.SourceIP),
+		InstrumentID:      nullUUIDToUUIDPointer(analysisRequestInfoDAO.InstrumentID),
+	}
+
+	// Todo - Check conditions
+	if analysisRequestInfoDAO.SentToCerberusAt.Valid && !analysisRequestInfoDAO.SentToCerberusAt.Time.IsZero() {
+		analysisRequestInfo.Status = AnalysisRequestStatusSent
+	}
+
+	if !analysisRequestInfoDAO.AnalyteMappingsID.Valid {
+		analysisRequestInfo.MappingError = true
+	}
+
+	return analysisRequestInfo
+}
+
+func convertRequestInfoDAOsToRequestInfos(analysisRequestInfoDAOs []analysisRequestInfoDAO) []AnalysisRequestInfo {
+	analysisRequestInfo := make([]AnalysisRequestInfo, len(analysisRequestInfoDAOs))
+	for i := range analysisRequestInfoDAOs {
+		analysisRequestInfo[i] = convertRequestInfoDAOToRequestInfo(analysisRequestInfoDAOs[i])
+	}
+	return analysisRequestInfo
 }

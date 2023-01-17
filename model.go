@@ -232,6 +232,32 @@ type AnalysisResultCreateStatusV1 struct {
 	CerberusAnalysisResultID uuid.NullUUID
 }
 
+type AnalysisRequestSentStatus string
+
+const (
+	AnalysisRequestStatusSent    = "SENT"
+	AnalysisRequestStatusNotSent = "NOT_SENT"
+	AnalysisRequestStatusOpen    = "OPEN"
+)
+
+type AnalysisRequestInfo struct {
+	ID                uuid.UUID
+	SampleCode        string
+	WorkItemID        uuid.UUID
+	AnalyteID         uuid.UUID
+	RequestCreatedAt  time.Time
+	ResultID          *uuid.UUID
+	AnalyteMappingsID *uuid.UUID
+	TestName          *string
+	TestResult        *string
+	BatchCreatedAt    *time.Time
+	Status            string
+	SentToCerberusAt  *time.Time
+	SourceIP          string
+	InstrumentID      *uuid.UUID
+	MappingError      bool
+}
+
 // Image Images are Id's as returned by the DEA service where they get uploaded to
 type Image struct {
 	ID          uuid.UUID
