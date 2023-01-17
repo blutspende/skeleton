@@ -52,7 +52,6 @@ func (s *skeleton) GetAnalysisRequestWithNoResults(currentPage, itemsPerPage int
 }
 
 func (s *skeleton) GetAnalysisRequestsBySampleCode(sampleCode string) ([]AnalysisRequest, error) {
-
 	analysisRequests, err := s.analysisRepository.GetAnalysisRequestsBySampleCodes(context.TODO(), []string{sampleCode})
 	if err != nil {
 		return []AnalysisRequest{}, nil
@@ -62,7 +61,6 @@ func (s *skeleton) GetAnalysisRequestsBySampleCode(sampleCode string) ([]Analysi
 }
 
 func (s *skeleton) GetAnalysisRequestsBySampleCodes(sampleCodes []string) (map[string][]AnalysisRequest, error) {
-
 	analysisRequests, err := s.analysisRepository.GetAnalysisRequestsBySampleCodes(context.TODO(), sampleCodes)
 	if err != nil {
 		return map[string][]AnalysisRequest{}, nil
@@ -125,7 +123,7 @@ func (s *skeleton) FindResultEntities(InstrumentID uuid.UUID, sampleCode string,
 		return Instrument{}, []AnalysisRequest{}, AnalyteMapping{}, err
 	}
 
-	analyteMapping := AnalyteMapping{}
+	var analyteMapping AnalyteMapping
 	for _, mapping := range instrument.AnalyteMappings {
 		if mapping.InstrumentAnalyte == ManufacturerTestCode {
 			analyteMapping = mapping
@@ -138,7 +136,7 @@ func (s *skeleton) FindResultEntities(InstrumentID uuid.UUID, sampleCode string,
 		return Instrument{}, []AnalysisRequest{}, AnalyteMapping{}, err
 	}
 
-	analysisRequests := []AnalysisRequest{}
+	analysisRequests := make([]AnalysisRequest, 0)
 	for _, ar := range allAnalysisRequests {
 		if ar.AnalyteID == analyteMapping.AnalyteID {
 			analysisRequests = append(analysisRequests, ar)
