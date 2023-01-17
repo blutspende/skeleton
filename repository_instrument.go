@@ -372,7 +372,7 @@ func (r *instrumentRepository) MarkAsSentToCerberus(ctx context.Context, id uuid
 }
 
 func (r *instrumentRepository) GetUnsentToCerberus(ctx context.Context) ([]uuid.UUID, error) {
-	query := fmt.Sprintf(`SELECT id FROM %s.sk_instruments WHERE sent_to_cerberus = FALSE;`, r.dbSchema)
+	query := fmt.Sprintf(`SELECT id FROM %s.sk_instruments WHERE sent_to_cerberus = FALSE AND deleted_at IS NULL;`, r.dbSchema)
 	rows, err := r.db.QueryxContext(ctx, query)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to fetch unsent instrument IDs")
