@@ -372,10 +372,10 @@ func (r *instrumentRepository) MarkAsSentToCerberus(ctx context.Context, id uuid
 }
 
 func (r *instrumentRepository) GetUnsentToCerberus(ctx context.Context) ([]uuid.UUID, error) {
-	query := `SELECT id FROM %s.sk_instruments WHERE sent_to_cerberus = false;`
+	query := fmt.Sprintf(`SELECT id FROM %s.sk_instruments WHERE sent_to_cerberus = FALSE;`, r.dbSchema)
 	rows, err := r.db.QueryxContext(ctx, query)
 	if err != nil {
-		log.Error().Err(err).Msg("Can not fetch unsent instrument IDs")
+		log.Error().Err(err).Msg("Failed to fetch unsent instrument IDs")
 		return []uuid.UUID{}, err
 	}
 	defer rows.Close()
@@ -385,7 +385,7 @@ func (r *instrumentRepository) GetUnsentToCerberus(ctx context.Context) ([]uuid.
 		instrumentID := uuid.UUID{}
 		err = rows.Scan(&instrumentID)
 		if err != nil {
-			log.Error().Err(err).Msg("Can not scan row")
+			log.Error().Err(err).Msg("Failed to scan row")
 			return nil, err
 		}
 		instrumentIDs = append(instrumentIDs, instrumentID)
