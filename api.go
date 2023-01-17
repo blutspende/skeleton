@@ -121,11 +121,12 @@ func newAPI(engine *gin.Engine, config *config.Configuration, authManager AuthMa
 		protocolVersions.GET("/:protocolVersionId/manufacturer-tests", api.GetManufacturerTests)
 	}
 
-	/*
-		analysisRequests := v1Group.Group("analysis-requests")
-		analysisRequests.POST("", api.analysisRequestHandler.CreateAnalysisRequest)
-		analysisRequests.POST("/batch", api.analysisRequestHandler.CreateAnalysisRequestBatch)
-	*/
+	analysisRequests := v1Group.Group("analysis-requests")
+	{
+		//analysisRequests.POST("", api.analysisRequestHandler.CreateAnalysisRequest)
+		analysisRequests.POST("/batch", api.CreateAnalysisRequestBatch)
+	}
+
 	// Development-option enables debugger, this can have side-effects
 	if api.config.Development {
 		debug := root.Group("/debug/pprof")

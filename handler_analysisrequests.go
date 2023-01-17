@@ -53,10 +53,9 @@ type analysisRequestStatusTO struct {
 // @Success 200 {object} analysisRequestResponse "OK"
 // @Failure 400 {object} model.HTTPError "Bad Request"
 // @Router /v1/int/analysisRequest/batch [POST]
-// @Router /v1/analysisRequest/batch [POST]
+// @Router /v1/analysis-request/batch [POST]
 func (api *api) CreateAnalysisRequestBatch(c *gin.Context) {
-
-	requeststart := time.Now()
+	requestStart := time.Now()
 	api.createAnalysisRequestMutex.Lock()
 	defer api.createAnalysisRequestMutex.Unlock()
 
@@ -126,7 +125,7 @@ func (api *api) CreateAnalysisRequestBatch(c *gin.Context) {
 	}
 
 	log.Debug().
-		Int64("Execution-time (ms)", time.Now().Sub(requeststart).Milliseconds()).
+		Int64("Execution-time (ms)", time.Now().Sub(requestStart).Milliseconds()).
 		Msg("createAnalysisRequestBatch")
 
 	c.JSON(http.StatusOK, analysisRequestStatusTO)
