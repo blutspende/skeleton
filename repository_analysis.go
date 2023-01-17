@@ -656,7 +656,7 @@ func (r *analysisRepository) CreateAnalysisResultQueueItem(ctx context.Context, 
 		ID:          uuid.New(),
 		JsonMessage: string(jsonData),
 	}
-	query := fmt.Sprintf(`INSERT INTO %s.sk_cerberus_queue_items(id, json_message) VALUES (:id, :json_message);`, r.dbSchema)
+	query := fmt.Sprintf(`INSERT INTO %s.sk_cerberus_queue_items(queue_item_id, json_message) VALUES (:queue_item_id, :json_message);`, r.dbSchema)
 	_, err = r.db.NamedExecContext(ctx, query, cerberusQueueItem)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to create cerberus queue item")
