@@ -920,6 +920,8 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_analysis_results
     yielded_at timestamp NOT NULL,
     valid_until timestamp NOT NULL,
     operator varchar NOT NULL,
+    technical_release_datetime timestamp NOT NULL,
+    run_counter int NOT NULL DEFAULT 0,
     edited bool NOT NULL,
     edit_reason varchar,
 	CONSTRAINT sk_pk_analysis_result PRIMARY KEY (id)
@@ -960,7 +962,7 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_analysis_result_reagent_infos(
 	serial varchar NOT NULL,
 	"name" varchar NOT NULL, 
 	code varchar NOT NULL,
-	shelfLife timestamp NOT NULL,
+	shelf_life timestamp NOT NULL,
 	lot_no varchar NOT NULL,
 	manufacturer_name varchar NOT NULL,
 	reagent_manufacturer_date timestamp NOT NULL,

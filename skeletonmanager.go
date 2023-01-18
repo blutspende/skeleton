@@ -33,6 +33,12 @@ type Manager interface {
 
 	SetCallbackHandler(eventHandler SkeletonCallbackHandlerV1)
 	GetCallbackHandler() SkeletonCallbackHandlerV1
+
+	SendAnalysisRequestsForProcessing(analysisRequests []AnalysisRequest)
+	GetProcessableAnalysisRequestsChan() chan []AnalysisRequest
+
+	SendResultForProcessing(analysisResult AnalysisResult)
+	GetResultChan() chan AnalysisResult
 }
 
 type instrumentEvent struct {
@@ -41,17 +47,21 @@ type instrumentEvent struct {
 }
 
 type manager struct {
-	instrumentEventChan           chan instrumentEvent
-	instrumentQueueListeners      map[instrumentEventType][]InstrumentQueueListener
-	instrumentQueueListenersMutex sync.Mutex
-	callbackEventHandler          SkeletonCallbackHandlerV1
-	callbackEventHandlerMutex     sync.Mutex
+	resultsChan                         chan AnalysisResult
+	processableAnalysisRequestBatchChan chan []AnalysisRequest
+	instrumentEventChan                 chan instrumentEvent
+	instrumentQueueListeners            map[instrumentEventType][]InstrumentQueueListener
+	instrumentQueueListenersMutex       sync.Mutex
+	callbackEventHandler                SkeletonCallbackHandlerV1
+	callbackEventHandlerMutex           sync.Mutex
 }
 
-func NewCallbackManager() Manager {
+func NewSkeletonManager() Manager {
 	skeletonManager := &manager{
-		instrumentEventChan:      make(chan instrumentEvent, 0),
-		instrumentQueueListeners: make(map[instrumentEventType][]InstrumentQueueListener, 0),
+		resultsChan:                         make(chan AnalysisResult, 500),
+		processableAnalysisRequestBatchChan: make(chan []AnalysisRequest, 0),
+		instrumentEventChan:                 make(chan instrumentEvent, 0),
+		instrumentQueueListeners:            make(map[instrumentEventType][]InstrumentQueueListener, 0),
 	}
 
 	go skeletonManager.listenOnInstruments()
@@ -88,6 +98,22 @@ func (sm *manager) RegisterInstrumentQueueListener(listener InstrumentQueueListe
 			sm.instrumentQueueListeners[event] = []InstrumentQueueListener{listener}
 		}
 	}
+}
+
+func (sm *manager) SendAnalysisRequestsForProcessing(analysisRequests []AnalysisRequest) {
+	sm.processableAnalysisRequestBatchChan <- analysisRequests
+}
+
+func (sm *manager) GetProcessableAnalysisRequestsChan() chan []AnalysisRequest {
+	return sm.processableAnalysisRequestBatchChan
+}
+
+func (sm *manager) SendResultForProcessing(analysisResult AnalysisResult) {
+	sm.resultsChan <- analysisResult
+}
+
+func (sm *manager) GetResultChan() chan AnalysisResult {
+	return sm.resultsChan
 }
 
 func (sm *manager) listenOnInstruments() {

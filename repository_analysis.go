@@ -39,26 +39,28 @@ type subjectInfoDAO struct {
 }
 
 type analysisResultDAO struct {
-	ID               uuid.UUID      `db:"id"`
-	AnalyteMappingID uuid.UUID      `db:"analyte_mapping_id"`
-	InstrumentID     uuid.UUID      `db:"instrument_id"`
-	InstrumentRunID  uuid.UUID      `db:"instrument_run_id"`
-	SampleCode       string         `db:"sample_code"`
-	ResultRecordID   uuid.UUID      `db:"result_record_id"`
-	BatchID          uuid.UUID      `db:"batch_id"`
-	Result           string         `db:"result"`
-	Status           ResultStatus   `db:"status"`
-	ResultMode       ResultMode     `db:"mode"`
-	YieldedAt        time.Time      `db:"yielded_at"`
-	ValidUntil       time.Time      `db:"valid_until"`
-	Operator         string         `db:"operator"`
-	Edited           bool           `db:"edited"`
-	EditReason       sql.NullString `db:"edit_reason"`
-	ChannelResults   []channelResultDAO
-	ExtraValues      []extraValueDAO
-	ReagentInfos     []reagentInfoDAO
-	Images           []imageDAO
-	Warnings         []warningDAO
+	ID                       uuid.UUID      `db:"id"`
+	AnalyteMappingID         uuid.UUID      `db:"analyte_mapping_id"`
+	InstrumentID             uuid.UUID      `db:"instrument_id"`
+	InstrumentRunID          uuid.UUID      `db:"instrument_run_id"`
+	SampleCode               string         `db:"sample_code"`
+	ResultRecordID           uuid.UUID      `db:"result_record_id"`
+	BatchID                  uuid.UUID      `db:"batch_id"`
+	Result                   string         `db:"result"`
+	Status                   ResultStatus   `db:"status"`
+	ResultMode               ResultMode     `db:"mode"`
+	YieldedAt                time.Time      `db:"yielded_at"`
+	ValidUntil               time.Time      `db:"valid_until"`
+	Operator                 string         `db:"operator"`
+	TechnicalReleaseDateTime time.Time      `db:"technical_release_datetime"`
+	RunCounter               int            `db:"run_counter"`
+	Edited                   bool           `db:"edited"`
+	EditReason               sql.NullString `db:"edit_reason"`
+	ChannelResults           []channelResultDAO
+	ExtraValues              []extraValueDAO
+	ReagentInfos             []reagentInfoDAO
+	Images                   []imageDAO
+	Warnings                 []warningDAO
 }
 
 type channelResultDAO struct {
@@ -153,6 +155,7 @@ type AnalysisRepository interface {
 	GetSubjectsByAnalysisRequestIDs(ctx context.Context, analysisRequestIDs []uuid.UUID) (map[uuid.UUID]SubjectInfo, error)
 
 	CreateAnalysisResultsBatch(ctx context.Context, analysisResults []AnalysisResult) ([]AnalysisResult, error)
+	GetAnalysisResultsBySampleCodeAndAnalyteID(ctx context.Context, sampleCode string, analyteID uuid.UUID) ([]AnalysisResult, error)
 
 	GetAnalysisResultQueueItems(ctx context.Context) ([]CerberusQueueItem, error)
 	UpdateAnalysisResultQueueItemStatus(ctx context.Context, queueItem CerberusQueueItem) error
@@ -492,6 +495,119 @@ func (r *analysisRepository) CreateAnalysisResultsBatch(ctx context.Context, ana
 	return analysisResults, nil
 }
 
+func (r *analysisRepository) GetAnalysisResultsBySampleCodeAndAnalyteID(ctx context.Context, sampleCode string, analyteID uuid.UUID) ([]AnalysisResult, error) {
+	query := `SELECT sar.id, sar.analyte_mapping_id, sar.instrument_id, sar.sample_code, sar.instrument_run_id, sar.result_record_id, sar.batch_id, sar."result", sar.status, sar.mode, sar.yielded_at, sar.valid_until, sar.operator, sar.edited, sar.edit_reason
+			FROM %schema_name%.sk_analysis_results sar
+			INNER JOIN %schema_name%.sk_analyte_mappings sam ON sar.analyte_mapping_id = sam.id
+			WHERE sar.sample_code = $1
+			AND sam.analyte_id = $2;`
+
+	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
+
+	rows, err := r.db.QueryxContext(ctx, query, sampleCode, analyteID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			log.Trace().Msg("No analysis results")
+			return []AnalysisResult{}, nil
+		}
+		log.Error().Err(err).Msg("Can not search for AnalysisResults")
+		return []AnalysisResult{}, err
+	}
+	defer rows.Close()
+
+	analysisResultDAOs := make([]analysisResultDAO, 0)
+	for rows.Next() {
+		result := analysisResultDAO{}
+		err := rows.StructScan(&result)
+		if err != nil {
+			log.Error().Err(err).Msg("Can not scan data")
+			return []AnalysisResult{}, err
+		}
+
+		analysisResultDAOs = append(analysisResultDAOs, result)
+	}
+
+	analysisResults := make([]AnalysisResult, len(analysisResultDAOs))
+	for analysisResultIndex, dao := range analysisResultDAOs {
+		extraValues, err := r.getExtraValues(ctx, dao.ID)
+		if err != nil {
+			return nil, err
+		}
+		dao.ExtraValues = extraValues
+
+		reagentInfoList, err := r.getReagentInfoList(ctx, dao.ID)
+		if err != nil {
+			return nil, err
+		}
+		dao.ReagentInfos = reagentInfoList
+
+		images, err := r.getImages(ctx, dao.ID)
+		if err != nil {
+			return nil, err
+		}
+		dao.Images = images
+
+		warnings, err := r.getWarnings(ctx, dao.ID)
+		if err != nil {
+			return nil, err
+		}
+		dao.Warnings = warnings
+
+		channelResults, err := r.getChannelResults(ctx, dao.ID)
+		if err != nil {
+			return nil, err
+		}
+		for i := range channelResults {
+			channelResultImages, err := r.getChannelResultImages(ctx, dao.ID, channelResults[i].ID)
+			if err != nil {
+				return nil, err
+			}
+			channelResults[i].Images = channelResultImages
+
+			quantitativeValues, err := r.getChannelResultQuantitativeValues(ctx, channelResults[i].ID)
+			if err != nil {
+				return nil, err
+			}
+			channelResults[i].QuantitativeResults = quantitativeValues
+		}
+		dao.ChannelResults = channelResults
+
+		analysisResults[analysisResultIndex] = convertAnalysisResultDAOToAnalysisResult(dao)
+	}
+
+	return analysisResults, err
+}
+
+func (r *analysisRepository) getExtraValues(ctx context.Context, analysisResultID uuid.UUID) ([]extraValueDAO, error) {
+	query := fmt.Sprintf(`SELECT sare.id, sare.analysis_result_id, sare."key", sare."value"
+		FROM %s.sk_analysis_result_extravalues sare WHERE sare.analysis_result_id = $1;`, r.dbSchema)
+
+	rows, err := r.db.QueryxContext(ctx, query, analysisResultID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			log.Trace().Msg("No extra value")
+			return []extraValueDAO{}, nil
+		}
+		log.Error().Err(err).Msg("Can not search for extra values")
+		return []extraValueDAO{}, err
+	}
+	defer rows.Close()
+
+	extraValues := make([]extraValueDAO, 0)
+	for rows.Next() {
+		extraValue := extraValueDAO{}
+		err := rows.StructScan(&extraValue)
+		if err != nil {
+			log.Error().Err(err).Msg("Can not scan data")
+			return []extraValueDAO{}, err
+		}
+
+		extraValues = append(extraValues, extraValue)
+	}
+
+	return extraValues, err
+}
+
 func (r *analysisRepository) createExtraValues(ctx context.Context, extraValuesByAnalysisRequestIDs map[uuid.UUID][]ExtraValue) error {
 	extraValuesDAOs := make([]extraValueDAO, 0)
 	for analysisResultID, extraValues := range extraValuesByAnalysisRequestIDs {
@@ -514,6 +630,36 @@ func (r *analysisRepository) createExtraValues(ctx context.Context, extraValuesB
 	return nil
 }
 
+func (r *analysisRepository) getChannelResults(ctx context.Context, analysisResultID uuid.UUID) ([]channelResultDAO, error) {
+	query := fmt.Sprintf(`SELECT scr.id, scr.analysis_result_id, scr.channel_id, scr.qualitative_result, scr.qualitative_result_edited
+		FROM %s.sk_channel_results scr WHERE scr.analysis_result_id = $1;`, r.dbSchema)
+
+	rows, err := r.db.QueryxContext(ctx, query, analysisResultID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			log.Trace().Msg("No channel result")
+			return []channelResultDAO{}, nil
+		}
+		log.Error().Err(err).Msg("Can not search for channel results")
+		return []channelResultDAO{}, err
+	}
+	defer rows.Close()
+
+	channelResults := make([]channelResultDAO, 0)
+	for rows.Next() {
+		channelResult := channelResultDAO{}
+		err := rows.StructScan(&channelResult)
+		if err != nil {
+			log.Error().Err(err).Msg("Can not scan data")
+			return []channelResultDAO{}, err
+		}
+
+		channelResults = append(channelResults, channelResult)
+	}
+
+	return channelResults, err
+}
+
 func (r *analysisRepository) createChannelResults(ctx context.Context, channelResults []ChannelResult, analysisResultID uuid.UUID) ([]uuid.UUID, error) {
 	ids := make([]uuid.UUID, len(channelResults))
 	if len(channelResults) == 0 {
@@ -527,6 +673,36 @@ func (r *analysisRepository) createChannelResults(ctx context.Context, channelRe
 		return []uuid.UUID{}, err
 	}
 	return ids, nil
+}
+
+func (r *analysisRepository) getChannelResultQuantitativeValues(ctx context.Context, channelResultID uuid.UUID) ([]quantitativeChannelResultDAO, error) {
+	query := fmt.Sprintf(`SELECT scrqv.id, scrqv.channel_result_id, scrqv.metric, scrqv."value"
+		FROM %s.sk_channel_result_quantitative_values scrqv WHERE scrqv.channel_result_id = $1;`, r.dbSchema)
+
+	rows, err := r.db.QueryxContext(ctx, query, channelResultID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			log.Trace().Msg("No quantitative channel result")
+			return []quantitativeChannelResultDAO{}, nil
+		}
+		log.Error().Err(err).Msg("Can not search for quantitative channel results")
+		return []quantitativeChannelResultDAO{}, err
+	}
+	defer rows.Close()
+
+	quantitativeChannelResults := make([]quantitativeChannelResultDAO, 0)
+	for rows.Next() {
+		quantitativeChannelResult := quantitativeChannelResultDAO{}
+		err := rows.StructScan(&quantitativeChannelResult)
+		if err != nil {
+			log.Error().Err(err).Msg("Can not scan data")
+			return []quantitativeChannelResultDAO{}, err
+		}
+
+		quantitativeChannelResults = append(quantitativeChannelResults, quantitativeChannelResult)
+	}
+
+	return quantitativeChannelResults, err
 }
 
 func (r *analysisRepository) createChannelResultQuantitativeValues(ctx context.Context, quantitativeValuesByChannelResultIDs map[uuid.UUID]map[string]string) error {
@@ -551,6 +727,37 @@ func (r *analysisRepository) createChannelResultQuantitativeValues(ctx context.C
 	return nil
 }
 
+func (r *analysisRepository) getReagentInfoList(ctx context.Context, analysisResultID uuid.UUID) ([]reagentInfoDAO, error) {
+	query := fmt.Sprintf(`SELECT sarri.id, sarri.analysis_result_id, sarri.serial, sarri."name", sarri.code, sarri.shelf_life, sarri.lot_no, sarri.manufacturer_name, sarri.reagent_manufacturer_date,
+        sarri.reagent_type, sarri.use_until, sarri.date_created
+		FROM %s.sk_analysis_result_reagent_infos sarri WHERE sarri.analysis_result_id = $1;`, r.dbSchema)
+
+	rows, err := r.db.QueryxContext(ctx, query, analysisResultID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			log.Trace().Msg("No reagent info")
+			return []reagentInfoDAO{}, nil
+		}
+		log.Error().Err(err).Msg("Can not search for reagent info")
+		return []reagentInfoDAO{}, err
+	}
+	defer rows.Close()
+
+	reagentInfoList := make([]reagentInfoDAO, 0)
+	for rows.Next() {
+		reagentInfo := reagentInfoDAO{}
+		err := rows.StructScan(&reagentInfo)
+		if err != nil {
+			log.Error().Err(err).Msg("Can not scan data")
+			return []reagentInfoDAO{}, err
+		}
+
+		reagentInfoList = append(reagentInfoList, reagentInfo)
+	}
+
+	return reagentInfoList, err
+}
+
 func (r *analysisRepository) createReagentInfos(ctx context.Context, reagentInfosByAnalysisResultID map[uuid.UUID][]ReagentInfo) error {
 	reagentInfoDAOs := make([]reagentInfoDAO, 0)
 	for analysisResultID, reagentInfos := range reagentInfosByAnalysisResultID {
@@ -571,6 +778,65 @@ func (r *analysisRepository) createReagentInfos(ctx context.Context, reagentInfo
 		return err
 	}
 	return nil
+}
+
+func (r *analysisRepository) getImages(ctx context.Context, analysisResultID uuid.UUID) ([]imageDAO, error) {
+	query := fmt.Sprintf(`SELECT sari.id, sari.analysis_result_id, sari.channel_result_id, sari.name, sari.description FROM %s.sk_analysis_result_images sari WHERE sari.analysis_result_id = $1;`, r.dbSchema)
+
+	rows, err := r.db.QueryxContext(ctx, query, analysisResultID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			log.Trace().Msg("No images")
+			return []imageDAO{}, nil
+		}
+		log.Error().Err(err).Msg("Can not search for Images")
+		return []imageDAO{}, err
+	}
+	defer rows.Close()
+
+	images := make([]imageDAO, 0)
+	for rows.Next() {
+		image := imageDAO{}
+		err := rows.StructScan(&image)
+		if err != nil {
+			log.Error().Err(err).Msg("Can not scan data")
+			return []imageDAO{}, err
+		}
+
+		images = append(images, image)
+	}
+
+	return images, err
+}
+
+func (r *analysisRepository) getChannelResultImages(ctx context.Context, analysisResultID uuid.UUID, channelResultID uuid.UUID) ([]imageDAO, error) {
+	query := fmt.Sprintf(`SELECT sari.id, sari.analysis_result_id, sari.channel_result_id, sari.name, sari.description
+		FROM %s.sk_analysis_result_images sari WHERE sari.analysis_result_id = $1 AND sari.channel_result_id = $2;`, r.dbSchema)
+
+	rows, err := r.db.QueryxContext(ctx, query, analysisResultID, channelResultID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			log.Trace().Msg("No images")
+			return []imageDAO{}, nil
+		}
+		log.Error().Err(err).Msg("Can not search for Images")
+		return []imageDAO{}, err
+	}
+	defer rows.Close()
+
+	images := make([]imageDAO, 0)
+	for rows.Next() {
+		image := imageDAO{}
+		err := rows.StructScan(&image)
+		if err != nil {
+			log.Error().Err(err).Msg("Can not scan data")
+			return []imageDAO{}, err
+		}
+
+		images = append(images, image)
+	}
+
+	return images, err
 }
 
 func (r *analysisRepository) createImages(ctx context.Context, images map[uuid.UUID]map[uuid.NullUUID][]Image) error {
@@ -595,6 +861,35 @@ func (r *analysisRepository) createImages(ctx context.Context, images map[uuid.U
 		return err
 	}
 	return nil
+}
+
+func (r *analysisRepository) getWarnings(ctx context.Context, analysisResultID uuid.UUID) ([]warningDAO, error) {
+	query := fmt.Sprintf(`SELECT sarw.id, sarw.analysis_result_id, sarw.warning FROM %s.sk_analysis_result_warnings sarw WHERE sarw.analysis_result_id = $1;`, r.dbSchema)
+
+	rows, err := r.db.QueryxContext(ctx, query, analysisResultID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			log.Trace().Msg("No analysis result warnings")
+			return []warningDAO{}, nil
+		}
+		log.Error().Err(err).Msg("Can not search for AnalysisResultWarnings")
+		return []warningDAO{}, err
+	}
+	defer rows.Close()
+
+	warnings := make([]warningDAO, 0)
+	for rows.Next() {
+		warning := warningDAO{}
+		err := rows.StructScan(&warning)
+		if err != nil {
+			log.Error().Err(err).Msg("Can not scan data")
+			return []warningDAO{}, err
+		}
+
+		warnings = append(warnings, warning)
+	}
+
+	return warnings, err
 }
 
 func (r *analysisRepository) createWarnings(ctx context.Context, warningsByAnalysisResultID map[uuid.UUID][]string) error {
@@ -727,20 +1022,21 @@ func convertAnalysisRequestDAOsToAnalysisRequests(analysisRequestDAOs []analysis
 
 func convertAnalysisResultToDAO(analysisResult AnalysisResult) analysisResultDAO {
 	return analysisResultDAO{
-		ID:               analysisResult.ID,
-		AnalyteMappingID: analysisResult.AnalyteMapping.ID,
-		InstrumentID:     analysisResult.Instrument.ID,
-		ResultMode:       analysisResult.Instrument.ResultMode,
-		SampleCode:       analysisResult.SampleCode,
-		InstrumentRunID:  analysisResult.InstrumentRunID,
-		ResultRecordID:   analysisResult.ResultRecordID,
-		BatchID:          analysisResult.BatchID,
-		Result:           analysisResult.Result,
-		Status:           analysisResult.Status,
-		YieldedAt:        analysisResult.ResultYieldDateTime,
-		ValidUntil:       analysisResult.ValidUntil,
-		Operator:         analysisResult.Operator,
-		Edited:           analysisResult.Edited,
+		ID:                       analysisResult.ID,
+		AnalyteMappingID:         analysisResult.AnalyteMapping.ID,
+		InstrumentID:             analysisResult.Instrument.ID,
+		ResultMode:               analysisResult.Instrument.ResultMode,
+		SampleCode:               analysisResult.SampleCode,
+		InstrumentRunID:          analysisResult.InstrumentRunID,
+		ResultRecordID:           analysisResult.ResultRecordID,
+		BatchID:                  analysisResult.BatchID,
+		Result:                   analysisResult.Result,
+		Status:                   analysisResult.Status,
+		YieldedAt:                analysisResult.ResultYieldDateTime,
+		ValidUntil:               analysisResult.ValidUntil,
+		Operator:                 analysisResult.Operator,
+		TechnicalReleaseDateTime: analysisResult.TechnicalReleaseDateTime,
+		Edited:                   analysisResult.Edited,
 		EditReason: sql.NullString{
 			String: analysisResult.EditReason,
 			Valid:  true,
@@ -754,6 +1050,44 @@ func convertAnalysisResultsToDAOs(analysisResults []AnalysisResult) []analysisRe
 		DAOs[i] = convertAnalysisResultToDAO(analysisResults[i])
 	}
 	return DAOs
+}
+
+func convertAnalysisResultDAOToAnalysisResult(analysisResult analysisResultDAO) AnalysisResult {
+	return AnalysisResult{
+		ID: analysisResult.ID,
+		AnalyteMapping: AnalyteMapping{
+			ID: analysisResult.AnalyteMappingID,
+		},
+		Instrument: Instrument{
+			ID: analysisResult.InstrumentID,
+		},
+		SampleCode:               analysisResult.SampleCode,
+		ResultRecordID:           analysisResult.ResultRecordID,
+		BatchID:                  analysisResult.BatchID,
+		Result:                   analysisResult.Result,
+		Status:                   analysisResult.Status,
+		ResultYieldDateTime:      analysisResult.YieldedAt,
+		ValidUntil:               analysisResult.ValidUntil,
+		Operator:                 analysisResult.Operator,
+		TechnicalReleaseDateTime: analysisResult.TechnicalReleaseDateTime,
+		InstrumentRunID:          analysisResult.InstrumentRunID,
+		RunCounter:               analysisResult.RunCounter,
+		Edited:                   analysisResult.Edited,
+		EditReason:               nullStringToString(analysisResult.EditReason),
+		Warnings:                 convertAnalysisWarningDAOsToWarnings(analysisResult.Warnings),
+		ChannelResults:           convertChannelResultDAOsToChannelResults(analysisResult.ChannelResults),
+		ExtraValues:              convertExtraValueDAOsToExtraValues(analysisResult.ExtraValues),
+		ReagentInfos:             convertReagentInfoDAOsToReagentInfoList(analysisResult.ReagentInfos),
+		Images:                   convertImageDAOsToImages(analysisResult.Images),
+	}
+}
+
+func convertAnalysisResultDAOsToAnalysisResults(analysisResults []analysisResultDAO) []AnalysisResult {
+	results := make([]AnalysisResult, len(analysisResults))
+	for i := range analysisResults {
+		results[i] = convertAnalysisResultDAOToAnalysisResult(analysisResults[i])
+	}
+	return results
 }
 
 func convertChannelResultToDAO(channelResult ChannelResult, analysisResultID uuid.UUID) channelResultDAO {
@@ -994,4 +1328,77 @@ func convertCerberusQueueItemDAOToCerberusQueueItem(cerberusQueueItemDAO cerberu
 		RawResponse:         cerberusQueueItemDAO.RawResponse,
 		ResponseJsonMessage: cerberusQueueItemDAO.ResponseJsonMessage,
 	}
+}
+
+func convertReagentInfoDAOsToReagentInfoList(reagentInfoDAOs []reagentInfoDAO) []ReagentInfo {
+	reagentInfoList := make([]ReagentInfo, len(reagentInfoDAOs))
+	for i, reagentInfoDAO := range reagentInfoDAOs {
+		reagentInfoList[i] = ReagentInfo{
+			SerialNumber:            reagentInfoDAO.SerialNumber,
+			Name:                    reagentInfoDAO.Name,
+			Code:                    reagentInfoDAO.Code,
+			ShelfLife:               reagentInfoDAO.ShelfLife,
+			LotNo:                   reagentInfoDAO.LotNo,
+			ManufacturerName:        reagentInfoDAO.ManufacturerName,
+			ReagentManufacturerDate: reagentInfoDAO.ReagentManufacturerDate,
+			ReagentType:             reagentInfoDAO.ReagentType,
+			UseUntil:                reagentInfoDAO.UseUntil,
+			DateCreated:             reagentInfoDAO.DateCreated,
+		}
+	}
+	return reagentInfoList
+}
+
+func convertAnalysisWarningDAOsToWarnings(warningDAOs []warningDAO) []string {
+	warnings := make([]string, len(warningDAOs))
+	for i := range warningDAOs {
+		warnings[i] = warningDAOs[i].Warning
+	}
+	return warnings
+}
+
+func convertExtraValueDAOsToExtraValues(extraValueDAOs []extraValueDAO) []ExtraValue {
+	extraValues := make([]ExtraValue, len(extraValueDAOs))
+	for i, extraValueDAO := range extraValueDAOs {
+		extraValues[i] = ExtraValue{
+			Key:   extraValueDAO.Key,
+			Value: extraValueDAO.Value,
+		}
+	}
+	return extraValues
+}
+
+func convertChannelResultDAOsToChannelResults(channelResultDAOs []channelResultDAO) []ChannelResult {
+	channelResults := make([]ChannelResult, len(channelResultDAOs))
+	for i, channelResultDAO := range channelResultDAOs {
+		channelResults[i] = ChannelResult{
+			ID:                    channelResultDAO.ID,
+			ChannelID:             channelResultDAO.ChannelID,
+			QualitativeResult:     channelResultDAO.QualitativeResult,
+			QualitativeResultEdit: channelResultDAO.QualitativeResultEdit,
+			QuantitativeResults:   convertQuantitativeResultDAOsToQuantitativeResults(channelResultDAO.QuantitativeResults),
+			Images:                convertImageDAOsToImages(channelResultDAO.Images),
+		}
+	}
+	return channelResults
+}
+
+func convertQuantitativeResultDAOsToQuantitativeResults(quantitativeChannelResultDAOs []quantitativeChannelResultDAO) map[string]string {
+	quantitativeChannelResults := make(map[string]string, len(quantitativeChannelResultDAOs))
+	for _, quantitativeChannelResultDAO := range quantitativeChannelResultDAOs {
+		quantitativeChannelResults[quantitativeChannelResultDAO.Metric] = quantitativeChannelResultDAO.Value
+	}
+	return quantitativeChannelResults
+}
+
+func convertImageDAOsToImages(imageDAOs []imageDAO) []Image {
+	images := make([]Image, len(imageDAOs))
+	for i, imageDAO := range imageDAOs {
+		images[i] = Image{
+			ID:          imageDAO.ID,
+			Name:        imageDAO.Name,
+			Description: nullStringToStringPointer(imageDAO.Description),
+		}
+	}
+	return images
 }

@@ -94,20 +94,6 @@ func timePointerToNullTime(value *time.Time) sql.NullTime {
 	return sql.NullTime{}
 }
 
-func partition(totalLength int, partitionLength int, consumer func(low int, high int)) {
-	if partitionLength <= 0 || totalLength <= 0 {
-		return
-	}
-	partitions := totalLength / partitionLength
-	var i int
-	for i = 0; i < partitions; i++ {
-		consumer(i*partitionLength, i*partitionLength+partitionLength)
-	}
-	if rest := totalLength % partitionLength; rest != 0 {
-		consumer(i*partitionLength, i*partitionLength+rest)
-	}
-}
-
 func isSorted(pageable Pageable) bool {
 	return pageable.Sort != ""
 }

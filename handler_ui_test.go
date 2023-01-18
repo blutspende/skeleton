@@ -40,7 +40,7 @@ func TestCreateInstrument(t *testing.T) {
 	dbConn := db.CreateDbConnector(sqlConn)
 	cerberusClientMock := &cerberusClientMock{}
 	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
-	instrumentService := NewInstrumentService(&config, instrumentRepository, NewCallbackManager(), NewInstrumentCache(), cerberusClientMock)
+	instrumentService := NewInstrumentService(&config, instrumentRepository, NewSkeletonManager(), NewInstrumentCache(), cerberusClientMock)
 
 	responseRecorder := &httptest.ResponseRecorder{}
 	c, engine := gin.CreateTestContext(responseRecorder)
@@ -134,7 +134,7 @@ func TestCreateInstrumentWithoutRequestMapping(t *testing.T) {
 	dbConn := db.CreateDbConnector(sqlConn)
 	cerberus, _ := NewCerberusClient("TODO", resty.New())
 	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
-	instrumentService := NewInstrumentService(&config, instrumentRepository, NewCallbackManager(), NewInstrumentCache(), cerberus)
+	instrumentService := NewInstrumentService(&config, instrumentRepository, NewSkeletonManager(), NewInstrumentCache(), cerberus)
 
 	responseRecorder := &httptest.ResponseRecorder{}
 	c, engine := gin.CreateTestContext(responseRecorder)
@@ -222,7 +222,7 @@ func TestGetInstruments(t *testing.T) {
 	dbConn := db.CreateDbConnector(sqlConn)
 	cerberus, _ := NewCerberusClient("TODO", resty.New())
 	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
-	instrumentService := NewInstrumentService(&config, instrumentRepository, NewCallbackManager(), NewInstrumentCache(), cerberus)
+	instrumentService := NewInstrumentService(&config, instrumentRepository, NewSkeletonManager(), NewInstrumentCache(), cerberus)
 
 	responseRecorder := &httptest.ResponseRecorder{}
 	c, engine := gin.CreateTestContext(responseRecorder)

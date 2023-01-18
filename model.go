@@ -292,7 +292,6 @@ type Image struct {
 	ID          uuid.UUID
 	Name        string
 	Description *string
-	ChannelName string
 }
 
 type SubmitType string

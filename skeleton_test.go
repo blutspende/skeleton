@@ -61,11 +61,11 @@ func TestSubmitAnalysisResult(t *testing.T) {
 	analysisRepository := skeleton.NewAnalysisRepository(dbConn, schemaName)
 	instrumentRepository := skeleton.NewInstrumentRepository(dbConn, schemaName)
 
-	analysisService := skeleton.NewAnalysisService(analysisRepository)
+	analysisService := skeleton.NewAnalysisService(analysisRepository, nil)
 	instrumentService := skeleton.NewInstrumentService(nil, instrumentRepository, nil, nil, nil)
 	cerberusClientMock := cerberusClientMock{}
 
-	skeletonInstance, _ := skeleton.NewSkeleton(sqlConn, schemaName, migrator.NewSkeletonMigrator(), nil, analysisRepository, instrumentService, nil, &cerberusClientMock)
+	skeletonInstance, _ := skeleton.NewSkeleton(sqlConn, schemaName, migrator.NewSkeletonMigrator(), nil, analysisRepository, analysisService, instrumentService, nil, &cerberusClientMock)
 	func() {
 		err = skeletonInstance.Start()
 		assert.Nil(t, err)

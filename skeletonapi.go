@@ -15,8 +15,7 @@ type SkeletonError error
 // SkeletonCallbackHandlerV1 - must implement an EventHandler to react on Events triggered by Skeleton
 type SkeletonCallbackHandlerV1 interface {
 	// HandleAnalysisRequests is called when the Skeleton needs to resolve an updated AnalysisRequest
-	// based on data that was probably not processed before. This function is supposed to trigger a
-	// SkeletonAPI.SubmitAnalysisResult on the SkeletonAPI if result-data was found.
+	// based on data that was probably not processed before.
 	HandleAnalysisRequests(request []AnalysisRequest) error
 
 	// GetManufacturerTestList is called when the Skeleton requires a list of test names (strings)
@@ -105,12 +104,12 @@ func New(sqlConn *sqlx.DB, dbSchema string) (SkeletonAPI, error) {
 		return nil, err
 	}
 	dbConn := db.CreateDbConnector(sqlConn)
-	manager := NewCallbackManager()
+	manager := NewSkeletonManager()
 	instrumentCache := NewInstrumentCache()
 	analysisRepository := NewAnalysisRepository(dbConn, dbSchema)
 	instrumentRepository := NewInstrumentRepository(dbConn, dbSchema)
-	analysisService := NewAnalysisService(analysisRepository)
+	analysisService := NewAnalysisService(analysisRepository, manager)
 	instrumentService := NewInstrumentService(&config, instrumentRepository, manager, instrumentCache, cerberusClient)
 	api := NewAPI(&config, authManager, analysisService, instrumentService)
-	return NewSkeleton(sqlConn, dbSchema, migrator.NewSkeletonMigrator(), api, analysisRepository, instrumentService, manager, cerberusClient)
+	return NewSkeleton(sqlConn, dbSchema, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, manager, cerberusClient)
 }

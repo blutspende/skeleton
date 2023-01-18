@@ -7,10 +7,8 @@ import (
 	"time"
 
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/migrator"
-
-	"github.com/jmoiron/sqlx"
-
 	"github.com/google/uuid"
+	"github.com/jmoiron/sqlx"
 	"github.com/rs/zerolog/log"
 )
 
@@ -20,9 +18,9 @@ type skeleton struct {
 	migrator           migrator.SkeletonMigrator
 	api                GinApi
 	analysisRepository AnalysisRepository
+	analysisService    AnalysisService
 	instrumentService  InstrumentService
 	resultsBuffer      []AnalysisResult
-	resultsChan        chan AnalysisResult
 	resultBatchesChan  chan []AnalysisResult
 	cerberusClient     Cerberus
 	manager            Manager
@@ -81,6 +79,9 @@ func (s *skeleton) SubmitAnalysisResult(ctx context.Context, resultData Analysis
 	if resultData.Instrument.ID == uuid.Nil {
 		return errors.New("instrument ID is missing")
 	}
+	if resultData.TechnicalReleaseDateTime.IsZero() {
+		return errors.New("technical release date-time is missing")
+	}
 
 	tx, err := s.analysisRepository.CreateTransaction()
 	if err != nil {
@@ -101,7 +102,7 @@ func (s *skeleton) SubmitAnalysisResult(ctx context.Context, resultData Analysis
 	}
 	for i := range analyteRequests {
 		savedResultData.AnalysisRequest = analyteRequests[i]
-		s.resultsChan <- savedResultData
+		s.manager.SendResultForProcessing(savedResultData)
 	}
 	return nil
 }
@@ -174,9 +175,10 @@ func (s *skeleton) migrateUp(ctx context.Context, db *sqlx.DB, schemaName string
 func (s *skeleton) Start() error {
 	go s.cleanUpCerberusQueueItems(context.Background())
 	go s.sendUnsentInstrumentsToCerberus(context.Background())
+	go s.processAnalysisRequests(context.Background())
 	go s.processAnalysisResults(context.Background())
 	go s.processAnalysisResultBatches(context.Background())
-	go s.submitAnalysisRequestsToCerberus(context.Background())
+	go s.submitAnalysisResultsToCerberus(context.Background())
 
 	// Todo - use cancellable context what is passed to the routines above too
 	err := s.api.Run()
@@ -204,10 +206,35 @@ func (s *skeleton) sendUnsentInstrumentsToCerberus(ctx context.Context) {
 	}
 }
 
+func (s *skeleton) processAnalysisRequests(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case requests, ok := <-s.manager.GetProcessableAnalysisRequestsChan():
+			if !ok {
+				log.Fatal().Msg("processing analysis requests stopped: requests channel closed")
+			}
+			err := s.GetCallbackHandler().HandleAnalysisRequests(requests)
+			if err != nil {
+				log.Error().Err(err).Msg("Unexpected error")
+				break
+			}
+			err = s.analysisService.ProcessAnalysisRequests(ctx, requests)
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to process analysis requests")
+				break
+			}
+		}
+	}
+}
+
 func (s *skeleton) processAnalysisResults(ctx context.Context) {
 	for {
 		select {
-		case result, ok := <-s.resultsChan:
+		case <-ctx.Done():
+			return
+		case result, ok := <-s.manager.GetResultChan():
 			if !ok {
 				log.Fatal().Msg("processing analysis results stopped: results channel closed")
 			}
@@ -222,8 +249,6 @@ func (s *skeleton) processAnalysisResults(ctx context.Context) {
 		}
 	}
 }
-
-const maxRetryCount = 30
 
 func (s *skeleton) processAnalysisResultBatches(ctx context.Context) {
 	for {
@@ -247,7 +272,7 @@ func (s *skeleton) cleanUpCerberusQueueItems(ctx context.Context) {
 	//delete from astm.sk_cerberus_queue_items where created_at < now()-interval '14 days';
 }
 
-func (s *skeleton) submitAnalysisRequestsToCerberus(ctx context.Context) {
+func (s *skeleton) submitAnalysisResultsToCerberus(ctx context.Context) {
 	ticker := time.NewTicker(60 * time.Second)
 	for {
 		select {
@@ -295,18 +320,18 @@ func (s *skeleton) submitAnalysisRequestsToCerberus(ctx context.Context) {
 	}
 }
 
-func NewSkeleton(sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api GinApi, analysisRepository AnalysisRepository, instrumentService InstrumentService, manager Manager, cerberusClient Cerberus) (SkeletonAPI, error) {
+func NewSkeleton(sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api GinApi, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, manager Manager, cerberusClient Cerberus) (SkeletonAPI, error) {
 	skeleton := &skeleton{
 		sqlConn:            sqlConn,
 		dbSchema:           dbSchema,
 		migrator:           migrator,
 		api:                api,
 		analysisRepository: analysisRepository,
+		analysisService:    analysisService,
 		instrumentService:  instrumentService,
 		manager:            manager,
 		cerberusClient:     cerberusClient,
 		resultsBuffer:      make([]AnalysisResult, 0, 500),
-		resultsChan:        make(chan AnalysisResult, 500),
 		resultBatchesChan:  make(chan []AnalysisResult, 10),
 	}
 

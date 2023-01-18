@@ -49,7 +49,7 @@ func TestRegisterCreatedInstrument(t *testing.T) {
 		},
 	}
 	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
-	instrumentService := NewInstrumentService(&config, instrumentRepository, NewCallbackManager(), NewInstrumentCache(), cerberusClientMock)
+	instrumentService := NewInstrumentService(&config, instrumentRepository, NewSkeletonManager(), NewInstrumentCache(), cerberusClientMock)
 
 	_, _ = instrumentService.CreateInstrument(context.Background(), Instrument{
 		ID:             uuid.MustParse("68f34e1d-1faa-4101-9e79-a743b420ab4e"),
