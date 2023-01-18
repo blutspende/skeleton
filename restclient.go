@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/config"
+	"net/http"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -29,6 +30,7 @@ func NewRestyClient(ctx context.Context, configuration *config.Configuration, us
 
 func NewRestyClientWithAuthManager(ctx context.Context, configuration *config.Configuration, authManager AuthManager) *resty.Client {
 	client := resty.New().
+		AddRetryCondition(configureRetryMechanismForService2ServiceCalls(authManager)).
 		OnBeforeRequest(configureRequest(ctx, configuration)).
 		OnBeforeRequest(func(client *resty.Client, request *resty.Request) error {
 			authToken, err := authManager.GetClientCredential()
@@ -52,9 +54,25 @@ func NewRestyClientWithAuthManager(ctx context.Context, configuration *config.Co
 func configureRequest(ctx context.Context, configuration *config.Configuration) resty.RequestMiddleware {
 	return func(client *resty.Client, request *resty.Request) error {
 		request.SetContext(ctx)
-		if configuration.LogLevel == zerolog.DebugLevel {
+		if configuration.LogLevel <= zerolog.DebugLevel {
 			request.EnableTrace()
 		}
 		return nil
+	}
+}
+
+func configureRetryMechanismForService2ServiceCalls(authManager AuthManager) resty.RetryConditionFunc {
+	return func(response *resty.Response, err error) bool {
+		if response.StatusCode() == http.StatusUnauthorized {
+			err := authManager.RefreshClientCredential()
+			if err != nil {
+				log.Error().Err(err).Msg("Skip service-to-service retry routine")
+				return false
+			}
+
+			return true
+		}
+
+		return false
 	}
 }

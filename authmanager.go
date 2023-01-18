@@ -1,13 +1,11 @@
 package skeleton
 
 import (
-	"context"
 	"errors"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/config"
 	"strings"
 	"sync"
-	"time"
 
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/config"
 	"github.com/MicahParks/keyfunc"
 	"github.com/go-resty/resty/v2"
 	"github.com/rs/zerolog/log"
@@ -18,7 +16,7 @@ const oidcURLPart = "/.well-known/openid-configuration"
 type AuthManager interface {
 	GetJWKS() (*keyfunc.JWKS, error)
 	GetClientCredential() (string, error)
-	StartClientCredentialTask(ctx context.Context)
+	RefreshClientCredential() error
 }
 
 type authManager struct {
@@ -31,18 +29,18 @@ type authManager struct {
 }
 
 func NewAuthManager(configuration *config.Configuration, restClient *resty.Client) AuthManager {
-	keycloakManager := &authManager{
+	authenticationManager := &authManager{
 		configuration: configuration,
 		restClient:    restClient,
 	}
 
-	err := keycloakManager.loadJWKS()
+	err := authenticationManager.loadJWKS()
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to load OIDC from Keycloak!")
+		log.Fatal().Err(err).Msg("Failed to load OIDC from the authentication provider")
 		return nil
 	}
 
-	return keycloakManager
+	return authenticationManager
 }
 
 func (m *authManager) GetJWKS() (*keyfunc.JWKS, error) {
@@ -61,61 +59,64 @@ func (m *authManager) GetClientCredential() (string, error) {
 	return m.tokenEndpointResponse.AccessToken, nil
 }
 
-func (m *authManager) loadJWKS() error {
-	err := m.ensureOIDC()
-	if err != nil {
+func (m *authManager) RefreshClientCredential() error {
+	if err := m.ensureOIDC(); err != nil {
 		return err
 	}
 
-	m.jwks, err = keyfunc.Get(m.oidc.JwksURI, keyfunc.Options{
+	tokenEndpointResponse, err := m.callAuthProviderTokenEndpoint()
+	if tokenEndpointResponse == nil || err != nil {
+		log.Error().Err(err).Msg("Failed to load JWT token from the authentication provider")
+		return err
+	}
+
+	if tokenEndpointResponse.TokenType != "Bearer" {
+		log.Error().Msg("Got invalid token type from the authentication provider")
+		return errors.New("invalid token type")
+	}
+
+	m.tokenEndpointResponse = tokenEndpointResponse
+
+	return nil
+}
+
+func (m *authManager) loadJWKS() error {
+	if err := m.ensureOIDC(); err != nil {
+		return err
+	}
+
+	jwks, err := keyfunc.Get(m.oidc.JwksURI, keyfunc.Options{
 		Client:              m.restClient.GetClient(),
 		RefreshErrorHandler: m.refreshErrorHandler,
 		RefreshUnknownKID:   true,
 	})
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to get JWKS from KeyCloak!")
+		log.Error().Err(err).Msg("Failed to get JWKS from the authentication provider")
 		return err
 	}
+
+	m.jwks = jwks
 
 	return nil
 }
 
-func (m *authManager) StartClientCredentialTask(ctx context.Context) {
-	log.Info().Msg("Starting client credential synchronizer task")
-	actualPeriod := 1 * time.Minute
-	ticker := time.NewTicker(actualPeriod)
-	m.refreshClientCredentialAuthToken(&actualPeriod)
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				ticker.Stop()
-				return
-			case <-ticker.C:
-				m.refreshClientCredentialAuthToken(&actualPeriod)
-				ticker.Reset(actualPeriod)
-			}
-		}
-	}()
-}
-
 func (m *authManager) refreshErrorHandler(err error) {
-	log.Error().Err(err).Msg("Failed to get JWKS from KeyCloak!")
+	log.Error().Err(err).Msg("Failed to get and refresh JWKS from the authentication provider")
 }
 
-func (m *authManager) callKeycloakOIDCEndpoint() (*OpenIDConfiguration, error) {
+func (m *authManager) callAuthProviderOIDCEndpoint() (*OpenIDConfiguration, error) {
 	response, err := m.restClient.R().
 		SetHeader("Content-Type", "application/json").
 		SetResult(&OpenIDConfiguration{}).
 		Get(strings.TrimRight(m.configuration.OIDCBaseURL, "/") + oidcURLPart)
 
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to get OIDC from Keycloak")
+		log.Error().Err(err).Msg("Failed to get OIDC from the authentication provider")
 		return nil, err
 	}
 
 	if !response.IsSuccess() {
-		log.Error().Err(err).Msgf("Failed to get OIDC from Keycloak: %v", response.Error())
+		log.Error().Err(err).Msgf("Failed to get OIDC from the authentication provider: %s", response.Status())
 		return nil, err
 	}
 
@@ -124,7 +125,7 @@ func (m *authManager) callKeycloakOIDCEndpoint() (*OpenIDConfiguration, error) {
 	return oidc, nil
 }
 
-func (m *authManager) callKeycloakTokenEndpoint() (*TokenEndpointResponse, error) {
+func (m *authManager) callAuthProviderTokenEndpoint() (*TokenEndpointResponse, error) {
 	response, err := m.restClient.R().
 		SetHeader("Content-Type", "application/x-www-form-urlencoded").
 		SetHeader("Cache-Control", "no-cache").
@@ -135,12 +136,12 @@ func (m *authManager) callKeycloakTokenEndpoint() (*TokenEndpointResponse, error
 		Post(m.oidc.TokenEndpoint)
 
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to get JWT token from Keycloak token endpoint")
+		log.Error().Err(err).Msg("Failed to get JWT token from the authentication provider's token endpoint")
 		return nil, err
 	}
 
 	if !response.IsSuccess() {
-		log.Error().Err(err).Msgf("Failed to get JWT token from Keycloak token endpoint: %v", response.Status())
+		log.Error().Err(err).Msgf("Failed to get JWT token from the authentication provider's token endpoint: %s", response.Status())
 		return nil, err
 	}
 
@@ -149,35 +150,11 @@ func (m *authManager) callKeycloakTokenEndpoint() (*TokenEndpointResponse, error
 	return tokenEndpointResponse, nil
 }
 
-func (m *authManager) refreshClientCredentialAuthToken(actualPeriod *time.Duration) {
-	if err := m.ensureOIDC(); err != nil {
-		return
-	}
-
-	tokenEndpointResponse, err := m.callKeycloakTokenEndpoint()
-	if tokenEndpointResponse == nil || err != nil {
-		log.Error().Err(err).Msg("Failed to load JWT token from Keycloak token endpoint")
-		return
-	}
-
-	if tokenEndpointResponse.TokenType != "Bearer" {
-		log.Error().Msg("Invalid token type")
-		return
-	}
-
-	expiresIn := time.Duration(tokenEndpointResponse.ExpiresIn) * time.Second
-	if actualPeriod.Milliseconds() != expiresIn.Milliseconds() {
-		*actualPeriod = expiresIn
-	}
-
-	m.tokenEndpointResponse = tokenEndpointResponse
-}
-
 func (m *authManager) ensureOIDC() error {
 	if m.oidc == nil {
-		oidc, err := m.callKeycloakOIDCEndpoint()
+		oidc, err := m.callAuthProviderOIDCEndpoint()
 		if err != nil {
-			log.Error().Err(err).Msg("Failed to load OIDC")
+			log.Error().Err(err).Msg("Failed to load OIDC from the authentication provider")
 			return err
 		}
 
