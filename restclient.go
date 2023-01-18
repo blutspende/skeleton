@@ -3,13 +3,12 @@ package skeleton
 import (
 	"context"
 	"crypto/tls"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/config"
 	"net/http"
 
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/config"
+	"github.com/go-resty/resty/v2"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-
-	"github.com/go-resty/resty/v2"
 )
 
 func NewRestyClient(ctx context.Context, configuration *config.Configuration, useProxy bool) *resty.Client {

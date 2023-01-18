@@ -131,14 +131,16 @@ type analysisRequestInfoDAO struct {
 }
 
 type cerberusQueueItemDAO struct {
-	ID             uuid.UUID    `db:"queue_item_id"`
-	JsonMessage    string       `db:"json_message"`
-	LastHTTPStatus int          `db:"last_http_status"`
-	LastError      string       `db:"last_error"`
-	LastErrorAt    sql.NullTime `db:"last_error_at"`
-	RetryCount     int          `db:"retry_count"`
-	RetryNotBefore time.Time    `db:"retry_not_before"`
-	CreatedAt      time.Time    `db:"created_at"`
+	ID                  uuid.UUID    `db:"queue_item_id"`
+	JsonMessage         string       `db:"json_message"`
+	LastHTTPStatus      int          `db:"last_http_status"`
+	LastError           string       `db:"last_error"`
+	LastErrorAt         sql.NullTime `db:"last_error_at"`
+	TrialCount          int          `db:"trial_count"`
+	RetryNotBefore      time.Time    `db:"retry_not_before"`
+	RawResponse         string       `db:"raw_response"`
+	ResponseJsonMessage string       `db:"response_json_message"`
+	CreatedAt           time.Time    `db:"created_at"`
 }
 
 type AnalysisRepository interface {
@@ -642,8 +644,8 @@ func (r *analysisRepository) CreateAnalysisResultQueueItem(ctx context.Context, 
 }
 
 func (r *analysisRepository) GetAnalysisResultQueueItems(ctx context.Context) ([]CerberusQueueItem, error) {
-	query := fmt.Sprintf(`SELECT queue_item_id, json_message, last_http_status, last_error, last_error_at, retry_count, retry_not_before, created_at FROM %s.sk_cerberus_queue_items 
-			WHERE retry_count < 5760 /* 4 days á 2 minutes */ AND last_http_status NOT BETWEEN 200 AND 299 AND created_at > timezone('utc', now()-interval '14 days') AND retry_not_before < timezone('utc', now())
+	query := fmt.Sprintf(`SELECT queue_item_id, json_message, last_http_status, last_error, last_error_at, trial_count, retry_not_before, created_at FROM %s.sk_cerberus_queue_items 
+			WHERE trial_count < 5760 /* 4 days á 2 minutes */ AND last_http_status NOT BETWEEN 200 AND 299 AND created_at > timezone('utc', now()-interval '14 days') AND retry_not_before < timezone('utc', now())
 			ORDER BY created_at LIMIT 1;`, r.dbSchema)
 
 	rows, err := r.db.QueryxContext(ctx, query)
@@ -673,11 +675,12 @@ func (r *analysisRepository) GetAnalysisResultQueueItems(ctx context.Context) ([
 }
 
 func (r *analysisRepository) UpdateAnalysisResultQueueItemStatus(ctx context.Context, queueItem CerberusQueueItem) error {
-	query := fmt.Sprintf(`UPDATE %s.sk_cerberus_queue_items SET last_http_status = :last_http_status, last_error = :last_error, last_error_at = :last_error_at, retry_count = retry_count + 1, retry_not_before = :retry_not_before
+	query := fmt.Sprintf(`UPDATE %s.sk_cerberus_queue_items
+			SET last_http_status = :last_http_status, last_error = :last_error, last_error_at = :last_error_at, trial_count = trial_count + 1, retry_not_before = :retry_not_before, raw_response = :raw_response, response_json_message = :response_json_message
 			WHERE id = :queue_item_id;`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, convertCerberusQueueItemToCerberusQueueItemDAO(queueItem))
 	if err != nil {
-		log.Error().Err(err).Msg("update result transmission status failed")
+		log.Error().Err(err).Msg("Update result transmission status failed")
 		return err
 	}
 	return nil
@@ -967,24 +970,28 @@ func convertRequestInfoDAOsToRequestInfos(analysisRequestInfoDAOs []analysisRequ
 
 func convertCerberusQueueItemToCerberusQueueItemDAO(cerberusQueueItem CerberusQueueItem) cerberusQueueItemDAO {
 	return cerberusQueueItemDAO{
-		ID:             cerberusQueueItem.ID,
-		JsonMessage:    cerberusQueueItem.JsonMessage,
-		LastHTTPStatus: cerberusQueueItem.LastHTTPStatus,
-		LastError:      cerberusQueueItem.LastError,
-		LastErrorAt:    timePointerToNullTime(cerberusQueueItem.LastErrorAt),
-		RetryCount:     cerberusQueueItem.RetryCount,
-		RetryNotBefore: cerberusQueueItem.RetryNotBefore,
+		ID:                  cerberusQueueItem.ID,
+		JsonMessage:         cerberusQueueItem.JsonMessage,
+		LastHTTPStatus:      cerberusQueueItem.LastHTTPStatus,
+		LastError:           cerberusQueueItem.LastError,
+		LastErrorAt:         timePointerToNullTime(cerberusQueueItem.LastErrorAt),
+		TrialCount:          cerberusQueueItem.TrialCount,
+		RetryNotBefore:      cerberusQueueItem.RetryNotBefore,
+		RawResponse:         cerberusQueueItem.RawResponse,
+		ResponseJsonMessage: cerberusQueueItem.ResponseJsonMessage,
 	}
 }
 
 func convertCerberusQueueItemDAOToCerberusQueueItem(cerberusQueueItemDAO cerberusQueueItemDAO) CerberusQueueItem {
 	return CerberusQueueItem{
-		ID:             cerberusQueueItemDAO.ID,
-		JsonMessage:    cerberusQueueItemDAO.JsonMessage,
-		LastHTTPStatus: cerberusQueueItemDAO.LastHTTPStatus,
-		LastError:      cerberusQueueItemDAO.LastError,
-		LastErrorAt:    nullTimeToTimePointer(cerberusQueueItemDAO.LastErrorAt),
-		RetryCount:     cerberusQueueItemDAO.RetryCount,
-		RetryNotBefore: cerberusQueueItemDAO.RetryNotBefore,
+		ID:                  cerberusQueueItemDAO.ID,
+		JsonMessage:         cerberusQueueItemDAO.JsonMessage,
+		LastHTTPStatus:      cerberusQueueItemDAO.LastHTTPStatus,
+		LastError:           cerberusQueueItemDAO.LastError,
+		LastErrorAt:         nullTimeToTimePointer(cerberusQueueItemDAO.LastErrorAt),
+		TrialCount:          cerberusQueueItemDAO.TrialCount,
+		RetryNotBefore:      cerberusQueueItemDAO.RetryNotBefore,
+		RawResponse:         cerberusQueueItemDAO.RawResponse,
+		ResponseJsonMessage: cerberusQueueItemDAO.ResponseJsonMessage,
 	}
 }

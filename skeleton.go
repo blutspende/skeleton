@@ -231,7 +231,6 @@ func (s *skeleton) processAnalysisResultBatches(ctx context.Context) {
 		if !ok {
 			log.Fatal().Msg("processing analysis result batches stopped: resultBatches channel closed")
 		}
-		//creationStatuses, err := s.cerberusClient.PostAnalysisResultBatch(resultsBatch)
 		_, err := s.analysisRepository.CreateAnalysisResultQueueItem(ctx, resultsBatch)
 		if err != nil {
 			time.AfterFunc(30*time.Second, func() {
@@ -239,14 +238,6 @@ func (s *skeleton) processAnalysisResultBatches(ctx context.Context) {
 			})
 			continue
 		}
-		//for i, status := range creationStatuses {
-		//	err = s.analysisRepository.UpdateAnalysisResultQueueItemStatus(ctx, resultsBatch[i].ID, status.Success, status.ErrorMessage)
-		//	if !status.Success && resultsBatch[i].RetryCount < maxRetryCount {
-		//		time.AfterFunc(30*time.Second, func() {
-		//			s.resultsChan <- resultsBatch[i]
-		//		})
-		//	}
-		//}
 	}
 }
 
@@ -275,20 +266,26 @@ func (s *skeleton) submitAnalysisRequestsToCerberus(ctx context.Context) {
 					continue
 				}
 
-				_, err := s.cerberusClient.PostAnalysisResultBatch(analysisResult)
+				response, err := s.cerberusClient.SendAnalysisResultBatch(analysisResult)
 				if err != nil {
 					log.Error().Err(err).Msg("Failed to send analysis result to cerberus")
+				}
+
+				if !response.HasResult() {
 					continue
 				}
-				utcNow := time.Now().UTC()
+
 				cerberusQueueItem := CerberusQueueItem{
 					ID:             queueItem.ID,
-					LastHTTPStatus: 500,
-					LastError:      "status.ErrorMessage",
-					LastErrorAt:    &utcNow,
-					RetryCount:     1,
-					RetryNotBefore: utcNow.Add(10 * time.Minute),
+					LastHTTPStatus: response.HTTPStatusCode,
+					LastError:      response.ErrorMessage,
 				}
+				if !response.IsSuccess() {
+					utcNow := time.Now().UTC()
+					cerberusQueueItem.LastErrorAt = &utcNow
+					cerberusQueueItem.RetryNotBefore = utcNow.Add(10 * time.Minute)
+				}
+
 				err = s.analysisRepository.UpdateAnalysisResultQueueItemStatus(ctx, cerberusQueueItem)
 				if err != nil {
 					log.Error().Err(err).Msg("Failed to update the status of the cerberus queue item")

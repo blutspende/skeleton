@@ -49,6 +49,13 @@ func LookupResultMapping(analyteMapping AnalyteMapping, valueFromInstrument stri
 	return valueFromInstrument
 }
 
+func stringPointerToString(value *string) string {
+	if value != nil {
+		return *value
+	}
+	return ""
+}
+
 func nullStringToString(value sql.NullString) string {
 	if value.Valid {
 		return value.String

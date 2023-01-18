@@ -171,20 +171,26 @@ func TestRegisterProtocol(t *testing.T) {
 }
 
 type cerberusClientMock struct {
-	AnalysisResults  []skeleton.AnalysisResult
-	ResponseStatuses []skeleton.AnalysisResultCreateStatus
+	AnalysisResults []skeleton.AnalysisResult
+	BatchResponse   skeleton.AnalysisResultBatchResponse
 }
 
 func (m *cerberusClientMock) RegisterInstrument(instrument skeleton.Instrument) error {
 	return nil
 }
 
-func (m *cerberusClientMock) PostAnalysisResultBatch(analysisResults []skeleton.AnalysisResult) ([]skeleton.AnalysisResultCreateStatus, error) {
+func (m *cerberusClientMock) SendAnalysisResultBatch(analysisResults []skeleton.AnalysisResult) (skeleton.AnalysisResultBatchResponse, error) {
 	m.AnalysisResults = append(m.AnalysisResults, analysisResults...)
-	resp := make([]skeleton.AnalysisResultCreateStatus, len(analysisResults))
-	for i := range resp {
-		resp[i].Success = true
+	infoList := make([]skeleton.AnalysisResultBatchItemInfo, len(analysisResults))
+	for i := range infoList {
+		infoList[i].ErrorMessage = "error"
 	}
-	m.ResponseStatuses = resp
-	return resp, nil
+	response := skeleton.AnalysisResultBatchResponse{
+		AnalysisResultBatchItemInfoList: infoList,
+		ErrorMessage:                    "",
+		HTTPStatusCode:                  500,
+		RawResponse:                     "",
+	}
+	m.BatchResponse = response
+	return response, nil
 }

@@ -1,6 +1,7 @@
 package skeleton
 
 import (
+	"net/http"
 	"time"
 
 	"github.com/google/uuid"
@@ -35,13 +36,15 @@ type AnalysisRequest struct {
 }
 
 type CerberusQueueItem struct {
-	ID             uuid.UUID
-	JsonMessage    string
-	LastHTTPStatus int
-	LastError      string
-	LastErrorAt    *time.Time
-	RetryCount     int
-	RetryNotBefore time.Time
+	ID                  uuid.UUID
+	JsonMessage         string
+	LastHTTPStatus      int
+	LastError           string
+	LastErrorAt         *time.Time
+	TrialCount          int
+	RetryNotBefore      time.Time
+	RawResponse         string
+	ResponseJsonMessage string
 }
 
 // SubjectInfo - Additional Information about the subject for the AnalysisRequest
@@ -233,11 +236,29 @@ type AnalysisResult struct {
 	Images                   []Image
 }
 
-type AnalysisResultCreateStatus struct {
+type AnalysisResultBatchItemInfo struct {
 	AnalysisResult           *AnalysisResult
-	Success                  bool
+	CerberusAnalysisResultID *uuid.UUID
 	ErrorMessage             string
-	CerberusAnalysisResultID uuid.NullUUID
+}
+
+func (i AnalysisResultBatchItemInfo) IsSuccessful() bool {
+	return i.CerberusAnalysisResultID != nil && *i.CerberusAnalysisResultID != uuid.Nil && i.ErrorMessage == ""
+}
+
+type AnalysisResultBatchResponse struct {
+	AnalysisResultBatchItemInfoList []AnalysisResultBatchItemInfo
+	ErrorMessage                    string
+	HTTPStatusCode                  int
+	RawResponse                     string
+}
+
+func (r AnalysisResultBatchResponse) HasResult() bool {
+	return r.HTTPStatusCode != 0 || r.ErrorMessage != ""
+}
+
+func (r AnalysisResultBatchResponse) IsSuccess() bool {
+	return r.HTTPStatusCode >= http.StatusOK && r.HTTPStatusCode < http.StatusMultipleChoices
 }
 
 type AnalysisRequestSentStatus string

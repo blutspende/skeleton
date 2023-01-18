@@ -1056,8 +1056,12 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_cerberus_queue_items
     last_http_status INT NOT NULL DEFAULT 0,
     last_error TEXT NOT NULL DEFAULT '', 
     last_error_at TIMESTAMP,
-    retry_count INT NOT NULL DEFAULT 0,
+    trial_count INT NOT NULL DEFAULT 0,
     retry_not_before TIMESTAMP NOT NULL DEFAULT timezone('utc', now()),
+    raw_response TEXT NOT NULL DEFAULT '',
+    response_json_message TEXT NOT NULL DEFAULT '',
     created_at TIMESTAMP NOT NULL DEFAULT timezone('utc', now()),
-  CONSTRAINT "sk_pk_cerberus_queue_items" PRIMARY KEY (queue_item_id)
-);`
+    CONSTRAINT "sk_pk_cerberus_queue_items" PRIMARY KEY (queue_item_id)
+);
+
+CREATE INDEX sk_idx_cerberus_queue_items_created_at ON <SCHEMA_PLACEHOLDER>.sk_cerberus_queue_items (created_at);`

@@ -23,7 +23,7 @@ var (
 
 type Cerberus interface {
 	RegisterInstrument(instrument Instrument) error
-	PostAnalysisResultBatch(analysisResults []AnalysisResult) ([]AnalysisResultCreateStatus, error)
+	SendAnalysisResultBatch(analysisResults []AnalysisResult) (AnalysisResultBatchResponse, error)
 }
 
 type cerberus struct {
@@ -146,22 +146,24 @@ func (c *cerberus) RegisterInstrument(instrument Instrument) error {
 	return nil
 }
 
-// PostAnalysisResultBatch Submit a list of Analysisresults to Cerberus
-func (cia *cerberus) PostAnalysisResultBatch(analysisResults []AnalysisResult) ([]AnalysisResultCreateStatus, error) {
-
-	if len(analysisResults) == 0 {
-		return []AnalysisResultCreateStatus{}, nil
+// SendAnalysisResultBatch Submit a list of AnalysisResults to Cerberus
+func (cia *cerberus) SendAnalysisResultBatch(analysisResults []AnalysisResult) (AnalysisResultBatchResponse, error) {
+	if len(analysisResults) < 1 {
+		return AnalysisResultBatchResponse{}, nil
 	}
 
-	analysisResultsTOs := make([]analysisResultTO, 0)
+	analysisResultsTOs := make([]analysisResultTO, len(analysisResults))
+	analysisResultBatchItemInfoList := make([]AnalysisResultBatchItemInfo, len(analysisResults))
 
-	for _, ar := range analysisResults {
+	var hasError bool
+	for i, ar := range analysisResults {
+		info := AnalysisResultBatchItemInfo{
+			AnalysisResult: &analysisResults[i],
+		}
 
 		analysisResultTO := analysisResultTO{
 			WorkingItemID:            ar.AnalysisRequest.WorkItemID,
 			ValidUntil:               ar.ValidUntil,
-			Status:                   "",
-			Mode:                     "",
 			ResultYieldDateTime:      ar.ResultYieldDateTime,
 			ExaminedMaterial:         ar.AnalysisRequest.MaterialID,
 			Result:                   ar.Result,
@@ -185,7 +187,9 @@ func (cia *cerberus) PostAnalysisResultBatch(analysisResults []AnalysisResult) (
 		case Final:
 			analysisResultTO.Status = "FIN"
 		default:
-			return nil, fmt.Errorf("Invalid result-status '%s'", ar.Status) // TODO: Can-it later
+			hasError = true
+			info.ErrorMessage = fmt.Sprintf("Invalid result-status (%s)", ar.Status)
+			log.Debug().Msg(info.ErrorMessage)
 		}
 
 		switch ar.Instrument.ResultMode {
@@ -198,7 +202,9 @@ func (cia *cerberus) PostAnalysisResultBatch(analysisResults []AnalysisResult) (
 		case Production:
 			analysisResultTO.Mode = "PRODUCTION"
 		default:
-			return nil, fmt.Errorf("Invalid result-mode '%s'", ar.Instrument.ResultMode) // TODO: Can-it later
+			hasError = true
+			info.ErrorMessage = fmt.Sprintf("Invalid result-mode (%s)", ar.Instrument.ResultMode)
+			log.Debug().Msg(info.ErrorMessage)
 		}
 
 		for _, ev := range ar.ExtraValues {
@@ -231,7 +237,6 @@ func (cia *cerberus) PostAnalysisResultBatch(analysisResults []AnalysisResult) (
 				ShelfLife:               ri.ShelfLife,
 				//TODO Add an expiry : ExpiryDateTime: (this has to be added to database as well)
 				ManufacturerName: ri.ManufacturerName,
-				ReagentType:      "",
 				DateCreated:      ri.DateCreated,
 			}
 
@@ -241,10 +246,22 @@ func (cia *cerberus) PostAnalysisResultBatch(analysisResults []AnalysisResult) (
 			case Diluent:
 				reagentInfoTO.ReagentType = "Diluent"
 			default:
+				hasError = true
+				info.ErrorMessage = fmt.Sprintf("Invalid reagent type (%s)", ri.ReagentType)
+				log.Debug().Msg(info.ErrorMessage)
 			}
 		}
 
-		analysisResultsTOs = append(analysisResultsTOs, analysisResultTO)
+		analysisResultBatchItemInfoList[i] = info
+		analysisResultsTOs[i] = analysisResultTO
+	}
+
+	if hasError {
+		response := AnalysisResultBatchResponse{
+			AnalysisResultBatchItemInfoList: analysisResultBatchItemInfoList,
+			ErrorMessage:                    "Failed to prepare data for sending",
+		}
+		return response, nil
 	}
 
 	resp, err := cia.client.R().
@@ -253,7 +270,12 @@ func (cia *cerberus) PostAnalysisResultBatch(analysisResults []AnalysisResult) (
 		Post(cia.cerberusUrl + "/v1/analysis-results/batch")
 
 	if err != nil {
-		return nil, fmt.Errorf("%s (%w)", ErrSendResultBatchFailed, err)
+		response := AnalysisResultBatchResponse{
+			AnalysisResultBatchItemInfoList: analysisResultBatchItemInfoList,
+			ErrorMessage:                    err.Error(),
+		}
+
+		return response, fmt.Errorf("%s (%w)", ErrSendResultBatchFailed, err)
 		// log.Error().Err(err).Msg(i18n.MsgSendResultBatchFailed)
 		//requestBody, _ := json.Marshal(analysisResultsTOs)
 		//TODO:Better soltion for request-logging cia.ciaHistoryService.Create(model.TYPE_AnalysisResultBatch, err.Error(), string(requestBody), 0, nil, analysisResultIDs)
@@ -261,40 +283,66 @@ func (cia *cerberus) PostAnalysisResultBatch(analysisResults []AnalysisResult) (
 
 	switch {
 	case resp.StatusCode() == http.StatusCreated, resp.StatusCode() == http.StatusAccepted:
-		responseItems := []createAnalysisResultResponseItemTO{}
-		err = json.Unmarshal(resp.Body(), responseItems)
+		responseItems := make([]createAnalysisResultResponseItemTO, 0)
+		err = json.Unmarshal(resp.Body(), &responseItems)
 		if err != nil {
-			return nil, err
+			response := AnalysisResultBatchResponse{
+				AnalysisResultBatchItemInfoList: analysisResultBatchItemInfoList,
+				HTTPStatusCode:                  resp.StatusCode(),
+				ErrorMessage:                    err.Error(),
+				RawResponse:                     string(resp.Body()),
+			}
+
+			return response, err
 		}
 
-		returnAnalysisResultStatus := []AnalysisResultCreateStatus{}
 		for i, responseItem := range responseItems {
-			analysisResultStatus := AnalysisResultCreateStatus{
-				AnalysisResult:           &analysisResults[i],
-				Success:                  responseItem.ID.Valid,
-				ErrorMessage:             "",
-				CerberusAnalysisResultID: responseItem.ID,
-			}
-			if responseItem.Error != nil {
-				analysisResultStatus.ErrorMessage = *responseItem.Error
-			}
-			returnAnalysisResultStatus = append(returnAnalysisResultStatus)
+			analysisResultBatchItemInfoList[i].ErrorMessage = stringPointerToString(responseItem.Error)
+			analysisResultBatchItemInfoList[i].CerberusAnalysisResultID = nullUUIDToUUIDPointer(responseItem.ID)
 		}
-		return returnAnalysisResultStatus, nil
+
+		response := AnalysisResultBatchResponse{
+			AnalysisResultBatchItemInfoList: analysisResultBatchItemInfoList,
+			HTTPStatusCode:                  resp.StatusCode(),
+			RawResponse:                     string(resp.Body()),
+		}
+
+		return response, nil
 	case resp.StatusCode() == http.StatusInternalServerError:
 		errReps := errorResponseTO{}
 		err = json.Unmarshal(resp.Body(), &errReps)
 		if err != nil {
-			return nil, fmt.Errorf("can not unmarshal error of resp (%w)", err)
+			err = fmt.Errorf("can not unmarshal error of response (%w)", err)
+			response := AnalysisResultBatchResponse{
+				AnalysisResultBatchItemInfoList: analysisResultBatchItemInfoList,
+				HTTPStatusCode:                  resp.StatusCode(),
+				ErrorMessage:                    err.Error(),
+				RawResponse:                     string(resp.Body()),
+			}
+			return response, err
 		}
-		return nil, errors.New(errReps.Message)
+		err = errors.New(errReps.Message)
+		response := AnalysisResultBatchResponse{
+			AnalysisResultBatchItemInfoList: analysisResultBatchItemInfoList,
+			HTTPStatusCode:                  resp.StatusCode(),
+			ErrorMessage:                    err.Error(),
+			RawResponse:                     string(resp.Body()),
+		}
+		return response, err
 	default:
-		return nil, fmt.Errorf("unexpected error from cerberus %d", resp.StatusCode())
+		err = fmt.Errorf("unexpected error from cerberus %d", resp.StatusCode())
+		response := AnalysisResultBatchResponse{
+			AnalysisResultBatchItemInfoList: analysisResultBatchItemInfoList,
+			HTTPStatusCode:                  resp.StatusCode(),
+			ErrorMessage:                    err.Error(),
+			RawResponse:                     string(resp.Body()),
+		}
+		return response, err
 	}
 }
 
 /*
-func (cia *cerberusV1) PostAnalysisResult(analysisResult v1.AnalysisResult) (v1.AnalysisResultCreateStatus, error) {
+func (cia *cerberusV1) PostAnalysisResult(analysisResult v1.AnalysisResult) (v1.AnalysisResultBatchResponse, error) {
 		var responseBodyStr string
 		requestBody, _ := json.Marshal(cia.mapAnalysisResultToAnalysisResultDTO(analysisResult))
 		requestBodyStr := string(requestBody)
