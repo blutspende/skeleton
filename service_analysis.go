@@ -25,15 +25,22 @@ func NewAnalysisService(analysisRepository AnalysisRepository, manager Manager) 
 }
 
 func (as *analysisService) CreateAnalysisRequests(ctx context.Context, analysisRequests []AnalysisRequest) ([]AnalysisRequestStatus, error) {
-	_, err := as.analysisRepository.CreateAnalysisRequestsBatch(ctx, analysisRequests)
+	_, savedAnalysisRequestWorkItemIDs, err := as.analysisRepository.CreateAnalysisRequestsBatch(ctx, analysisRequests)
 	if err != nil {
 		return nil, err
 	}
 
 	as.manager.SendAnalysisRequestsForProcessing(analysisRequests)
 
-	// Todo give back correct response
-	return []AnalysisRequestStatus{}, nil
+	analysisRequestStatuses := make([]AnalysisRequestStatus, len(savedAnalysisRequestWorkItemIDs))
+	for i := range savedAnalysisRequestWorkItemIDs {
+		analysisRequestStatuses[i] = AnalysisRequestStatus{
+			WorkItemID: savedAnalysisRequestWorkItemIDs[i],
+			Error:      nil,
+		}
+	}
+
+	return analysisRequestStatuses, nil
 }
 
 func (as *analysisService) ProcessAnalysisRequests(ctx context.Context, analysisRequests []AnalysisRequest) error {

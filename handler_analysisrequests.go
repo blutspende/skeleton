@@ -63,7 +63,7 @@ func (api *api) CreateAnalysisRequestBatch(c *gin.Context) {
 	err := c.BindJSON(&analysisRequestTOs)
 	if err != nil {
 		log.Error().Err(err).Msg(ErrInvalidRequestBody.Message)
-		c.JSON(http.StatusBadRequest, ErrInvalidRequestBody)
+		c.AbortWithStatusJSON(http.StatusBadRequest, ErrInvalidRequestBody)
 		return
 	}
 
@@ -99,7 +99,7 @@ func (api *api) CreateAnalysisRequestBatch(c *gin.Context) {
 			default:
 				log.Error().Err(err).Msg(ErrInvalidSubjectTypeProvidedInAnalysisRequest.Message)
 				//TODO: Add logcom: notify some groups
-				c.JSON(http.StatusBadRequest, ErrInvalidSubjectTypeProvidedInAnalysisRequest)
+				c.AbortWithStatusJSON(http.StatusBadRequest, ErrInvalidSubjectTypeProvidedInAnalysisRequest)
 				return
 			}
 		}
@@ -114,7 +114,7 @@ func (api *api) CreateAnalysisRequestBatch(c *gin.Context) {
 
 	analysisRequestStatusTO := make([]analysisRequestStatusTO, len(analysisRequestStatus))
 	for i := range analysisRequestStatus {
-		analysisRequestStatusTO[i].WorkItemID = analysisRequestStatus[i].AnalysisRequest.WorkItemID
+		analysisRequestStatusTO[i].WorkItemID = analysisRequestStatus[i].WorkItemID
 		if analysisRequestStatus[i].Error != nil {
 			analysisRequestStatusTO[i].Error = analysisRequestStatus[i].Error.Error()
 		}

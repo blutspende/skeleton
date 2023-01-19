@@ -146,7 +146,7 @@ type cerberusQueueItemDAO struct {
 }
 
 type AnalysisRepository interface {
-	CreateAnalysisRequestsBatch(ctx context.Context, analysisRequests []AnalysisRequest) ([]uuid.UUID, error)
+	CreateAnalysisRequestsBatch(ctx context.Context, analysisRequests []AnalysisRequest) ([]uuid.UUID, []uuid.UUID, error)
 	GetAnalysisRequestsBySampleCodeAndAnalyteID(ctx context.Context, sampleCodes string, analyteID uuid.UUID) ([]AnalysisRequest, error)
 	GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string) (map[string][]AnalysisRequest, error)
 	GetAnalysisRequestsInfo(ctx context.Context, instrumentID uuid.UUID, pageable Pageable) ([]AnalysisRequestInfo, int, error)
@@ -177,16 +177,20 @@ func NewAnalysisRepository(db db.DbConnector, dbSchema string) AnalysisRepositor
 	}
 }
 
-func (r *analysisRepository) CreateAnalysisRequestsBatch(ctx context.Context, analysisRequests []AnalysisRequest) ([]uuid.UUID, error) {
+// CreateAnalysisRequestsBatch
+// Returns the ID and work item IDs of saved requests
+func (r *analysisRepository) CreateAnalysisRequestsBatch(ctx context.Context, analysisRequests []AnalysisRequest) ([]uuid.UUID, []uuid.UUID, error) {
 	if len(analysisRequests) == 0 {
-		return []uuid.UUID{}, nil
+		return []uuid.UUID{}, []uuid.UUID{}, nil
 	}
 	ids := make([]uuid.UUID, len(analysisRequests))
+	workItemIDs := make([]uuid.UUID, len(analysisRequests))
 	for i := range analysisRequests {
 		if (analysisRequests[i].ID == uuid.UUID{}) || (analysisRequests[i].ID == uuid.Nil) {
 			analysisRequests[i].ID = uuid.New()
 		}
 		ids[i] = analysisRequests[i].ID
+		workItemIDs[i] = analysisRequests[i].WorkItemID
 	}
 
 	query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_requests(id, work_item_id, analyte_id, sample_code, material_id, laboratory_id, valid_until_time)
@@ -196,10 +200,10 @@ func (r *analysisRepository) CreateAnalysisRequestsBatch(ctx context.Context, an
 	_, err := r.db.NamedExecContext(ctx, query, convertAnalysisRequestsToDAOs(analysisRequests))
 	if err != nil {
 		log.Error().Err(err).Msg("Can not create RequestData")
-		return []uuid.UUID{}, nil
+		return []uuid.UUID{}, []uuid.UUID{}, nil
 	}
 
-	return ids, nil
+	return ids, workItemIDs, nil
 }
 
 func (r *analysisRepository) CreateSubjectsBatch(ctx context.Context, subjectInfosByAnalysisRequestID map[uuid.UUID]SubjectInfo) (map[uuid.UUID]uuid.UUID, error) {

@@ -17,8 +17,8 @@ type GinApi interface {
 
 // AnalysisRequestResponseItemV1 - Response of the AnalysisService to indicate the status of the requests
 type AnalysisRequestStatus struct {
-	AnalysisRequest *AnalysisRequest
-	Error           error
+	WorkItemID uuid.UUID
+	Error      error
 }
 
 // AnalysisRequest - Analysis Request as processed by our AnalysisService
