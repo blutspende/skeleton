@@ -445,8 +445,8 @@ func (r *analysisRepository) CreateAnalysisResultsBatch(ctx context.Context, ana
 			analysisResults[i].ID = uuid.New()
 		}
 	}
-	query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_results(id, analyte_mapping_id, instrument_id, sample_code, instrument_run_id, result_record_id, batch_id, "result", status, mode, yielded_at, valid_until, operator, edited, edit_reason)
-		VALUES(:id, :analyte_mapping_id, :instrument_id, :sample_code, :instrument_run_id, :result_record_id, :batch_id, :result, :status, :mode, :yielded_at, :valid_until, :operator, :edited, :edit_reason);`, r.dbSchema)
+	query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_results(id, analyte_mapping_id, instrument_id, sample_code, instrument_run_id, result_record_id, batch_id, "result", status, mode, yielded_at, valid_until, operator, technical_release_datetime, run_counter, edited, edit_reason)
+		VALUES(:id, :analyte_mapping_id, :instrument_id, :sample_code, :instrument_run_id, :result_record_id, :batch_id, :result, :status, :mode, :yielded_at, :valid_until, :operator, :technical_release_datetime, :run_counter, :edited, :edit_reason);`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, convertAnalysisResultsToDAOs(analysisResults))
 	if err != nil {
 		log.Error().Err(err).Msg("create analysis result batch failed")
