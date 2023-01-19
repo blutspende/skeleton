@@ -68,18 +68,20 @@ func (api *api) CreateAnalysisRequestBatch(c *gin.Context) {
 	}
 
 	// Map TO to model
-	analysisRequests := make([]AnalysisRequest, len(analysisRequestTOs))
+	analysisRequests := make([]AnalysisRequest, 0, len(analysisRequestTOs))
 	for i := range analysisRequestTOs {
-		analysisRequests[i].ID = uuid.Nil
-		analysisRequests[i].WorkItemID = analysisRequestTOs[i].WorkItemID
-		analysisRequests[i].AnalyteID = analysisRequestTOs[i].AnalyteID
-		analysisRequests[i].SampleCode = analysisRequestTOs[i].SampleCode
-		analysisRequests[i].MaterialID = analysisRequestTOs[i].MaterialID
-		analysisRequests[i].LaboratoryID = analysisRequestTOs[i].LaboratoryID
-		analysisRequests[i].ValidUntilTime = analysisRequestTOs[i].ValidUntilTime
-		analysisRequests[i].CreatedAt = time.Time{}
+		analysisRequest := AnalysisRequest{
+			ID:             uuid.Nil,
+			WorkItemID:     analysisRequestTOs[i].WorkItemID,
+			AnalyteID:      analysisRequestTOs[i].AnalyteID,
+			SampleCode:     analysisRequestTOs[i].SampleCode,
+			MaterialID:     analysisRequestTOs[i].MaterialID,
+			LaboratoryID:   analysisRequestTOs[i].LaboratoryID,
+			ValidUntilTime: analysisRequestTOs[i].ValidUntilTime,
+			CreatedAt:      time.Time{},
+		}
 		if analysisRequestTOs[i].Subject != nil {
-			subject := SubjectInfo{
+			analysisRequest.SubjectInfo = &SubjectInfo{
 				Type:         "",
 				DateOfBirth:  analysisRequestTOs[i].Subject.DateOfBirth,
 				FirstName:    analysisRequestTOs[i].Subject.FirstName,
@@ -91,22 +93,22 @@ func (api *api) CreateAnalysisRequestBatch(c *gin.Context) {
 			}
 			switch analysisRequestTOs[i].Subject.Type {
 			case "DONOR":
-				subject.Type = Donor
+				analysisRequest.SubjectInfo.Type = Donor
 			case "PERSONAL":
-				subject.Type = Personal
+				analysisRequest.SubjectInfo.Type = Personal
 			case "PSEUDONYMIZED":
-				subject.Type = Pseudonym
+				analysisRequest.SubjectInfo.Type = Pseudonym
 			case "":
-				analysisRequestTOs[i].Subject = nil
+				analysisRequest.SubjectInfo = nil
 			default:
 				log.Error().Err(err).Str("workItemID", analysisRequestTOs[i].WorkItemID.String()).
 					Str("subjectID", analysisRequestTOs[i].Subject.ID.String()).
 					Msgf("Invalid subject Type provided (%+v)", analysisRequestTOs[i].Subject.Type)
 				//TODO: Add logcom: notify some groups
-				c.AbortWithStatusJSON(http.StatusBadRequest, ErrInvalidSubjectTypeProvidedInAnalysisRequest)
-				return
+				analysisRequest.SubjectInfo = nil
 			}
 		}
+		analysisRequests = append(analysisRequests, analysisRequest)
 	}
 
 	analysisRequestStatus, err := api.analysisService.CreateAnalysisRequests(c, analysisRequests)
