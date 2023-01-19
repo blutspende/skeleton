@@ -976,7 +976,7 @@ func (r *analysisRepository) GetAnalysisResultQueueItems(ctx context.Context) ([
 func (r *analysisRepository) UpdateAnalysisResultQueueItemStatus(ctx context.Context, queueItem CerberusQueueItem) error {
 	query := fmt.Sprintf(`UPDATE %s.sk_cerberus_queue_items
 			SET last_http_status = :last_http_status, last_error = :last_error, last_error_at = :last_error_at, trial_count = trial_count + 1, retry_not_before = :retry_not_before, raw_response = :raw_response, response_json_message = :response_json_message
-			WHERE id = :queue_item_id;`, r.dbSchema)
+			WHERE queue_item_id = :queue_item_id;`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, convertCerberusQueueItemToCerberusQueueItemDAO(queueItem))
 	if err != nil {
 		log.Error().Err(err).Msg("Update result transmission status failed")
