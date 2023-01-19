@@ -54,7 +54,10 @@ func (m *authManager) GetJWKS() (*keyfunc.JWKS, error) {
 
 func (m *authManager) GetClientCredential() (string, error) {
 	if m.tokenEndpointResponse == nil {
-		return "", errors.New("no client credential")
+		err := m.RefreshClientCredential()
+		if err != nil || m.tokenEndpointResponse == nil {
+			return "", errors.New("no client credential")
+		}
 	}
 	return m.tokenEndpointResponse.AccessToken, nil
 }
