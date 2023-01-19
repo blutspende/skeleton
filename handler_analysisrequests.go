@@ -97,7 +97,9 @@ func (api *api) CreateAnalysisRequestBatch(c *gin.Context) {
 			case "PSEUDONYMIZED":
 				subject.Type = Pseudonym
 			default:
-				log.Error().Err(err).Msg(ErrInvalidSubjectTypeProvidedInAnalysisRequest.Message)
+				log.Error().Err(err).Str("workItemID", analysisRequestTOs[i].WorkItemID.String()).
+					Str("subjectID", analysisRequestTOs[i].Subject.ID.String()).
+					Msgf("Invalid subject Type provided (%s)", analysisRequestTOs[i].Subject.Type)
 				//TODO: Add logcom: notify some groups
 				c.AbortWithStatusJSON(http.StatusBadRequest, ErrInvalidSubjectTypeProvidedInAnalysisRequest)
 				return
