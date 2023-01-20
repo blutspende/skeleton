@@ -54,9 +54,11 @@ func NewRestyClientWithAuthManager(ctx context.Context, configuration *config.Co
 func configureRequest(ctx context.Context, configuration *config.Configuration) resty.RequestMiddleware {
 	return func(client *resty.Client, request *resty.Request) error {
 		request.SetContext(ctx)
+
 		if configuration.LogLevel <= zerolog.DebugLevel {
 			request.EnableTrace()
 		}
+
 		return nil
 	}
 }
@@ -64,11 +66,13 @@ func configureRequest(ctx context.Context, configuration *config.Configuration) 
 func configureRetryMechanismForService2ServiceCalls(authManager AuthManager) resty.RetryConditionFunc {
 	return func(response *resty.Response, err error) bool {
 		if response.StatusCode() == http.StatusUnauthorized {
-			err := authManager.RefreshClientCredential()
+			token, err := authManager.GetClientCredential()
 			if err != nil {
 				log.Error().Err(err).Msg("Skip service-to-service retry routine")
 				return false
 			}
+
+			response.Request.SetAuthToken(token)
 
 			return true
 		}

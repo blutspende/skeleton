@@ -16,7 +16,6 @@ const oidcURLPart = "/.well-known/openid-configuration"
 type AuthManager interface {
 	GetJWKS() (*keyfunc.JWKS, error)
 	GetClientCredential() (string, error)
-	RefreshClientCredential() error
 }
 
 type authManager struct {
@@ -54,7 +53,7 @@ func (m *authManager) GetJWKS() (*keyfunc.JWKS, error) {
 
 func (m *authManager) GetClientCredential() (string, error) {
 	if m.tokenEndpointResponse == nil {
-		err := m.RefreshClientCredential()
+		err := m.refreshClientCredential()
 		if err != nil || m.tokenEndpointResponse == nil {
 			return "", errors.New("no client credential")
 		}
@@ -62,7 +61,7 @@ func (m *authManager) GetClientCredential() (string, error) {
 	return m.tokenEndpointResponse.AccessToken, nil
 }
 
-func (m *authManager) RefreshClientCredential() error {
+func (m *authManager) refreshClientCredential() error {
 	if err := m.ensureOIDC(); err != nil {
 		return err
 	}
