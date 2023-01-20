@@ -916,7 +916,7 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_analysis_results
     batch_id uuid NOT NULL DEFAULT('00000000-0000-0000-0000-000000000000'),
 	"result" varchar NOT NULL,
     status varchar NOT NULL,
-    result_mode varchar NOT NULL,
+    result_mode TEXT NOT NULL,
     yielded_at timestamp NOT NULL,
     valid_until timestamp NOT NULL,
     operator varchar NOT NULL,
@@ -1067,4 +1067,6 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_cerberus_queue_items
     CONSTRAINT "sk_pk_cerberus_queue_items" PRIMARY KEY (queue_item_id)
 );
 
-CREATE INDEX sk_idx_cerberus_queue_items_created_at ON <SCHEMA_PLACEHOLDER>.sk_cerberus_queue_items (created_at);`
+CREATE INDEX sk_idx_cerberus_queue_items_created_at ON <SCHEMA_PLACEHOLDER>.sk_cerberus_queue_items (created_at);
+CREATE INDEX sk_analysis_result_analyte_mapping_id ON <SCHEMA_PLACEHOLDER>.sk_analysis_results USING btree (analyte_mapping_id);
+CREATE INDEX sk_analysis_result_analyte_sample_code ON <SCHEMA_PLACEHOLDER>.sk_analysis_results USING btree (sample_code);`
