@@ -29,6 +29,7 @@ func NewRestyClient(ctx context.Context, configuration *config.Configuration, us
 
 func NewRestyClientWithAuthManager(ctx context.Context, configuration *config.Configuration, authManager AuthManager) *resty.Client {
 	client := resty.New().
+		SetRetryCount(2).
 		AddRetryCondition(configureRetryMechanismForService2ServiceCalls(authManager)).
 		OnBeforeRequest(configureRequest(ctx, configuration)).
 		OnBeforeRequest(func(client *resty.Client, request *resty.Request) error {
