@@ -220,6 +220,7 @@ type AnalysisResult struct {
 	ResultRecordID           uuid.UUID
 	BatchID                  uuid.UUID
 	Result                   string
+	ResultMode               ResultMode
 	Status                   ResultStatus
 	ResultYieldDateTime      time.Time
 	ValidUntil               time.Time

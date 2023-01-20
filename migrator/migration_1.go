@@ -1,16 +1,16 @@
 package migrator
 
 const migration_1 = `
-CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_running_modes
+CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_result_mode_definitions
 (
-	name TEXT NOT NULL UNIQUE,
-	CONSTRAINT sk_pk_running_modes PRIMARY KEY (name)
+    result_mode TEXT NOT NULL PRIMARY KEY,
+    description TEXT
 );
 
-INSERT INTO	<SCHEMA_PLACEHOLDER>.sk_running_modes(name)
-VALUES ('TEST'),
-       ('VALIDATION'),
-       ('PRODUCTION');
+INSERT INTO <SCHEMA_PLACEHOLDER>.sk_result_mode_definitions (result_mode, description)
+VALUES ('TEST', 'Do process, but do not return the results to cerberus'),
+       ('VALIDATION', 'Return to workflow, these orders will not be returned via external api''s'),
+       ('PRODUCTION', 'All enabled');
 
 CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_connection_modes
 (
@@ -758,7 +758,7 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_instruments
 	deleted_at timestamp NULL,
 	CONSTRAINT sk_pk_instruments PRIMARY KEY (id),
 	CONSTRAINT sk_fk_connection_mode_instruments FOREIGN KEY (connection_mode) REFERENCES <SCHEMA_PLACEHOLDER>.sk_connection_modes (name),
-	CONSTRAINT sk_fk_running_mode__instruments FOREIGN KEY (running_mode) REFERENCES <SCHEMA_PLACEHOLDER>.sk_running_modes (name),
+	CONSTRAINT sk_fk_result_mode__instruments FOREIGN KEY (running_mode) REFERENCES <SCHEMA_PLACEHOLDER>.sk_result_mode_definitions (result_mode),
 	CONSTRAINT sk_fk_supported_protocol__instruments FOREIGN KEY (protocol_id) REFERENCES <SCHEMA_PLACEHOLDER>.sk_supported_protocols (id),
 	CONSTRAINT sk_fk_timezone__zone FOREIGN KEY (timezone) REFERENCES <SCHEMA_PLACEHOLDER>.sk_timezones (ZONE),
 	CONSTRAINT sk_fk_encoding__encoding FOREIGN KEY (file_encoding) REFERENCES <SCHEMA_PLACEHOLDER>.sk_encodings (ENCODING)
@@ -916,7 +916,7 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_analysis_results
     batch_id uuid NOT NULL DEFAULT('00000000-0000-0000-0000-000000000000'),
 	"result" varchar NOT NULL,
     status varchar NOT NULL,
-    mode varchar NOT NULL,
+    result_mode varchar NOT NULL,
     yielded_at timestamp NOT NULL,
     valid_until timestamp NOT NULL,
     operator varchar NOT NULL,
@@ -924,7 +924,8 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_analysis_results
     run_counter int NOT NULL DEFAULT 0,
     edited bool NOT NULL,
     edit_reason varchar,
-	CONSTRAINT sk_pk_analysis_result PRIMARY KEY (id)
+	CONSTRAINT sk_pk_analysis_result PRIMARY KEY (id),
+    CONSTRAINT sk_fk_running_mode__analysis_results FOREIGN KEY (result_mode) REFERENCES <SCHEMA_PLACEHOLDER>.sk_result_mode_definitions (result_mode)
 );
 
 CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_channel_results

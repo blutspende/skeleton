@@ -65,7 +65,7 @@ type analysisResultTO struct {
 	WorkingItemID            uuid.UUID       `json:"workItemId"`
 	ValidUntil               time.Time       `json:"validUntil"`
 	Status                   string          `json:"status"`
-	Mode                     string          `json:"mode"`
+	Mode                     string          `json:"mode"` // ResultMode
 	ResultYieldDateTime      time.Time       `json:"resultYieldDateTime"`
 	ExaminedMaterial         uuid.UUID       `json:"examinedMaterial"`
 	Result                   string          `json:"result"`
@@ -192,7 +192,7 @@ func (cia *cerberus) SendAnalysisResultBatch(analysisResults []AnalysisResult) (
 			log.Debug().Msg(info.ErrorMessage)
 		}
 
-		switch ar.Instrument.ResultMode {
+		switch ar.ResultMode {
 		case Simulation:
 			//analysisResultTO.Mode = "SIMULATION"
 			analysisResultTO.Mode = "TEST"

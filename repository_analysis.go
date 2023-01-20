@@ -48,7 +48,7 @@ type analysisResultDAO struct {
 	BatchID                  uuid.UUID      `db:"batch_id"`
 	Result                   string         `db:"result"`
 	Status                   ResultStatus   `db:"status"`
-	ResultMode               ResultMode     `db:"mode"`
+	ResultMode               ResultMode     `db:"result_mode"`
 	YieldedAt                time.Time      `db:"yielded_at"`
 	ValidUntil               time.Time      `db:"valid_until"`
 	Operator                 string         `db:"operator"`
@@ -316,7 +316,7 @@ func (r *analysisRepository) GetAnalysisRequestsInfo(ctx context.Context, instru
 	   i.hostname as source_ip,
 	   i.id as instrument_id
 FROM %schema_name%.sk_analysis_requests req
-LEFT JOIN %schema_name%.sk_analysis_results res ON res.sample_code = req.sample_code AND res.analysis_request_id = req.id
+LEFT JOIN %schema_name%.sk_analysis_results res ON res.sample_code = req.sample_code AND res.analysis_request_id = req.id -- TODO there is no res.analysis_request_id
 LEFT JOIN %schema_name%.sk_instruments i ON i.id = res.instrument_id
 LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = i.id AND req.analyte_id = am.analyte_id AND res.test_name = am.instrument_analyte
 WHERE res.instrument_id = :instrument_id`
@@ -445,8 +445,8 @@ func (r *analysisRepository) CreateAnalysisResultsBatch(ctx context.Context, ana
 			analysisResults[i].ID = uuid.New()
 		}
 	}
-	query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_results(id, analyte_mapping_id, instrument_id, sample_code, instrument_run_id, result_record_id, batch_id, "result", status, mode, yielded_at, valid_until, operator, technical_release_datetime, run_counter, edited, edit_reason)
-		VALUES(:id, :analyte_mapping_id, :instrument_id, :sample_code, :instrument_run_id, :result_record_id, :batch_id, :result, :status, :mode, :yielded_at, :valid_until, :operator, :technical_release_datetime, :run_counter, :edited, :edit_reason);`, r.dbSchema)
+	query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_results(id, analyte_mapping_id, instrument_id, sample_code, instrument_run_id, result_record_id, batch_id, "result", status, result_mode, yielded_at, valid_until, operator, technical_release_datetime, run_counter, edited, edit_reason)
+		VALUES(:id, :analyte_mapping_id, :instrument_id, :sample_code, :instrument_run_id, :result_record_id, :batch_id, :result, :status, :result_mode, :yielded_at, :valid_until, :operator, :technical_release_datetime, :run_counter, :edited, :edit_reason);`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, convertAnalysisResultsToDAOs(analysisResults))
 	if err != nil {
 		log.Error().Err(err).Msg("create analysis result batch failed")
@@ -500,7 +500,7 @@ func (r *analysisRepository) CreateAnalysisResultsBatch(ctx context.Context, ana
 }
 
 func (r *analysisRepository) GetAnalysisResultsBySampleCodeAndAnalyteID(ctx context.Context, sampleCode string, analyteID uuid.UUID) ([]AnalysisResult, error) {
-	query := `SELECT sar.id, sar.analyte_mapping_id, sar.instrument_id, sar.sample_code, sar.instrument_run_id, sar.result_record_id, sar.batch_id, sar."result", sar.status, sar.mode, sar.yielded_at, sar.valid_until, sar.operator, sar.edited, sar.edit_reason
+	query := `SELECT sar.id, sar.analyte_mapping_id, sar.instrument_id, sar.sample_code, sar.instrument_run_id, sar.result_record_id, sar.batch_id, sar."result", sar.status, sar.result_mode, sar.yielded_at, sar.valid_until, sar.operator, sar.edited, sar.edit_reason
 			FROM %schema_name%.sk_analysis_results sar
 			INNER JOIN %schema_name%.sk_analyte_mappings sam ON sar.analyte_mapping_id = sam.id
 			WHERE sar.sample_code = $1
@@ -1029,7 +1029,7 @@ func convertAnalysisResultToDAO(analysisResult AnalysisResult) analysisResultDAO
 		ID:                       analysisResult.ID,
 		AnalyteMappingID:         analysisResult.AnalyteMapping.ID,
 		InstrumentID:             analysisResult.Instrument.ID,
-		ResultMode:               analysisResult.Instrument.ResultMode,
+		ResultMode:               analysisResult.ResultMode,
 		SampleCode:               analysisResult.SampleCode,
 		InstrumentRunID:          analysisResult.InstrumentRunID,
 		ResultRecordID:           analysisResult.ResultRecordID,
@@ -1069,6 +1069,7 @@ func convertAnalysisResultDAOToAnalysisResult(analysisResult analysisResultDAO) 
 		ResultRecordID:           analysisResult.ResultRecordID,
 		BatchID:                  analysisResult.BatchID,
 		Result:                   analysisResult.Result,
+		ResultMode:               analysisResult.ResultMode,
 		Status:                   analysisResult.Status,
 		ResultYieldDateTime:      analysisResult.YieldedAt,
 		ValidUntil:               analysisResult.ValidUntil,

@@ -83,6 +83,10 @@ func (s *skeleton) SubmitAnalysisResult(ctx context.Context, resultData Analysis
 		return errors.New("technical release date-time is missing")
 	}
 
+	if resultData.ResultMode == "" {
+		resultData.ResultMode = resultData.Instrument.ResultMode
+	}
+
 	tx, err := s.analysisRepository.CreateTransaction()
 	if err != nil {
 		return err
