@@ -304,10 +304,14 @@ func (s *skeleton) submitAnalysisResultsToCerberus(ctx context.Context) {
 					continue
 				}
 
+				responseJsonMessage, _ := json.Marshal(response.AnalysisResultBatchItemInfoList)
+
 				cerberusQueueItem := CerberusQueueItem{
-					ID:             queueItem.ID,
-					LastHTTPStatus: response.HTTPStatusCode,
-					LastError:      response.ErrorMessage,
+					ID:                  queueItem.ID,
+					LastHTTPStatus:      response.HTTPStatusCode,
+					LastError:           response.ErrorMessage,
+					RawResponse:         response.RawResponse,
+					ResponseJsonMessage: string(responseJsonMessage),
 				}
 				if !response.IsSuccess() {
 					utcNow := time.Now().UTC()
