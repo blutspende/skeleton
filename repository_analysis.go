@@ -56,7 +56,7 @@ type analysisResultDAO struct {
 	RunCounter               int               `db:"run_counter"`
 	Edited                   bool              `db:"edited"`
 	EditReason               sql.NullString    `db:"edit_reason"`
-	AnalyteMapping           analyteMappingDAO `db:"sam"`
+	AnalyteMapping           analyteMappingDAO `db:"analyte_mapping"`
 	ChannelResults           []channelResultDAO
 	ExtraValues              []extraValueDAO
 	ReagentInfos             []reagentInfoDAO
@@ -502,7 +502,7 @@ func (r *analysisRepository) CreateAnalysisResultsBatch(ctx context.Context, ana
 
 func (r *analysisRepository) GetAnalysisResultsBySampleCodeAndAnalyteID(ctx context.Context, sampleCode string, analyteID uuid.UUID) ([]AnalysisResult, error) {
 	query := `SELECT sar.id, sar.analyte_mapping_id, sar.instrument_id, sar.sample_code, sar.instrument_run_id, sar.result_record_id, sar.batch_id, sar."result", sar.status, sar.result_mode, sar.yielded_at, sar.valid_until, sar.operator, sar.edited, sar.edit_reason,
-					sam.id, sam.instrument_id, sam.instrument_analyte, sam.analyte_id, sam.result_type, sam.created_at, sam.modified_at
+					sam.id AS "analyte_mapping.id", sam.instrument_id AS "analyte_mapping.instrument_id", sam.instrument_analyte AS "analyte_mapping.instrument_analyte", sam.analyte_id AS "analyte_mapping.analyte_id", sam.result_type AS "analyte_mapping.result_type", sam.created_at AS "analyte_mapping.created_at", sam.modified_at AS "analyte_mapping.modified_at"
 			FROM %schema_name%.sk_analysis_results sar
 			INNER JOIN %schema_name%.sk_analyte_mappings sam ON sar.analyte_mapping_id = sam.id AND sam.deleted_at IS NULL
 			WHERE sar.sample_code = $1
