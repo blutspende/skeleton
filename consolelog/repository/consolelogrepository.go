@@ -37,7 +37,7 @@ func (s *ConsoleLogStorage) LoadConsoleLogs(instrumentID uuid.UUID) []model.Cons
 	log.Trace().Str("instrumentID", instrumentID.String()).Msg("Loading console logs")
 	consoleLogEntities := make([]model.ConsoleLogEntity, 0, s.size)
 	consoleLogCount := len(s.consoleLogs)
-	for i := 0; i < consoleLogCount-1; i++ {
+	for i := 0; i < consoleLogCount; i++ {
 		if s.consoleLogs[i] != nil {
 			if (*s.consoleLogs[i]).InstrumentID == instrumentID {
 				consoleLogEntities = append(consoleLogEntities, *s.consoleLogs[i])
