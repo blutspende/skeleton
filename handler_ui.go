@@ -279,6 +279,18 @@ func (api *api) GetAnalysisRequestsInfo(c *gin.Context) {
 	c.JSON(http.StatusOK, NewPage(pageable, totalCount, convertAnalysisRequestInfoListToAnalysisRequestInfoTOList(analysisRequestInfoList)))
 }
 
+func (api *api) GetMessages(c *gin.Context) {
+	instrumentID, err := uuid.Parse(c.Param("instrumentId"))
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, "GetMessages Error")
+		return
+	}
+
+	logs := api.consoleLogService.GetConsoleLogs(instrumentID)
+
+	c.JSON(http.StatusOK, logs)
+}
+
 //// AddRequestToTransferQueue
 //// @Summary Add Request to Transfer Queue
 //// @Description Add a Request to the transfer queue to retransmit again
