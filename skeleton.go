@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/consolelog/service"
 	"time"
 
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/migrator"
@@ -20,6 +21,7 @@ type skeleton struct {
 	analysisRepository AnalysisRepository
 	analysisService    AnalysisService
 	instrumentService  InstrumentService
+	consoleLogService  service.ConsoleLogService
 	resultsBuffer      []AnalysisResult
 	resultBatchesChan  chan []AnalysisResult
 	cerberusClient     Cerberus
@@ -329,7 +331,7 @@ func (s *skeleton) submitAnalysisResultsToCerberus(ctx context.Context) {
 	}
 }
 
-func NewSkeleton(sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api GinApi, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, manager Manager, cerberusClient Cerberus) (SkeletonAPI, error) {
+func NewSkeleton(sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api GinApi, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService service.ConsoleLogService, manager Manager, cerberusClient Cerberus) (SkeletonAPI, error) {
 	skeleton := &skeleton{
 		sqlConn:            sqlConn,
 		dbSchema:           dbSchema,
@@ -338,6 +340,7 @@ func NewSkeleton(sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMi
 		analysisRepository: analysisRepository,
 		analysisService:    analysisService,
 		instrumentService:  instrumentService,
+		consoleLogService:  consoleLogService,
 		manager:            manager,
 		cerberusClient:     cerberusClient,
 		resultsBuffer:      make([]AnalysisResult, 0, 500),

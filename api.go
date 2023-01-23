@@ -3,6 +3,7 @@ package skeleton
 import (
 	"fmt"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/config"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/consolelog/service"
 	middleware2 "github.com/DRK-Blutspende-BaWueHe/skeleton/middleware"
 	"net/http/pprof"
 	"sync"
@@ -16,14 +17,15 @@ type api struct {
 	engine            *gin.Engine
 	analysisService   AnalysisService
 	instrumentService InstrumentService
+	consoleLogService service.ConsoleLogService
 	/*healthHandler               handlers.HealthHandler
-	instrumentsHandler          handlers.Instruments
-	analyteMappingHandler       handlers.AnalyteMapping
-	requestVisualizationHandler handlers.RequestVisualization
-	resultMappingHandler        handlers.ResultMapping
-	analysisRequestHandler      handlers.AnalysisRequest
-	requestMapping              handlers.RequestMapping
-	channelMapping              handlers.ChannelMapping*/
+	  instrumentsHandler          handlers.Instruments
+	  analyteMappingHandler       handlers.AnalyteMapping
+	  requestVisualizationHandler handlers.RequestVisualization
+	  resultMappingHandler        handlers.ResultMapping
+	  analysisRequestHandler      handlers.AnalysisRequest
+	  requestMapping              handlers.RequestMapping
+	  channelMapping              handlers.ChannelMapping*/
 	createAnalysisRequestMutex sync.Mutex
 }
 
@@ -56,13 +58,13 @@ func newAPI(engine *gin.Engine, config *config.Configuration, authManager AuthMa
 		analysisService:   analysisService,
 		instrumentService: instrumentService,
 		/*healthHandler:               healthHandler,
-		instrumentsHandler:          instrumentsHandler,
-		analyteMappingHandler:       analyteMappingHandler,
-		requestVisualizationHandler: requestVisualizationHandler,
-		resultMappingHandler:        resultMappingHandler,
-		analysisRequestHandler:      analysisRequestHandler,
-		requestMapping:              requestMapping,
-		channelMapping:              channelMapping,*/
+		  instrumentsHandler:          instrumentsHandler,
+		  analyteMappingHandler:       analyteMappingHandler,
+		  requestVisualizationHandler: requestVisualizationHandler,
+		  resultMappingHandler:        resultMappingHandler,
+		  analysisRequestHandler:      analysisRequestHandler,
+		  requestMapping:              requestMapping,
+		  channelMapping:              channelMapping,*/
 	}
 
 	corsMiddleWare := middleware2.CreateCorsMiddleware(config)
@@ -92,6 +94,12 @@ func newAPI(engine *gin.Engine, config *config.Configuration, authManager AuthMa
 		//instrumentsGroup.POST("/request/:requestID/add-to-queue", api.AddRequestToTransferQueue)
 		//instrumentsGroup.POST("/request/add-message-batch-to-queue", api.AddTransmissionsBatchToTransferQueue)
 	}
+
+	messagesGroup := instrumentsGroup.Group("/:instrumentID/messages")
+	{
+		messagesGroup.GET("", api.GetMessages)
+	}
+
 	/*
 		mappingGroup := v1Group.Group("/:analyteMappingID")
 		{

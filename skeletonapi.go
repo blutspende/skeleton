@@ -2,6 +2,8 @@ package skeleton
 
 import (
 	"context"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/consolelog/repository"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/consolelog/service"
 
 	config2 "github.com/DRK-Blutspende-BaWueHe/skeleton/config"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/db"
@@ -109,8 +111,10 @@ func New(sqlConn *sqlx.DB, dbSchema string) (SkeletonAPI, error) {
 	instrumentCache := NewInstrumentCache()
 	analysisRepository := NewAnalysisRepository(dbConn, dbSchema)
 	instrumentRepository := NewInstrumentRepository(dbConn, dbSchema)
+	consoleLogRepository := repository.NewConsoleLogRepository(500)
 	analysisService := NewAnalysisService(analysisRepository, manager)
 	instrumentService := NewInstrumentService(&config, instrumentRepository, manager, instrumentCache, cerberusClient)
+	consoleLogService := service.NewConsoleLogService(consoleLogRepository)
 	api := NewAPI(&config, authManager, analysisService, instrumentService)
-	return NewSkeleton(sqlConn, dbSchema, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, manager, cerberusClient)
+	return NewSkeleton(sqlConn, dbSchema, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, manager, cerberusClient)
 }
