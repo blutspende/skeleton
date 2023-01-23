@@ -93,11 +93,11 @@ func newAPI(engine *gin.Engine, config *config.Configuration, authManager AuthMa
 		instrumentsGroup.DELETE("/:instrumentId", api.DeleteInstrument)
 		//instrumentsGroup.POST("/request/:requestID/add-to-queue", api.AddRequestToTransferQueue)
 		//instrumentsGroup.POST("/request/add-message-batch-to-queue", api.AddTransmissionsBatchToTransferQueue)
-	}
 
-	messagesGroup := instrumentsGroup.Group("/:instrumentID/messages")
-	{
-		messagesGroup.GET("", api.GetMessages)
+		messagesGroup := instrumentsGroup.Group("/:instrumentId/messages")
+		{
+			messagesGroup.GET("", api.GetMessages)
+		}
 	}
 
 	/*
