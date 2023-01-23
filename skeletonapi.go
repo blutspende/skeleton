@@ -14,8 +14,9 @@ type SkeletonError error
 
 // SkeletonCallbackHandlerV1 - must implement an EventHandler to react on Events triggered by Skeleton
 type SkeletonCallbackHandlerV1 interface {
-	// HandleAnalysisRequests is called when the Skeleton needs to resolve an updated AnalysisRequest
-	// based on data that was probably not processed before.
+	// HandleAnalysisRequests is called to inform and check about new analysis request.
+	// Returning a not nil will prevent the result being processed further.
+	// This method should be used e.g. to update standing caches regarding analysis requests whenever a request is received.
 	HandleAnalysisRequests(request []AnalysisRequest) error
 
 	// GetManufacturerTestList is called when the Skeleton requires a list of test names (strings)

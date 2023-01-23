@@ -259,7 +259,7 @@ func (api *api) GetManufacturerTests(c *gin.Context) {
 func (api *api) GetAnalysisRequestsInfo(c *gin.Context) {
 	instrumentID, err := uuid.Parse(c.Param("instrumentId"))
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, "GetAnalysisRequestsInfo Error")
+		c.AbortWithStatusJSON(http.StatusBadRequest, err.Error())
 		return
 	}
 

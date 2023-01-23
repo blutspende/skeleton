@@ -39,23 +39,24 @@ type subjectInfoDAO struct {
 }
 
 type analysisResultDAO struct {
-	ID                       uuid.UUID      `db:"id"`
-	AnalyteMappingID         uuid.UUID      `db:"analyte_mapping_id"`
-	InstrumentID             uuid.UUID      `db:"instrument_id"`
-	InstrumentRunID          uuid.UUID      `db:"instrument_run_id"`
-	SampleCode               string         `db:"sample_code"`
-	ResultRecordID           uuid.UUID      `db:"result_record_id"`
-	BatchID                  uuid.UUID      `db:"batch_id"`
-	Result                   string         `db:"result"`
-	Status                   ResultStatus   `db:"status"`
-	ResultMode               ResultMode     `db:"result_mode"`
-	YieldedAt                time.Time      `db:"yielded_at"`
-	ValidUntil               time.Time      `db:"valid_until"`
-	Operator                 string         `db:"operator"`
-	TechnicalReleaseDateTime time.Time      `db:"technical_release_datetime"`
-	RunCounter               int            `db:"run_counter"`
-	Edited                   bool           `db:"edited"`
-	EditReason               sql.NullString `db:"edit_reason"`
+	ID                       uuid.UUID         `db:"id"`
+	AnalyteMappingID         uuid.UUID         `db:"analyte_mapping_id"`
+	InstrumentID             uuid.UUID         `db:"instrument_id"`
+	InstrumentRunID          uuid.UUID         `db:"instrument_run_id"`
+	SampleCode               string            `db:"sample_code"`
+	ResultRecordID           uuid.UUID         `db:"result_record_id"`
+	BatchID                  uuid.UUID         `db:"batch_id"`
+	Result                   string            `db:"result"`
+	Status                   ResultStatus      `db:"status"`
+	ResultMode               ResultMode        `db:"result_mode"`
+	YieldedAt                time.Time         `db:"yielded_at"`
+	ValidUntil               time.Time         `db:"valid_until"`
+	Operator                 string            `db:"operator"`
+	TechnicalReleaseDateTime time.Time         `db:"technical_release_datetime"`
+	RunCounter               int               `db:"run_counter"`
+	Edited                   bool              `db:"edited"`
+	EditReason               sql.NullString    `db:"edit_reason"`
+	AnalyteMapping           analyteMappingDAO `db:"sam"`
 	ChannelResults           []channelResultDAO
 	ExtraValues              []extraValueDAO
 	ReagentInfos             []reagentInfoDAO
@@ -500,9 +501,10 @@ func (r *analysisRepository) CreateAnalysisResultsBatch(ctx context.Context, ana
 }
 
 func (r *analysisRepository) GetAnalysisResultsBySampleCodeAndAnalyteID(ctx context.Context, sampleCode string, analyteID uuid.UUID) ([]AnalysisResult, error) {
-	query := `SELECT sar.id, sar.analyte_mapping_id, sar.instrument_id, sar.sample_code, sar.instrument_run_id, sar.result_record_id, sar.batch_id, sar."result", sar.status, sar.result_mode, sar.yielded_at, sar.valid_until, sar.operator, sar.edited, sar.edit_reason
+	query := `SELECT sar.id, sar.analyte_mapping_id, sar.instrument_id, sar.sample_code, sar.instrument_run_id, sar.result_record_id, sar.batch_id, sar."result", sar.status, sar.result_mode, sar.yielded_at, sar.valid_until, sar.operator, sar.edited, sar.edit_reason,
+					sam.id, sam.instrument_id, sam.instrument_analyte, sam.analyte_id, sam.result_type, sam.created_at, sam.modified_at
 			FROM %schema_name%.sk_analysis_results sar
-			INNER JOIN %schema_name%.sk_analyte_mappings sam ON sar.analyte_mapping_id = sam.id
+			INNER JOIN %schema_name%.sk_analyte_mappings sam ON sar.analyte_mapping_id = sam.id AND sam.deleted_at IS NULL
 			WHERE sar.sample_code = $1
 			AND sam.analyte_id = $2;`
 
