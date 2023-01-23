@@ -115,6 +115,6 @@ func New(sqlConn *sqlx.DB, dbSchema string) (SkeletonAPI, error) {
 	analysisService := NewAnalysisService(analysisRepository, manager)
 	instrumentService := NewInstrumentService(&config, instrumentRepository, manager, instrumentCache, cerberusClient)
 	consoleLogService := service.NewConsoleLogService(consoleLogRepository)
-	api := NewAPI(&config, authManager, analysisService, instrumentService)
+	api := NewAPI(&config, authManager, analysisService, instrumentService, consoleLogService)
 	return NewSkeleton(sqlConn, dbSchema, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, manager, cerberusClient)
 }
