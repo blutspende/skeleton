@@ -37,12 +37,12 @@ func (api *api) Run() error {
 	return api.engine.Run(fmt.Sprintf(":%d", api.config.APIPort))
 }
 
-func NewAPI(config *config.Configuration, authManager AuthManager, analysisService AnalysisService, instrumentService InstrumentService) GinApi {
-	return newAPI(gin.New(), config, authManager, analysisService, instrumentService)
+func NewAPI(config *config.Configuration, authManager AuthManager, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService service.ConsoleLogService) GinApi {
+	return newAPI(gin.New(), config, authManager, analysisService, instrumentService, consoleLogService)
 }
 
 func newAPI(engine *gin.Engine, config *config.Configuration, authManager AuthManager,
-	analysisService AnalysisService, instrumentService InstrumentService) GinApi {
+	analysisService AnalysisService, instrumentService InstrumentService, consoleLogService service.ConsoleLogService) GinApi {
 
 	if config.LogLevel <= zerolog.DebugLevel {
 		gin.SetMode(gin.DebugMode)
@@ -57,6 +57,7 @@ func newAPI(engine *gin.Engine, config *config.Configuration, authManager AuthMa
 		engine:            engine,
 		analysisService:   analysisService,
 		instrumentService: instrumentService,
+		consoleLogService: consoleLogService,
 		/*healthHandler:               healthHandler,
 		  instrumentsHandler:          instrumentsHandler,
 		  analyteMappingHandler:       analyteMappingHandler,
