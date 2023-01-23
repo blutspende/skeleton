@@ -53,11 +53,14 @@ func (s *consoleLogService) Error(instrumentID uuid.UUID, message string) {
 }
 
 func (s *consoleLogService) GetConsoleLogs(instrumentID uuid.UUID) []model.ConsoleLogDTO {
-	log.Trace().Msg("Getting console logs")
+	log.Trace().Str("instrumentID", instrumentID.String()).Msg("Getting console logs")
 
 	loadedConsoleLogEntities := s.repository.LoadConsoleLogs(instrumentID)
 
 	entityCount := len(loadedConsoleLogEntities)
+
+	log.Trace().Str("instrumentID", instrumentID.String()).Msgf("Loaded %d console logs", entityCount)
+
 	consoleLogDTOs := make([]model.ConsoleLogDTO, entityCount)
 	for i := 0; i < entityCount; i++ {
 		consoleLogEntity := loadedConsoleLogEntities[i]
