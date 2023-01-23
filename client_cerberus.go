@@ -58,34 +58,33 @@ type channelResultTO struct {
 	QualitativeResult     string            `json:"qualitativeResult"`
 	QualitativeResultEdit bool              `json:"edited"`
 	QuantitativeResults   map[string]string `json:"quantitativeResults"`
-	Images                []imageV1TO       `json:"images"`
+	Images                []imageTO         `json:"images"`
 }
 
 type analysisResultTO struct {
-	WorkingItemID            uuid.UUID       `json:"workItemId"`
-	ValidUntil               time.Time       `json:"validUntil"`
-	Status                   string          `json:"status"`
-	Mode                     string          `json:"mode"` // ResultMode
-	ResultYieldDateTime      time.Time       `json:"resultYieldDateTime"`
-	ExaminedMaterial         uuid.UUID       `json:"examinedMaterial"`
-	Result                   string          `json:"result"`
-	Operator                 string          `json:"operator"`
-	TechnicalReleaseDateTime time.Time       `json:"technicalReleaseDateTime"`
-	InstrumentID             uuid.UUID       `json:"instrumentId"`
-	InstrumentRunID          uuid.UUID       `json:"instrumentRunId" `
-	ReagentInfos             []reagentInfoTO `json:"reagentInfos"`
-	// OrderRef                 string              `json:"orderRef"`
-	RunCounter  int            `json:"runCounter" `
-	ExtraValues []extraValueTO `json:"extraValues"`
-	Edited      bool           `json:"resultEdit"`
-	EditReason  string         `json:"editReason"`
-	//TODO:REMOVE : WarnFlag                 bool                `json:"warnFlag"`
-	Warnings       []string          `json:"warnings"`
-	ChannelResults []channelResultTO `json:"channelResults"`
-	Images         []imageV1TO       `json:"images"`
+	WorkingItemID            uuid.UUID         `json:"workItemId"`
+	ValidUntil               time.Time         `json:"validUntil"`
+	Status                   string            `json:"status"`
+	Mode                     string            `json:"mode"` // ResultMode
+	ResultYieldDateTime      time.Time         `json:"resultYieldDateTime"`
+	ExaminedMaterial         uuid.UUID         `json:"examinedMaterial"`
+	Result                   string            `json:"result"`
+	Operator                 string            `json:"operator"`
+	TechnicalReleaseDateTime time.Time         `json:"technicalReleaseDateTime"`
+	InstrumentID             uuid.UUID         `json:"instrumentId"`
+	InstrumentRunID          uuid.UUID         `json:"instrumentRunId" `
+	RunCounter               int               `json:"runCounter" `
+	Edited                   bool              `json:"resultEdit"`
+	EditReason               string            `json:"editReason"`
+	ChannelResults           []channelResultTO `json:"channelResults"`
+	ExtraValues              []extraValueTO    `json:"extraValues"`
+	ReagentInfos             []reagentInfoTO   `json:"reagentInfos"`
+	Images                   []imageTO         `json:"images"`
+	WarnFlag                 bool              `json:"warnFlag"`
+	Warnings                 []string          `json:"warnings"`
 }
 
-type imageV1TO struct {
+type imageTO struct {
 	ID          uuid.UUID `json:"id"`
 	Name        string    `json:"name"`
 	Description *string   `json:"description,omitempty"`
@@ -171,14 +170,15 @@ func (cia *cerberus) SendAnalysisResultBatch(analysisResults []AnalysisResult) (
 			TechnicalReleaseDateTime: ar.TechnicalReleaseDateTime,
 			InstrumentID:             ar.Instrument.ID,
 			InstrumentRunID:          ar.InstrumentRunID,
-			ReagentInfos:             []reagentInfoTO{},
 			RunCounter:               ar.RunCounter,
-			ExtraValues:              []extraValueTO{},
 			Edited:                   ar.Edited,
 			EditReason:               ar.EditReason,
-			Warnings:                 ar.Warnings,
 			ChannelResults:           []channelResultTO{},
-			//TODO Images                  : ar.Images,
+			ExtraValues:              []extraValueTO{},
+			ReagentInfos:             []reagentInfoTO{},
+			Images:                   []imageTO{},
+			WarnFlag:                 ar.WarnFlag,
+			Warnings:                 ar.Warnings,
 		}
 
 		switch ar.Status {
@@ -221,7 +221,7 @@ func (cia *cerberus) SendAnalysisResultBatch(analysisResults []AnalysisResult) (
 				QualitativeResult:     cr.QualitativeResult,
 				QualitativeResultEdit: cr.QualitativeResultEdit,
 				QuantitativeResults:   cr.QuantitativeResults,
-				// TODO: Images
+				Images:                []imageTO{}, // Todo fill
 			}
 			analysisResultTO.ChannelResults = append(analysisResultTO.ChannelResults, channelResultTO)
 		}
@@ -409,10 +409,10 @@ func (cia *cerberusV1) PostAnalysisResult(analysisResult v1.AnalysisResult) (v1.
 		}
 	}
 
-func (cia *cerberusV1) mapImageToImageDTO(images []v1.Image) []imageV1TO {
-	imagesDTO := make([]imageV1TO, 0)
+func (cia *cerberusV1) mapImageToImageDTO(images []v1.Image) []imageTO {
+	imagesDTO := make([]imageTO, 0)
 	for _, image := range images {
-		imagesDTO = append(imagesDTO, imageV1TO{
+		imagesDTO = append(imagesDTO, imageTO{
 			ID:          image.ID,
 			Name:        image.Name,
 			Description: image.Description,

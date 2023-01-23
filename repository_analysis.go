@@ -39,23 +39,24 @@ type subjectInfoDAO struct {
 }
 
 type analysisResultDAO struct {
-	ID                       uuid.UUID      `db:"id"`
-	AnalyteMappingID         uuid.UUID      `db:"analyte_mapping_id"`
-	InstrumentID             uuid.UUID      `db:"instrument_id"`
-	InstrumentRunID          uuid.UUID      `db:"instrument_run_id"`
-	SampleCode               string         `db:"sample_code"`
-	ResultRecordID           uuid.UUID      `db:"result_record_id"`
-	BatchID                  uuid.UUID      `db:"batch_id"`
-	Result                   string         `db:"result"`
-	Status                   ResultStatus   `db:"status"`
-	ResultMode               ResultMode     `db:"result_mode"`
-	YieldedAt                time.Time      `db:"yielded_at"`
-	ValidUntil               time.Time      `db:"valid_until"`
-	Operator                 string         `db:"operator"`
-	TechnicalReleaseDateTime time.Time      `db:"technical_release_datetime"`
-	RunCounter               int            `db:"run_counter"`
-	Edited                   bool           `db:"edited"`
-	EditReason               sql.NullString `db:"edit_reason"`
+	ID                       uuid.UUID         `db:"id"`
+	AnalyteMappingID         uuid.UUID         `db:"analyte_mapping_id"`
+	InstrumentID             uuid.UUID         `db:"instrument_id"`
+	InstrumentRunID          uuid.UUID         `db:"instrument_run_id"`
+	SampleCode               string            `db:"sample_code"`
+	ResultRecordID           uuid.UUID         `db:"result_record_id"`
+	BatchID                  uuid.UUID         `db:"batch_id"`
+	Result                   string            `db:"result"`
+	Status                   ResultStatus      `db:"status"`
+	ResultMode               ResultMode        `db:"result_mode"`
+	YieldedAt                time.Time         `db:"yielded_at"`
+	ValidUntil               time.Time         `db:"valid_until"`
+	Operator                 string            `db:"operator"`
+	TechnicalReleaseDateTime time.Time         `db:"technical_release_datetime"`
+	RunCounter               int               `db:"run_counter"`
+	Edited                   bool              `db:"edited"`
+	EditReason               sql.NullString    `db:"edit_reason"`
+	AnalyteMapping           analyteMappingDAO `db:"analyte_mapping"`
 	ChannelResults           []channelResultDAO
 	ExtraValues              []extraValueDAO
 	ReagentInfos             []reagentInfoDAO
@@ -500,9 +501,10 @@ func (r *analysisRepository) CreateAnalysisResultsBatch(ctx context.Context, ana
 }
 
 func (r *analysisRepository) GetAnalysisResultsBySampleCodeAndAnalyteID(ctx context.Context, sampleCode string, analyteID uuid.UUID) ([]AnalysisResult, error) {
-	query := `SELECT sar.id, sar.analyte_mapping_id, sar.instrument_id, sar.sample_code, sar.instrument_run_id, sar.result_record_id, sar.batch_id, sar."result", sar.status, sar.result_mode, sar.yielded_at, sar.valid_until, sar.operator, sar.edited, sar.edit_reason
+	query := `SELECT sar.id, sar.analyte_mapping_id, sar.instrument_id, sar.sample_code, sar.instrument_run_id, sar.result_record_id, sar.batch_id, sar."result", sar.status, sar.result_mode, sar.yielded_at, sar.valid_until, sar.operator, sar.edited, sar.edit_reason,
+					sam.id AS "analyte_mapping.id", sam.instrument_id AS "analyte_mapping.instrument_id", sam.instrument_analyte AS "analyte_mapping.instrument_analyte", sam.analyte_id AS "analyte_mapping.analyte_id", sam.result_type AS "analyte_mapping.result_type", sam.created_at AS "analyte_mapping.created_at", sam.modified_at AS "analyte_mapping.modified_at"
 			FROM %schema_name%.sk_analysis_results sar
-			INNER JOIN %schema_name%.sk_analyte_mappings sam ON sar.analyte_mapping_id = sam.id
+			INNER JOIN %schema_name%.sk_analyte_mappings sam ON sar.analyte_mapping_id = sam.id AND sam.deleted_at IS NULL
 			WHERE sar.sample_code = $1
 			AND sam.analyte_id = $2;`
 
@@ -576,10 +578,66 @@ func (r *analysisRepository) GetAnalysisResultsBySampleCodeAndAnalyteID(ctx cont
 		}
 		dao.ChannelResults = channelResults
 
-		analysisResults[analysisResultIndex] = convertAnalysisResultDAOToAnalysisResult(dao)
+		analysisResult := convertAnalysisResultDAOToAnalysisResult(dao)
+
+		channelMappings, err := r.getChannelMappings(ctx, dao.AnalyteMappingID)
+		if err != nil {
+			return nil, err
+		}
+		analysisResult.AnalyteMapping.ChannelMappings = channelMappings
+
+		resultMappings, err := r.getResultMappings(ctx, dao.AnalyteMappingID)
+		if err != nil {
+			return nil, err
+		}
+		analysisResult.AnalyteMapping.ResultMappings = resultMappings
+
+		analysisResults[analysisResultIndex] = analysisResult
 	}
 
 	return analysisResults, err
+}
+
+func (r *analysisRepository) getChannelMappings(ctx context.Context, analyteMappingID uuid.UUID) ([]ChannelMapping, error) {
+	query := fmt.Sprintf(`SELECT * FROM %s.sk_channel_mappings WHERE analyte_mapping_id = $1 AND deleted_at IS NULL;`, r.dbSchema)
+	rows, err := r.db.QueryxContext(ctx, query, analyteMappingID)
+	if err != nil {
+		log.Error().Err(err).Msg(msgGetChannelMappingsFailed)
+		return nil, ErrGetChannelMappingsFailed
+	}
+	defer rows.Close()
+	channelMappings := make([]ChannelMapping, 0)
+	for rows.Next() {
+		var dao channelMappingDAO
+		err = rows.StructScan(&dao)
+		if err != nil {
+			log.Error().Err(err).Msg(msgGetChannelMappingsFailed)
+			return nil, ErrGetChannelMappingsFailed
+		}
+		channelMappings = append(channelMappings, convertChannelMappingDaoToChannelMapping(dao))
+	}
+	return channelMappings, nil
+}
+
+func (r *analysisRepository) getResultMappings(ctx context.Context, analyteMappingID uuid.UUID) ([]ResultMapping, error) {
+	query := fmt.Sprintf(`SELECT * FROM %s.sk_result_mappings WHERE analyte_mapping_id = $1 AND deleted_at IS NULL;`, r.dbSchema)
+	rows, err := r.db.QueryxContext(ctx, query, analyteMappingID)
+	if err != nil {
+		log.Error().Err(err).Msg(msgGetResultMappingsFailed)
+		return nil, ErrGetResultMappingsFailed
+	}
+	defer rows.Close()
+	resultMappings := make([]ResultMapping, 0)
+	for rows.Next() {
+		var dao resultMappingDAO
+		err = rows.StructScan(&dao)
+		if err != nil {
+			log.Error().Err(err).Msg(msgGetResultMappingsFailed)
+			return nil, ErrGetResultMappingsFailed
+		}
+		resultMappings = append(resultMappings, convertResultMappingDaoToChannelMapping(dao))
+	}
+	return resultMappings, nil
 }
 
 func (r *analysisRepository) getExtraValues(ctx context.Context, analysisResultID uuid.UUID) ([]extraValueDAO, error) {
@@ -1058,10 +1116,8 @@ func convertAnalysisResultsToDAOs(analysisResults []AnalysisResult) []analysisRe
 
 func convertAnalysisResultDAOToAnalysisResult(analysisResult analysisResultDAO) AnalysisResult {
 	return AnalysisResult{
-		ID: analysisResult.ID,
-		AnalyteMapping: AnalyteMapping{
-			ID: analysisResult.AnalyteMappingID,
-		},
+		ID:             analysisResult.ID,
+		AnalyteMapping: convertAnalyteMappingDaoToAnalyteMapping(analysisResult.AnalyteMapping),
 		Instrument: Instrument{
 			ID: analysisResult.InstrumentID,
 		},

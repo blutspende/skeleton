@@ -52,6 +52,7 @@ func (as *analysisService) ProcessAnalysisRequests(ctx context.Context, analysis
 		}
 
 		for i := range analysisResults {
+			analysisResults[i].AnalysisRequest = request
 			as.manager.SendResultForProcessing(analysisResults[i])
 		}
 	}

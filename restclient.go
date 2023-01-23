@@ -32,15 +32,7 @@ func NewRestyClientWithAuthManager(ctx context.Context, configuration *config.Co
 		SetRetryCount(2).
 		AddRetryCondition(configureRetryMechanismForService2ServiceCalls(authManager)).
 		OnBeforeRequest(configureRequest(ctx, configuration)).
-		OnBeforeRequest(func(client *resty.Client, request *resty.Request) error {
-			authToken, err := authManager.GetClientCredential()
-			if err != nil {
-				log.Error().Err(err).Msg("refresh internal api client auth token failed")
-				return err
-			}
-			client.SetAuthToken(authToken)
-			return nil
-		})
+		OnBeforeRequest(setService2ServiceAuthToken(authManager))
 
 	if configuration.Development {
 		client = client.SetTLSClientConfig(&tls.Config{
@@ -66,17 +58,22 @@ func configureRequest(ctx context.Context, configuration *config.Configuration) 
 func configureRetryMechanismForService2ServiceCalls(authManager AuthManager) resty.RetryConditionFunc {
 	return func(response *resty.Response, err error) bool {
 		if response.StatusCode() == http.StatusUnauthorized {
-			token, err := authManager.GetClientCredential()
-			if err != nil {
-				log.Error().Err(err).Msg("Skip service-to-service retry routine")
-				return false
-			}
-
-			response.Request.SetAuthToken(token)
-
+			authManager.InvalidateClientCredential()
 			return true
 		}
 
 		return false
+	}
+}
+
+func setService2ServiceAuthToken(authManager AuthManager) resty.RequestMiddleware {
+	return func(client *resty.Client, request *resty.Request) error {
+		authToken, err := authManager.GetClientCredential()
+		if err != nil {
+			log.Error().Err(err).Msg("refresh internal api client auth token failed")
+			return err
+		}
+		client.SetAuthToken(authToken)
+		return nil
 	}
 }
