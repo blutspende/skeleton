@@ -230,6 +230,7 @@ type AnalysisResult struct {
 	RunCounter               int
 	Edited                   bool
 	EditReason               string
+	WarnFlag                 bool // Todo use it
 	Warnings                 []string
 	ChannelResults           []ChannelResult
 	ExtraValues              []ExtraValue
