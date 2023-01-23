@@ -1060,10 +1060,8 @@ func convertAnalysisResultsToDAOs(analysisResults []AnalysisResult) []analysisRe
 
 func convertAnalysisResultDAOToAnalysisResult(analysisResult analysisResultDAO) AnalysisResult {
 	return AnalysisResult{
-		ID: analysisResult.ID,
-		AnalyteMapping: AnalyteMapping{
-			ID: analysisResult.AnalyteMappingID,
-		},
+		ID:             analysisResult.ID,
+		AnalyteMapping: convertAnalyteMappingDAOToAnalyteMapping(analysisResult.AnalyteMapping),
 		Instrument: Instrument{
 			ID: analysisResult.InstrumentID,
 		},
@@ -1211,6 +1209,15 @@ func convertAnalysisRequestDAOToAnalysisRequest(analysisRequest analysisRequestD
 		LaboratoryID:   analysisRequest.LaboratoryID,
 		ValidUntilTime: analysisRequest.ValidUntilTime,
 		CreatedAt:      analysisRequest.CreatedAt,
+	}
+}
+
+func convertAnalyteMappingDAOToAnalyteMapping(analyteMappingDAO analyteMappingDAO) AnalyteMapping {
+	return AnalyteMapping{
+		ID:                analyteMappingDAO.ID,
+		InstrumentAnalyte: analyteMappingDAO.InstrumentAnalyte,
+		AnalyteID:         analyteMappingDAO.AnalyteID,
+		ResultType:        analyteMappingDAO.ResultType,
 	}
 }
 
