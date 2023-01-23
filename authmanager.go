@@ -16,6 +16,7 @@ const oidcURLPart = "/.well-known/openid-configuration"
 type AuthManager interface {
 	GetJWKS() (*keyfunc.JWKS, error)
 	GetClientCredential() (string, error)
+	InvalidateClientCredential()
 }
 
 type authManager struct {
@@ -59,6 +60,10 @@ func (m *authManager) GetClientCredential() (string, error) {
 		}
 	}
 	return m.tokenEndpointResponse.AccessToken, nil
+}
+
+func (m *authManager) InvalidateClientCredential() {
+	m.tokenEndpointResponse = nil
 }
 
 func (m *authManager) refreshClientCredential() error {

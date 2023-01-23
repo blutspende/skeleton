@@ -66,14 +66,7 @@ func configureRequest(ctx context.Context, configuration *config.Configuration) 
 func configureRetryMechanismForService2ServiceCalls(authManager AuthManager) resty.RetryConditionFunc {
 	return func(response *resty.Response, err error) bool {
 		if response.StatusCode() == http.StatusUnauthorized {
-			token, err := authManager.GetClientCredential()
-			if err != nil {
-				log.Error().Err(err).Msg("Skip service-to-service retry routine")
-				return false
-			}
-
-			response.Request.SetAuthToken(token)
-
+			authManager.InvalidateClientCredential()
 			return true
 		}
 
