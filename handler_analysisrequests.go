@@ -67,6 +67,8 @@ func (api *api) CreateAnalysisRequestBatch(c *gin.Context) {
 		return
 	}
 
+	log.Debug().Msgf("Got %d analysis requests", len(analysisRequestTOs))
+
 	// Map TO to model
 	analysisRequests := make([]AnalysisRequest, 0, len(analysisRequestTOs))
 	for i := range analysisRequestTOs {
