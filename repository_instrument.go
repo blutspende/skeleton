@@ -113,6 +113,8 @@ type analyteMappingDAO struct {
 	CreatedAt         time.Time    `db:"created_at"`
 	ModifiedAt        sql.NullTime `db:"modified_at"`
 	DeletedAt         sql.NullTime `db:"deleted_at"`
+	ChannelMapping    []channelMappingDAO
+	ResultMapping     []resultMappingDAO
 }
 
 type channelMappingDAO struct {
