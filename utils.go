@@ -98,10 +98,18 @@ func isSorted(pageable Pageable) bool {
 	return pageable.Sort != ""
 }
 
-func applyPagination(pageable Pageable, tableAlias, defaultSort string) string {
+func applyPagination(pageable Pageable, tableAlias, defaultSort string, createdAtAlias string) string {
 	var paginationQueryPart string
 	if isSorted(pageable) {
-		paginationQueryPart += " ORDER BY " + tableAlias + "." + pageable.Sort
+		var sort string
+
+		if pageable.Sort == "created_at" {
+			sort = strings.Replace(pageable.Sort, "created_at", createdAtAlias, 1)
+		} else {
+			sort = pageable.Sort
+		}
+
+		paginationQueryPart += " ORDER BY " + tableAlias + "." + sort
 		if pageable.Direction != SortNone {
 			paginationQueryPart += " " + strings.ToUpper(pageable.Direction.String())
 		}
