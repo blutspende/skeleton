@@ -59,7 +59,10 @@ func (ic *instrumentCache) GetByID(id uuid.UUID) (Instrument, bool) {
 		return Instrument{}, false
 	}
 	instrument, ok := ic.instrumentMapByID[id]
-	return *instrument, ok
+	if ok {
+		return *instrument, ok
+	}
+	return Instrument{}, ok
 }
 
 func (ic *instrumentCache) GetByIP(ip string) (Instrument, bool) {
@@ -69,7 +72,10 @@ func (ic *instrumentCache) GetByIP(ip string) (Instrument, bool) {
 		return Instrument{}, false
 	}
 	instrument, ok := ic.instrumentMapByIP[ip]
-	return *instrument, ok
+	if ok {
+		return *instrument, ok
+	}
+	return Instrument{}, ok
 }
 
 func (ic *instrumentCache) GetAll() []Instrument {
