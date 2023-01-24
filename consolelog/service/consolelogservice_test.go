@@ -14,9 +14,9 @@ func TestMessages(t *testing.T) {
 
 	instrumentID := uuid.MustParse("845b73b5-c92d-4797-93a6-0165b3366404")
 
-	consoleLogService.Info(instrumentID, "Info message")
-	consoleLogService.Debug(instrumentID, "Debug message")
-	consoleLogService.Error(instrumentID, "Error message")
+	consoleLogService.Info(instrumentID, "[GENERAL]", "Info message")
+	consoleLogService.Debug(instrumentID, "[GENERAL]", "Debug message")
+	consoleLogService.Error(instrumentID, "[GENERAL]", "Error message")
 
 	messages := consoleLogService.GetConsoleLogs(instrumentID)
 	assert.Equal(t, 3, len(messages))
