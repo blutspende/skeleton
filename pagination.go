@@ -42,7 +42,7 @@ func (p *Pageable) IsUnPaged() bool {
 }
 
 type Page struct {
-	Items      interface{} `json:"items"`                   // The items
+	Items      interface{} `json:"content"`                 // The items
 	Page       int         `json:"currentPage" example:"1"` // The actual page number
 	PageSize   int         `json:"pageSize" example:"50"`   // The number of items per page
 	TotalCount int         `json:"totalCount" example:"69"` // The total count of items
