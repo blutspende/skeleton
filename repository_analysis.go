@@ -317,9 +317,15 @@ LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = i.id AND re
 WHERE res.instrument_id = :instrument_id`
 
 	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
-	countQuery := query
-
 	query += applyPagination(pageable, "req", "req.created_at DESC, req.id") + `;`
+
+	countQuery := `SELECT count(req.id)
+FROM %schema_name%.sk_analysis_requests req
+LEFT JOIN %schema_name%.sk_analysis_results res ON res.sample_code = req.sample_code
+LEFT JOIN %schema_name%.sk_instruments i ON i.id = res.instrument_id
+LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = i.id AND req.analyte_id = am.analyte_id
+WHERE res.instrument_id = :instrument_id`
+	countQuery = strings.ReplaceAll(countQuery, "%schema_name%", r.dbSchema)
 
 	preparedValues := map[string]interface{}{
 		"instrument_id": instrumentID,
@@ -392,12 +398,12 @@ WHERE res.instrument_id = :instrument_id`
 
 	stmt, err := r.db.PrepareNamed(countQuery)
 	if err != nil {
-		log.Error().Msg("Failed to prepare named count query")
+		log.Error().Err(err).Msg("Failed to prepare named count query")
 		return nil, 0, err
 	}
 	var count int
 	if err = stmt.QueryRowx(preparedValues).Scan(&count); err != nil {
-		log.Error().Msg("Failed to execute named count query")
+		log.Error().Err(err).Msg("Failed to execute named count query")
 		return nil, 0, err
 	}
 
