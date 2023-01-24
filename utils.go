@@ -103,7 +103,7 @@ func applyPagination(pageable Pageable, tableAlias, defaultSort string, createdA
 	if isSorted(pageable) {
 		var sort string
 
-		if pageable.Sort == "created_at" {
+		if strings.Contains(pageable.Sort, "created_at") {
 			sort = strings.Replace(pageable.Sort, "created_at", createdAtAlias, 1)
 		} else {
 			sort = pageable.Sort
