@@ -133,6 +133,16 @@ type analysisRequestInfoDAO struct {
 	InstrumentID      uuid.NullUUID  `db:"instrument_id"`
 }
 
+type analysisResultInfoDAO struct {
+	ID              uuid.UUID      `db:"result_id"`
+	SampleCode      string         `db:"sample_code"`
+	AnalyteID       uuid.UUID      `db:"analyte_id"`
+	ResultCreatedAt time.Time      `db:"yielded_at"`
+	TestName        sql.NullString `db:"test_name"`
+	TestResult      sql.NullString `db:"test_result"`
+	Status          string         `db:"status"`
+}
+
 type cerberusQueueItemDAO struct {
 	ID                  uuid.UUID    `db:"queue_item_id"`
 	JsonMessage         string       `db:"json_message"`
@@ -151,6 +161,7 @@ type AnalysisRepository interface {
 	GetAnalysisRequestsBySampleCodeAndAnalyteID(ctx context.Context, sampleCodes string, analyteID uuid.UUID) ([]AnalysisRequest, error)
 	GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string) (map[string][]AnalysisRequest, error)
 	GetAnalysisRequestsInfo(ctx context.Context, instrumentID uuid.UUID, pageable Pageable) ([]AnalysisRequestInfo, int, error)
+	GetAnalysisResultsInfo(ctx context.Context, instrumentID uuid.UUID, pageable Pageable) ([]AnalysisResultInfo, int, error)
 	//GetAnalysisRequestsForVisualization(ctx context.Context) (map[string][]AnalysisRequest, error)
 	CreateSubjectsBatch(ctx context.Context, subjectInfosByAnalysisRequestID map[uuid.UUID]SubjectInfo) (map[uuid.UUID]uuid.UUID, error)
 	GetSubjectsByAnalysisRequestIDs(ctx context.Context, analysisRequestIDs []uuid.UUID) (map[uuid.UUID]SubjectInfo, error)
@@ -408,6 +419,68 @@ WHERE res.instrument_id = :instrument_id`
 	}
 
 	return convertRequestInfoDAOsToRequestInfos(requestInfoList), count, nil
+}
+
+func (r *analysisRepository) GetAnalysisResultsInfo(ctx context.Context, instrumentID uuid.UUID, pageable Pageable) ([]AnalysisResultInfo, int, error) {
+	query := `SELECT res.id AS result_id,
+	   res.sample_code AS sample_code,
+	   am.analyte_id AS analyte_id,
+	   res.yielded_at as yielded_at,
+       am.instrument_analyte as test_name,
+	   res.result AS test_result,
+       res.status AS status
+FROM %schema_name%.sk_analysis_results res
+LEFT JOIN %schema_name%.sk_instruments i ON i.id = res.instrument_id
+LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = i.id AND res.analyte_mapping_id = am.id
+WHERE res.instrument_id = :instrument_id`
+
+	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
+	query += applyPagination(pageable, "req", "req.created_at DESC, req.id") + `;`
+
+	countQuery := `SELECT count(res.id)
+FROM %schema_name%.sk_analysis_results res
+LEFT JOIN %schema_name%.sk_instruments i ON i.id = res.instrument_id
+LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = i.id AND res.analyte_mapping_id = am.id
+WHERE res.instrument_id = :instrument_id`
+	countQuery = strings.ReplaceAll(countQuery, "%schema_name%", r.dbSchema)
+
+	preparedValues := map[string]interface{}{
+		"instrument_id": instrumentID,
+		//"time_from":     filter.TimeFrom.UTC(),
+		//"limit":         filter.PageSize,
+		//"offset":        filter.PageNumber * filter.PageSize,
+	}
+
+	rows, err := r.db.NamedQueryContext(ctx, query, preparedValues)
+	if err != nil {
+		log.Error().Err(err).Msg("Can not get analysis request list")
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	resultInfoList := make([]analysisResultInfoDAO, 0)
+	for rows.Next() {
+		result := analysisResultInfoDAO{}
+		err = rows.StructScan(&result)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to struct scan request")
+			return nil, 0, err
+		}
+		resultInfoList = append(resultInfoList, result)
+	}
+
+	stmt, err := r.db.PrepareNamed(countQuery)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to prepare named count query")
+		return nil, 0, err
+	}
+	var count int
+	if err = stmt.QueryRowx(preparedValues).Scan(&count); err != nil {
+		log.Error().Err(err).Msg("Failed to execute named count query")
+		return nil, 0, err
+	}
+
+	return convertResultInfoDAOsToResultInfos(resultInfoList), count, nil
 }
 
 func (r *analysisRepository) GetSubjectsByAnalysisRequestIDs(ctx context.Context, analysisRequestIDs []uuid.UUID) (map[uuid.UUID]SubjectInfo, error) {
@@ -1362,12 +1435,34 @@ func convertRequestInfoDAOToRequestInfo(analysisRequestInfoDAO analysisRequestIn
 	return analysisRequestInfo
 }
 
+func convertResultInfoDAOToResultInfo(analysisResultInfoDAO analysisResultInfoDAO) AnalysisResultInfo {
+	analysisResultInfo := AnalysisResultInfo{
+		ID:              analysisResultInfoDAO.ID,
+		AnalyteID:       analysisResultInfoDAO.AnalyteID,
+		SampleCode:      analysisResultInfoDAO.SampleCode,
+		ResultCreatedAt: analysisResultInfoDAO.ResultCreatedAt,
+		TestName:        nullStringToStringPointer(analysisResultInfoDAO.TestName),
+		TestResult:      nullStringToStringPointer(analysisResultInfoDAO.TestResult),
+		Status:          analysisResultInfoDAO.Status,
+	}
+
+	return analysisResultInfo
+}
+
 func convertRequestInfoDAOsToRequestInfos(analysisRequestInfoDAOs []analysisRequestInfoDAO) []AnalysisRequestInfo {
 	analysisRequestInfo := make([]AnalysisRequestInfo, len(analysisRequestInfoDAOs))
 	for i := range analysisRequestInfoDAOs {
 		analysisRequestInfo[i] = convertRequestInfoDAOToRequestInfo(analysisRequestInfoDAOs[i])
 	}
 	return analysisRequestInfo
+}
+
+func convertResultInfoDAOsToResultInfos(analysisResultInfoDAOs []analysisResultInfoDAO) []AnalysisResultInfo {
+	analysisResultInfo := make([]AnalysisResultInfo, len(analysisResultInfoDAOs))
+	for i := range analysisResultInfoDAOs {
+		analysisResultInfo[i] = convertResultInfoDAOToResultInfo(analysisResultInfoDAOs[i])
+	}
+	return analysisResultInfo
 }
 
 func convertCerberusQueueItemToCerberusQueueItemDAO(cerberusQueueItem CerberusQueueItem) cerberusQueueItemDAO {

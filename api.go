@@ -87,7 +87,7 @@ func newAPI(engine *gin.Engine, config *config.Configuration, authManager AuthMa
 		instrumentsGroup.POST("", api.CreateInstrument)
 		instrumentsGroup.GET("/:instrumentId", api.GetInstrumentByID)
 		instrumentsGroup.GET("/:instrumentId/requests", api.GetAnalysisRequestsInfo)
-		//instrumentsGroup.GET("/:instrumentId/results", api.GetAnalysisResultsInfo)
+		instrumentsGroup.GET("/:instrumentId/results", api.GetAnalysisResultsInfo)
 		//instrumentsGroup.GET("/:instrumentId/batches", api.GetAnalysisBatchesInfo)
 		//instrumentsGroup.GET("/channel-results/:requestId", api.GetChannelResultsForRequest)
 		//instrumentsGroup.GET("/:instrumentId/list/transmissions", api.GetListOfTransmission)

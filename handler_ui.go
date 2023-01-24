@@ -103,6 +103,16 @@ type analysisRequestInfoTO struct {
 	MappingError bool `json:"mappingError"`
 }
 
+type analysisResultInfoTO struct {
+	ID              uuid.UUID `json:"requestId"`
+	SampleCode      string    `json:"sampleCode"`
+	AnalyteID       uuid.UUID `json:"analyteId"`
+	ResultCreatedAt time.Time `json:"transmissionDate"`
+	TestName        *string   `json:"testName"`
+	TestResult      *string   `json:"testResult"`
+	Status          string    `json:"status"`
+}
+
 func (api *api) GetInstruments(c *gin.Context) {
 	instruments, err := api.instrumentService.GetInstruments(c)
 	if err != nil {
@@ -277,6 +287,29 @@ func (api *api) GetAnalysisRequestsInfo(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, NewPage(pageable, totalCount, convertAnalysisRequestInfoListToAnalysisRequestInfoTOList(analysisRequestInfoList)))
+}
+
+func (api *api) GetAnalysisResultsInfo(c *gin.Context) {
+	instrumentID, err := uuid.Parse(c.Param("instrumentId"))
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, err.Error())
+		return
+	}
+
+	var pageable Pageable
+	err = c.ShouldBindQuery(&pageable)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, "malformed pageable data")
+		return
+	}
+
+	analysisResultInfoList, totalCount, err := api.analysisService.GetAnalysisResultsInfo(c, instrumentID, pageable)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	c.JSON(http.StatusOK, NewPage(pageable, totalCount, convertAnalysisResultInfoListToAnalysisResultInfoTOList(analysisResultInfoList)))
 }
 
 func (api *api) GetMessages(c *gin.Context) {
@@ -633,10 +666,30 @@ func convertAnalysisRequestInfoToAnalysisRequestInfoTO(analysisRequestInfo Analy
 	}
 }
 
+func convertAnalysisResultInfoToAnalysisResultInfoTO(analysisResultInfo AnalysisResultInfo) analysisResultInfoTO {
+	return analysisResultInfoTO{
+		ID:              analysisResultInfo.ID,
+		SampleCode:      analysisResultInfo.SampleCode,
+		AnalyteID:       analysisResultInfo.AnalyteID,
+		ResultCreatedAt: analysisResultInfo.ResultCreatedAt,
+		TestName:        analysisResultInfo.TestName,
+		TestResult:      analysisResultInfo.TestResult,
+		Status:          analysisResultInfo.Status,
+	}
+}
+
 func convertAnalysisRequestInfoListToAnalysisRequestInfoTOList(analysisRequestInfoList []AnalysisRequestInfo) []analysisRequestInfoTO {
 	tos := make([]analysisRequestInfoTO, len(analysisRequestInfoList))
 	for i := range analysisRequestInfoList {
 		tos[i] = convertAnalysisRequestInfoToAnalysisRequestInfoTO(analysisRequestInfoList[i])
+	}
+	return tos
+}
+
+func convertAnalysisResultInfoListToAnalysisResultInfoTOList(analysisResultInfoList []AnalysisResultInfo) []analysisResultInfoTO {
+	tos := make([]analysisResultInfoTO, len(analysisResultInfoList))
+	for i := range analysisResultInfoList {
+		tos[i] = convertAnalysisResultInfoToAnalysisResultInfoTO(analysisResultInfoList[i])
 	}
 	return tos
 }

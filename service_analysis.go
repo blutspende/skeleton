@@ -10,6 +10,7 @@ type AnalysisService interface {
 	CreateAnalysisRequests(ctx context.Context, analysisRequests []AnalysisRequest) ([]AnalysisRequestStatus, error)
 	ProcessAnalysisRequests(ctx context.Context, analysisRequests []AnalysisRequest) error
 	GetAnalysisRequestsInfo(ctx context.Context, instrumentID uuid.UUID, pageable Pageable) ([]AnalysisRequestInfo, int, error)
+	GetAnalysisResultsInfo(ctx context.Context, instrumentID uuid.UUID, pageable Pageable) ([]AnalysisResultInfo, int, error)
 }
 
 type analysisService struct {
@@ -67,4 +68,13 @@ func (as *analysisService) GetAnalysisRequestsInfo(ctx context.Context, instrume
 	}
 
 	return requestInfoList, totalCount, nil
+}
+
+func (as *analysisService) GetAnalysisResultsInfo(ctx context.Context, instrumentID uuid.UUID, pageable Pageable) ([]AnalysisResultInfo, int, error) {
+	resultInfoList, totalCount, err := as.analysisRepository.GetAnalysisResultsInfo(ctx, instrumentID, pageable)
+	if err != nil {
+		return []AnalysisResultInfo{}, 0, err
+	}
+
+	return resultInfoList, totalCount, nil
 }
