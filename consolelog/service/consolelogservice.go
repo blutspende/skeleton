@@ -5,14 +5,12 @@ import (
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/consolelog/repository"
 	"github.com/google/uuid"
 	"time"
-
-	"github.com/rs/zerolog/log"
 )
 
 type ConsoleLogService interface {
-	Debug(instrumentID uuid.UUID, message string)
-	Info(instrumentID uuid.UUID, message string)
-	Error(instrumentID uuid.UUID, message string)
+	Debug(instrumentID uuid.UUID, messageType string, message string)
+	Info(instrumentID uuid.UUID, messageType string, message string)
+	Error(instrumentID uuid.UUID, messageType string, message string)
 	GetConsoleLogs(instrumentID uuid.UUID) []model.ConsoleLogDTO
 }
 
@@ -21,45 +19,39 @@ type consoleLogService struct {
 }
 
 func NewConsoleLogService(repository repository.ConsoleLogRepository) ConsoleLogService {
-	log.Trace().Msg("Creating new console log service")
 	return &consoleLogService{
 		repository: repository,
 	}
 }
 
-func (s *consoleLogService) createConsoleLog(level model.LogLevel, instrumentID uuid.UUID, message string) {
-	log.Trace().Interface("level", level).Interface("message", message).Msg("Creating console log")
-
+func (s *consoleLogService) createConsoleLog(level model.LogLevel, instrumentID uuid.UUID, messageType string, message string) {
 	newConsoleLogEntity := model.ConsoleLogEntity{
 		InstrumentID: instrumentID,
 		Level:        level,
 		CreatedAt:    time.Now().UTC(),
 		Message:      message,
+		MessageType:  messageType,
 	}
 
 	s.repository.CreateConsoleLog(newConsoleLogEntity)
 }
 
-func (s *consoleLogService) Debug(instrumentID uuid.UUID, message string) {
-	s.createConsoleLog(model.Debug, instrumentID, message)
+func (s *consoleLogService) Debug(instrumentID uuid.UUID, messageType string, message string) {
+	s.createConsoleLog(model.Debug, instrumentID, messageType, message)
 }
 
-func (s *consoleLogService) Info(instrumentID uuid.UUID, message string) {
-	s.createConsoleLog(model.Info, instrumentID, message)
+func (s *consoleLogService) Info(instrumentID uuid.UUID, messageType string, message string) {
+	s.createConsoleLog(model.Info, instrumentID, messageType, message)
 }
 
-func (s *consoleLogService) Error(instrumentID uuid.UUID, message string) {
-	s.createConsoleLog(model.Error, instrumentID, message)
+func (s *consoleLogService) Error(instrumentID uuid.UUID, messageType string, message string) {
+	s.createConsoleLog(model.Error, instrumentID, messageType, message)
 }
 
 func (s *consoleLogService) GetConsoleLogs(instrumentID uuid.UUID) []model.ConsoleLogDTO {
-	log.Trace().Str("instrumentID", instrumentID.String()).Msg("Getting console logs")
-
 	loadedConsoleLogEntities := s.repository.LoadConsoleLogs(instrumentID)
 
 	entityCount := len(loadedConsoleLogEntities)
-
-	log.Trace().Str("instrumentID", instrumentID.String()).Msgf("Loaded %d console logs", entityCount)
 
 	consoleLogDTOs := make([]model.ConsoleLogDTO, entityCount)
 	for i := 0; i < entityCount; i++ {

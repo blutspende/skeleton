@@ -37,17 +37,17 @@ func (s *skeleton) GetCallbackHandler() SkeletonCallbackHandlerV1 {
 
 func (s *skeleton) Log(instrumentID uuid.UUID, msg string) {
 	log.Info().Interface("instrumentId", instrumentID).Msg(msg)
-	s.consoleLogService.Info(instrumentID, msg)
+	s.consoleLogService.Info(instrumentID, "[GENERAL]", msg)
 }
 
 func (s *skeleton) LogError(instrumentID uuid.UUID, err error) {
 	log.Error().Interface("instrumentId", instrumentID).Err(err).Msg("")
-	s.consoleLogService.Error(instrumentID, err.Error())
+	s.consoleLogService.Error(instrumentID, "[GENERAL]", err.Error())
 }
 
 func (s *skeleton) LogDebug(instrumentID uuid.UUID, msg string) {
 	log.Debug().Interface("instrumentId", instrumentID).Msg(msg)
-	s.consoleLogService.Debug(instrumentID, msg)
+	s.consoleLogService.Debug(instrumentID, "[GENERAL]", msg)
 }
 
 func (s *skeleton) GetAnalysisRequestWithNoResults(currentPage, itemsPerPage int) (requests []AnalysisRequest, maxPages int, err error) {

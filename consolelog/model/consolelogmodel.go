@@ -19,6 +19,7 @@ type ConsoleLogEntity struct {
 	CreatedAt    time.Time
 	Level        LogLevel
 	Message      string
+	MessageType  string
 }
 
 type ConsoleLogDTO struct {
@@ -26,4 +27,5 @@ type ConsoleLogDTO struct {
 	CreatedAt    time.Time `json:"timestamp" swaggertype:"string" format:"date-time"` // The log timestamp
 	Level        LogLevel  `json:"messageCategory"`                                   // The log level
 	Message      string    `json:"message"`                                           // The log message
+	MessageType  string    `json:"messageType"`                                       // The log message type
 } // @Name ConsoleLogDTO

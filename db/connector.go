@@ -15,8 +15,9 @@ type DbConnector interface {
 	Exec(query string, args ...interface{}) (sql.Result, error)
 	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
 	NamedExec(query string, arg interface{}) (sql.Result, error)
-	NamedQuery(query string, arg interface{}) (*sqlx.Rows, error)
 	NamedExecContext(ctx context.Context, query string, arg interface{}) (sql.Result, error)
+	NamedQuery(query string, arg interface{}) (*sqlx.Rows, error)
+	NamedQueryContext(ctx context.Context, query string, arg interface{}) (*sqlx.Rows, error)
 	Queryx(query string, args ...interface{}) (*sqlx.Rows, error)
 	QueryxContext(ctx context.Context, query string, args ...interface{}) (*sqlx.Rows, error)
 	QueryRowx(query string, args ...interface{}) *sqlx.Row
@@ -81,6 +82,13 @@ func (c *dbConnector) NamedQuery(query string, arg interface{}) (*sqlx.Rows, err
 	} else {
 		return c.db.NamedQuery(query, arg)
 	}
+}
+
+func (c *dbConnector) NamedQueryContext(ctx context.Context, query string, arg interface{}) (*sqlx.Rows, error) {
+	if c.tx != nil {
+		return c.tx.NamedQuery(query, arg)
+	}
+	return c.db.NamedQueryContext(ctx, query, arg)
 }
 
 func (c *dbConnector) Queryx(query string, args ...interface{}) (*sqlx.Rows, error) {

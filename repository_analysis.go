@@ -305,21 +305,15 @@ func (r *analysisRepository) GetAnalysisRequestsInfo(ctx context.Context, instru
 	   req.work_item_id AS work_item_id,
 	   req.analyte_id AS analyte_id,
 	   req.created_at as request_date,
-	   
 	   am.analyte_id as analyte_mapping_id,
-	   
 	   res.id AS result_id,
-	   res.test_name AS test_name,
 	   res."result" AS test_result,
-	   res.batch_created_at AS batch_created_at,
-	   res.sent_to_cerberus_at AS sent_to_cerberus_at,
-	   
 	   i.hostname as source_ip,
 	   i.id as instrument_id
 FROM %schema_name%.sk_analysis_requests req
-LEFT JOIN %schema_name%.sk_analysis_results res ON res.sample_code = req.sample_code AND res.analysis_request_id = req.id -- TODO there is no res.analysis_request_id
+LEFT JOIN %schema_name%.sk_analysis_results res ON res.sample_code = req.sample_code
 LEFT JOIN %schema_name%.sk_instruments i ON i.id = res.instrument_id
-LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = i.id AND req.analyte_id = am.analyte_id AND res.test_name = am.instrument_analyte
+LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = i.id AND req.analyte_id = am.analyte_id
 WHERE res.instrument_id = :instrument_id`
 
 	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
@@ -378,7 +372,7 @@ WHERE res.instrument_id = :instrument_id`
 	//
 	//query += ` Limit :limit Offset :offset`
 
-	rows, err := r.db.NamedQuery(query, preparedValues)
+	rows, err := r.db.NamedQueryContext(ctx, query, preparedValues)
 	if err != nil {
 		log.Error().Err(err).Msg("Can not get analysis request list")
 		return nil, 0, err
