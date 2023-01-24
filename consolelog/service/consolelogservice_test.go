@@ -23,10 +23,13 @@ func TestMessages(t *testing.T) {
 
 	assert.Equal(t, model.Error, messages[0].Level)
 	assert.Equal(t, "Error message", messages[0].Message)
+	assert.Equal(t, "[GENERAL]", messages[0].MessageType)
 	assert.Equal(t, model.Debug, messages[1].Level)
 	assert.Equal(t, "Debug message", messages[1].Message)
+	assert.Equal(t, "[GENERAL]", messages[1].MessageType)
 	assert.Equal(t, model.Info, messages[2].Level)
 	assert.Equal(t, "Info message", messages[2].Message)
+	assert.Equal(t, "[GENERAL]", messages[2].MessageType)
 
 	messages = consoleLogService.GetConsoleLogs(uuid.Nil)
 	assert.Equal(t, 0, len(messages))

@@ -57,9 +57,10 @@ func (s *consoleLogService) GetConsoleLogs(instrumentID uuid.UUID) []model.Conso
 	for i := 0; i < entityCount; i++ {
 		consoleLogEntity := loadedConsoleLogEntities[i]
 		consoleLogDTOs[i] = model.ConsoleLogDTO{
-			Level:     consoleLogEntity.Level,
-			CreatedAt: consoleLogEntity.CreatedAt,
-			Message:   consoleLogEntity.Message,
+			Level:       consoleLogEntity.Level,
+			CreatedAt:   consoleLogEntity.CreatedAt,
+			Message:     consoleLogEntity.Message,
+			MessageType: consoleLogEntity.MessageType,
 		}
 	}
 
