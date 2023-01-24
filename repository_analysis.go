@@ -435,7 +435,7 @@ LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = i.id AND re
 WHERE res.instrument_id = :instrument_id`
 
 	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
-	query += applyPagination(pageable, "req", "req.created_at DESC, req.id") + `;`
+	query += applyPagination(pageable, "res", "res.yielded_ad DESC, res.id") + `;`
 
 	countQuery := `SELECT count(res.id)
 FROM %schema_name%.sk_analysis_results res
