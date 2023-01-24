@@ -20,7 +20,7 @@ type ConsoleLogStorage struct {
 }
 
 func NewConsoleLogRepository(size int) ConsoleLogRepository {
-	log.Trace().Msg("Creating new  console log repository")
+	log.Trace().Msg("Creating new console log repository")
 	return &ConsoleLogStorage{
 		mutex:       &sync.Mutex{},
 		consoleLogs: make([]*model.ConsoleLogEntity, 0, size),

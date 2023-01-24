@@ -212,7 +212,7 @@ func (r *analysisRepository) CreateSubjectsBatch(ctx context.Context, subjectInf
 	if len(subjectInfosByAnalysisRequestID) == 0 {
 		return idsMap, nil
 	}
-	subjectDAOs := make([]subjectInfoDAO, len(subjectInfosByAnalysisRequestID))
+	subjectDAOs := make([]subjectInfoDAO, 0, len(subjectInfosByAnalysisRequestID))
 	for analysisRequestID, subjectInfo := range subjectInfosByAnalysisRequestID {
 		subjectDAO := convertSubjectToDAO(subjectInfo, analysisRequestID)
 		subjectDAO.ID = uuid.New()
@@ -723,10 +723,17 @@ func (r *analysisRepository) getChannelResults(ctx context.Context, analysisResu
 }
 
 func (r *analysisRepository) createChannelResults(ctx context.Context, channelResults []ChannelResult, analysisResultID uuid.UUID) ([]uuid.UUID, error) {
-	ids := make([]uuid.UUID, len(channelResults))
 	if len(channelResults) == 0 {
-		return ids, nil
+		return []uuid.UUID{}, nil
 	}
+	ids := make([]uuid.UUID, len(channelResults))
+	for i := range channelResults {
+		if (channelResults[i].ID == uuid.UUID{}) || (channelResults[i].ID == uuid.Nil) {
+			channelResults[i].ID = uuid.New()
+		}
+		ids[i] = channelResults[i].ID
+	}
+
 	query := fmt.Sprintf(`INSERT INTO %s.sk_channel_results(id, analysis_result_id, channel_id, qualitative_result, qualitative_result_edited)
 		VALUES(:id, :analysis_result_id, :channel_id, :qualitative_result, :qualitative_result_edited);`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, convertChannelResultsToDAOs(channelResults, analysisResultID))
@@ -770,7 +777,7 @@ func (r *analysisRepository) getChannelResultQuantitativeValues(ctx context.Cont
 func (r *analysisRepository) createChannelResultQuantitativeValues(ctx context.Context, quantitativeValuesByChannelResultIDs map[uuid.UUID]map[string]string) error {
 	quantitativeChannelResultDAOs := make([]quantitativeChannelResultDAO, 0)
 	for channelResultID, quantitativeValues := range quantitativeValuesByChannelResultIDs {
-		qrDAOs := convertQuantiativeResultsToDAOs(quantitativeValues, channelResultID)
+		qrDAOs := convertQuantitativeResultsToDAOs(quantitativeValues, channelResultID)
 		for i := range qrDAOs {
 			qrDAOs[i].ID = uuid.New()
 		}
@@ -1185,8 +1192,8 @@ func convertExtraValuesToDAOs(extraValues []ExtraValue, analysisResultID uuid.UU
 	return extraValueDAOs
 }
 
-func convertQuantiativeResultsToDAOs(quantitativeResults map[string]string, channelResultID uuid.UUID) []quantitativeChannelResultDAO {
-	DAOs := make([]quantitativeChannelResultDAO, len(quantitativeResults))
+func convertQuantitativeResultsToDAOs(quantitativeResults map[string]string, channelResultID uuid.UUID) []quantitativeChannelResultDAO {
+	DAOs := make([]quantitativeChannelResultDAO, 0, len(quantitativeResults))
 	for metric, value := range quantitativeResults {
 		DAOs = append(DAOs, quantitativeChannelResultDAO{
 			ChannelResultID: channelResultID,
@@ -1223,10 +1230,10 @@ func convertReagentInfosToDAOs(reagentInfos []ReagentInfo, analysisResultID uuid
 func convertWarningsToDAOs(warnings []string, analysisResultID uuid.UUID) []warningDAO {
 	warningDAOs := make([]warningDAO, len(warnings))
 	for i := range warnings {
-		warningDAOs = append(warningDAOs, warningDAO{
+		warningDAOs[i] = warningDAO{
 			AnalysisResultID: analysisResultID,
 			Warning:          warnings[i],
-		})
+		}
 	}
 	return warningDAOs
 }
