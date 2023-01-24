@@ -104,7 +104,7 @@ type analysisRequestInfoTO struct {
 }
 
 type analysisResultInfoTO struct {
-	ID              uuid.UUID `json:"requestId"`
+	ID              uuid.UUID `json:"id"`
 	SampleCode      string    `json:"sampleCode"`
 	AnalyteID       uuid.UUID `json:"analyteId"`
 	ResultCreatedAt time.Time `json:"transmissionDate"`
@@ -310,6 +310,22 @@ func (api *api) GetAnalysisResultsInfo(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, NewPage(pageable, totalCount, convertAnalysisResultInfoListToAnalysisResultInfoTOList(analysisResultInfoList)))
+}
+
+func (api *api) RetransmitResult(c *gin.Context) {
+	resultID, err := uuid.Parse(c.Param("resultID"))
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, err.Error())
+		return
+	}
+
+	err = api.analysisService.RetransmitResult(c, resultID)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	c.Status(http.StatusNoContent)
 }
 
 func (api *api) GetMessages(c *gin.Context) {

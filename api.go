@@ -93,6 +93,7 @@ func newAPI(engine *gin.Engine, config *config.Configuration, authManager AuthMa
 		//instrumentsGroup.GET("/:instrumentId/list/transmissions", api.GetListOfTransmission)
 		instrumentsGroup.PUT("/:instrumentId", api.UpdateInstrument)
 		instrumentsGroup.DELETE("/:instrumentId", api.DeleteInstrument)
+		instrumentsGroup.POST("/result/:resultID/retransmit", api.RetransmitResult)
 		//instrumentsGroup.POST("/request/:requestID/add-to-queue", api.AddRequestToTransferQueue)
 		//instrumentsGroup.POST("/request/add-message-batch-to-queue", api.AddTransmissionsBatchToTransferQueue)
 

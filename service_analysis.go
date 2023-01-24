@@ -11,6 +11,7 @@ type AnalysisService interface {
 	ProcessAnalysisRequests(ctx context.Context, analysisRequests []AnalysisRequest) error
 	GetAnalysisRequestsInfo(ctx context.Context, instrumentID uuid.UUID, pageable Pageable) ([]AnalysisRequestInfo, int, error)
 	GetAnalysisResultsInfo(ctx context.Context, instrumentID uuid.UUID, pageable Pageable) ([]AnalysisResultInfo, int, error)
+	RetransmitResult(ctx context.Context, resultID uuid.UUID) error
 }
 
 type analysisService struct {
@@ -77,4 +78,15 @@ func (as *analysisService) GetAnalysisResultsInfo(ctx context.Context, instrumen
 	}
 
 	return resultInfoList, totalCount, nil
+}
+
+func (as *analysisService) RetransmitResult(ctx context.Context, resultID uuid.UUID) error {
+	analysisResult, err := as.analysisRepository.GetAnalysisResultByID(ctx, resultID)
+	if err != nil {
+		return err
+	}
+
+	as.manager.SendResultForProcessing(analysisResult)
+
+	return nil
 }

@@ -168,6 +168,7 @@ type AnalysisRepository interface {
 
 	CreateAnalysisResultsBatch(ctx context.Context, analysisResults []AnalysisResult) ([]AnalysisResult, error)
 	GetAnalysisResultsBySampleCodeAndAnalyteID(ctx context.Context, sampleCode string, analyteID uuid.UUID) ([]AnalysisResult, error)
+	GetAnalysisResultByID(ctx context.Context, id uuid.UUID) (AnalysisResult, error)
 
 	GetAnalysisResultQueueItems(ctx context.Context) ([]CerberusQueueItem, error)
 	UpdateAnalysisResultQueueItemStatus(ctx context.Context, queueItem CerberusQueueItem) error
@@ -669,6 +670,92 @@ func (r *analysisRepository) GetAnalysisResultsBySampleCodeAndAnalyteID(ctx cont
 	}
 
 	return analysisResults, err
+}
+
+func (r *analysisRepository) GetAnalysisResultByID(ctx context.Context, id uuid.UUID) (AnalysisResult, error) {
+	query := `SELECT sar.id, sar.analyte_mapping_id, sar.instrument_id, sar.sample_code, sar.instrument_run_id, sar.result_record_id, sar.batch_id, sar."result", sar.status, sar.result_mode, sar.yielded_at, sar.valid_until, sar.operator, sar.edited, sar.edit_reason,
+					sam.id AS "analyte_mapping.id", sam.instrument_id AS "analyte_mapping.instrument_id", sam.instrument_analyte AS "analyte_mapping.instrument_analyte", sam.analyte_id AS "analyte_mapping.analyte_id", sam.result_type AS "analyte_mapping.result_type", sam.created_at AS "analyte_mapping.created_at", sam.modified_at AS "analyte_mapping.modified_at"
+			FROM %schema_name%.sk_analysis_results sar
+			INNER JOIN %schema_name%.sk_analyte_mappings sam ON sar.analyte_mapping_id = sam.id AND sam.deleted_at IS NULL
+			WHERE sar.id = $1;`
+
+	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
+
+	row := r.db.QueryRowxContext(ctx, query, id)
+	result := analysisResultDAO{}
+	err := row.StructScan(&result)
+	if err != nil {
+		log.Error().Err(err).Msg("Can not scan data")
+		return AnalysisResult{}, err
+	}
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			log.Trace().Msg("No analysis results")
+			return AnalysisResult{}, nil
+		}
+		log.Error().Err(err).Msg("Can not search for AnalysisResults")
+		return AnalysisResult{}, err
+	}
+
+	extraValues, err := r.getExtraValues(ctx, result.ID)
+	if err != nil {
+		return AnalysisResult{}, err
+	}
+	result.ExtraValues = extraValues
+
+	reagentInfoList, err := r.getReagentInfoList(ctx, result.ID)
+	if err != nil {
+		return AnalysisResult{}, err
+	}
+	result.ReagentInfos = reagentInfoList
+
+	images, err := r.getImages(ctx, result.ID)
+	if err != nil {
+		return AnalysisResult{}, err
+	}
+	result.Images = images
+
+	warnings, err := r.getWarnings(ctx, result.ID)
+	if err != nil {
+		return AnalysisResult{}, err
+	}
+	result.Warnings = warnings
+
+	channelResults, err := r.getChannelResults(ctx, result.ID)
+	if err != nil {
+		return AnalysisResult{}, err
+	}
+	for i := range channelResults {
+		channelResultImages, err := r.getChannelResultImages(ctx, result.ID, channelResults[i].ID)
+		if err != nil {
+			return AnalysisResult{}, err
+		}
+		channelResults[i].Images = channelResultImages
+
+		quantitativeValues, err := r.getChannelResultQuantitativeValues(ctx, channelResults[i].ID)
+		if err != nil {
+			return AnalysisResult{}, err
+		}
+		channelResults[i].QuantitativeResults = quantitativeValues
+	}
+	result.ChannelResults = channelResults
+
+	analysisResult := convertAnalysisResultDAOToAnalysisResult(result)
+
+	channelMappings, err := r.getChannelMappings(ctx, result.AnalyteMappingID)
+	if err != nil {
+		return AnalysisResult{}, err
+	}
+	analysisResult.AnalyteMapping.ChannelMappings = channelMappings
+
+	resultMappings, err := r.getResultMappings(ctx, result.AnalyteMappingID)
+	if err != nil {
+		return AnalysisResult{}, err
+	}
+	analysisResult.AnalyteMapping.ResultMappings = resultMappings
+
+	return analysisResult, err
 }
 
 func (r *analysisRepository) getChannelMappings(ctx context.Context, analyteMappingID uuid.UUID) ([]ChannelMapping, error) {
