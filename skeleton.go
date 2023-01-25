@@ -254,8 +254,10 @@ func (s *skeleton) processAnalysisResults(ctx context.Context) {
 				s.resultsBuffer = make([]AnalysisResult, 0, 500)
 			}
 		case <-time.After(3 * time.Second):
-			s.resultBatchesChan <- s.resultsBuffer
-			s.resultsBuffer = make([]AnalysisResult, 0, 500)
+			if len(s.resultsBuffer) > 0 {
+				s.resultBatchesChan <- s.resultsBuffer
+				s.resultsBuffer = make([]AnalysisResult, 0, 500)
+			}
 		}
 	}
 }
@@ -266,6 +268,11 @@ func (s *skeleton) processAnalysisResultBatches(ctx context.Context) {
 		if !ok {
 			log.Fatal().Msg("processing analysis result batches stopped: resultBatches channel closed")
 		}
+
+		if len(resultsBatch) < 1 {
+			continue
+		}
+
 		_, err := s.analysisRepository.CreateAnalysisResultQueueItem(ctx, resultsBatch)
 		if err != nil {
 			time.AfterFunc(30*time.Second, func() {
