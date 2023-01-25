@@ -81,7 +81,7 @@ func (as *analysisService) GetAnalysisResultsInfo(ctx context.Context, instrumen
 }
 
 func (as *analysisService) RetransmitResult(ctx context.Context, resultID uuid.UUID) error {
-	analysisResult, err := as.analysisRepository.GetAnalysisResultByID(ctx, resultID)
+	analysisResult, err := as.analysisRepository.GetAnalysisResultByID(ctx, resultID, true)
 	if err != nil {
 		return err
 	}
