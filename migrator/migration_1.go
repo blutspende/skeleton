@@ -1070,7 +1070,7 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_cerberus_queue_items
 CREATE INDEX sk_idx_cerberus_queue_items_created_at ON <SCHEMA_PLACEHOLDER>.sk_cerberus_queue_items (created_at);
 CREATE INDEX sk_analysis_result_analyte_mapping_id ON <SCHEMA_PLACEHOLDER>.sk_analysis_results USING btree (analyte_mapping_id);
 CREATE INDEX sk_analysis_result_analyte_sample_code ON <SCHEMA_PLACEHOLDER>.sk_analysis_results USING btree (sample_code);
-CREATE UNIQUE INDEX sk_un_analyte_mapping_analyte_id ON <SCHEMA_PLACEHOLDER>.sk_analyte_mappings USING btree (analyte_id) WHERE (deleted_at IS NULL);
+CREATE UNIQUE INDEX sk_un_analyte_mapping_analyte_id ON <SCHEMA_PLACEHOLDER>.sk_analyte_mappings USING btree (instrument_id, instrument_analyte) WHERE (deleted_at IS NULL);
 CREATE UNIQUE INDEX sk_un_result_images_result_id ON <SCHEMA_PLACEHOLDER>.sk_analysis_result_images USING btree (analysis_result_id);
 CREATE UNIQUE INDEX sk_un_result_images_result_id_channel_result ON <SCHEMA_PLACEHOLDER>.sk_analysis_result_images USING btree (analysis_result_id, channel_result_id);
 CREATE INDEX sk_cerberus_queue_items_created_at ON <SCHEMA_PLACEHOLDER>.sk_cerberus_queue_items USING btree (created_at);
