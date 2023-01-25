@@ -448,6 +448,7 @@ WHERE res.instrument_id = :instrument_id`
 FROM %schema_name%.sk_analysis_results res
 LEFT JOIN %schema_name%.sk_instruments i ON i.id = res.instrument_id
 LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = i.id AND res.analyte_mapping_id = am.id
+LEFT JOIN %schema_name%.sk_analysis_requests req ON req.sample_code = res.sample_code AND req.analyte_id = am.analyte_id
 WHERE res.instrument_id = :instrument_id`
 
 	if filter.TimeFrom != nil {
