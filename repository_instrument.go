@@ -319,13 +319,13 @@ func (r *instrumentRepository) GetInstrumentByIP(ctx context.Context, ip string)
 		if row.Err() == sql.ErrNoRows {
 			return instrument, ErrInstrumentNotFound
 		}
-		log.Error().Err(row.Err()).Msg(msgGetInstrumentByIPFailed)
+		log.Error().Err(row.Err()).Msgf(msgGetInstrumentByIPFailed+" %s", ip)
 		return instrument, ErrGetInstrumentByIPFailed
 	}
 	var dao instrumentDAO
 	err := row.StructScan(&dao)
 	if err != nil {
-		log.Error().Err(row.Err()).Msg(msgGetInstrumentByIPFailed)
+		log.Error().Err(row.Err()).Msgf(msgGetInstrumentByIPFailed+" %s", ip)
 		return instrument, ErrGetInstrumentByIPFailed
 	}
 	instrument, err = convertInstrumentDaoToInstrument(dao)
