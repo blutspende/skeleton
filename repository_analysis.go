@@ -448,6 +448,7 @@ WHERE res.instrument_id = :instrument_id`
 FROM %schema_name%.sk_analysis_results res
 LEFT JOIN %schema_name%.sk_instruments i ON i.id = res.instrument_id
 LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = i.id AND res.analyte_mapping_id = am.id
+LEFT JOIN %schema_name%.sk_analysis_requests req ON req.sample_code = res.sample_code AND req.analyte_id = am.analyte_id
 WHERE res.instrument_id = :instrument_id`
 
 	if filter.TimeFrom != nil {
@@ -460,12 +461,12 @@ WHERE res.instrument_id = :instrument_id`
 	if filter.Filter != nil {
 		preparedValues["filter"] = "%" + *filter.Filter + "%"
 
-		query += ` AND (sample_code LIKE :filter OR test_name LIKE :filter)`
-		countQuery += ` AND (sample_code LIKE :filter OR test_name LIKE :filter)`
+		query += ` AND (res.sample_code LIKE :filter OR am.instrument_analyte LIKE :filter)`
+		countQuery += ` AND (res.sample_code LIKE :filter OR am.instrument_analyte LIKE :filter)`
 	}
 
 	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
-	query += applyPagination(filter.Pageable, "res", "req.created_at DESC, res.id") + `;`
+	query += applyPagination(filter.Pageable, "req", "req.created_at DESC, res.id") + `;`
 
 	countQuery = strings.ReplaceAll(countQuery, "%schema_name%", r.dbSchema)
 
