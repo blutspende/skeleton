@@ -47,8 +47,9 @@ func (ic *instrumentCache) Set(instruments []Instrument) {
 	ic.instrumentMapByID = make(map[uuid.UUID]*Instrument, len(instruments))
 	ic.instrumentMapByIP = make(map[string]*Instrument, len(instruments))
 	for _, instrument := range instruments {
-		ic.instrumentMapByID[instrument.ID] = &instrument
-		ic.instrumentMapByIP[instrument.Hostname] = &instrument
+		myInstrument := instrument
+		ic.instrumentMapByID[instrument.ID] = &myInstrument
+		ic.instrumentMapByIP[instrument.Hostname] = &myInstrument
 	}
 }
 
