@@ -135,6 +135,8 @@ type analysisRequestInfoDAO struct {
 
 type analysisResultInfoDAO struct {
 	ID              uuid.UUID      `db:"result_id"`
+	RequestDate     sql.NullTime   `db:"request_date"`
+	WorkItemID      uuid.NullUUID  `db:"work_item_id"`
 	SampleCode      string         `db:"sample_code"`
 	AnalyteID       uuid.UUID      `db:"analyte_id"`
 	ResultCreatedAt time.Time      `db:"yielded_at"`
@@ -161,7 +163,7 @@ type AnalysisRepository interface {
 	GetAnalysisRequestsBySampleCodeAndAnalyteID(ctx context.Context, sampleCodes string, analyteID uuid.UUID) ([]AnalysisRequest, error)
 	GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string) (map[string][]AnalysisRequest, error)
 	GetAnalysisRequestsInfo(ctx context.Context, instrumentID uuid.UUID, pageable Pageable) ([]AnalysisRequestInfo, int, error)
-	GetAnalysisResultsInfo(ctx context.Context, instrumentID uuid.UUID, pageable Pageable) ([]AnalysisResultInfo, int, error)
+	GetAnalysisResultsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisResultInfo, int, error)
 	//GetAnalysisRequestsForVisualization(ctx context.Context) (map[string][]AnalysisRequest, error)
 	CreateSubjectsBatch(ctx context.Context, subjectInfosByAnalysisRequestID map[uuid.UUID]SubjectInfo) (map[uuid.UUID]uuid.UUID, error)
 	GetSubjectsByAnalysisRequestIDs(ctx context.Context, analysisRequestIDs []uuid.UUID) (map[uuid.UUID]SubjectInfo, error)
@@ -329,7 +331,7 @@ LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = i.id AND re
 WHERE res.instrument_id = :instrument_id`
 
 	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
-	query += applyPagination(pageable, "req", "req.created_at DESC, req.id", "created_at") + `;`
+	query += applyPagination(pageable, "req", "req.created_at DESC, req.id") + `;`
 
 	countQuery := `SELECT count(req.id)
 FROM %schema_name%.sk_analysis_requests req
@@ -422,32 +424,47 @@ WHERE res.instrument_id = :instrument_id`
 	return convertRequestInfoDAOsToRequestInfos(requestInfoList), count, nil
 }
 
-func (r *analysisRepository) GetAnalysisResultsInfo(ctx context.Context, instrumentID uuid.UUID, pageable Pageable) ([]AnalysisResultInfo, int, error) {
+func (r *analysisRepository) GetAnalysisResultsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisResultInfo, int, error) {
 	query := `SELECT res.id AS result_id,
 	   res.sample_code AS sample_code,
 	   am.analyte_id AS analyte_id,
 	   res.yielded_at as yielded_at,
        am.instrument_analyte as test_name,
 	   res.result AS test_result,
-       res.status AS status
+       res.status AS status,
+       req.created_at AS request_date,
+       req.work_item_id as work_item_id
 FROM %schema_name%.sk_analysis_results res
 LEFT JOIN %schema_name%.sk_instruments i ON i.id = res.instrument_id
 LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = i.id AND res.analyte_mapping_id = am.id
+LEFT JOIN %schema_name%.sk_analysis_requests req ON req.sample_code = res.sample_code AND req.analyte_id = am.analyte_id
 WHERE res.instrument_id = :instrument_id`
-
-	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
-	query += applyPagination(pageable, "res", "res.yielded_ad DESC, res.id", "yielded_at") + `;`
 
 	countQuery := `SELECT count(res.id)
 FROM %schema_name%.sk_analysis_results res
 LEFT JOIN %schema_name%.sk_instruments i ON i.id = res.instrument_id
 LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = i.id AND res.analyte_mapping_id = am.id
 WHERE res.instrument_id = :instrument_id`
+
+	if filter.TimeFrom != nil {
+		query += ` AND req.created_at >= :time_from`
+		countQuery += ` AND req.created_at >= :time_from`
+	}
+
+	if filter.Filter != nil {
+		query += ` AND (sample_code LIKE :filter OR test_name LIKE :filter)`
+		countQuery += ` AND (sample_code LIKE :filter OR test_name LIKE :filter)`
+	}
+
+	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
+	query += applyPagination(filter.Pageable, "res", "req.created_at DESC, res.id") + `;`
+
 	countQuery = strings.ReplaceAll(countQuery, "%schema_name%", r.dbSchema)
 
 	preparedValues := map[string]interface{}{
 		"instrument_id": instrumentID,
-		//"time_from":     filter.TimeFrom.UTC(),
+		"time_from":     filter.TimeFrom.UTC(),
+		"filter":        "%" + *filter.Filter + "%",
 		//"limit":         filter.PageSize,
 		//"offset":        filter.PageNumber * filter.PageSize,
 	}
@@ -1525,6 +1542,8 @@ func convertRequestInfoDAOToRequestInfo(analysisRequestInfoDAO analysisRequestIn
 func convertResultInfoDAOToResultInfo(analysisResultInfoDAO analysisResultInfoDAO) AnalysisResultInfo {
 	analysisResultInfo := AnalysisResultInfo{
 		ID:              analysisResultInfoDAO.ID,
+		RequestDate:     nullTimeToTimePointer(analysisResultInfoDAO.RequestDate),
+		WorkItemID:      nullUUIDToUUIDPointer(analysisResultInfoDAO.WorkItemID),
 		AnalyteID:       analysisResultInfoDAO.AnalyteID,
 		SampleCode:      analysisResultInfoDAO.SampleCode,
 		ResultCreatedAt: analysisResultInfoDAO.ResultCreatedAt,

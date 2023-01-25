@@ -1,6 +1,9 @@
 package skeleton
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"time"
+)
 
 type SortDirection string // @Name SortDirection
 
@@ -12,6 +15,12 @@ const (
 
 func (s SortDirection) String() string {
 	return string(s)
+}
+
+type Filter struct {
+	TimeFrom *time.Time `form:"timeFrom" json:"timeFrom"`
+	Filter   *string    `form:"filter" json:"filter"`
+	Pageable Pageable
 }
 
 type Pageable struct {

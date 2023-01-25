@@ -291,6 +291,8 @@ type AnalysisRequestInfo struct {
 
 type AnalysisResultInfo struct {
 	ID              uuid.UUID
+	RequestDate     *time.Time
+	WorkItemID      *uuid.UUID
 	SampleCode      string
 	AnalyteID       uuid.UUID
 	ResultCreatedAt time.Time

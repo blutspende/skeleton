@@ -10,7 +10,7 @@ type AnalysisService interface {
 	CreateAnalysisRequests(ctx context.Context, analysisRequests []AnalysisRequest) ([]AnalysisRequestStatus, error)
 	ProcessAnalysisRequests(ctx context.Context, analysisRequests []AnalysisRequest) error
 	GetAnalysisRequestsInfo(ctx context.Context, instrumentID uuid.UUID, pageable Pageable) ([]AnalysisRequestInfo, int, error)
-	GetAnalysisResultsInfo(ctx context.Context, instrumentID uuid.UUID, pageable Pageable) ([]AnalysisResultInfo, int, error)
+	GetAnalysisResultsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisResultInfo, int, error)
 	RetransmitResult(ctx context.Context, resultID uuid.UUID) error
 }
 
@@ -71,8 +71,8 @@ func (as *analysisService) GetAnalysisRequestsInfo(ctx context.Context, instrume
 	return requestInfoList, totalCount, nil
 }
 
-func (as *analysisService) GetAnalysisResultsInfo(ctx context.Context, instrumentID uuid.UUID, pageable Pageable) ([]AnalysisResultInfo, int, error) {
-	resultInfoList, totalCount, err := as.analysisRepository.GetAnalysisResultsInfo(ctx, instrumentID, pageable)
+func (as *analysisService) GetAnalysisResultsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisResultInfo, int, error) {
+	resultInfoList, totalCount, err := as.analysisRepository.GetAnalysisResultsInfo(ctx, instrumentID, filter)
 	if err != nil {
 		return []AnalysisResultInfo{}, 0, err
 	}

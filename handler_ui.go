@@ -104,13 +104,15 @@ type analysisRequestInfoTO struct {
 }
 
 type analysisResultInfoTO struct {
-	ID              uuid.UUID `json:"id"`
-	SampleCode      string    `json:"sampleCode"`
-	AnalyteID       uuid.UUID `json:"analyteId"`
-	ResultCreatedAt time.Time `json:"transmissionDate"`
-	TestName        *string   `json:"testName"`
-	TestResult      *string   `json:"testResult"`
-	Status          string    `json:"status"`
+	ID              uuid.UUID  `json:"id"`
+	RequestDate     *time.Time `json:"requestDate"`
+	WorkItemID      *uuid.UUID `json:"workItemId"`
+	SampleCode      string     `json:"sampleCode"`
+	AnalyteID       uuid.UUID  `json:"analyteId"`
+	ResultCreatedAt time.Time  `json:"transmissionDate"`
+	TestName        *string    `json:"testName"`
+	TestResult      *string    `json:"testResult"`
+	Status          string     `json:"status"`
 }
 
 func (api *api) GetInstruments(c *gin.Context) {
@@ -296,20 +298,20 @@ func (api *api) GetAnalysisResultsInfo(c *gin.Context) {
 		return
 	}
 
-	var pageable Pageable
-	err = c.ShouldBindQuery(&pageable)
+	var filter Filter
+	err = c.ShouldBindQuery(&filter)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, "malformed pageable data")
 		return
 	}
 
-	analysisResultInfoList, totalCount, err := api.analysisService.GetAnalysisResultsInfo(c, instrumentID, pageable)
+	analysisResultInfoList, totalCount, err := api.analysisService.GetAnalysisResultsInfo(c, instrumentID, filter)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, NewPage(pageable, totalCount, convertAnalysisResultInfoListToAnalysisResultInfoTOList(analysisResultInfoList)))
+	c.JSON(http.StatusOK, NewPage(filter.Pageable, totalCount, convertAnalysisResultInfoListToAnalysisResultInfoTOList(analysisResultInfoList)))
 }
 
 func (api *api) RetransmitResult(c *gin.Context) {
@@ -685,6 +687,8 @@ func convertAnalysisRequestInfoToAnalysisRequestInfoTO(analysisRequestInfo Analy
 func convertAnalysisResultInfoToAnalysisResultInfoTO(analysisResultInfo AnalysisResultInfo) analysisResultInfoTO {
 	return analysisResultInfoTO{
 		ID:              analysisResultInfo.ID,
+		RequestDate:     analysisResultInfo.RequestDate,
+		WorkItemID:      analysisResultInfo.WorkItemID,
 		SampleCode:      analysisResultInfo.SampleCode,
 		AnalyteID:       analysisResultInfo.AnalyteID,
 		ResultCreatedAt: analysisResultInfo.ResultCreatedAt,
