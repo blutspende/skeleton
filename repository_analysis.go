@@ -696,7 +696,7 @@ func (r *analysisRepository) GetAnalysisResultByID(ctx context.Context, id uuid.
 			FROM %schema_name%.sk_analysis_results sar
 			INNER JOIN %schema_name%.sk_analyte_mappings sam ON sar.analyte_mapping_id = sam.id`
 
-	if allowDeletedAnalyteMapping {
+	if !allowDeletedAnalyteMapping {
 		query += ` AND sam.deleted_at IS NULL`
 	}
 
