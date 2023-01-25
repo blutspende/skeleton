@@ -291,6 +291,7 @@ type AnalysisRequestInfo struct {
 
 type AnalysisResultInfo struct {
 	ID              uuid.UUID
+	BatchID         *uuid.UUID
 	RequestDate     *time.Time
 	WorkItemID      *uuid.UUID
 	SampleCode      string
@@ -299,6 +300,11 @@ type AnalysisResultInfo struct {
 	TestName        *string
 	TestResult      *string
 	Status          string
+}
+
+type AnalysisBatch struct {
+	ID      uuid.UUID
+	Results []AnalysisResultInfo
 }
 
 // Image Images are Id's as returned by the DEA service where they get uploaded to

@@ -66,6 +66,7 @@ func NewPage(pageable Pageable, totalCount int, items interface{}) Page {
 		}
 
 		return Page{
+			Items:      items,
 			Page:       0,
 			PageSize:   0,
 			TotalCount: totalCount,

@@ -11,7 +11,9 @@ type AnalysisService interface {
 	ProcessAnalysisRequests(ctx context.Context, analysisRequests []AnalysisRequest) error
 	GetAnalysisRequestsInfo(ctx context.Context, instrumentID uuid.UUID, pageable Pageable) ([]AnalysisRequestInfo, int, error)
 	GetAnalysisResultsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisResultInfo, int, error)
+	GetAnalysisBatches(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisBatch, int, error)
 	RetransmitResult(ctx context.Context, resultID uuid.UUID) error
+	RetransmitResultBatches(ctx context.Context, batchIDs []uuid.UUID) error
 }
 
 type analysisService struct {
@@ -80,6 +82,15 @@ func (as *analysisService) GetAnalysisResultsInfo(ctx context.Context, instrumen
 	return resultInfoList, totalCount, nil
 }
 
+func (as *analysisService) GetAnalysisBatches(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisBatch, int, error) {
+	analysisBatchList, totalCount, err := as.analysisRepository.GetAnalysisBatches(ctx, instrumentID, filter)
+	if err != nil {
+		return []AnalysisBatch{}, 0, err
+	}
+
+	return analysisBatchList, totalCount, nil
+}
+
 func (as *analysisService) RetransmitResult(ctx context.Context, resultID uuid.UUID) error {
 	analysisResult, err := as.analysisRepository.GetAnalysisResultByID(ctx, resultID, true)
 	if err != nil {
@@ -87,6 +98,19 @@ func (as *analysisService) RetransmitResult(ctx context.Context, resultID uuid.U
 	}
 
 	as.manager.SendResultForProcessing(analysisResult)
+
+	return nil
+}
+
+func (as *analysisService) RetransmitResultBatches(ctx context.Context, batchIDs []uuid.UUID) error {
+	analysisResults, err := as.analysisRepository.GetAnalysisResultsByBatchIDs(ctx, batchIDs)
+	if err != nil {
+		return err
+	}
+
+	for _, analysisResult := range analysisResults {
+		as.manager.SendResultForProcessing(analysisResult)
+	}
 
 	return nil
 }

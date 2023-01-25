@@ -135,6 +135,7 @@ type analysisRequestInfoDAO struct {
 
 type analysisResultInfoDAO struct {
 	ID              uuid.UUID      `db:"result_id"`
+	BatchID         uuid.NullUUID  `db:"batch_id"`
 	RequestDate     sql.NullTime   `db:"request_date"`
 	WorkItemID      uuid.NullUUID  `db:"work_item_id"`
 	SampleCode      string         `db:"sample_code"`
@@ -164,6 +165,7 @@ type AnalysisRepository interface {
 	GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string) (map[string][]AnalysisRequest, error)
 	GetAnalysisRequestsInfo(ctx context.Context, instrumentID uuid.UUID, pageable Pageable) ([]AnalysisRequestInfo, int, error)
 	GetAnalysisResultsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisResultInfo, int, error)
+	GetAnalysisBatches(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisBatch, int, error)
 	//GetAnalysisRequestsForVisualization(ctx context.Context) (map[string][]AnalysisRequest, error)
 	CreateSubjectsBatch(ctx context.Context, subjectInfosByAnalysisRequestID map[uuid.UUID]SubjectInfo) (map[uuid.UUID]uuid.UUID, error)
 	GetSubjectsByAnalysisRequestIDs(ctx context.Context, analysisRequestIDs []uuid.UUID) (map[uuid.UUID]SubjectInfo, error)
@@ -171,6 +173,8 @@ type AnalysisRepository interface {
 	CreateAnalysisResultsBatch(ctx context.Context, analysisResults []AnalysisResult) ([]AnalysisResult, error)
 	GetAnalysisResultsBySampleCodeAndAnalyteID(ctx context.Context, sampleCode string, analyteID uuid.UUID) ([]AnalysisResult, error)
 	GetAnalysisResultByID(ctx context.Context, id uuid.UUID, allowDeletedAnalyteMapping bool) (AnalysisResult, error)
+	GetAnalysisResultsByBatchIDs(ctx context.Context, batchIDs []uuid.UUID) ([]AnalysisResult, error)
+	GetAnalysisResultsByBatchIDsMapped(ctx context.Context, batchIDs []uuid.UUID) (map[uuid.UUID][]AnalysisResultInfo, error)
 
 	GetAnalysisResultQueueItems(ctx context.Context) ([]CerberusQueueItem, error)
 	UpdateAnalysisResultQueueItemStatus(ctx context.Context, queueItem CerberusQueueItem) error
@@ -438,15 +442,13 @@ func (r *analysisRepository) GetAnalysisResultsInfo(ctx context.Context, instrum
        req.created_at AS request_date,
        req.work_item_id as work_item_id
 FROM %schema_name%.sk_analysis_results res
-LEFT JOIN %schema_name%.sk_instruments i ON i.id = res.instrument_id
-LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = i.id AND res.analyte_mapping_id = am.id
+LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = res.instrument_id AND res.analyte_mapping_id = am.id
 LEFT JOIN %schema_name%.sk_analysis_requests req ON req.sample_code = res.sample_code AND req.analyte_id = am.analyte_id
 WHERE res.instrument_id = :instrument_id`
 
 	countQuery := `SELECT count(res.id)
 FROM %schema_name%.sk_analysis_results res
-LEFT JOIN %schema_name%.sk_instruments i ON i.id = res.instrument_id
-LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = i.id AND res.analyte_mapping_id = am.id
+LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = res.instrument_id AND res.analyte_mapping_id = am.id
 LEFT JOIN %schema_name%.sk_analysis_requests req ON req.sample_code = res.sample_code AND req.analyte_id = am.analyte_id
 WHERE res.instrument_id = :instrument_id`
 
@@ -499,6 +501,74 @@ WHERE res.instrument_id = :instrument_id`
 	}
 
 	return convertResultInfoDAOsToResultInfos(resultInfoList), count, nil
+}
+
+func (r *analysisRepository) GetAnalysisBatches(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisBatch, int, error) {
+	preparedValues := map[string]interface{}{
+		"instrument_id": instrumentID,
+	}
+
+	query := `SELECT distinct res.batch_id
+FROM %schema_name%.sk_analysis_results res
+LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = res.instrument_id AND res.analyte_mapping_id = am.id
+LEFT JOIN %schema_name%.sk_analysis_requests req ON req.sample_code = res.sample_code AND req.analyte_id = am.analyte_id
+WHERE res.instrument_id = :instrument_id`
+
+	countQuery := `SELECT count(res.id)
+FROM %schema_name%.sk_analysis_results res
+LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = res.instrument_id AND res.analyte_mapping_id = am.id
+LEFT JOIN %schema_name%.sk_analysis_requests req ON req.sample_code = res.sample_code AND req.analyte_id = am.analyte_id
+WHERE res.instrument_id = :instrument_id`
+
+	if filter.TimeFrom != nil {
+		preparedValues["time_from"] = filter.TimeFrom.UTC()
+
+		query += ` AND req.created_at >= :time_from`
+		countQuery += ` AND req.created_at >= :time_from`
+	}
+
+	if filter.Filter != nil {
+		preparedValues["filter"] = "%" + *filter.Filter + "%"
+
+		query += ` AND (res.sample_code LIKE :filter OR am.instrument_analyte LIKE :filter)`
+		countQuery += ` AND (res.sample_code LIKE :filter OR am.instrument_analyte LIKE :filter)`
+	}
+
+	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
+	query += applyPagination(filter.Pageable, "", "") + `;`
+
+	countQuery = strings.ReplaceAll(countQuery, "%schema_name%", r.dbSchema)
+
+	rows, err := r.db.NamedQueryContext(ctx, query, preparedValues)
+	if err != nil {
+		log.Error().Err(err).Msg("Can not get analysis request list")
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	batchIDs := make([]uuid.UUID, 0)
+	for rows.Next() {
+		var batchID uuid.UUID
+		err = rows.Scan(&batchID)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to struct scan request")
+			return nil, 0, err
+		}
+		batchIDs = append(batchIDs, batchID)
+	}
+
+	batches, err := r.GetAnalysisResultsByBatchIDsMapped(ctx, batchIDs)
+
+	analysisBatchList := make([]AnalysisBatch, 0)
+
+	for batchID, results := range batches {
+		analysisBatchList = append(analysisBatchList, AnalysisBatch{
+			ID:      batchID,
+			Results: results,
+		})
+	}
+
+	return analysisBatchList, len(batchIDs), err
 }
 
 func (r *analysisRepository) GetSubjectsByAnalysisRequestIDs(ctx context.Context, analysisRequestIDs []uuid.UUID) (map[uuid.UUID]SubjectInfo, error) {
@@ -778,6 +848,155 @@ func (r *analysisRepository) GetAnalysisResultByID(ctx context.Context, id uuid.
 	analysisResult.AnalyteMapping.ResultMappings = resultMappings
 
 	return analysisResult, err
+}
+
+func (r *analysisRepository) GetAnalysisResultsByBatchIDs(ctx context.Context, batchIDs []uuid.UUID) ([]AnalysisResult, error) {
+	query := `SELECT sar.id, sar.analyte_mapping_id, sar.instrument_id, sar.sample_code, sar.instrument_run_id, sar.result_record_id, sar.batch_id, sar."result", sar.status, sar.result_mode, sar.yielded_at, sar.valid_until, sar.operator, sar.edited, sar.edit_reason,
+					sam.id AS "analyte_mapping.id", sam.instrument_id AS "analyte_mapping.instrument_id", sam.instrument_analyte AS "analyte_mapping.instrument_analyte", sam.analyte_id AS "analyte_mapping.analyte_id", sam.result_type AS "analyte_mapping.result_type", sam.created_at AS "analyte_mapping.created_at", sam.modified_at AS "analyte_mapping.modified_at"
+			FROM %schema_name%.sk_analysis_results sar
+			INNER JOIN %schema_name%.sk_analyte_mappings sam ON sar.analyte_mapping_id = sam.id AND sam.deleted_at IS NULL
+			WHERE sar.batch_id IN (?);`
+
+	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
+	query, args, _ := sqlx.In(query, batchIDs)
+	query = r.db.Rebind(query)
+
+	rows, err := r.db.QueryxContext(ctx, query, args...)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			log.Trace().Msg("No analysis results")
+			return []AnalysisResult{}, nil
+		}
+		log.Error().Err(err).Msg("Can not search for AnalysisResults")
+		return []AnalysisResult{}, err
+	}
+	defer rows.Close()
+
+	analysisResultDAOs := make([]analysisResultDAO, 0)
+	for rows.Next() {
+		result := analysisResultDAO{}
+		err := rows.StructScan(&result)
+		if err != nil {
+			log.Error().Err(err).Msg("Can not scan data")
+			return []AnalysisResult{}, err
+		}
+
+		analysisResultDAOs = append(analysisResultDAOs, result)
+	}
+
+	analysisResults := make([]AnalysisResult, len(analysisResultDAOs))
+	for analysisResultIndex, dao := range analysisResultDAOs {
+		extraValues, err := r.getExtraValues(ctx, dao.ID)
+		if err != nil {
+			return nil, err
+		}
+		dao.ExtraValues = extraValues
+
+		reagentInfoList, err := r.getReagentInfoList(ctx, dao.ID)
+		if err != nil {
+			return nil, err
+		}
+		dao.ReagentInfos = reagentInfoList
+
+		images, err := r.getImages(ctx, dao.ID)
+		if err != nil {
+			return nil, err
+		}
+		dao.Images = images
+
+		warnings, err := r.getWarnings(ctx, dao.ID)
+		if err != nil {
+			return nil, err
+		}
+		dao.Warnings = warnings
+
+		channelResults, err := r.getChannelResults(ctx, dao.ID)
+		if err != nil {
+			return nil, err
+		}
+		for i := range channelResults {
+			channelResultImages, err := r.getChannelResultImages(ctx, dao.ID, channelResults[i].ID)
+			if err != nil {
+				return nil, err
+			}
+			channelResults[i].Images = channelResultImages
+
+			quantitativeValues, err := r.getChannelResultQuantitativeValues(ctx, channelResults[i].ID)
+			if err != nil {
+				return nil, err
+			}
+			channelResults[i].QuantitativeResults = quantitativeValues
+		}
+		dao.ChannelResults = channelResults
+
+		analysisResult := convertAnalysisResultDAOToAnalysisResult(dao)
+
+		channelMappings, err := r.getChannelMappings(ctx, dao.AnalyteMappingID)
+		if err != nil {
+			return nil, err
+		}
+		analysisResult.AnalyteMapping.ChannelMappings = channelMappings
+
+		resultMappings, err := r.getResultMappings(ctx, dao.AnalyteMappingID)
+		if err != nil {
+			return nil, err
+		}
+		analysisResult.AnalyteMapping.ResultMappings = resultMappings
+
+		analysisResults[analysisResultIndex] = analysisResult
+	}
+
+	return analysisResults, err
+}
+
+func (r *analysisRepository) GetAnalysisResultsByBatchIDsMapped(ctx context.Context, batchIDs []uuid.UUID) (map[uuid.UUID][]AnalysisResultInfo, error) {
+	resultMap := make(map[uuid.UUID][]AnalysisResultInfo)
+
+	if len(batchIDs) < 1 {
+		return resultMap, nil
+	}
+
+	query := `SELECT res.id AS result_id,
+       res.batch_id AS batch_id,
+	   res.sample_code AS sample_code,
+	   am.analyte_id AS analyte_id,
+	   res.yielded_at as yielded_at,
+       am.instrument_analyte as test_name,
+	   res.result AS test_result,
+       res.status AS status,
+       req.created_at AS request_date,
+       req.work_item_id as work_item_id
+FROM %schema_name%.sk_analysis_results res
+LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = res.instrument_id AND res.analyte_mapping_id = am.id
+LEFT JOIN %schema_name%.sk_analysis_requests req ON req.sample_code = res.sample_code AND req.analyte_id = am.analyte_id
+WHERE res.batch_id IN (?)`
+
+	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
+	query, args, _ := sqlx.In(query, batchIDs)
+	query = r.db.Rebind(query)
+
+	rows, err := r.db.QueryxContext(ctx, query, args...)
+	if err != nil {
+		log.Error().Err(err).Msg("Can not get analysis request list")
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		result := analysisResultInfoDAO{}
+		err = rows.StructScan(&result)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to struct scan request")
+			return nil, err
+		}
+
+		if result.BatchID.Valid {
+			resultMap[result.BatchID.UUID] = append(resultMap[result.BatchID.UUID], convertResultInfoDAOToResultInfo(result))
+		}
+	}
+
+	return resultMap, nil
 }
 
 func (r *analysisRepository) getChannelMappings(ctx context.Context, analyteMappingID uuid.UUID) ([]ChannelMapping, error) {
@@ -1547,6 +1766,7 @@ func convertRequestInfoDAOToRequestInfo(analysisRequestInfoDAO analysisRequestIn
 func convertResultInfoDAOToResultInfo(analysisResultInfoDAO analysisResultInfoDAO) AnalysisResultInfo {
 	analysisResultInfo := AnalysisResultInfo{
 		ID:              analysisResultInfoDAO.ID,
+		BatchID:         nullUUIDToUUIDPointer(analysisResultInfoDAO.BatchID),
 		RequestDate:     nullTimeToTimePointer(analysisResultInfoDAO.RequestDate),
 		WorkItemID:      nullUUIDToUUIDPointer(analysisResultInfoDAO.WorkItemID),
 		AnalyteID:       analysisResultInfoDAO.AnalyteID,

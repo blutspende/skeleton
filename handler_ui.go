@@ -115,6 +115,15 @@ type analysisResultInfoTO struct {
 	Status          string     `json:"status"`
 }
 
+type analysisBatchTO struct {
+	ID      uuid.UUID `json:"batchId"`
+	Results Page      `json:"requests"`
+}
+
+type batchRetransmitTO struct {
+	BatchIDs []uuid.UUID `json:"batchIds"`
+}
+
 func (api *api) GetInstruments(c *gin.Context) {
 	instruments, err := api.instrumentService.GetInstruments(c)
 	if err != nil {
@@ -314,6 +323,29 @@ func (api *api) GetAnalysisResultsInfo(c *gin.Context) {
 	c.JSON(http.StatusOK, NewPage(filter.Pageable, totalCount, convertAnalysisResultInfoListToAnalysisResultInfoTOList(analysisResultInfoList)))
 }
 
+func (api *api) GetAnalysisBatches(c *gin.Context) {
+	instrumentID, err := uuid.Parse(c.Param("instrumentId"))
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, err.Error())
+		return
+	}
+
+	var filter Filter
+	err = c.ShouldBindQuery(&filter)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, "malformed pageable data")
+		return
+	}
+
+	analysisBatchList, totalCount, err := api.analysisService.GetAnalysisBatches(c, instrumentID, filter)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	c.JSON(http.StatusOK, NewPage(filter.Pageable, totalCount, convertAnalysisBatchListToAnalysisBatchTOList(analysisBatchList)))
+}
+
 func (api *api) RetransmitResult(c *gin.Context) {
 	resultID, err := uuid.Parse(c.Param("resultID"))
 	if err != nil {
@@ -322,6 +354,23 @@ func (api *api) RetransmitResult(c *gin.Context) {
 	}
 
 	err = api.analysisService.RetransmitResult(c, resultID)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+func (api *api) RetransmitResultBatches(c *gin.Context) {
+	var to batchRetransmitTO
+	err := c.ShouldBindJSON(&to)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, "invalid batch ids")
+		return
+	}
+
+	err = api.analysisService.RetransmitResultBatches(c, to.BatchIDs)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, err.Error())
 		return
@@ -698,6 +747,15 @@ func convertAnalysisResultInfoToAnalysisResultInfoTO(analysisResultInfo Analysis
 	}
 }
 
+func convertAnalysisBatchToAnalysisBatchTO(analysisBatch AnalysisBatch) analysisBatchTO {
+	to := analysisBatchTO{
+		ID:      analysisBatch.ID,
+		Results: NewPage(Pageable{PageSize: 0}, len(analysisBatch.Results), convertAnalysisResultInfoListToAnalysisResultInfoTOList(analysisBatch.Results)),
+	}
+
+	return to
+}
+
 func convertAnalysisRequestInfoListToAnalysisRequestInfoTOList(analysisRequestInfoList []AnalysisRequestInfo) []analysisRequestInfoTO {
 	tos := make([]analysisRequestInfoTO, len(analysisRequestInfoList))
 	for i := range analysisRequestInfoList {
@@ -710,6 +768,14 @@ func convertAnalysisResultInfoListToAnalysisResultInfoTOList(analysisResultInfoL
 	tos := make([]analysisResultInfoTO, len(analysisResultInfoList))
 	for i := range analysisResultInfoList {
 		tos[i] = convertAnalysisResultInfoToAnalysisResultInfoTO(analysisResultInfoList[i])
+	}
+	return tos
+}
+
+func convertAnalysisBatchListToAnalysisBatchTOList(analysisBatchList []AnalysisBatch) []analysisBatchTO {
+	tos := make([]analysisBatchTO, len(analysisBatchList))
+	for i := range analysisBatchList {
+		tos[i] = convertAnalysisBatchToAnalysisBatchTO(analysisBatchList[i])
 	}
 	return tos
 }

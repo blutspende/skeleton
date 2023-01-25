@@ -90,10 +90,11 @@ func newAPI(engine *gin.Engine, config *config.Configuration, authManager AuthMa
 		instrumentsGroup.GET("/:instrumentId/results", api.GetAnalysisResultsInfo)
 		//instrumentsGroup.GET("/:instrumentId/batches", api.GetAnalysisBatchesInfo)
 		//instrumentsGroup.GET("/channel-results/:requestId", api.GetChannelResultsForRequest)
-		//instrumentsGroup.GET("/:instrumentId/list/transmissions", api.GetListOfTransmission)
+		instrumentsGroup.GET("/:instrumentId/list/transmissions", api.GetAnalysisBatches)
 		instrumentsGroup.PUT("/:instrumentId", api.UpdateInstrument)
 		instrumentsGroup.DELETE("/:instrumentId", api.DeleteInstrument)
 		instrumentsGroup.POST("/result/:resultID/retransmit", api.RetransmitResult)
+		instrumentsGroup.POST("/result/retransmit/batches", api.RetransmitResultBatches)
 		//instrumentsGroup.POST("/request/:requestID/add-to-queue", api.AddRequestToTransferQueue)
 		//instrumentsGroup.POST("/request/add-message-batch-to-queue", api.AddTransmissionsBatchToTransferQueue)
 
