@@ -70,18 +70,3 @@ func TestRegisterCreatedInstrument(t *testing.T) {
 		t.Fail()
 	}
 }
-
-type cerberusClientMock struct {
-	registerInstrumentFunc func(instrument Instrument) error
-}
-
-func (m *cerberusClientMock) RegisterInstrument(instrument Instrument) error {
-	if m.registerInstrumentFunc == nil {
-		return nil
-	}
-	return m.registerInstrumentFunc(instrument)
-}
-
-func (m *cerberusClientMock) SendAnalysisResultBatch(analysisResults []AnalysisResult) (AnalysisResultBatchResponse, error) {
-	return AnalysisResultBatchResponse{}, nil
-}
