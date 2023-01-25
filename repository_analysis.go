@@ -325,20 +325,19 @@ func (r *analysisRepository) GetAnalysisRequestsInfo(ctx context.Context, instru
 	   i.hostname as source_ip,
 	   i.id as instrument_id
 FROM %schema_name%.sk_analysis_requests req
-LEFT JOIN %schema_name%.sk_analysis_results res ON res.sample_code = req.sample_code
+LEFT JOIN %schema_name%.sk_analysis_results res ON (res.sample_code = req.sample_code and res.instrument_id = :instrument_id)
 LEFT JOIN %schema_name%.sk_instruments i ON i.id = res.instrument_id
-LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = i.id AND req.analyte_id = am.analyte_id
-WHERE res.instrument_id = :instrument_id`
+LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = i.id AND req.analyte_id = am.analyte_id`
 
 	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
 	query += applyPagination(pageable, "req", "req.created_at DESC, req.id") + `;`
 
 	countQuery := `SELECT count(req.id)
 FROM %schema_name%.sk_analysis_requests req
-LEFT JOIN %schema_name%.sk_analysis_results res ON res.sample_code = req.sample_code
+LEFT JOIN %schema_name%.sk_analysis_results res ON (res.sample_code = req.sample_code and res.instrument_id = :instrument_id)
 LEFT JOIN %schema_name%.sk_instruments i ON i.id = res.instrument_id
-LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = i.id AND req.analyte_id = am.analyte_id
-WHERE res.instrument_id = :instrument_id`
+LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = i.id AND req.analyte_id = am.analyte_id`
+
 	countQuery = strings.ReplaceAll(countQuery, "%schema_name%", r.dbSchema)
 
 	preparedValues := map[string]interface{}{
