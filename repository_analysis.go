@@ -425,6 +425,10 @@ WHERE res.instrument_id = :instrument_id`
 }
 
 func (r *analysisRepository) GetAnalysisResultsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisResultInfo, int, error) {
+	preparedValues := map[string]interface{}{
+		"instrument_id": instrumentID,
+	}
+
 	query := `SELECT res.id AS result_id,
 	   res.sample_code AS sample_code,
 	   am.analyte_id AS analyte_id,
@@ -447,11 +451,15 @@ LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = i.id AND re
 WHERE res.instrument_id = :instrument_id`
 
 	if filter.TimeFrom != nil {
+		preparedValues["time_from"] = filter.TimeFrom.UTC()
+
 		query += ` AND req.created_at >= :time_from`
 		countQuery += ` AND req.created_at >= :time_from`
 	}
 
 	if filter.Filter != nil {
+		preparedValues["filter"] = "%" + *filter.Filter + "%"
+
 		query += ` AND (sample_code LIKE :filter OR test_name LIKE :filter)`
 		countQuery += ` AND (sample_code LIKE :filter OR test_name LIKE :filter)`
 	}
@@ -460,14 +468,6 @@ WHERE res.instrument_id = :instrument_id`
 	query += applyPagination(filter.Pageable, "res", "req.created_at DESC, res.id") + `;`
 
 	countQuery = strings.ReplaceAll(countQuery, "%schema_name%", r.dbSchema)
-
-	preparedValues := map[string]interface{}{
-		"instrument_id": instrumentID,
-		"time_from":     filter.TimeFrom.UTC(),
-		"filter":        "%" + *filter.Filter + "%",
-		//"limit":         filter.PageSize,
-		//"offset":        filter.PageNumber * filter.PageSize,
-	}
 
 	rows, err := r.db.NamedQueryContext(ctx, query, preparedValues)
 	if err != nil {
