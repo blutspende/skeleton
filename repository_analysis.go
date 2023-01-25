@@ -465,7 +465,7 @@ WHERE res.instrument_id = :instrument_id`
 	}
 
 	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
-	query += applyPagination(filter.Pageable, "res", "req.created_at DESC, res.id") + `;`
+	query += applyPagination(filter.Pageable, "req", "req.created_at DESC, res.id") + `;`
 
 	countQuery = strings.ReplaceAll(countQuery, "%schema_name%", r.dbSchema)
 
