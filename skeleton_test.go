@@ -48,125 +48,6 @@ func TestSkeletonStart(t *testing.T) {
 	}
 }
 
-func TestSubmitAnalysisResult(t *testing.T) {
-	postgres := embeddedpostgres.NewDatabase(embeddedpostgres.DefaultConfig().Port(5433))
-	postgres.Start()
-	defer postgres.Stop()
-	sqlConn, _ := sqlx.Connect("pgx", "host=localhost port=5433 user=postgres password=postgres dbname=postgres sslmode=disable")
-
-	schemaName := "testSubmitAnalysisResults"
-
-	_, _ = sqlConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
-	_, _ = sqlConn.Exec(fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schemaName))
-	_, _ = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
-
-	dbConn := db.CreateDbConnector(sqlConn)
-	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
-	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
-	consoleLogRepository := repository.NewConsoleLogRepository(500)
-
-	analysisService := NewAnalysisService(analysisRepository, nil)
-	instrumentService := NewInstrumentService(nil, instrumentRepository, nil, nil, nil)
-	consoleLogService := service.NewConsoleLogService(consoleLogRepository)
-	cerberusClientMock := cerberusClientMock{}
-
-	skeletonInstance, _ := NewSkeleton(sqlConn, schemaName, migrator.NewSkeletonMigrator(), nil, analysisRepository, analysisService, instrumentService, consoleLogService, nil, &cerberusClientMock)
-	func() {
-		_ = skeletonInstance.Start()
-	}()
-
-	analysisRequests := []AnalysisRequest{
-		{
-			WorkItemID:     uuid.New(),
-			AnalyteID:      uuid.New(),
-			SampleCode:     "",
-			MaterialID:     uuid.New(),
-			LaboratoryID:   uuid.New(),
-			ValidUntilTime: time.Now().UTC().Add(14 * 24 * time.Hour),
-			CreatedAt:      time.Now().UTC(),
-			SubjectInfo:    nil,
-		},
-	}
-	_, err := analysisService.CreateAnalysisRequests(context.TODO(), analysisRequests)
-	assert.Nil(t, err)
-
-	//TODO
-	//create instrument + analytemapping
-
-	instrumentID1 := uuid.New()
-	instrumentID2 := uuid.New()
-
-	analysisResults := []AnalysisResult{
-		{
-			ID:              uuid.UUID{},
-			AnalysisRequest: analysisRequests[0],
-			AnalyteMapping: AnalyteMapping{
-				AnalyteID: analysisRequests[0].ID,
-			},
-			Instrument: Instrument{
-				ID: instrumentID1,
-			},
-			SampleCode:               "testSampleCode",
-			ResultRecordID:           uuid.New(),
-			Result:                   "pos",
-			Status:                   "",
-			ResultYieldDateTime:      time.Now().Add(-1 * time.Minute),
-			ValidUntil:               time.Now().Add(1 * time.Minute),
-			Operator:                 "",
-			TechnicalReleaseDateTime: time.Now(),
-			InstrumentRunID:          uuid.Nil,
-			RunCounter:               1,
-			Edited:                   false,
-			EditReason:               "",
-			Warnings:                 []string{"test warning"},
-			ChannelResults:           nil,
-			ExtraValues:              nil,
-			ReagentInfos:             nil,
-			Images:                   nil,
-		},
-		{
-			ID:              uuid.UUID{},
-			AnalysisRequest: analysisRequests[0],
-			AnalyteMapping: AnalyteMapping{
-				AnalyteID: analysisRequests[0].ID,
-			},
-			Instrument: Instrument{
-				ID: instrumentID2,
-			},
-			SampleCode:               "testSampleCode2",
-			ResultRecordID:           uuid.New(),
-			Result:                   "pos",
-			Status:                   "",
-			ResultYieldDateTime:      time.Now().Add(-1 * time.Minute),
-			ValidUntil:               time.Now().Add(1 * time.Minute),
-			Operator:                 "",
-			TechnicalReleaseDateTime: time.Now(),
-			InstrumentRunID:          uuid.Nil,
-			RunCounter:               1,
-			Edited:                   false,
-			EditReason:               "",
-			Warnings:                 nil,
-			ChannelResults:           nil,
-			ExtraValues:              nil,
-			ReagentInfos:             nil,
-			Images:                   nil,
-		},
-	}
-
-	for _, analysisResult := range analysisResults {
-		err = skeletonInstance.SubmitAnalysisResult(context.TODO(), analysisResult)
-		assert.Nil(t, err)
-	}
-
-	time.Sleep(4 * time.Second)
-	assert.Equal(t, 2, len(cerberusClientMock.AnalysisResults))
-	assert.Equal(t, analysisRequests[0].WorkItemID, cerberusClientMock.AnalysisResults[0].AnalysisRequest.WorkItemID)
-	assert.Equal(t, analysisRequests[0].SampleCode, cerberusClientMock.AnalysisResults[0].AnalysisRequest.SampleCode)
-	assert.Equal(t, analysisRequests[0].AnalyteID, cerberusClientMock.AnalysisResults[0].AnalysisRequest.AnalyteID)
-	//assert.Equal(t, instrumentID, cerberusClientMock.AnalysisResults[0].Instrument.ID)
-	//assert.Equal(t, analysisResult.Result, cerberusClientMock.AnalysisResults[0].Result)
-}
-
 func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 	postgres := embeddedpostgres.NewDatabase(embeddedpostgres.DefaultConfig().Port(5433))
 	postgres.Start()
@@ -216,12 +97,12 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 			return AnalysisResultBatchResponse{
 				AnalysisResultBatchItemInfoList: []AnalysisResultBatchItemInfo{
 					{
-						AnalysisResult:           nil,
+						AnalysisResult:           &analysisResultsWithoutAnalysisRequestsTest_analysisResults[0],
 						CerberusAnalysisResultID: &result1ID,
 						ErrorMessage:             "",
 					},
 					{
-						AnalysisResult:           nil,
+						AnalysisResult:           &analysisResultsWithoutAnalysisRequestsTest_analysisResults[1],
 						CerberusAnalysisResultID: &result2ID,
 						ErrorMessage:             "",
 					},
@@ -284,9 +165,20 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 
 	time.Sleep(70 * time.Second)
 	assert.Equal(t, 2, len(cerberusClientMock.AnalysisResults))
-	//Todo more assert on response
+	assert.Equal(t, uuid.MustParse("660d1095-c8f6-4899-946e-935bfddfaa69"), cerberusClientMock.AnalysisResults[0].AnalysisRequest.WorkItemID)
+	assert.Equal(t, "TestSampleCode1", cerberusClientMock.AnalysisResults[0].AnalysisRequest.SampleCode)
+	assert.Equal(t, uuid.MustParse("51bfea41-1b7e-48f7-8b35-46d930216de7"), cerberusClientMock.AnalysisResults[0].AnalysisRequest.AnalyteID)
+	assert.Equal(t, analysisResultsWithoutAnalysisRequestsTest_instrument.ID, cerberusClientMock.AnalysisResults[0].Instrument.ID)
+	assert.Equal(t, analysisResultsWithoutAnalysisRequestsTest_analysisResults[0].Result, cerberusClientMock.AnalysisResults[0].Result)
+	assert.Equal(t, uuid.MustParse("55abb455-5c35-464a-aa9b-26ea5690c6ca"), cerberusClientMock.AnalysisResults[1].AnalysisRequest.WorkItemID)
+	assert.Equal(t, "TestSampleCode2", cerberusClientMock.AnalysisResults[1].AnalysisRequest.SampleCode)
+	assert.Equal(t, uuid.MustParse("51bfea41-1b7e-48f7-8b35-46d930216de7"), cerberusClientMock.AnalysisResults[1].AnalysisRequest.AnalyteID)
+	assert.Equal(t, analysisResultsWithoutAnalysisRequestsTest_instrument.ID, cerberusClientMock.AnalysisResults[1].Instrument.ID)
+	assert.Equal(t, analysisResultsWithoutAnalysisRequestsTest_analysisResults[1].Result, cerberusClientMock.AnalysisResults[1].Result)
+	assert.NotEqual(t, AnalysisResultBatchItemInfo{}, cerberusClientMock.BatchResponse)
 }
 
+// Todo - Complete the test
 func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 	postgres := embeddedpostgres.NewDatabase(embeddedpostgres.DefaultConfig().Port(5433))
 	postgres.Start()
@@ -482,39 +374,6 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 	time.Sleep(4 * time.Second)
 	assert.Equal(t, 0, len(cerberusClientMock.AnalysisResults))
 }
-
-//func TestCreateInstrument(t *testing.T) {
-//	postgres := embeddedpostgres.NewDatabase()
-//	postgres.Start()
-//	defer postgres.Stop()
-//	sqlConn, err := sqlx.Connect("postgres", "host=localhost port=5432 user=postgres password=postgres dbname=postgres sslmode=disable")
-//	assert.Nil(t, err)
-//
-//	schemaName := "testSubmitAnalysisResults"
-//
-//	_, err = sqlConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
-//	assert.Nil(t, err)
-//
-//	_, err = sqlConn.Exec(fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schemaName))
-//	assert.Nil(t, err)
-//
-//	_, err = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
-//	assert.Nil(t, err)
-//
-//	dbConn := db.CreateDbConnector(sqlConn)
-//	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
-//	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
-//
-//	cerberusClientMock := cerberusClientMock{}
-//
-//	//todo
-//	skeletonInstance := NewSkeleton(sqlConn, schemaName, migrator.NewSkeletonMigrator(), nil, analysisRepository, instrumentRepository, &cerberusClientMock)
-//	func() {
-//		err = skeletonInstance.Start()
-//		assert.Nil(t, err)
-//	}()
-//
-//}
 
 func TestRegisterProtocol(t *testing.T) {
 	//TODO
