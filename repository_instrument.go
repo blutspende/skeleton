@@ -293,20 +293,16 @@ func (r *instrumentRepository) GetInstrumentChanges(ctx context.Context, timeFro
 func (r *instrumentRepository) GetInstrumentByID(ctx context.Context, id uuid.UUID) (Instrument, error) {
 	query := fmt.Sprintf(`SELECT * FROM %s.sk_instruments WHERE id = $1 AND deleted_at IS NULL;`, r.dbSchema)
 	var instrument Instrument
-	row := r.db.QueryRowxContext(ctx, query, id)
-	if row.Err() != nil {
-		if row.Err() == sql.ErrNoRows {
+	var dao instrumentDAO
+	err := r.db.QueryRowxContext(ctx, query, id).StructScan(&dao)
+	if err != nil {
+		if err == sql.ErrNoRows {
 			return instrument, ErrInstrumentNotFound
 		}
-		log.Error().Err(row.Err()).Msg(msgGetInstrumentByIDFailed)
+		log.Error().Err(err).Msg(msgGetInstrumentByIDFailed)
 		return instrument, ErrGetInstrumentByIDFailed
 	}
-	var dao instrumentDAO
-	err := row.StructScan(&dao)
-	if err != nil {
-		log.Error().Err(row.Err()).Msg(msgGetInstrumentByIDFailed)
-		return instrument, ErrGetInstrumentByIDFailed
-	}
+
 	instrument, err = convertInstrumentDaoToInstrument(dao)
 	if err != nil {
 		return instrument, err
@@ -317,20 +313,16 @@ func (r *instrumentRepository) GetInstrumentByID(ctx context.Context, id uuid.UU
 func (r *instrumentRepository) GetInstrumentByIP(ctx context.Context, ip string) (Instrument, error) {
 	query := fmt.Sprintf(`SELECT * FROM %s.sk_instruments WHERE hostname = $1 AND deleted_at IS NULL;`, r.dbSchema)
 	var instrument Instrument
-	row := r.db.QueryRowxContext(ctx, query, ip)
-	if row.Err() != nil {
-		if row.Err() == sql.ErrNoRows {
+	var dao instrumentDAO
+	err := r.db.QueryRowxContext(ctx, query, ip).StructScan(&dao)
+	if err != nil {
+		if err == sql.ErrNoRows {
 			return instrument, ErrInstrumentNotFound
 		}
-		log.Error().Err(row.Err()).Msg(msgGetInstrumentByIPFailed + " " + ip)
-		return instrument, ErrGetInstrumentByIPFailed
-	}
-	var dao instrumentDAO
-	err := row.StructScan(&dao)
-	if err != nil {
 		log.Error().Err(err).Msg(msgGetInstrumentByIPFailed + " " + ip)
 		return instrument, ErrGetInstrumentByIPFailed
 	}
+
 	instrument, err = convertInstrumentDaoToInstrument(dao)
 	if err != nil {
 		return instrument, err
