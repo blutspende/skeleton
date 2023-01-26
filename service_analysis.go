@@ -9,6 +9,7 @@ import (
 type AnalysisService interface {
 	CreateAnalysisRequests(ctx context.Context, analysisRequests []AnalysisRequest) ([]AnalysisRequestStatus, error)
 	ProcessAnalysisRequests(ctx context.Context, analysisRequests []AnalysisRequest) error
+	RevokeAnalysisRequests(ctx context.Context, workItemIDs []uuid.UUID) error
 	GetAnalysisRequestsInfo(ctx context.Context, instrumentID uuid.UUID, pageable Pageable) ([]AnalysisRequestInfo, int, error)
 	GetAnalysisResultsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisResultInfo, int, error)
 	GetAnalysisBatches(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisBatch, int, error)
@@ -62,6 +63,17 @@ func (as *analysisService) ProcessAnalysisRequests(ctx context.Context, analysis
 	}
 
 	return nil
+}
+
+func (as *analysisService) RevokeAnalysisRequests(ctx context.Context, workItemIDs []uuid.UUID) error {
+	analysisRequests, err := as.analysisRepository.GetAnalysisRequestsByWorkItemIDs(ctx, workItemIDs)
+	if err != nil {
+		return ErrFailedToRevokeAnalysisRequests
+	}
+
+	as.manager.GetCallbackHandler().RevokeAnalysisRequests(analysisRequests)
+
+	return as.analysisRepository.RevokeAnalysisRequests(ctx, workItemIDs)
 }
 
 func (as *analysisService) GetAnalysisRequestsInfo(ctx context.Context, instrumentID uuid.UUID, pageable Pageable) ([]AnalysisRequestInfo, int, error) {

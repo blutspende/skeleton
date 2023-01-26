@@ -28,6 +28,8 @@ type SkeletonCallbackHandlerV1 interface {
 	// GetEncodingList is called when the Skeleton requires a list of supported encodings (strings)
 	// as known to be valid by the provided protocol
 	GetEncodingList(protocolId uuid.UUID) ([]string, error)
+
+	RevokeAnalysisRequests(request []AnalysisRequest)
 }
 
 // SkeletonAPI is the interface for accessing the skeleton driver capabilities

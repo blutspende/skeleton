@@ -134,3 +134,31 @@ func (api *api) CreateAnalysisRequestBatch(c *gin.Context) {
 
 	c.JSON(http.StatusOK, analysisRequestStatusTO)
 }
+
+// RevokeAnalysisRequestBatch
+// @Summary Revoke a batch of Analysis Request by Work Item ID
+// @Description Revoke multiple analysis requests by work item id.
+// @Tags AnalysisRequest
+// @Produce json
+// @Accept json
+// @Param WorkItemIDs body []uuid.UUID true "Array of work item id"
+// @Success 204 "No Content"
+// @Router /v1/analysis-request/batch [DELETE]
+func (api *api) RevokeAnalysisRequestBatch(c *gin.Context) {
+	var workItemIDs []uuid.UUID
+	err := c.ShouldBindJSON(&workItemIDs)
+	if err != nil {
+		log.Error().Err(err).Msg(ErrInvalidRequestBody.Message)
+		c.AbortWithStatusJSON(http.StatusBadRequest, ErrInvalidRequestBody)
+		return
+	}
+
+	err = api.analysisService.RevokeAnalysisRequests(c, workItemIDs)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to revoke analysis requests")
+		c.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}

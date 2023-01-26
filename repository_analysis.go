@@ -6,12 +6,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/db"
+	"github.com/pkg/errors"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/rs/zerolog/log"
+)
+
+const (
+	msgFailedToRevokeAnalysisRequests = "Failed to revoke analysis requests"
+)
+
+var (
+	ErrFailedToRevokeAnalysisRequests = errors.New(msgFailedToRevokeAnalysisRequests)
 )
 
 type analysisRequestDAO struct {
@@ -169,6 +178,8 @@ type AnalysisRepository interface {
 	//GetAnalysisRequestsForVisualization(ctx context.Context) (map[string][]AnalysisRequest, error)
 	CreateSubjectsBatch(ctx context.Context, subjectInfosByAnalysisRequestID map[uuid.UUID]SubjectInfo) (map[uuid.UUID]uuid.UUID, error)
 	GetSubjectsByAnalysisRequestIDs(ctx context.Context, analysisRequestIDs []uuid.UUID) (map[uuid.UUID]SubjectInfo, error)
+	GetAnalysisRequestsByWorkItemIDs(ctx context.Context, workItemIds []uuid.UUID) ([]AnalysisRequest, error)
+	RevokeAnalysisRequests(ctx context.Context, workItemIds []uuid.UUID) error
 
 	CreateAnalysisResultsBatch(ctx context.Context, analysisResults []AnalysisResult) ([]AnalysisResult, error)
 	GetAnalysisResultsBySampleCodeAndAnalyteID(ctx context.Context, sampleCode string, analyteID uuid.UUID) ([]AnalysisResult, error)
@@ -218,15 +229,7 @@ func (r *analysisRepository) CreateAnalysisRequestsBatch(ctx context.Context, an
 				UPDATE SET analyte_id = excluded.analyte_id, sample_code = excluded.sample_code, material_id = excluded.material_id, laboratory_id = excluded.laboratory_id, valid_until_time = excluded.valid_until_time;`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, convertAnalysisRequestsToDAOs(analysisRequests))
 	if err != nil {
-		log.Info().Msgf("Analysis requests size: %i", len(analysisRequests))
-		analysisWorkItemIDs := make([]uuid.UUID, 0)
-		for _, analysisRequest := range analysisRequests {
-			analysisWorkItemIDs = append(analysisWorkItemIDs, analysisRequest.WorkItemID)
-		}
-
-		log.Info().Msgf("Analysis request work item IDs: %v", analysisWorkItemIDs)
-
-		log.Error().Err(err).Msgf("Can not create RequestData %v", analysisRequests)
+		log.Error().Err(err).Msg("Can not create RequestData")
 		return []uuid.UUID{}, []uuid.UUID{}, nil
 	}
 
@@ -603,7 +606,53 @@ func (r *analysisRepository) GetSubjectsByAnalysisRequestIDs(ctx context.Context
 		subjectsMap[subjectDao.AnalysisRequestID] = convertSubjectDAOToSubjectInfo(subjectDao)
 	}
 	return subjectsMap, nil
+}
 
+func (r *analysisRepository) GetAnalysisRequestsByWorkItemIDs(ctx context.Context, workItemIds []uuid.UUID) ([]AnalysisRequest, error) {
+	analysisRequests := make([]AnalysisRequest, 0)
+	if len(workItemIds) == 0 {
+		return analysisRequests, nil
+	}
+	query := fmt.Sprintf(`SELECT * FROM %s.sk_analysis_requests WHERE work_item_id in (?);`, r.dbSchema)
+
+	query, args, _ := sqlx.In(query, workItemIds)
+	query = r.db.Rebind(query)
+
+	rows, err := r.db.QueryxContext(ctx, query, args...)
+	if err != nil {
+		log.Error().Err(err).Msg("Can not search for AnalysisRequests")
+		return analysisRequests, err
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		request := analysisRequestDAO{}
+		err := rows.StructScan(&request)
+		if err != nil {
+			log.Error().Err(err).Msg("Can not scan data")
+			return analysisRequests, err
+		}
+		analysisRequests = append(analysisRequests, convertAnalysisRequestDAOToAnalysisRequest(request))
+	}
+
+	return analysisRequests, err
+}
+
+func (r *analysisRepository) RevokeAnalysisRequests(ctx context.Context, workItemIds []uuid.UUID) error {
+	query := fmt.Sprintf(`DELETE FROM %s.sk_analysis_requests WHERE work_item_id IN (?);`, r.dbSchema)
+
+	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
+	query, args, _ := sqlx.In(query, workItemIds)
+	query = r.db.Rebind(query)
+
+	_, err := r.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		log.Error().Err(err).Msg(msgFailedToRevokeAnalysisRequests)
+		return ErrFailedToRevokeAnalysisRequests
+	}
+
+	return nil
 }
 
 func (r *analysisRepository) CreateAnalysisResultsBatch(ctx context.Context, analysisResults []AnalysisResult) ([]AnalysisResult, error) {
