@@ -13,19 +13,11 @@ import (
 )
 
 type api struct {
-	config            *config.Configuration
-	engine            *gin.Engine
-	analysisService   AnalysisService
-	instrumentService InstrumentService
-	consoleLogService service.ConsoleLogService
-	/*healthHandler               handlers.HealthHandler
-	  instrumentsHandler          handlers.Instruments
-	  analyteMappingHandler       handlers.AnalyteMapping
-	  requestVisualizationHandler handlers.RequestVisualization
-	  resultMappingHandler        handlers.ResultMapping
-	  analysisRequestHandler      handlers.AnalysisRequest
-	  requestMapping              handlers.RequestMapping
-	  channelMapping              handlers.ChannelMapping*/
+	config                     *config.Configuration
+	engine                     *gin.Engine
+	analysisService            AnalysisService
+	instrumentService          InstrumentService
+	consoleLogService          service.ConsoleLogService
 	createAnalysisRequestMutex sync.Mutex
 }
 
@@ -58,14 +50,6 @@ func newAPI(engine *gin.Engine, config *config.Configuration, authManager AuthMa
 		analysisService:   analysisService,
 		instrumentService: instrumentService,
 		consoleLogService: consoleLogService,
-		/*healthHandler:               healthHandler,
-		  instrumentsHandler:          instrumentsHandler,
-		  analyteMappingHandler:       analyteMappingHandler,
-		  requestVisualizationHandler: requestVisualizationHandler,
-		  resultMappingHandler:        resultMappingHandler,
-		  analysisRequestHandler:      analysisRequestHandler,
-		  requestMapping:              requestMapping,
-		  channelMapping:              channelMapping,*/
 	}
 
 	corsMiddleWare := middleware2.CreateCorsMiddleware(config)
@@ -88,15 +72,11 @@ func newAPI(engine *gin.Engine, config *config.Configuration, authManager AuthMa
 		instrumentsGroup.GET("/:instrumentId", api.GetInstrumentByID)
 		instrumentsGroup.GET("/:instrumentId/requests", api.GetAnalysisRequestsInfo)
 		instrumentsGroup.GET("/:instrumentId/results", api.GetAnalysisResultsInfo)
-		//instrumentsGroup.GET("/:instrumentId/batches", api.GetAnalysisBatchesInfo)
-		//instrumentsGroup.GET("/channel-results/:requestId", api.GetChannelResultsForRequest)
 		instrumentsGroup.GET("/:instrumentId/list/transmissions", api.GetAnalysisBatches)
 		instrumentsGroup.PUT("/:instrumentId", api.UpdateInstrument)
 		instrumentsGroup.DELETE("/:instrumentId", api.DeleteInstrument)
 		instrumentsGroup.POST("/result/:resultID/retransmit", api.RetransmitResult)
 		instrumentsGroup.POST("/result/retransmit/batches", api.RetransmitResultBatches)
-		//instrumentsGroup.POST("/request/:requestID/add-to-queue", api.AddRequestToTransferQueue)
-		//instrumentsGroup.POST("/request/add-message-batch-to-queue", api.AddTransmissionsBatchToTransferQueue)
 		instrumentsGroup.GET("/protocol/:protocolId/encodings", api.GetEncodings)
 
 		messagesGroup := instrumentsGroup.Group("/:instrumentId/messages")
@@ -104,22 +84,6 @@ func newAPI(engine *gin.Engine, config *config.Configuration, authManager AuthMa
 			messagesGroup.GET("", api.GetMessages)
 		}
 	}
-
-	/*
-		mappingGroup := v1Group.Group("/:analyteMappingID")
-		{
-			mappingGroup.PUT("/result-mappings", api.resultMappingHandler.UpdateResultMapping)
-			mappingGroup.PUT("/channel-mappings", api.channelMapping.UpdateChannelMapping)
-		}
-	*/
-	/*
-		requestMappingGroup := instrumentsGroup.Group("/:instrumentID/request-mapping")
-		{
-			requestMappingGroup.POST("", api.requestMapping.CreateMapping)
-			requestMappingGroup.PUT("", api.requestMapping.UpdateMapping)
-			requestMappingGroup.DELETE("/:mappingID", api.requestMapping.DeleteMapping)
-		}
-	*/
 
 	protocolVersions := v1Group.Group("/protocol-versions")
 	{
@@ -130,7 +94,6 @@ func newAPI(engine *gin.Engine, config *config.Configuration, authManager AuthMa
 
 	analysisRequests := v1Group.Group("analysis-requests")
 	{
-		//analysisRequests.POST("", api.analysisRequestHandler.CreateAnalysisRequest)
 		analysisRequests.POST("/batch", api.CreateAnalysisRequestBatch)
 		analysisRequests.DELETE("/batch", api.RevokeAnalysisRequestBatch)
 	}
