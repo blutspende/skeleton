@@ -218,7 +218,15 @@ func (r *analysisRepository) CreateAnalysisRequestsBatch(ctx context.Context, an
 				UPDATE SET analyte_id = excluded.analyte_id, sample_code = excluded.sample_code, material_id = excluded.material_id, laboratory_id = excluded.laboratory_id, valid_until_time = excluded.valid_until_time;`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, convertAnalysisRequestsToDAOs(analysisRequests))
 	if err != nil {
-		log.Error().Err(err).Msg("Can not create RequestData")
+		log.Info().Msgf("Analysis requests size: %i", len(analysisRequests))
+		analysisWorkItemIDs := make([]uuid.UUID, 0)
+		for _, analysisRequest := range analysisRequests {
+			analysisWorkItemIDs = append(analysisWorkItemIDs, analysisRequest.WorkItemID)
+		}
+
+		log.Info().Msgf("Analysis request work item IDs: %v", analysisWorkItemIDs)
+
+		log.Error().Err(err).Msgf("Can not create RequestData %v", analysisRequests)
 		return []uuid.UUID{}, []uuid.UUID{}, nil
 	}
 
