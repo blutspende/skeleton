@@ -755,7 +755,7 @@ func (r *instrumentRepository) UpsertRequestMappingAnalytes(ctx context.Context,
 }
 
 func (r *instrumentRepository) UpdateRequestMapping(ctx context.Context, requestMapping RequestMapping) error {
-	query := fmt.Sprintf(`UPDATE %s.sk_result_mappings SET code = :code, modified_at = timezone('utc', now()) WHERE id = :id;`, r.dbSchema)
+	query := fmt.Sprintf(`UPDATE %s.sk_request_mappings SET code = :code, modified_at = timezone('utc', now()) WHERE id = :id;`, r.dbSchema)
 	dao := convertRequestMappingToDAO(requestMapping, uuid.Nil)
 	_, err := r.db.NamedExecContext(ctx, query, dao)
 	if err != nil {
