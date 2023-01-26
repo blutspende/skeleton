@@ -455,8 +455,8 @@ WHERE res.instrument_id = :instrument_id`
 	if filter.TimeFrom != nil {
 		preparedValues["time_from"] = filter.TimeFrom.UTC()
 
-		query += ` AND req.created_at >= :time_from`
-		countQuery += ` AND req.created_at >= :time_from`
+		query += ` AND res.yielded_at >= :time_from`
+		countQuery += ` AND res.yielded_at >= :time_from`
 	}
 
 	if filter.Filter != nil {
