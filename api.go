@@ -120,12 +120,6 @@ func newAPI(engine *gin.Engine, config *config.Configuration, authManager AuthMa
 			requestMappingGroup.DELETE("/:mappingID", api.requestMapping.DeleteMapping)
 		}
 	*/
-	/*
-		messagesGroup := instrumentsGroup.Group("/:instrumentID/messages")
-		{
-			messagesGroup.GET("", api.instrumentsHandler.GetMessages)
-		}
-	*/
 
 	protocolVersions := v1Group.Group("/protocol-versions")
 	{

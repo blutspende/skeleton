@@ -878,9 +878,10 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_request_mappings
     modified_at timestamp,
     deleted_at timestamp,
 	CONSTRAINT "sk_pk_request_mappings" PRIMARY KEY (id),
-	CONSTRAINT "sk_unique_code_instrument_id" UNIQUE (code, instrument_id),
 	CONSTRAINT "sk_fk_instrument_id__id" FOREIGN KEY (instrument_id) REFERENCES <SCHEMA_PLACEHOLDER>.sk_instruments (id)
 );
+
+CREATE UNIQUE INDEX sk_un_request_mappings_code_insturment_id ON <SCHEMA_PLACEHOLDER>.sk_request_mappings USING btree (code, instrument_id) WHERE (deleted_at IS NULL);
 
 CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_request_mapping_analytes
 (
