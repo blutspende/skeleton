@@ -24,6 +24,10 @@ type SkeletonCallbackHandlerV1 interface {
 	// GetManufacturerTestList is called when the Skeleton requires a list of test names (strings)
 	// as known to be valid by the manufacturer of this instrument
 	GetManufacturerTestList(instrumentId uuid.UUID, protocolId uuid.UUID) ([]SupportedManufacturerTests, error)
+
+	// GetEncodingList is called when the Skeleton requires a list of supported encodings (strings)
+	// as known to be valid by the provided protocol
+	GetEncodingList(protocolId uuid.UUID) ([]string, error)
 }
 
 // SkeletonAPI is the interface for accessing the skeleton driver capabilities

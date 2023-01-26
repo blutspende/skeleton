@@ -18,6 +18,7 @@ type InstrumentService interface {
 	GetSupportedProtocols(ctx context.Context) ([]SupportedProtocol, error)
 	GetProtocolAbilities(ctx context.Context, protocolID uuid.UUID) ([]ProtocolAbility, error)
 	GetManufacturerTests(ctx context.Context, instrumentID uuid.UUID, protocolID uuid.UUID) ([]SupportedManufacturerTests, error)
+	GetEncodings(ctx context.Context, protocolID uuid.UUID) ([]string, error)
 	UpsertSupportedProtocol(ctx context.Context, id uuid.UUID, name string, description string) error
 	UpsertProtocolAbilities(ctx context.Context, protocolID uuid.UUID, protocolAbilities []ProtocolAbility) error
 	UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error
@@ -450,6 +451,17 @@ func (s *instrumentService) GetManufacturerTests(ctx context.Context, instrument
 		return []SupportedManufacturerTests{}, nil
 	}
 	return tests, nil
+}
+
+func (s *instrumentService) GetEncodings(ctx context.Context, protocolID uuid.UUID) ([]string, error) {
+	encodings, err := s.manager.GetCallbackHandler().GetEncodingList(protocolID)
+	if err != nil {
+		return nil, err
+	}
+	if len(encodings) < 1 {
+		return s.instrumentRepository.GetEncodings(ctx)
+	}
+	return encodings, nil
 }
 
 func (s *instrumentService) UpsertSupportedProtocol(ctx context.Context, id uuid.UUID, name string, description string) error {

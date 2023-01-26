@@ -97,6 +97,7 @@ func newAPI(engine *gin.Engine, config *config.Configuration, authManager AuthMa
 		instrumentsGroup.POST("/result/retransmit/batches", api.RetransmitResultBatches)
 		//instrumentsGroup.POST("/request/:requestID/add-to-queue", api.AddRequestToTransferQueue)
 		//instrumentsGroup.POST("/request/add-message-batch-to-queue", api.AddTransmissionsBatchToTransferQueue)
+		instrumentsGroup.GET("/protocol/:protocolId/encodings", api.GetEncodings)
 
 		messagesGroup := instrumentsGroup.Group("/:instrumentId/messages")
 		{

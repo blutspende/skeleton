@@ -47,6 +47,7 @@ const (
 	msgDeleteRequestMappingsFailed        = "delete request mappings failed"
 	msgUpdateRequestMappingFailed         = "update request mapping failed"
 	msgDeleteRequestMappingAnalytesFailed = "delete request mapping analytes failed"
+	msgGetEncodingsFailed                 = "get encodings failed"
 )
 
 var (
@@ -81,6 +82,7 @@ var (
 	ErrDeleteRequestMappingsFailed        = errors.New(msgDeleteRequestMappingsFailed)
 	ErrUpdateRequestMappingFailed         = errors.New(msgUpdateRequestMappingFailed)
 	ErrDeleteRequestMappingAnalytesFailed = errors.New(msgDeleteRequestMappingAnalytesFailed)
+	ErrGetEncodingsFailed                 = errors.New(msgGetEncodingsFailed)
 )
 
 type instrumentDAO struct {
@@ -213,6 +215,7 @@ type InstrumentRepository interface {
 	GetRequestMappingAnalytes(ctx context.Context, requestMappingIDs []uuid.UUID) (map[uuid.UUID][]uuid.UUID, error)
 	DeleteRequestMappings(ctx context.Context, requestMappingIDs []uuid.UUID) error
 	DeleteRequestMappingAnalytes(ctx context.Context, requestMappingID uuid.UUID, analyteIDs []uuid.UUID) error
+	GetEncodings(ctx context.Context) ([]string, error)
 
 	CreateTransaction() (db.DbConnector, error)
 	WithTransaction(tx db.DbConnector) InstrumentRepository
@@ -838,6 +841,27 @@ func (r *instrumentRepository) DeleteRequestMappingAnalytes(ctx context.Context,
 		return ErrDeleteRequestMappingAnalytesFailed
 	}
 	return nil
+}
+
+func (r *instrumentRepository) GetEncodings(ctx context.Context) ([]string, error) {
+	query := fmt.Sprintf(`SELECT * FROM %s.sk_encodings ORDER BY encoding;`, r.dbSchema)
+	rows, err := r.db.QueryxContext(ctx, query)
+	if err != nil {
+		log.Error().Err(err).Msg(msgGetEncodingsFailed)
+		return nil, ErrGetEncodingsFailed
+	}
+	defer rows.Close()
+	encodings := make([]string, 0)
+	for rows.Next() {
+		var encoding string
+		err = rows.Scan(&encoding)
+		if err != nil {
+			log.Error().Err(err).Msg(msgGetEncodingsFailed)
+			return nil, ErrGetEncodingsFailed
+		}
+		encodings = append(encodings, encoding)
+	}
+	return encodings, nil
 }
 
 func (r *instrumentRepository) CreateTransaction() (db.DbConnector, error) {

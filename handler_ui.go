@@ -391,6 +391,22 @@ func (api *api) GetMessages(c *gin.Context) {
 	c.JSON(http.StatusOK, logs)
 }
 
+func (api *api) GetEncodings(c *gin.Context) {
+	protocolID, err := uuid.Parse(c.Param("protocolId"))
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, "invalid protocol id")
+		return
+	}
+
+	encodings, err := api.instrumentService.GetEncodings(c, protocolID)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	c.JSON(http.StatusOK, encodings)
+}
+
 //// AddRequestToTransferQueue
 //// @Summary Add Request to Transfer Queue
 //// @Description Add a Request to the transfer queue to retransmit again
