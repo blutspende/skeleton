@@ -328,7 +328,7 @@ func (r *instrumentRepository) GetInstrumentByIP(ctx context.Context, ip string)
 	var dao instrumentDAO
 	err := row.StructScan(&dao)
 	if err != nil {
-		log.Error().Err(row.Err()).Msg(msgGetInstrumentByIPFailed + " " + ip)
+		log.Error().Err(err).Msg(msgGetInstrumentByIPFailed + " " + ip)
 		return instrument, ErrGetInstrumentByIPFailed
 	}
 	instrument, err = convertInstrumentDaoToInstrument(dao)
