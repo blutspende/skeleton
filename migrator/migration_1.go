@@ -874,6 +874,7 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_request_mappings
 	id uuid NOT NULL DEFAULT uuid_generate_v4(),
 	code TEXT NOT NULL,
 	instrument_id uuid NOT NULL,
+    is_default bool NOT NULL DEFAULT FALSE,
 	created_at timestamp DEFAULT timezone('utc', now()),
     modified_at timestamp,
     deleted_at timestamp,

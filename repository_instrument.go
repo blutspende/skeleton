@@ -144,6 +144,7 @@ type requestMappingDAO struct {
 	ID           uuid.UUID    `db:"id"`
 	InstrumentID uuid.UUID    `db:"instrument_id"`
 	Code         string       `db:"code"`
+	IsDefault    bool         `db:"is_default"`
 	CreatedAt    time.Time    `db:"created_at"`
 	ModifiedAt   sql.NullTime `db:"modified_at"`
 	DeletedAt    sql.NullTime `db:"deleted_at"`
@@ -717,8 +718,8 @@ func (r *instrumentRepository) CreateRequestMappings(ctx context.Context, reques
 		requestMappings[i].ID = uuid.New()
 		ids[i] = requestMappings[i].ID
 	}
-	query := fmt.Sprintf(`INSERT INTO %s.sk_request_mappings(id, code, instrument_id) 
-		VALUES(:id, :code, :instrument_id);`, r.dbSchema)
+	query := fmt.Sprintf(`INSERT INTO %s.sk_request_mappings(id, code, instrument_id, is_default) 
+		VALUES(:id, :code, :instrument_id, :is_default);`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, convertRequestMappingsToDAOs(requestMappings, instrumentID))
 	if err != nil {
 		log.Error().Err(err).Msg(msgCreateAnalyteMappingsFailed)
@@ -755,7 +756,7 @@ func (r *instrumentRepository) UpsertRequestMappingAnalytes(ctx context.Context,
 }
 
 func (r *instrumentRepository) UpdateRequestMapping(ctx context.Context, requestMapping RequestMapping) error {
-	query := fmt.Sprintf(`UPDATE %s.sk_request_mappings SET code = :code, modified_at = timezone('utc', now()) WHERE id = :id;`, r.dbSchema)
+	query := fmt.Sprintf(`UPDATE %s.sk_request_mappings SET code = :code, is_default = :is_default, modified_at = timezone('utc', now()) WHERE id = :id;`, r.dbSchema)
 	dao := convertRequestMappingToDAO(requestMapping, uuid.Nil)
 	_, err := r.db.NamedExecContext(ctx, query, dao)
 	if err != nil {
@@ -870,6 +871,7 @@ func convertRequestMappingDaoToAnalyteMapping(dao requestMappingDAO) RequestMapp
 	return RequestMapping{
 		ID:         dao.ID,
 		Code:       dao.Code,
+		IsDefault:  dao.IsDefault,
 		AnalyteIDs: nil,
 	}
 }
@@ -1043,6 +1045,7 @@ func convertRequestMappingToDAO(requestMapping RequestMapping, instrumentID uuid
 		ID:           requestMapping.ID,
 		InstrumentID: instrumentID,
 		Code:         requestMapping.Code,
+		IsDefault:    requestMapping.IsDefault,
 	}
 }
 

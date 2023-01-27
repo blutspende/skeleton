@@ -190,6 +190,7 @@ type ResultMapping struct {
 type RequestMapping struct {
 	ID         uuid.UUID
 	Code       string
+	IsDefault  bool
 	AnalyteIDs []uuid.UUID
 }
 

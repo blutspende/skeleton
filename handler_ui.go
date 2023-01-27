@@ -50,6 +50,7 @@ type analyteMappingTO struct {
 type requestMappingTO struct {
 	ID         uuid.UUID   `json:"id"`
 	Code       string      `json:"code"`
+	IsDefault  bool        `json:"isDefault"`
 	AnalyteIDs []uuid.UUID `json:"requestMappingAnalyteIds"`
 }
 
@@ -625,6 +626,7 @@ func convertRequestMappingTOToRequestMapping(requestMappingTO requestMappingTO) 
 	return RequestMapping{
 		ID:         requestMappingTO.ID,
 		Code:       requestMappingTO.Code,
+		IsDefault:  requestMappingTO.IsDefault,
 		AnalyteIDs: requestMappingTO.AnalyteIDs,
 	}
 }
@@ -633,6 +635,7 @@ func convertRequestMappingToRequestMappingTO(requestMapping RequestMapping) requ
 	return requestMappingTO{
 		ID:         requestMapping.ID,
 		Code:       requestMapping.Code,
+		IsDefault:  requestMapping.IsDefault,
 		AnalyteIDs: requestMapping.AnalyteIDs,
 	}
 }
