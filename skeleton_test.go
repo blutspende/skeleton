@@ -385,6 +385,8 @@ func TestRegisterProtocol(t *testing.T) {
 type skeletonCallbackHandlerV1Mock struct {
 	handleAnalysisRequestsFunc func(request []AnalysisRequest) error
 	getManufacturerTestFunc    func(instrumentId uuid.UUID, protocolId uuid.UUID) ([]SupportedManufacturerTests, error)
+	getEncodingList            func(protocolId uuid.UUID) ([]string, error)
+	revokeAnalysisRequests     func(request []AnalysisRequest)
 }
 
 func (m *skeletonCallbackHandlerV1Mock) HandleAnalysisRequests(request []AnalysisRequest) error {
@@ -399,6 +401,20 @@ func (m *skeletonCallbackHandlerV1Mock) GetManufacturerTestList(instrumentId uui
 		return nil, errors.New("not implemented")
 	}
 	return m.getManufacturerTestFunc(instrumentId, protocolId)
+}
+
+func (m *skeletonCallbackHandlerV1Mock) GetEncodingList(protocolId uuid.UUID) ([]string, error) {
+	if m.getEncodingList == nil {
+		return nil, errors.New("not implemented")
+	}
+	return m.getEncodingList(protocolId)
+}
+
+func (m *skeletonCallbackHandlerV1Mock) RevokeAnalysisRequests(request []AnalysisRequest) {
+	if m.revokeAnalysisRequests == nil {
+		return
+	}
+	m.revokeAnalysisRequests(request)
 }
 
 type authManagerMock struct {

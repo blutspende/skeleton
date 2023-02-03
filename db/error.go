@@ -5,13 +5,13 @@ import (
 )
 
 const (
-	MsgBeginTransactionTransactionFailed    = "begin transaction failed"
-	MsgCommitTransactionTransactionFailed   = "commit transaction failed"
-	MsgRollbackTransactionTransactionFailed = "revert transaction failed"
+	MsgBeginTransactionFailed    = "begin transaction failed"
+	MsgCommitTransactionFailed   = "commit transaction failed"
+	MsgRollbackTransactionFailed = "revert transaction failed"
 )
 
 var (
-	ErrBeginTransactionTransactionFailed    = errors.New(MsgBeginTransactionTransactionFailed)
-	ErrCommitTransactionTransactionFailed   = errors.New(MsgCommitTransactionTransactionFailed)
-	ErrRollbackTransactionTransactionFailed = errors.New(MsgRollbackTransactionTransactionFailed)
+	ErrBeginTransactionFailed    = errors.New(MsgBeginTransactionFailed)
+	ErrCommitTransactionFailed   = errors.New(MsgCommitTransactionFailed)
+	ErrRollbackTransactionFailed = errors.New(MsgRollbackTransactionFailed)
 )

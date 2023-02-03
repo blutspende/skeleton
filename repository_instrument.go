@@ -1000,7 +1000,7 @@ func convertChannelMappingToDAO(channelMapping ChannelMapping, analyteMappingID 
 func convertChannelMappingsToDAOs(channelMappings []ChannelMapping, analyteMappingID uuid.UUID) []channelMappingDAO {
 	channelMappingDAOs := make([]channelMappingDAO, len(channelMappings))
 	for i := range channelMappings {
-		channelMappingDAOs = append(channelMappingDAOs, convertChannelMappingToDAO(channelMappings[i], analyteMappingID))
+		channelMappingDAOs[i] = convertChannelMappingToDAO(channelMappings[i], analyteMappingID)
 	}
 	return channelMappingDAOs
 }

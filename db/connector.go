@@ -36,8 +36,8 @@ type dbConnector struct {
 func (c *dbConnector) CreateTransactionConnector() (DbConnector, error) {
 	tx, err := c.db.Beginx()
 	if err != nil {
-		log.Error().Err(err).Msg(MsgBeginTransactionTransactionFailed)
-		return nil, ErrBeginTransactionTransactionFailed
+		log.Error().Err(err).Msg(MsgBeginTransactionFailed)
+		return nil, ErrBeginTransactionFailed
 	}
 	connCopy := *c
 	connCopy.tx = tx
@@ -127,8 +127,8 @@ func (c *dbConnector) Commit() error {
 	if c.tx != nil {
 		err := c.tx.Commit()
 		if err != nil {
-			log.Error().Err(err).Msg(MsgCommitTransactionTransactionFailed)
-			return ErrCommitTransactionTransactionFailed
+			log.Error().Err(err).Msg(MsgCommitTransactionFailed)
+			return ErrCommitTransactionFailed
 		}
 	}
 	return nil
@@ -138,8 +138,8 @@ func (c *dbConnector) Rollback() error {
 	if c.tx != nil {
 		err := c.tx.Rollback()
 		if err != nil {
-			log.Error().Err(err).Msg(MsgRollbackTransactionTransactionFailed)
-			return ErrRollbackTransactionTransactionFailed
+			log.Error().Err(err).Msg(MsgRollbackTransactionFailed)
+			return ErrRollbackTransactionFailed
 		}
 	}
 	return nil

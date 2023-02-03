@@ -3,6 +3,7 @@ package skeleton
 import (
 	"context"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/config"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/db"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"time"
@@ -253,8 +254,15 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 	if err != nil {
 		return err
 	}
-	err = s.instrumentRepository.UpdateInstrument(ctx, instrument)
+
+	tx, err := s.instrumentRepository.CreateTransaction()
 	if err != nil {
+		return db.ErrBeginTransactionFailed
+	}
+
+	err = s.instrumentRepository.WithTransaction(tx).UpdateInstrument(ctx, instrument)
+	if err != nil {
+		_ = tx.Rollback()
 		return err
 	}
 	deletedAnalyteMappingIDs := make([]uuid.UUID, 0)
@@ -311,20 +319,24 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 		}
 	}
 
-	err = s.instrumentRepository.DeleteAnalyteMappings(ctx, deletedAnalyteMappingIDs)
+	err = s.instrumentRepository.WithTransaction(tx).DeleteAnalyteMappings(ctx, deletedAnalyteMappingIDs)
 	if err != nil {
+		_ = tx.Rollback()
 		return err
 	}
-	err = s.instrumentRepository.DeleteChannelMappings(ctx, deletedChannelMappingIDs)
+	err = s.instrumentRepository.WithTransaction(tx).DeleteChannelMappings(ctx, deletedChannelMappingIDs)
 	if err != nil {
+		_ = tx.Rollback()
 		return err
 	}
-	err = s.instrumentRepository.DeleteResultMappings(ctx, deletedResultMappingIDs)
+	err = s.instrumentRepository.WithTransaction(tx).DeleteResultMappings(ctx, deletedResultMappingIDs)
 	if err != nil {
+		_ = tx.Rollback()
 		return err
 	}
-	err = s.instrumentRepository.DeleteRequestMappings(ctx, deletedRequestMappingIDs)
+	err = s.instrumentRepository.WithTransaction(tx).DeleteRequestMappings(ctx, deletedRequestMappingIDs)
 	if err != nil {
+		_ = tx.Rollback()
 		return err
 	}
 
@@ -333,8 +345,9 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 		if analyteMapping.ID == uuid.Nil {
 			newAnalyteMappings = append(newAnalyteMappings, analyteMapping)
 		} else {
-			err = s.instrumentRepository.UpdateAnalyteMapping(ctx, analyteMapping)
+			err = s.instrumentRepository.WithTransaction(tx).UpdateAnalyteMapping(ctx, analyteMapping)
 			if err != nil {
+				_ = tx.Rollback()
 				return err
 			}
 			newChannelMappings := make([]ChannelMapping, 0)
@@ -342,14 +355,16 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 				if channelMapping.ID == uuid.Nil {
 					newChannelMappings = append(newChannelMappings, channelMapping)
 				} else {
-					err = s.instrumentRepository.UpdateChannelMapping(ctx, channelMapping)
+					err = s.instrumentRepository.WithTransaction(tx).UpdateChannelMapping(ctx, channelMapping)
 					if err != nil {
+						_ = tx.Rollback()
 						return err
 					}
 				}
 			}
-			_, err = s.instrumentRepository.CreateChannelMappings(ctx, newChannelMappings, analyteMapping.ID)
+			_, err = s.instrumentRepository.WithTransaction(tx).CreateChannelMappings(ctx, newChannelMappings, analyteMapping.ID)
 			if err != nil {
+				_ = tx.Rollback()
 				return err
 			}
 
@@ -358,29 +373,34 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 				if resultMapping.ID == uuid.Nil {
 					newResultMappings = append(newResultMappings, resultMapping)
 				} else {
-					err = s.instrumentRepository.UpdateResultMapping(ctx, resultMapping)
+					err = s.instrumentRepository.WithTransaction(tx).UpdateResultMapping(ctx, resultMapping)
 					if err != nil {
+						_ = tx.Rollback()
 						return err
 					}
 				}
 			}
-			_, err = s.instrumentRepository.CreateResultMappings(ctx, newResultMappings, analyteMapping.ID)
+			_, err = s.instrumentRepository.WithTransaction(tx).CreateResultMappings(ctx, newResultMappings, analyteMapping.ID)
 			if err != nil {
+				_ = tx.Rollback()
 				return err
 			}
 		}
 	}
-	analyteMappingIDs, err := s.instrumentRepository.CreateAnalyteMappings(ctx, newAnalyteMappings, instrument.ID)
+	analyteMappingIDs, err := s.instrumentRepository.WithTransaction(tx).CreateAnalyteMappings(ctx, newAnalyteMappings, instrument.ID)
 	if err != nil {
+		_ = tx.Rollback()
 		return err
 	}
 	for i, analyteMappingID := range analyteMappingIDs {
-		_, err = s.instrumentRepository.CreateChannelMappings(ctx, newAnalyteMappings[i].ChannelMappings, analyteMappingID)
+		_, err = s.instrumentRepository.WithTransaction(tx).CreateChannelMappings(ctx, newAnalyteMappings[i].ChannelMappings, analyteMappingID)
 		if err != nil {
+			_ = tx.Rollback()
 			return err
 		}
-		_, err = s.instrumentRepository.CreateResultMappings(ctx, newAnalyteMappings[i].ResultMappings, analyteMappingID)
+		_, err = s.instrumentRepository.WithTransaction(tx).CreateResultMappings(ctx, newAnalyteMappings[i].ResultMappings, analyteMappingID)
 		if err != nil {
+			_ = tx.Rollback()
 			return err
 		}
 	}
@@ -389,27 +409,41 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 		if requestMapping.ID == uuid.Nil {
 			newRequestMappings = append(newRequestMappings, requestMapping)
 		} else {
-			err = s.instrumentRepository.UpdateRequestMapping(ctx, requestMapping)
+			err = s.instrumentRepository.WithTransaction(tx).UpdateRequestMapping(ctx, requestMapping)
 			if err != nil {
+				_ = tx.Rollback()
 				return err
 			}
-			err = s.instrumentRepository.UpsertRequestMappingAnalytes(ctx, map[uuid.UUID][]uuid.UUID{
+			err = s.instrumentRepository.WithTransaction(tx).UpsertRequestMappingAnalytes(ctx, map[uuid.UUID][]uuid.UUID{
 				requestMapping.ID: requestMapping.AnalyteIDs,
 			})
+			if err != nil {
+				_ = tx.Rollback()
+				return err
+			}
 		}
 	}
-	requestMappingIDs, err := s.instrumentRepository.CreateRequestMappings(ctx, newRequestMappings, instrument.ID)
+	requestMappingIDs, err := s.instrumentRepository.WithTransaction(tx).CreateRequestMappings(ctx, newRequestMappings, instrument.ID)
 	if err != nil {
+		_ = tx.Rollback()
 		return err
 	}
 	requestMappingsAnalytes := make(map[uuid.UUID][]uuid.UUID)
 	for i := range requestMappingIDs {
 		requestMappingsAnalytes[requestMappingIDs[i]] = newRequestMappings[i].AnalyteIDs
 	}
-	err = s.instrumentRepository.UpsertRequestMappingAnalytes(ctx, requestMappingsAnalytes)
+	err = s.instrumentRepository.WithTransaction(tx).UpsertRequestMappingAnalytes(ctx, requestMappingsAnalytes)
 	if err != nil {
+		_ = tx.Rollback()
 		return err
 	}
+
+	err = tx.Commit()
+	if err != nil {
+		_ = tx.Rollback()
+		return db.ErrCommitTransactionFailed
+	}
+
 	s.manager.EnqueueInstrument(instrument.ID, InstrumentUpdatedEvent)
 	return nil
 }
