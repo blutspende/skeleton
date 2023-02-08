@@ -1,6 +1,7 @@
 package skeleton
 
 import (
+	"errors"
 	"fmt"
 )
 
@@ -67,6 +68,11 @@ const (
 	MsgUnmarshalErrorResponseFailed   = "unmarshal send result batch error response failed"
 
 	MsgErrorInSkeleton = "error in skeletonhandler"
+	MsgFailedToAudit   = "failed to audit"
+)
+
+var (
+	ErrFailedToAudit = errors.New(MsgFailedToAudit)
 )
 
 // TODO: Update new Error Structure

@@ -117,7 +117,7 @@ func (s *skeleton) SubmitAnalysisResult(ctx context.Context, resultData Analysis
 }
 
 func (s *skeleton) GetInstrument(instrumentID uuid.UUID) (Instrument, error) {
-	return s.instrumentService.GetInstrumentByID(context.TODO(), instrumentID)
+	return s.instrumentService.GetInstrumentByID(context.TODO(), nil, instrumentID, false)
 }
 
 func (s *skeleton) GetInstrumentByIP(ip string) (Instrument, error) {

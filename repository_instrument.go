@@ -862,6 +862,10 @@ func (r *instrumentRepository) CreateTransaction() (db.DbConnector, error) {
 }
 
 func (r *instrumentRepository) WithTransaction(tx db.DbConnector) InstrumentRepository {
+	if tx == nil {
+		return r
+	}
+
 	txRepo := *r
 	txRepo.db = tx
 	return &txRepo
