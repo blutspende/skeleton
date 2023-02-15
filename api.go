@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/config"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/consolelog/service"
-	middleware2 "github.com/DRK-Blutspende-BaWueHe/skeleton/middleware"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/middleware"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/server"
 	"net/http/pprof"
 	"sync"
 
@@ -19,6 +20,7 @@ type api struct {
 	instrumentService          InstrumentService
 	consoleLogService          service.ConsoleLogService
 	createAnalysisRequestMutex sync.Mutex
+	consoleLogSSEServer        *server.ConsoleLogSSEServer
 }
 
 func (api *api) Run() error {
@@ -29,12 +31,28 @@ func (api *api) Run() error {
 	return api.engine.Run(fmt.Sprintf(":%d", api.config.APIPort))
 }
 
-func NewAPI(config *config.Configuration, authManager AuthManager, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService service.ConsoleLogService) GinApi {
-	return newAPI(gin.New(), config, authManager, analysisService, instrumentService, consoleLogService)
+func NewAPI(config *config.Configuration,
+	authManager AuthManager,
+	analysisService AnalysisService,
+	instrumentService InstrumentService,
+	consoleLogService service.ConsoleLogService,
+	consoleLogSSEServer *server.ConsoleLogSSEServer) GinApi {
+	return newAPI(gin.New(), config, authManager, analysisService, instrumentService, consoleLogService, consoleLogSSEServer)
+}
+
+func NewAPIForTesting(engine *gin.Engine,
+	config *config.Configuration,
+	authManager AuthManager,
+	analysisService AnalysisService,
+	instrumentService InstrumentService,
+	consoleLogService service.ConsoleLogService,
+	consoleLogSSEServer *server.ConsoleLogSSEServer) GinApi {
+	return newAPI(engine, config, authManager, analysisService, instrumentService, consoleLogService, consoleLogSSEServer)
 }
 
 func newAPI(engine *gin.Engine, config *config.Configuration, authManager AuthManager,
-	analysisService AnalysisService, instrumentService InstrumentService, consoleLogService service.ConsoleLogService) GinApi {
+	analysisService AnalysisService, instrumentService InstrumentService, consoleLogService service.ConsoleLogService,
+	consoleLogSSEServer *server.ConsoleLogSSEServer) GinApi {
 
 	if config.LogLevel <= zerolog.DebugLevel {
 		gin.SetMode(gin.DebugMode)
@@ -45,14 +63,15 @@ func newAPI(engine *gin.Engine, config *config.Configuration, authManager AuthMa
 	engine.Use(gin.Recovery())
 
 	api := api{
-		config:            config,
-		engine:            engine,
-		analysisService:   analysisService,
-		instrumentService: instrumentService,
-		consoleLogService: consoleLogService,
+		config:              config,
+		engine:              engine,
+		analysisService:     analysisService,
+		instrumentService:   instrumentService,
+		consoleLogService:   consoleLogService,
+		consoleLogSSEServer: consoleLogSSEServer,
 	}
 
-	corsMiddleWare := middleware2.CreateCorsMiddleware(config)
+	corsMiddleWare := middleware.CreateCorsMiddleware(config)
 	engine.Use(corsMiddleWare)
 
 	root := engine.Group("")
@@ -61,7 +80,7 @@ func newAPI(engine *gin.Engine, config *config.Configuration, authManager AuthMa
 	v1Group := root.Group("v1")
 
 	if api.config.Authorization {
-		authMiddleWare := middleware2.CheckAuth(authManager)
+		authMiddleWare := middleware.CheckAuth(authManager)
 		v1Group.Use(authMiddleWare)
 	}
 
@@ -78,6 +97,7 @@ func newAPI(engine *gin.Engine, config *config.Configuration, authManager AuthMa
 		instrumentsGroup.POST("/result/:resultID/retransmit", api.RetransmitResult)
 		instrumentsGroup.POST("/result/retransmit/batches", api.RetransmitResultBatches)
 		instrumentsGroup.GET("/protocol/:protocolId/encodings", api.GetEncodings)
+		instrumentsGroup.GET("/:instrumentId/console/handshake", middleware.SSEHeadersMiddleware(), api.consoleLogSSEServer.ServeHTTP())
 
 		messagesGroup := instrumentsGroup.Group("/:instrumentId/messages")
 		{
