@@ -44,6 +44,8 @@ type Configuration struct {
 	ResultTransferRetryTimeout        int           `envconfig:"RESULT_TRANSFER_RETRY_TIMEOUT" default:"5"`
 	AnalysisRequestsChannelBufferSize int           `envconfig:"ANALYSIS_REQUESTS_CHANNEL_BUFFER_SIZE" default:"1024"`
 	AnalysisResultsChannelBufferSize  int           `envconfig:"ANALYSIS_RESULTS_CHANNEL_BUFFER_SIZE" default:"1024"`
+	LogComURL                         string        `envconfig:"LOG_COM_URL" required:"true" default:"http://logcom"`
+	LogComServiceName                 string        `envconfig:"LOG_COM_SERVICE_NAME" required:"true"`
 
 	ClientCredentialAuthHeaderValue string
 }

@@ -2,6 +2,7 @@ package skeleton
 
 import (
 	"context"
+	"github.com/DRK-Blutspende-BaWueHe/logcom-api/logcom"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/config"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/db"
 	"github.com/google/uuid"
@@ -12,7 +13,7 @@ import (
 type InstrumentService interface {
 	CreateInstrument(ctx context.Context, instrument Instrument) (uuid.UUID, error)
 	GetInstruments(ctx context.Context) ([]Instrument, error)
-	GetInstrumentByID(ctx context.Context, id uuid.UUID) (Instrument, error)
+	GetInstrumentByID(ctx context.Context, tx db.DbConnector, id uuid.UUID, bypassCache bool) (Instrument, error)
 	GetInstrumentByIP(ctx context.Context, ip string) (Instrument, error)
 	UpdateInstrument(ctx context.Context, instrument Instrument) error
 	DeleteInstrument(ctx context.Context, id uuid.UUID) error
@@ -174,17 +175,19 @@ func (s *instrumentService) GetInstruments(ctx context.Context) ([]Instrument, e
 	return instruments, nil
 }
 
-func (s *instrumentService) GetInstrumentByID(ctx context.Context, id uuid.UUID) (Instrument, error) {
-	if instrument, ok := s.instrumentCache.GetByID(id); ok {
-		return instrument, nil
+func (s *instrumentService) GetInstrumentByID(ctx context.Context, tx db.DbConnector, id uuid.UUID, bypassCache bool) (Instrument, error) {
+	if !bypassCache {
+		if instrument, ok := s.instrumentCache.GetByID(id); ok {
+			return instrument, nil
+		}
 	}
 
-	instrument, err := s.instrumentRepository.GetInstrumentByID(ctx, id)
+	instrument, err := s.instrumentRepository.WithTransaction(tx).GetInstrumentByID(ctx, id)
 	if err != nil {
 		return instrument, err
 	}
 	instrumentIDs := []uuid.UUID{instrument.ID}
-	analyteMappingsByInstrumentID, err := s.instrumentRepository.GetAnalyteMappings(ctx, instrumentIDs)
+	analyteMappingsByInstrumentID, err := s.instrumentRepository.WithTransaction(tx).GetAnalyteMappings(ctx, instrumentIDs)
 	if err != nil {
 		return instrument, err
 	}
@@ -200,7 +203,7 @@ func (s *instrumentService) GetInstrumentByID(ctx context.Context, id uuid.UUID)
 			analyteMappingsByIDs[analyteMappings[i].ID] = &instrument.AnalyteMappings[i]
 		}
 	}
-	channelMappingsByAnalyteMappingID, err := s.instrumentRepository.GetChannelMappings(ctx, analyteMappingsIDs)
+	channelMappingsByAnalyteMappingID, err := s.instrumentRepository.WithTransaction(tx).GetChannelMappings(ctx, analyteMappingsIDs)
 	if err != nil {
 		return instrument, err
 	}
@@ -208,7 +211,7 @@ func (s *instrumentService) GetInstrumentByID(ctx context.Context, id uuid.UUID)
 		analyteMappingsByIDs[analyteMappingID].ChannelMappings = channelMappings
 	}
 
-	resultMappingsByAnalyteMappingID, err := s.instrumentRepository.GetResultMappings(ctx, analyteMappingsIDs)
+	resultMappingsByAnalyteMappingID, err := s.instrumentRepository.WithTransaction(tx).GetResultMappings(ctx, analyteMappingsIDs)
 	if err != nil {
 		return instrument, err
 	}
@@ -216,7 +219,7 @@ func (s *instrumentService) GetInstrumentByID(ctx context.Context, id uuid.UUID)
 		analyteMappingsByIDs[analyteMappingID].ResultMappings = resultMappings
 	}
 
-	requestMappingsByInstrumentID, err := s.instrumentRepository.GetRequestMappings(ctx, instrumentIDs)
+	requestMappingsByInstrumentID, err := s.instrumentRepository.WithTransaction(tx).GetRequestMappings(ctx, instrumentIDs)
 	if err != nil {
 		return instrument, err
 	}
@@ -230,7 +233,7 @@ func (s *instrumentService) GetInstrumentByID(ctx context.Context, id uuid.UUID)
 		}
 	}
 
-	requestMappingAnalyteIDs, err := s.instrumentRepository.GetRequestMappingAnalytes(ctx, requestMappingIDs)
+	requestMappingAnalyteIDs, err := s.instrumentRepository.WithTransaction(tx).GetRequestMappingAnalytes(ctx, requestMappingIDs)
 	if err != nil {
 		return instrument, err
 	}
@@ -250,14 +253,14 @@ func (s *instrumentService) GetInstrumentByIP(ctx context.Context, ip string) (I
 }
 
 func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Instrument) error {
-	oldInstrument, err := s.GetInstrumentByID(ctx, instrument.ID)
-	if err != nil {
-		return err
-	}
-
 	tx, err := s.instrumentRepository.CreateTransaction()
 	if err != nil {
 		return db.ErrBeginTransactionFailed
+	}
+
+	oldInstrument, err := s.GetInstrumentByID(ctx, tx, instrument.ID, false)
+	if err != nil {
+		return err
 	}
 
 	err = s.instrumentRepository.WithTransaction(tx).UpdateInstrument(ctx, instrument)
@@ -436,6 +439,18 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 	if err != nil {
 		_ = tx.Rollback()
 		return err
+	}
+
+	newInstrument, err := s.GetInstrumentByID(ctx, tx, instrument.ID, true)
+	if err != nil {
+		return err
+	}
+
+	err = logcom.SendAuditLogWithModification(ctx, "INSTRUMENT", oldInstrument.Name+"("+oldInstrument.ID.String()+")", oldInstrument, newInstrument)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to audit instrument update")
+		_ = tx.Rollback()
+		return ErrFailedToAudit
 	}
 
 	err = tx.Commit()

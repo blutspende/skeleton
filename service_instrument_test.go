@@ -126,7 +126,7 @@ func TestUpdateInstrument(t *testing.T) {
 	})
 	assert.Nil(t, err)
 
-	instrument, err := instrumentService.GetInstrumentByID(context.Background(), instrumentID)
+	instrument, err := instrumentService.GetInstrumentByID(context.Background(), nil, instrumentID, false)
 	assert.Nil(t, err)
 	assert.Equal(t, "TestInstrument", instrument.Name)
 	assert.Equal(t, protocolID, instrument.ProtocolID)
@@ -187,7 +187,7 @@ func TestUpdateInstrument(t *testing.T) {
 	})
 
 	assert.Nil(t, err)
-	instrument, err = instrumentService.GetInstrumentByID(context.Background(), instrumentID)
+	instrument, err = instrumentService.GetInstrumentByID(context.Background(), nil, instrumentID, false)
 	assert.Equal(t, "TestInstrumentUpdated", instrument.Name)
 	assert.Len(t, instrument.AnalyteMappings, 1)
 	assert.Equal(t, analyteID1, instrument.AnalyteMappings[0].AnalyteID)
@@ -295,7 +295,7 @@ func TestUpdateInstrument(t *testing.T) {
 	})
 
 	assert.Nil(t, err)
-	instrument, err = instrumentService.GetInstrumentByID(context.Background(), instrumentID)
+	instrument, err = instrumentService.GetInstrumentByID(context.Background(), nil, instrumentID, false)
 	assert.Equal(t, "TestInstrumentUpdated2", instrument.Name)
 	assert.Len(t, instrument.AnalyteMappings, 2)
 

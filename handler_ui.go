@@ -148,7 +148,7 @@ func (api *api) GetInstrumentByID(c *gin.Context) {
 		return
 	}
 
-	instrument, err := api.instrumentService.GetInstrumentByID(c, id)
+	instrument, err := api.instrumentService.GetInstrumentByID(c, nil, id, false)
 	if err != nil {
 		if err == ErrInstrumentNotFound {
 			c.AbortWithStatus(http.StatusNotFound)
