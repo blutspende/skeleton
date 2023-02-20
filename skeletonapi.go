@@ -5,6 +5,7 @@ import (
 	"github.com/DRK-Blutspende-BaWueHe/logcom-api/logcom"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/consolelog/repository"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/consolelog/service"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/server"
 	"github.com/gin-gonic/gin"
 	"net/http"
 
@@ -123,8 +124,9 @@ func New(sqlConn *sqlx.DB, dbSchema string) (SkeletonAPI, error) {
 	consoleLogRepository := repository.NewConsoleLogRepository(500)
 	analysisService := NewAnalysisService(analysisRepository, manager)
 	instrumentService := NewInstrumentService(&config, instrumentRepository, manager, instrumentCache, cerberusClient)
-	consoleLogService := service.NewConsoleLogService(consoleLogRepository)
-	api := NewAPI(&config, authManager, analysisService, instrumentService, consoleLogService)
+	consoleLogSSEServer := server.NewConsoleLogSSEServer(service.NewConsoleLogSSEClientListener())
+	consoleLogService := service.NewConsoleLogService(consoleLogRepository, consoleLogSSEServer)
+	api := NewAPI(&config, authManager, analysisService, instrumentService, consoleLogService, consoleLogSSEServer)
 
 	logcom.Init(logcom.Configuration{
 		ServiceName: config.LogComServiceName,

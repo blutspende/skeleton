@@ -3,6 +3,7 @@ package service
 import (
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/consolelog/model"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/consolelog/repository"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/server"
 	"github.com/google/uuid"
 	"time"
 )
@@ -15,12 +16,15 @@ type ConsoleLogService interface {
 }
 
 type consoleLogService struct {
-	repository repository.ConsoleLogRepository
+	repository          repository.ConsoleLogRepository
+	consoleLogSSEServer *server.ConsoleLogSSEServer
 }
 
-func NewConsoleLogService(repository repository.ConsoleLogRepository) ConsoleLogService {
+func NewConsoleLogService(repository repository.ConsoleLogRepository,
+	consoleLogSSEServer *server.ConsoleLogSSEServer) ConsoleLogService {
 	return &consoleLogService{
-		repository: repository,
+		repository:          repository,
+		consoleLogSSEServer: consoleLogSSEServer,
 	}
 }
 
@@ -34,6 +38,14 @@ func (s *consoleLogService) createConsoleLog(level model.LogLevel, instrumentID 
 	}
 
 	s.repository.CreateConsoleLog(newConsoleLogEntity)
+
+	s.consoleLogSSEServer.Send(model.ConsoleLogDTO{
+		InstrumentID: newConsoleLogEntity.InstrumentID,
+		Level:        newConsoleLogEntity.Level,
+		CreatedAt:    newConsoleLogEntity.CreatedAt,
+		Message:      newConsoleLogEntity.Message,
+		MessageType:  newConsoleLogEntity.MessageType,
+	})
 }
 
 func (s *consoleLogService) Debug(instrumentID uuid.UUID, messageType string, message string) {
@@ -57,10 +69,11 @@ func (s *consoleLogService) GetConsoleLogs(instrumentID uuid.UUID) []model.Conso
 	for i := 0; i < entityCount; i++ {
 		consoleLogEntity := loadedConsoleLogEntities[i]
 		consoleLogDTOs[i] = model.ConsoleLogDTO{
-			Level:       consoleLogEntity.Level,
-			CreatedAt:   consoleLogEntity.CreatedAt,
-			Message:     consoleLogEntity.Message,
-			MessageType: consoleLogEntity.MessageType,
+			InstrumentID: consoleLogEntity.InstrumentID,
+			Level:        consoleLogEntity.Level,
+			CreatedAt:    consoleLogEntity.CreatedAt,
+			Message:      consoleLogEntity.Message,
+			MessageType:  consoleLogEntity.MessageType,
 		}
 	}
 
