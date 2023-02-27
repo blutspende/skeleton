@@ -290,20 +290,19 @@ func (s *skeleton) cleanUpCerberusQueueItems(ctx context.Context) {
 }
 
 func (s *skeleton) submitAnalysisResultsToCerberus(ctx context.Context) {
-	ticker := time.NewTicker(60 * time.Second)
+	tickerTriggerDuration := 60 * time.Second
+	ticker := time.NewTicker(tickerTriggerDuration)
+	continuousTrigger := make(chan []CerberusQueueItem)
 	for {
 		select {
 		case <-ctx.Done():
 			ticker.Stop()
 			return
-		case <-ticker.C:
-			queueItems, err := s.analysisRepository.GetAnalysisResultQueueItems(ctx)
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to get cerberus queue items")
-			}
+		case queueItems := <-continuousTrigger:
+			ticker.Stop()
 			for _, queueItem := range queueItems {
 				var analysisResult []AnalysisResult
-				if err = json.Unmarshal([]byte(queueItem.JsonMessage), &analysisResult); err != nil {
+				if err := json.Unmarshal([]byte(queueItem.JsonMessage), &analysisResult); err != nil {
 					log.Error().Err(err).Msg("Failed to unmarshal analysis results")
 					continue
 				}
@@ -337,6 +336,28 @@ func (s *skeleton) submitAnalysisResultsToCerberus(ctx context.Context) {
 					log.Error().Err(err).Msg("Failed to update the status of the cerberus queue item")
 				}
 			}
+			queueItems, err := s.analysisRepository.GetAnalysisResultQueueItems(ctx)
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to get cerberus queue items")
+			}
+			if len(queueItems) < 1 {
+				ticker.Reset(tickerTriggerDuration)
+				break
+			}
+			go func() {
+				time.Sleep(1 * time.Second)
+				continuousTrigger <- queueItems
+			}()
+		case <-ticker.C:
+			queueItems, err := s.analysisRepository.GetAnalysisResultQueueItems(ctx)
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to get cerberus queue items")
+				break
+			}
+			go func() {
+				time.Sleep(50 * time.Millisecond)
+				continuousTrigger <- queueItems
+			}()
 		}
 	}
 }

@@ -1468,7 +1468,7 @@ func (r *analysisRepository) CreateAnalysisResultQueueItem(ctx context.Context, 
 func (r *analysisRepository) GetAnalysisResultQueueItems(ctx context.Context) ([]CerberusQueueItem, error) {
 	query := fmt.Sprintf(`SELECT queue_item_id, json_message, last_http_status, last_error, last_error_at, trial_count, retry_not_before, created_at FROM %s.sk_cerberus_queue_items 
 			WHERE trial_count < 5760 /* 4 days á 2 minutes */ AND last_http_status NOT BETWEEN 200 AND 299 AND created_at > timezone('utc', now()-interval '14 days') AND retry_not_before < timezone('utc', now())
-			ORDER BY created_at LIMIT 1;`, r.dbSchema)
+			ORDER BY created_at LIMIT 10;`, r.dbSchema)
 
 	rows, err := r.db.QueryxContext(ctx, query)
 	if err != nil {
