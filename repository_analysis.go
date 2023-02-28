@@ -1442,12 +1442,17 @@ func (r *analysisRepository) createWarnings(ctx context.Context, warningsByAnaly
 }
 
 func (r *analysisRepository) CreateAnalysisResultQueueItem(ctx context.Context, analysisResults []AnalysisResult) (uuid.UUID, error) {
+	log.Trace().Int("analysisResultCount", len(analysisResults)).Msg("Creating analysis result queue item")
+
 	if len(analysisResults) < 1 {
 		return uuid.Nil, nil
 	}
 
 	jsonData, err := json.Marshal(analysisResults)
 	if err != nil {
+		log.Error().Err(err).
+			Interface("analysisResults", analysisResults).
+			Msg("Failed to marshal analysis results, skipping further processing until manual intervention")
 		return uuid.Nil, nil
 	}
 
