@@ -10,7 +10,7 @@ import (
 
 func TestMessages(t *testing.T) {
 	consoleLogRepository := repository.NewConsoleLogRepository(5)
-	consoleLogService := NewConsoleLogService(consoleLogRepository)
+	consoleLogService := NewConsoleLogService(consoleLogRepository, nil)
 
 	instrumentID := uuid.MustParse("845b73b5-c92d-4797-93a6-0165b3366404")
 
