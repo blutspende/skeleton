@@ -116,12 +116,12 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 
 	analysisService := NewAnalysisService(analysisRepository, skeletonManager)
 	instrumentService := NewInstrumentService(&config, instrumentRepository, skeletonManager, NewInstrumentCache(), cerberusClientMock)
-	consoleLogService := service.NewConsoleLogService(consoleLogRepository)
+	consoleLogService := service.NewConsoleLogService(consoleLogRepository, nil)
 
 	responseRecorder := &httptest.ResponseRecorder{}
 	ginContext, ginEngine := gin.CreateTestContext(responseRecorder)
 
-	api := newAPI(ginEngine, &config, &authManager, analysisService, instrumentService, consoleLogService)
+	api := newAPI(ginEngine, &config, &authManager, analysisService, instrumentService, consoleLogService, nil)
 
 	skeletonInstance, _ := NewSkeleton(sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, skeletonManager, cerberusClientMock)
 
@@ -221,9 +221,9 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 
 	analysisService := NewAnalysisService(analysisRepository, skeletonManager)
 	instrumentService := NewInstrumentService(&config, instrumentRepository, skeletonManager, NewInstrumentCache(), cerberusClientMock)
-	consoleLogService := service.NewConsoleLogService(consoleLogRepository)
+	consoleLogService := service.NewConsoleLogService(consoleLogRepository, nil)
 
-	api := NewAPI(&config, &authManager, analysisService, instrumentService, consoleLogService)
+	api := NewAPI(&config, &authManager, analysisService, instrumentService, consoleLogService, nil)
 
 	skeletonInstance, _ := NewSkeleton(sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, skeletonManager, cerberusClientMock)
 
