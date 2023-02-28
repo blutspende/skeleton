@@ -296,10 +296,15 @@ func (s *skeleton) submitAnalysisResultsToCerberus(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
+			log.Debug().Msg("Stopping analysis result submit job")
 			ticker.Stop()
 			return
 		case queueItems := <-continuousTrigger:
+			executionStarted := time.Now()
+			log.Trace().Msgf("Triggered result sending to cerberus. Sending %d batches", len(queueItems))
 			ticker.Stop()
+
+			sentResultCount := 0
 			for _, queueItem := range queueItems {
 				var analysisResult []AnalysisResult
 				if err := json.Unmarshal([]byte(queueItem.JsonMessage), &analysisResult); err != nil {
@@ -315,6 +320,8 @@ func (s *skeleton) submitAnalysisResultsToCerberus(ctx context.Context) {
 				if !response.HasResult() {
 					continue
 				}
+
+				sentResultCount += len(analysisResult)
 
 				responseJsonMessage, _ := json.Marshal(response.AnalysisResultBatchItemInfoList)
 
@@ -336,6 +343,10 @@ func (s *skeleton) submitAnalysisResultsToCerberus(ctx context.Context) {
 					log.Error().Err(err).Msg("Failed to update the status of the cerberus queue item")
 				}
 			}
+
+			log.Trace().Int64("elapsedExecutionTime", time.Since(executionStarted).Milliseconds()).
+				Msgf("Sent (or tried to send) %d results to cerberus", sentResultCount)
+
 			queueItems, err := s.analysisRepository.GetAnalysisResultQueueItems(ctx)
 			if err != nil {
 				log.Error().Err(err).Msg("Failed to get cerberus queue items")
@@ -349,6 +360,7 @@ func (s *skeleton) submitAnalysisResultsToCerberus(ctx context.Context) {
 				continuousTrigger <- queueItems
 			}()
 		case <-ticker.C:
+			log.Trace().Msg("Scheduled result sending to cerberus")
 			queueItems, err := s.analysisRepository.GetAnalysisResultQueueItems(ctx)
 			if err != nil {
 				log.Error().Err(err).Msg("Failed to get cerberus queue items")
