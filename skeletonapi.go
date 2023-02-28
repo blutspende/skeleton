@@ -141,3 +141,19 @@ func New(sqlConn *sqlx.DB, dbSchema string) (SkeletonAPI, error) {
 
 	return NewSkeleton(sqlConn, dbSchema, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, manager, cerberusClient)
 }
+
+func NewForTest(config config2.Configuration, sqlConn *sqlx.DB, dbSchema string, cerberusClient Cerberus, authManager AuthManager) (SkeletonAPI, error) {
+	dbConn := db.CreateDbConnector(sqlConn)
+	manager := NewSkeletonManager()
+	instrumentCache := NewInstrumentCache()
+	analysisRepository := NewAnalysisRepository(dbConn, dbSchema)
+	instrumentRepository := NewInstrumentRepository(dbConn, dbSchema)
+	consoleLogRepository := repository.NewConsoleLogRepository(500)
+	analysisService := NewAnalysisService(analysisRepository, manager)
+	instrumentService := NewInstrumentService(&config, instrumentRepository, manager, instrumentCache, cerberusClient)
+	consoleLogSSEServer := server.NewConsoleLogSSEServer(service.NewConsoleLogSSEClientListener())
+	consoleLogService := service.NewConsoleLogService(consoleLogRepository, consoleLogSSEServer)
+	api := NewAPI(&config, authManager, analysisService, instrumentService, consoleLogService, consoleLogSSEServer)
+
+	return NewSkeleton(sqlConn, dbSchema, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, manager, cerberusClient)
+}
