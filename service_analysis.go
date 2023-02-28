@@ -49,6 +49,7 @@ func (as *analysisService) CreateAnalysisRequests(ctx context.Context, analysisR
 }
 
 func (as *analysisService) ProcessAnalysisRequests(ctx context.Context, analysisRequests []AnalysisRequest) error {
+	completableRequestCount := 0
 	for _, request := range analysisRequests {
 		analysisResults, err := as.analysisRepository.GetAnalysisResultsBySampleCodeAndAnalyteID(ctx, request.SampleCode, request.AnalyteID)
 		if err != nil {
@@ -56,16 +57,26 @@ func (as *analysisService) ProcessAnalysisRequests(ctx context.Context, analysis
 			return err
 		}
 
+		if len(analysisResults) < 1 {
+			continue
+		}
+
+		completableRequestCount++
+
 		for i := range analysisResults {
 			analysisResults[i].AnalysisRequest = request
 			as.manager.SendResultForProcessing(analysisResults[i])
 		}
 	}
 
+	log.Trace().Msgf("%d processed request(s) has results out from %d", completableRequestCount, len(analysisRequests))
+
 	return nil
 }
 
 func (as *analysisService) RevokeAnalysisRequests(ctx context.Context, workItemIDs []uuid.UUID) error {
+	log.Trace().Msgf("Revoking %d work-item(s) by IDs", len(workItemIDs))
+
 	analysisRequests, err := as.analysisRepository.GetAnalysisRequestsByWorkItemIDs(ctx, workItemIDs)
 	if err != nil {
 		return ErrFailedToRevokeAnalysisRequests
@@ -115,10 +126,14 @@ func (as *analysisService) RetransmitResult(ctx context.Context, resultID uuid.U
 }
 
 func (as *analysisService) RetransmitResultBatches(ctx context.Context, batchIDs []uuid.UUID) error {
+	log.Trace().Msgf("Trying to retransmit %d analysis results by ID", len(batchIDs))
+
 	analysisResults, err := as.analysisRepository.GetAnalysisResultsByBatchIDs(ctx, batchIDs)
 	if err != nil {
 		return err
 	}
+
+	log.Trace().Msgf("Retransmitting %d analysis results", len(analysisResults))
 
 	for _, analysisResult := range analysisResults {
 		as.manager.SendResultForProcessing(analysisResult)

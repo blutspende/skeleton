@@ -101,6 +101,8 @@ func (sm *manager) RegisterInstrumentQueueListener(listener InstrumentQueueListe
 }
 
 func (sm *manager) SendAnalysisRequestsForProcessing(analysisRequests []AnalysisRequest) {
+	log.Trace().Msgf("Sending %d analysis request(s) for processing", len(analysisRequests))
+
 	sm.processableAnalysisRequestBatchChan <- analysisRequests
 }
 
