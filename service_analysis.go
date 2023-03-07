@@ -10,7 +10,7 @@ type AnalysisService interface {
 	CreateAnalysisRequests(ctx context.Context, analysisRequests []AnalysisRequest) ([]AnalysisRequestStatus, error)
 	ProcessAnalysisRequests(ctx context.Context, analysisRequests []AnalysisRequest) error
 	RevokeAnalysisRequests(ctx context.Context, workItemIDs []uuid.UUID) error
-	GetAnalysisRequestsInfo(ctx context.Context, instrumentID uuid.UUID, pageable Pageable) ([]AnalysisRequestInfo, int, error)
+	GetAnalysisRequestsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisRequestInfo, int, error)
 	GetAnalysisResultsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisResultInfo, int, error)
 	GetAnalysisBatches(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisBatch, int, error)
 	RetransmitResult(ctx context.Context, resultID uuid.UUID) error
@@ -87,8 +87,8 @@ func (as *analysisService) RevokeAnalysisRequests(ctx context.Context, workItemI
 	return as.analysisRepository.RevokeAnalysisRequests(ctx, workItemIDs)
 }
 
-func (as *analysisService) GetAnalysisRequestsInfo(ctx context.Context, instrumentID uuid.UUID, pageable Pageable) ([]AnalysisRequestInfo, int, error) {
-	requestInfoList, totalCount, err := as.analysisRepository.GetAnalysisRequestsInfo(ctx, instrumentID, pageable)
+func (as *analysisService) GetAnalysisRequestsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisRequestInfo, int, error) {
+	requestInfoList, totalCount, err := as.analysisRepository.GetAnalysisRequestsInfo(ctx, instrumentID, filter)
 	if err != nil {
 		return []AnalysisRequestInfo{}, 0, err
 	}

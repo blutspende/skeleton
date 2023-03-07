@@ -285,20 +285,20 @@ func (api *api) GetAnalysisRequestsInfo(c *gin.Context) {
 		return
 	}
 
-	var pageable Pageable
-	err = c.ShouldBindQuery(&pageable)
+	var filter Filter
+	err = c.ShouldBindQuery(&filter)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, "malformed pageable data")
 		return
 	}
 
-	analysisRequestInfoList, totalCount, err := api.analysisService.GetAnalysisRequestsInfo(c, instrumentID, pageable)
+	analysisRequestInfoList, totalCount, err := api.analysisService.GetAnalysisRequestsInfo(c, instrumentID, filter)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, NewPage(pageable, totalCount, convertAnalysisRequestInfoListToAnalysisRequestInfoTOList(analysisRequestInfoList)))
+	c.JSON(http.StatusOK, NewPage(filter.Pageable, totalCount, convertAnalysisRequestInfoListToAnalysisRequestInfoTOList(analysisRequestInfoList)))
 }
 
 func (api *api) GetAnalysisResultsInfo(c *gin.Context) {

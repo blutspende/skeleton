@@ -172,7 +172,7 @@ type AnalysisRepository interface {
 	CreateAnalysisRequestsBatch(ctx context.Context, analysisRequests []AnalysisRequest) ([]uuid.UUID, []uuid.UUID, error)
 	GetAnalysisRequestsBySampleCodeAndAnalyteID(ctx context.Context, sampleCodes string, analyteID uuid.UUID) ([]AnalysisRequest, error)
 	GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string) (map[string][]AnalysisRequest, error)
-	GetAnalysisRequestsInfo(ctx context.Context, instrumentID uuid.UUID, pageable Pageable) ([]AnalysisRequestInfo, int, error)
+	GetAnalysisRequestsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisRequestInfo, int, error)
 	GetAnalysisResultsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisResultInfo, int, error)
 	GetAnalysisBatches(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisBatch, int, error)
 	//GetAnalysisRequestsForVisualization(ctx context.Context) (map[string][]AnalysisRequest, error)
@@ -328,7 +328,11 @@ func (r *analysisRepository) GetAnalysisRequestsBySampleCodes(ctx context.Contex
 	return analysisRequestsBySampleCodes, err
 }
 
-func (r *analysisRepository) GetAnalysisRequestsInfo(ctx context.Context, instrumentID uuid.UUID, pageable Pageable) ([]AnalysisRequestInfo, int, error) {
+func (r *analysisRepository) GetAnalysisRequestsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisRequestInfo, int, error) {
+	preparedValues := map[string]interface{}{
+		"instrument_id": instrumentID,
+	}
+
 	query := `SELECT req.id AS request_id,
 	   req.sample_code AS sample_code,
 	   req.work_item_id AS work_item_id,
@@ -344,67 +348,30 @@ LEFT JOIN %schema_name%.sk_analysis_results res ON (res.sample_code = req.sample
 LEFT JOIN %schema_name%.sk_instruments i ON i.id = res.instrument_id
 LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = i.id AND req.analyte_id = am.analyte_id`
 
-	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
-	query += applyPagination(pageable, "req", "req.created_at DESC, req.id") + `;`
-
 	countQuery := `SELECT count(req.id)
 FROM %schema_name%.sk_analysis_requests req
 LEFT JOIN %schema_name%.sk_analysis_results res ON (res.sample_code = req.sample_code and res.instrument_id = :instrument_id)
 LEFT JOIN %schema_name%.sk_instruments i ON i.id = res.instrument_id
 LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = i.id AND req.analyte_id = am.analyte_id`
 
-	countQuery = strings.ReplaceAll(countQuery, "%schema_name%", r.dbSchema)
+	if filter.TimeFrom != nil {
+		preparedValues["time_from"] = filter.TimeFrom.UTC()
 
-	preparedValues := map[string]interface{}{
-		"instrument_id": instrumentID,
-		//"time_from":     filter.TimeFrom.UTC(),
-		//"limit":         filter.PageSize,
-		//"offset":        filter.PageNumber * filter.PageSize,
+		query += ` AND req.created_at >= :time_from`
+		countQuery += ` AND req.created_at >= :time_from`
 	}
 
-	//filterQuery := ``
-	//
-	//if filter.Filter != "" {
-	//	namedValues["filter"] = filter.Filter + "%"
-	//	filterQuery += " AND req.sample_code like :filter "
-	//}
-	//
-	//if !filter.TimeFrom.IsZero() {
-	//	filterQuery += " AND req.created_at >= :time_from "
-	//}
-	//
-	//query += filterQuery
-	//
-	//if filter.Sort != "" {
-	//	splitSort := strings.Split(filter.Sort, " ")
-	//	sort := ""
-	//	direction := ""
-	//
-	//	if strings.ToLower(splitSort[1]) == "desc" {
-	//		direction = " desc"
-	//	} else {
-	//		direction = " asc"
-	//	}
-	//
-	//	switch splitSort[0] {
-	//	case "createdAt":
-	//		sort = "req.created_at"
-	//	case "sample_code":
-	//		sort = "req.sample_code"
-	//	case "testName":
-	//		sort = "test_name"
-	//	case "transmissionDate":
-	//		sort = "res.batch_created_at"
-	//	default:
-	//		sort = "req.created_at"
-	//	}
-	//
-	//	query += ` order by ` + sort + direction
-	//} else {
-	//	query += ` order by res.batch_created_at DESC `
-	//}
-	//
-	//query += ` Limit :limit Offset :offset`
+	if filter.Filter != nil {
+		preparedValues["filter"] = "%" + *filter.Filter + "%"
+
+		query += ` AND (res.sample_code LIKE :filter OR am.instrument_analyte LIKE :filter)`
+		countQuery += ` AND (res.sample_code LIKE :filter OR am.instrument_analyte LIKE :filter)`
+	}
+
+	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
+	query += applyPagination(filter.Pageable, "req", "req.created_at DESC, req.id") + `;`
+
+	countQuery = strings.ReplaceAll(countQuery, "%schema_name%", r.dbSchema)
 
 	rows, err := r.db.NamedQueryContext(ctx, query, preparedValues)
 	if err != nil {
