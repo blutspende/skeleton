@@ -364,8 +364,8 @@ LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = i.id AND re
 	if filter.Filter != nil {
 		preparedValues["filter"] = "%" + *filter.Filter + "%"
 
-		query += ` AND (res.sample_code LIKE :filter OR am.instrument_analyte LIKE :filter OR req.work_item_id::::TEXT LIKE :filter)`
-		countQuery += ` AND (res.sample_code LIKE :filter OR am.instrument_analyte LIKE :filter OR req.work_item_id::::TEXT LIKE :filter)`
+		query += ` AND (res.sample_code LIKE :filter OR am.instrument_analyte LIKE :filter)`
+		countQuery += ` AND (res.sample_code LIKE :filter OR am.instrument_analyte LIKE :filter)`
 	}
 
 	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
@@ -373,6 +373,7 @@ LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = i.id AND re
 
 	countQuery = strings.ReplaceAll(countQuery, "%schema_name%", r.dbSchema)
 
+	log.Trace().Str("query", query).Interface("args", preparedValues).Msg("GetAnalysisRequestsInfo")
 	rows, err := r.db.NamedQueryContext(ctx, query, preparedValues)
 	if err != nil {
 		log.Error().Err(err).Msg("Can not get analysis request list")
@@ -440,14 +441,15 @@ WHERE res.instrument_id = :instrument_id`
 	if filter.Filter != nil {
 		preparedValues["filter"] = "%" + *filter.Filter + "%"
 
-		query += ` AND (res.sample_code LIKE :filter OR am.instrument_analyte LIKE :filter OR req.work_item_id::::TEXT LIKE :filter)`
-		countQuery += ` AND (res.sample_code LIKE :filter OR am.instrument_analyte LIKE :filter OR req.work_item_id::::TEXT LIKE :filter)`
+		query += ` AND (res.sample_code LIKE :filter OR am.instrument_analyte LIKE :filter)`
+		countQuery += ` AND (res.sample_code LIKE :filter OR am.instrument_analyte LIKE :filter)`
 	}
 
 	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
 	query += applyPagination(filter.Pageable, "req", "req.created_at DESC, res.id") + `;`
 
 	countQuery = strings.ReplaceAll(countQuery, "%schema_name%", r.dbSchema)
+	log.Trace().Str("query", query).Interface("args", preparedValues).Msg("GetAnalysisResultsInfo")
 
 	rows, err := r.db.NamedQueryContext(ctx, query, preparedValues)
 	if err != nil {
@@ -508,15 +510,15 @@ WHERE res.instrument_id = :instrument_id`
 	if filter.Filter != nil {
 		preparedValues["filter"] = "%" + *filter.Filter + "%"
 
-		query += ` AND (res.sample_code LIKE :filter OR am.instrument_analyte LIKE :filter OR req.work_item_id::::TEXT LIKE :filter)`
-		countQuery += ` AND (res.sample_code LIKE :filter OR am.instrument_analyte LIKE :filter OR req.work_item_id::::TEXT LIKE :filter)`
+		query += ` AND (res.sample_code LIKE :filter OR am.instrument_analyte LIKE :filter)`
+		countQuery += ` AND (res.sample_code LIKE :filter OR am.instrument_analyte LIKE :filter)`
 	}
 
 	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
 	query += applyPagination(filter.Pageable, "", "") + `;`
 
 	countQuery = strings.ReplaceAll(countQuery, "%schema_name%", r.dbSchema)
-
+	log.Trace().Str("query", query).Interface("args", preparedValues).Msg("GetAnalysisResultsInfo")
 	rows, err := r.db.NamedQueryContext(ctx, query, preparedValues)
 	if err != nil {
 		log.Error().Err(err).Msg("Can not get analysis request list")
