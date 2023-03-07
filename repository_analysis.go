@@ -366,8 +366,8 @@ WHERE 1 = 1`
 	if filter.Filter != nil {
 		preparedValues["filter"] = "%" + *filter.Filter + "%"
 
-		query += ` AND (res.sample_code LIKE :filter OR am.instrument_analyte LIKE :filter)`
-		countQuery += ` AND (res.sample_code LIKE :filter OR am.instrument_analyte LIKE :filter)`
+		query += ` AND (req.sample_code LIKE :filter OR am.instrument_analyte LIKE :filter)`
+		countQuery += ` AND (req.sample_code LIKE :filter OR am.instrument_analyte LIKE :filter)`
 	}
 
 	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
