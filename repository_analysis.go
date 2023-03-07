@@ -346,13 +346,15 @@ func (r *analysisRepository) GetAnalysisRequestsInfo(ctx context.Context, instru
 FROM %schema_name%.sk_analysis_requests req
 LEFT JOIN %schema_name%.sk_analysis_results res ON (res.sample_code = req.sample_code and res.instrument_id = :instrument_id)
 LEFT JOIN %schema_name%.sk_instruments i ON i.id = res.instrument_id
-LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = i.id AND req.analyte_id = am.analyte_id`
+LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = i.id AND req.analyte_id = am.analyte_id
+WHERE 1 = 1`
 
 	countQuery := `SELECT count(req.id)
 FROM %schema_name%.sk_analysis_requests req
 LEFT JOIN %schema_name%.sk_analysis_results res ON (res.sample_code = req.sample_code and res.instrument_id = :instrument_id)
 LEFT JOIN %schema_name%.sk_instruments i ON i.id = res.instrument_id
-LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = i.id AND req.analyte_id = am.analyte_id`
+LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = i.id AND req.analyte_id = am.analyte_id
+WHERE 1 = 1`
 
 	if filter.TimeFrom != nil {
 		preparedValues["time_from"] = filter.TimeFrom.UTC()
