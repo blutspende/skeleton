@@ -292,6 +292,8 @@ func (api *api) GetAnalysisRequestsInfo(c *gin.Context) {
 		return
 	}
 
+	log.Trace().Str("instrumentID", instrumentID.String()).Interface("filter", filter).Msg("GetAnalysisRequestsInfo")
+
 	analysisRequestInfoList, totalCount, err := api.analysisService.GetAnalysisRequestsInfo(c, instrumentID, filter)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, err.Error())
@@ -315,6 +317,8 @@ func (api *api) GetAnalysisResultsInfo(c *gin.Context) {
 		return
 	}
 
+	log.Trace().Str("instrumentID", instrumentID.String()).Interface("filter", filter).Msg("GetAnalysisResultsInfo")
+
 	analysisResultInfoList, totalCount, err := api.analysisService.GetAnalysisResultsInfo(c, instrumentID, filter)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, err.Error())
@@ -337,6 +341,8 @@ func (api *api) GetAnalysisBatches(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, "malformed pageable data")
 		return
 	}
+
+	log.Trace().Str("instrumentID", instrumentID.String()).Interface("filter", filter).Msg("GetAnalysisBatches")
 
 	analysisBatchList, totalCount, err := api.analysisService.GetAnalysisBatches(c, instrumentID, filter)
 	if err != nil {
