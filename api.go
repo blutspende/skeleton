@@ -116,6 +116,7 @@ func newAPI(engine *gin.Engine, config *config.Configuration, authManager AuthMa
 	{
 		analysisRequests.POST("/batch", api.CreateAnalysisRequestBatch)
 		analysisRequests.DELETE("/batch", api.RevokeAnalysisRequestBatch)
+		analysisRequests.POST("/batch/reexamine", api.ReexamineAnalysisRequestBatch)
 	}
 
 	// Development-option enables debugger, this can have side-effects

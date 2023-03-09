@@ -10,6 +10,7 @@ type AnalysisService interface {
 	CreateAnalysisRequests(ctx context.Context, analysisRequests []AnalysisRequest) ([]AnalysisRequestStatus, error)
 	ProcessAnalysisRequests(ctx context.Context, analysisRequests []AnalysisRequest) error
 	RevokeAnalysisRequests(ctx context.Context, workItemIDs []uuid.UUID) error
+	ReexamineAnalysisRequestsBatch(ctx context.Context, workItemIDs []uuid.UUID) error
 	GetAnalysisRequestsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisRequestInfo, int, error)
 	GetAnalysisResultsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisResultInfo, int, error)
 	GetAnalysisBatches(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisBatch, int, error)
@@ -85,6 +86,11 @@ func (as *analysisService) RevokeAnalysisRequests(ctx context.Context, workItemI
 	as.manager.GetCallbackHandler().RevokeAnalysisRequests(analysisRequests)
 
 	return as.analysisRepository.RevokeAnalysisRequests(ctx, workItemIDs)
+}
+
+func (as *analysisService) ReexamineAnalysisRequestsBatch(ctx context.Context, workItemIDs []uuid.UUID) error {
+	log.Trace().Msgf("Reexamine %d work-item(s) by IDs", len(workItemIDs))
+	return as.analysisRepository.IncreaseReexaminationRequestedCount(ctx, workItemIDs)
 }
 
 func (as *analysisService) GetAnalysisRequestsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisRequestInfo, int, error) {

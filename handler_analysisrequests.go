@@ -162,3 +162,22 @@ func (api *api) RevokeAnalysisRequestBatch(c *gin.Context) {
 
 	c.Status(http.StatusNoContent)
 }
+
+func (api *api) ReexamineAnalysisRequestBatch(c *gin.Context) {
+	var workItemIDs []uuid.UUID
+	err := c.ShouldBindJSON(&workItemIDs)
+	if err != nil {
+		log.Error().Err(err).Msg(ErrInvalidRequestBody.Message)
+		c.AbortWithStatusJSON(http.StatusBadRequest, ErrInvalidRequestBody)
+		return
+	}
+
+	err = api.analysisService.ReexamineAnalysisRequestsBatch(c, workItemIDs)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to reexamine analysis requests")
+		c.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}

@@ -58,6 +58,8 @@ type SkeletonAPI interface {
 	GetAnalysisRequestsBySampleCodes(sampleCodes []string) (map[string][]AnalysisRequest, error)
 	GetRequestMappingsByInstrumentID(instrumentID uuid.UUID) ([]RequestMapping, error)
 
+	SaveAnalysisRequestsInstrumentTransmissions(ctx context.Context, analysisRequestIDs []uuid.UUID, instrumentID uuid.UUID) error
+
 	// SubmitAnalysisResult - Submit results to Skeleton and/or Cerberus,
 	//
 	// SubmitTypes:

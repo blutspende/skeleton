@@ -16,22 +16,28 @@ import (
 )
 
 const (
-	msgFailedToRevokeAnalysisRequests = "Failed to revoke analysis requests"
+	msgFailedToRevokeAnalysisRequests                      = "Failed to revoke analysis requests"
+	msgSaveAnalysisRequestsInstrumentTransmissions         = "save analysis requests' instrument transmissions"
+	msgIncreaseAnalysisRequestsSentToInstrumentCountFailed = "increase analysis requests sent to instrument count failed"
 )
 
 var (
-	ErrFailedToRevokeAnalysisRequests = errors.New(msgFailedToRevokeAnalysisRequests)
+	ErrFailedToRevokeAnalysisRequests                      = errors.New(msgFailedToRevokeAnalysisRequests)
+	ErrSaveAnalysisRequestsInstrumentTransmissions         = errors.New(msgSaveAnalysisRequestsInstrumentTransmissions)
+	ErrIncreaseAnalysisRequestsSentToInstrumentCountFailed = errors.New(msgIncreaseAnalysisRequestsSentToInstrumentCountFailed)
 )
 
 type analysisRequestDAO struct {
-	ID             uuid.UUID `db:"id"`
-	WorkItemID     uuid.UUID `db:"work_item_id"`
-	AnalyteID      uuid.UUID `db:"analyte_id"`
-	SampleCode     string    `db:"sample_code"`
-	MaterialID     uuid.UUID `db:"material_id"`
-	LaboratoryID   uuid.UUID `db:"laboratory_id"`
-	ValidUntilTime time.Time `db:"valid_until_time"`
-	CreatedAt      time.Time `db:"created_at"`
+	ID                          uuid.UUID `db:"id"`
+	WorkItemID                  uuid.UUID `db:"work_item_id"`
+	AnalyteID                   uuid.UUID `db:"analyte_id"`
+	SampleCode                  string    `db:"sample_code"`
+	MaterialID                  uuid.UUID `db:"material_id"`
+	LaboratoryID                uuid.UUID `db:"laboratory_id"`
+	ValidUntilTime              time.Time `db:"valid_until_time"`
+	ReexaminationRequestedCount int       `db:"reexamination_requested_count"`
+	SentToInstrumentCount       int       `db:"sent_to_instrument_count"`
+	CreatedAt                   time.Time `db:"created_at"`
 }
 
 type subjectInfoDAO struct {
@@ -180,6 +186,10 @@ type AnalysisRepository interface {
 	GetSubjectsByAnalysisRequestIDs(ctx context.Context, analysisRequestIDs []uuid.UUID) (map[uuid.UUID]SubjectInfo, error)
 	GetAnalysisRequestsByWorkItemIDs(ctx context.Context, workItemIds []uuid.UUID) ([]AnalysisRequest, error)
 	RevokeAnalysisRequests(ctx context.Context, workItemIds []uuid.UUID) error
+	IncreaseReexaminationRequestedCount(ctx context.Context, workItemIDs []uuid.UUID) error
+	IncreaseSentToInstrumentCounter(ctx context.Context, analysisRequestIDs []uuid.UUID) error
+
+	SaveAnalysisRequestsInstrumentTransmissions(ctx context.Context, analysisRequestIDs []uuid.UUID, instrumentID uuid.UUID) error
 
 	CreateAnalysisResultsBatch(ctx context.Context, analysisResults []AnalysisResult) ([]AnalysisResult, error)
 	GetAnalysisResultsBySampleCodeAndAnalyteID(ctx context.Context, sampleCode string, analyteID uuid.UUID) ([]AnalysisResult, error)
@@ -299,7 +309,8 @@ func (r *analysisRepository) GetAnalysisRequestsBySampleCodes(ctx context.Contex
 	}
 	query := fmt.Sprintf(`SELECT * FROM %s.sk_analysis_requests 
 					WHERE sample_code in (?)
-					AND valid_until_time >= timezone('utc',now());`, r.dbSchema)
+					AND valid_until_time >= timezone('utc',now())
+					AND reexamination_requested_count >= sent_to_instrument_count;`, r.dbSchema)
 
 	query, args, _ := sqlx.In(query, sampleCodes)
 	query = r.db.Rebind(query)
@@ -623,6 +634,55 @@ func (r *analysisRepository) RevokeAnalysisRequests(ctx context.Context, workIte
 		return ErrFailedToRevokeAnalysisRequests
 	}
 
+	return nil
+}
+
+func (r *analysisRepository) IncreaseReexaminationRequestedCount(ctx context.Context, workItemIDs []uuid.UUID) error {
+	query := fmt.Sprintf(`UPDATE %s.sk_analysis_requests SET reexamination_requested_count = reexamination_requested_count + 1 WHERE work_item_id IN (?);`, r.dbSchema)
+
+	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
+	query, args, _ := sqlx.In(query, workItemIDs)
+	query = r.db.Rebind(query)
+
+	_, err := r.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		log.Error().Err(err).Msg(msgFailedToRevokeAnalysisRequests)
+		return ErrFailedToRevokeAnalysisRequests
+	}
+
+	return nil
+}
+
+func (r *analysisRepository) IncreaseSentToInstrumentCounter(ctx context.Context, analysisRequestIDs []uuid.UUID) error {
+	query := fmt.Sprintf(`UPDATE %s.sk_analysis_requests SET sent_to_instrument_count = sent_to_instrument_count + 1 WHERE id IN (?);`, r.dbSchema)
+
+	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
+	query, args, _ := sqlx.In(query, analysisRequestIDs)
+	query = r.db.Rebind(query)
+
+	_, err := r.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		log.Error().Err(err).Msg(msgIncreaseAnalysisRequestsSentToInstrumentCountFailed)
+		return ErrIncreaseAnalysisRequestsSentToInstrumentCountFailed
+	}
+
+	return nil
+}
+
+func (r *analysisRepository) SaveAnalysisRequestsInstrumentTransmissions(ctx context.Context, analysisRequestIDs []uuid.UUID, instrumentID uuid.UUID) error {
+	args := make([]map[string]interface{}, len(analysisRequestIDs))
+	for i := range analysisRequestIDs {
+		args[i] = map[string]interface{}{
+			"analysis_request_id": analysisRequestIDs[i],
+			"instrument_id":       instrumentID,
+		}
+	}
+	query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_request_instrument_transmissions(analysis_request_id, instrument_id) VALUES (:analysis_request_id, :instrument_id);`, r.dbSchema)
+	_, err := r.db.NamedExecContext(ctx, query, args)
+	if err != nil {
+		log.Error().Err(err).Msg(msgSaveAnalysisRequestsInstrumentTransmissions)
+		return ErrSaveAnalysisRequestsInstrumentTransmissions
+	}
 	return nil
 }
 

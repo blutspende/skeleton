@@ -73,6 +73,29 @@ func (s *skeleton) GetAnalysisRequestsBySampleCodes(sampleCodes []string) (map[s
 	return analysisRequests, nil
 }
 
+func (s *skeleton) SaveAnalysisRequestsInstrumentTransmissions(ctx context.Context, analysisRequestIDs []uuid.UUID, instrumentID uuid.UUID) error {
+	tx, err := s.analysisRepository.CreateTransaction()
+	if err != nil {
+		return err
+	}
+	err = s.analysisRepository.WithTransaction(tx).IncreaseSentToInstrumentCounter(ctx, analysisRequestIDs)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	err = s.analysisRepository.WithTransaction(tx).SaveAnalysisRequestsInstrumentTransmissions(ctx, analysisRequestIDs, instrumentID)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	err = tx.Commit()
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	return nil
+}
+
 func (s *skeleton) GetRequestMappingsByInstrumentID(instrumentID uuid.UUID) ([]RequestMapping, error) {
 	return []RequestMapping{}, nil
 }
