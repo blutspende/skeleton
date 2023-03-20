@@ -1275,7 +1275,7 @@ func (r *analysisRepository) createChannelResultQuantitativeValues(ctx context.C
 	if len(quantitativeChannelResultDAOs) == 0 {
 		return nil
 	}
-	query := fmt.Sprintf(`INSERT INTO %s.sk_channel_result_quantitative_results(id, channel_result_id, metric, "value")
+	query := fmt.Sprintf(`INSERT INTO %s.sk_channel_result_quantitative_values(id, channel_result_id, metric, "value")
 		VALUES(:id, :channel_result_id, :metric, :value);`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, quantitativeChannelResultDAOs)
 	if err != nil {
