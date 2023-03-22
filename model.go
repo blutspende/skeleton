@@ -310,9 +310,12 @@ type AnalysisBatch struct {
 
 // Image Images are Id's as returned by the DEA service where they get uploaded to
 type Image struct {
-	ID          uuid.UUID
-	Name        string
-	Description *string
+	ID              uuid.UUID
+	Name            string
+	Description     *string
+	ImageBytes      []byte
+	DeaImageID      uuid.NullUUID
+	UploadedToDeaAt *time.Time
 }
 
 type SubmitType string

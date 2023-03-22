@@ -2,8 +2,10 @@ package skeleton
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/consolelog/service"
 	"time"
 
@@ -25,6 +27,7 @@ type skeleton struct {
 	resultsBuffer      []AnalysisResult
 	resultBatchesChan  chan []AnalysisResult
 	cerberusClient     Cerberus
+	deaClient          DeaClientV1
 	manager            Manager
 }
 
@@ -128,13 +131,110 @@ func (s *skeleton) SubmitAnalysisResult(ctx context.Context, resultData Analysis
 		return err
 	}
 	savedResultData := savedResultDataList[0]
-	analyteRequests, err := s.analysisRepository.GetAnalysisRequestsBySampleCodeAndAnalyteID(ctx, savedResultData.SampleCode, savedResultData.AnalyteMapping.AnalyteID)
+
+	go func(analysisResult AnalysisResult) {
+		err := s.saveImages(ctx, &analysisResult)
+		if err != nil {
+			log.Error().Err(err).Str("analysisResultID", analysisResult.ID.String()).Msg("save images of analysis result failed")
+		}
+		analyteRequests, err := s.analysisRepository.GetAnalysisRequestsBySampleCodeAndAnalyteID(ctx, analysisResult.SampleCode, analysisResult.AnalyteMapping.AnalyteID)
+		if err != nil {
+			log.Error().Err(err).Msg("get analysis requests by sample code and analyteID failed after saving results")
+			return
+		}
+
+		for i := range analyteRequests {
+			savedResultData.AnalysisRequest = analyteRequests[i]
+			s.manager.SendResultForProcessing(savedResultData)
+		}
+	}(savedResultData)
+
+	return nil
+}
+
+const imageContentType = "image/jpeg"
+
+func (s *skeleton) saveImages(ctx context.Context, resultData *AnalysisResult) error {
+	if resultData == nil {
+		return nil
+	}
+	imagePtrs := make([]*Image, 0)
+	imageDaos := make([]imageDAO, 0)
+	for i := range resultData.Images {
+		imageDao := imageDAO{
+			AnalysisResultID: resultData.ID,
+			Name:             resultData.Images[i].Name,
+		}
+		if resultData.Images[i].Description != nil && len(*resultData.Images[i].Description) > 0 {
+			imageDao.Description = sql.NullString{
+				String: *resultData.Images[i].Description,
+				Valid:  true,
+			}
+		}
+		filename := fmt.Sprintf("%s_%d.jpg", resultData.ID.String(), i)
+		id, err := s.deaClient.UploadImage(resultData.Images[i].ImageBytes, filename, imageContentType)
+		if err != nil {
+			imageDao.ImageBytes = resultData.Images[i].ImageBytes
+			imageDao.UploadError = sql.NullString{
+				String: err.Error(),
+				Valid:  true,
+			}
+			log.Error().Err(err).Str("analysisResultID", resultData.ID.String()).Msg("upload image to dea failed")
+		} else {
+			imageDao.DeaImageID = uuid.NullUUID{
+				UUID:  id,
+				Valid: true,
+			}
+		}
+		imagePtrs = append(imagePtrs, &resultData.Images[i])
+		imageDaos = append(imageDaos, imageDao)
+	}
+	for i := range resultData.ChannelResults {
+		for j := range resultData.ChannelResults[i].Images {
+			imageDao := imageDAO{
+				AnalysisResultID: resultData.ID,
+				ChannelResultID: uuid.NullUUID{
+					UUID:  resultData.ChannelResults[i].ID,
+					Valid: true,
+				},
+				Name: resultData.ChannelResults[i].Images[j].Name,
+			}
+			if resultData.ChannelResults[i].Images[j].Description != nil && len(*resultData.ChannelResults[i].Images[j].Description) > 0 {
+				imageDao.Description = sql.NullString{
+					String: *resultData.ChannelResults[i].Images[j].Description,
+					Valid:  true,
+				}
+			}
+			filename := fmt.Sprintf("%s_chres_%d_%d.jpg", resultData.ID.String(), i, j)
+			id, err := s.deaClient.UploadImage(resultData.Images[i].ImageBytes, filename, imageContentType)
+			if err != nil {
+				imageDao.ImageBytes = resultData.ChannelResults[i].Images[j].ImageBytes
+				imageDao.UploadError = sql.NullString{
+					String: err.Error(),
+					Valid:  true,
+				}
+				log.Error().
+					Err(err).
+					Str("analysisResultID", resultData.ID.String()).
+					Str("channelResultID", resultData.ChannelResults[i].ID.String()).
+					Msg("upload image to dea failed")
+			} else {
+				imageDao.DeaImageID = uuid.NullUUID{
+					UUID:  id,
+					Valid: true,
+				}
+			}
+			imagePtrs = append(imagePtrs, &resultData.ChannelResults[i].Images[j])
+			imageDaos = append(imageDaos, imageDao)
+		}
+	}
+	ids, err := s.analysisRepository.SaveImages(ctx, imageDaos)
 	if err != nil {
 		return err
 	}
-	for i := range analyteRequests {
-		savedResultData.AnalysisRequest = analyteRequests[i]
-		s.manager.SendResultForProcessing(savedResultData)
+	for i := range ids {
+		imagePtrs[i].ID = ids[i]
+		imagePtrs[i].DeaImageID = imageDaos[i].DeaImageID
 	}
 	return nil
 }
@@ -397,7 +497,7 @@ func (s *skeleton) submitAnalysisResultsToCerberus(ctx context.Context) {
 	}
 }
 
-func NewSkeleton(sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api GinApi, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService service.ConsoleLogService, manager Manager, cerberusClient Cerberus) (SkeletonAPI, error) {
+func NewSkeleton(sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api GinApi, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService service.ConsoleLogService, manager Manager, cerberusClient Cerberus, deaClient DeaClientV1) (SkeletonAPI, error) {
 	skeleton := &skeleton{
 		sqlConn:            sqlConn,
 		dbSchema:           dbSchema,
@@ -409,6 +509,7 @@ func NewSkeleton(sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMi
 		consoleLogService:  consoleLogService,
 		manager:            manager,
 		cerberusClient:     cerberusClient,
+		deaClient:          deaClient,
 		resultsBuffer:      make([]AnalysisResult, 0, 500),
 		resultBatchesChan:  make(chan []AnalysisResult, 10),
 	}

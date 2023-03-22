@@ -124,6 +124,11 @@ type imageDAO struct {
 	ChannelResultID  uuid.NullUUID  `db:"channel_result_id"`
 	Name             string         `db:"name"`
 	Description      sql.NullString `db:"description"`
+	ImageBytes       []byte         `db:"image_bytes"`
+	DeaImageID       uuid.NullUUID  `db:"dea_image_id"`
+	UploadedToDeaAt  sql.NullTime   `db:"uploaded_to_dea_at"`
+	UploadRetryCount int            `db:"upload_retry_count"`
+	UploadError      sql.NullString `db:"upload_error"`
 }
 
 type warningDAO struct {
@@ -200,6 +205,8 @@ type AnalysisRepository interface {
 	GetAnalysisResultQueueItems(ctx context.Context) ([]CerberusQueueItem, error)
 	UpdateAnalysisResultQueueItemStatus(ctx context.Context, queueItem CerberusQueueItem) error
 	CreateAnalysisResultQueueItem(ctx context.Context, analysisResults []AnalysisResult) (uuid.UUID, error)
+
+	SaveImages(ctx context.Context, images []imageDAO) ([]uuid.UUID, error)
 
 	CreateTransaction() (db.DbConnector, error)
 	WithTransaction(tx db.DbConnector) AnalysisRepository
@@ -706,14 +713,11 @@ func (r *analysisRepository) CreateAnalysisResultsBatch(ctx context.Context, ana
 	extraValuesMap := make(map[uuid.UUID][]ExtraValue)
 	warningsMap := make(map[uuid.UUID][]string)
 	reagentInfosMap := make(map[uuid.UUID][]ReagentInfo)
-	imagesMap := make(map[uuid.UUID]map[uuid.NullUUID][]Image)
 
 	for i := range analysisResults {
 		extraValuesMap[analysisResults[i].ID] = analysisResults[i].ExtraValues
 		warningsMap[analysisResults[i].ID] = analysisResults[i].Warnings
 		reagentInfosMap[analysisResults[i].ID] = analysisResults[i].ReagentInfos
-		imagesMap[analysisResults[i].ID] = make(map[uuid.NullUUID][]Image)
-		imagesMap[analysisResults[i].ID][uuid.NullUUID{Valid: false}] = analysisResults[i].Images
 	}
 
 	err = r.createExtraValues(ctx, extraValuesMap)
@@ -729,19 +733,16 @@ func (r *analysisRepository) CreateAnalysisResultsBatch(ctx context.Context, ana
 			return analysisResults, err
 		}
 		for j := range analysisResults[i].ChannelResults {
+			if len(channelResultIDs) > j {
+				analysisResults[i].ChannelResults[j].ID = channelResultIDs[j]
+			}
 			quantitativeChannelResultsMap[channelResultIDs[j]] = analysisResults[i].ChannelResults[j].QuantitativeResults
 			channelImagesMap[uuid.NullUUID{UUID: channelResultIDs[j], Valid: true}] = analysisResults[i].ChannelResults[j].Images
 		}
-		imagesMap[analysisResults[i].ID] = channelImagesMap
 		err = r.createChannelResultQuantitativeValues(ctx, quantitativeChannelResultsMap)
 	}
 
 	err = r.createWarnings(ctx, warningsMap)
-	if err != nil {
-		return analysisResults, err
-	}
-
-	err = r.createImages(ctx, imagesMap)
 	if err != nil {
 		return analysisResults, err
 	}
@@ -1397,28 +1398,24 @@ func (r *analysisRepository) getChannelResultImages(ctx context.Context, analysi
 	return images, err
 }
 
-func (r *analysisRepository) createImages(ctx context.Context, images map[uuid.UUID]map[uuid.NullUUID][]Image) error {
-	imageDAOs := make([]imageDAO, 0)
-	for analysisResultID, imagesMap := range images {
-		for channelResultID, images := range imagesMap {
-			idaos := convertImagesToDAOs(images, analysisResultID, channelResultID)
-			for i := range idaos {
-				idaos[i].ID = uuid.New()
-			}
-			imageDAOs = append(imageDAOs, idaos...)
-		}
+func (r *analysisRepository) SaveImages(ctx context.Context, images []imageDAO) ([]uuid.UUID, error) {
+	ids := make([]uuid.UUID, len(images))
+	if len(images) == 0 {
+		return ids, nil
 	}
-	if len(imageDAOs) == 0 {
-		return nil
+	for i := range images {
+		images[i].ID = uuid.New()
+		ids[i] = images[i].ID
 	}
-	query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_result_extravalues(id, analysis_result_id, "key", "value")
-		VALUES(:id, :analysis_result_id, :key, :value)`, r.dbSchema)
-	_, err := r.db.NamedExecContext(ctx, query, imageDAOs)
+
+	query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_result_images(id, analysis_result_id, channel_result_id, "name", description, image_bytes, dea_image_id, uploaded_to_dea_at)
+		VALUES(:id, :analysis_result_id, :channel_result_id, :name, :description, :image_bytes, :dea_image_id, :uploaded_to_dea_at);`, r.dbSchema)
+	_, err := r.db.NamedExecContext(ctx, query, images)
 	if err != nil {
 		log.Error().Err(err).Msg("create analysis result images failed")
-		return err
+		return nil, err
 	}
-	return nil
+	return ids, nil
 }
 
 func (r *analysisRepository) getWarnings(ctx context.Context, analysisResultID uuid.UUID) ([]warningDAO, error) {
