@@ -48,6 +48,12 @@ const (
 	msgUpdateRequestMappingFailed         = "update request mapping failed"
 	msgDeleteRequestMappingAnalytesFailed = "delete request mapping analytes failed"
 	msgGetEncodingsFailed                 = "get encodings failed"
+	msgGetProtocolSettingsFailed          = "get protocol settings failed"
+	msgUpsertProtocolSettingsFailed       = "upsert protocol settings failed"
+	msgDeleteProtocolMappingFailed        = "delete protocol settings failed"
+	msgGetInstrumentsSettingsFailed       = "get instruments settings failed"
+	msgUpsertInstrumentSettingsFailed     = "upsert instrument settings failed"
+	msgDeleteInstrumentSettingsFailed     = "delete instrument settings failed"
 	msgCheckAnalyteUsageFailed            = "check analyte usage failed"
 )
 
@@ -84,6 +90,12 @@ var (
 	ErrUpdateRequestMappingFailed         = errors.New(msgUpdateRequestMappingFailed)
 	ErrDeleteRequestMappingAnalytesFailed = errors.New(msgDeleteRequestMappingAnalytesFailed)
 	ErrGetEncodingsFailed                 = errors.New(msgGetEncodingsFailed)
+	ErrGetProtocolSettingsFailed          = errors.New(msgGetProtocolSettingsFailed)
+	ErrUpsertProtocolSettingsFailed       = errors.New(msgUpsertProtocolSettingsFailed)
+	ErrDeleteProtocolMappingFailed        = errors.New(msgDeleteProtocolMappingFailed)
+	ErrGetInstrumentsSettingsFailed       = errors.New(msgGetInstrumentsSettingsFailed)
+	ErrUpsertInstrumentSettingsFailed     = errors.New(msgUpsertInstrumentSettingsFailed)
+	ErrDeleteInstrumentSettingsFailed     = errors.New(msgDeleteInstrumentSettingsFailed)
 	ErrCheckAnalyteUsageFailed            = errors.New(msgCheckAnalyteUsageFailed)
 )
 
@@ -161,6 +173,16 @@ type requestMappingAnalyteDAO struct {
 	DeletedAt        sql.NullTime `db:"deleted_at"`
 }
 
+type instrumentSettingDao struct {
+	ID                uuid.UUID    `db:"id"`
+	InstrumentID      uuid.UUID    `db:"instrument_id"`
+	ProtocolSettingID uuid.UUID    `db:"protocol_setting_id"`
+	Value             string       `db:"value"`
+	CreatedAt         time.Time    `db:"created_at"`
+	ModifiedAt        sql.NullTime `db:"modified_at"`
+	DeletedAt         sql.NullTime `db:"deleted_at"`
+}
+
 type supportedProtocolDAO struct {
 	ID          uuid.UUID
 	Name        Protocol
@@ -176,6 +198,17 @@ type protocolAbilityDAO struct {
 	CreatedAt               time.Time    `db:"created_at"`
 	ModifiedAt              sql.NullTime `db:"modified_at"`
 	DeletedAt               sql.NullTime `db:"deleted_at"`
+}
+
+type protocolSettingDAO struct {
+	ID          uuid.UUID           `db:"id"`
+	ProtocolID  uuid.UUID           `db:"protocol_id"`
+	Key         string              `db:"key"`
+	Type        ProtocolSettingType `db:"key"`
+	Description sql.NullString      `db:"description"`
+	CreatedAt   time.Time           `db:"created_at"`
+	ModifiedAt  sql.NullTime        `db:"modified_at"`
+	DeletedAt   sql.NullTime        `db:"deleted_at"`
 }
 
 type instrumentRepository struct {
@@ -198,6 +231,9 @@ type InstrumentRepository interface {
 	UpsertSupportedProtocol(ctx context.Context, id uuid.UUID, name string, description string) error
 	GetProtocolAbilities(ctx context.Context, protocolID uuid.UUID) ([]ProtocolAbility, error)
 	UpsertProtocolAbilities(ctx context.Context, protocolID uuid.UUID, protocolAbilities []ProtocolAbility) error
+	GetProtocolSettings(ctx context.Context, protocolID uuid.UUID) ([]ProtocolSetting, error)
+	UpsertProtocolSettings(ctx context.Context, protocolID uuid.UUID, protocolSettings []ProtocolSetting) error
+	DeleteProtocolSettings(ctx context.Context, protocolSettingIDs []uuid.UUID) error
 	UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error
 	CreateAnalyteMappings(ctx context.Context, analyteMappings []AnalyteMapping, instrumentID uuid.UUID) ([]uuid.UUID, error)
 	GetAnalyteMappings(ctx context.Context, instrumentIDs []uuid.UUID) (map[uuid.UUID][]AnalyteMapping, error)
@@ -219,6 +255,9 @@ type InstrumentRepository interface {
 	DeleteRequestMappings(ctx context.Context, requestMappingIDs []uuid.UUID) error
 	DeleteRequestMappingAnalytes(ctx context.Context, requestMappingID uuid.UUID, analyteIDs []uuid.UUID) error
 	GetEncodings(ctx context.Context) ([]string, error)
+	GetInstrumentsSettings(ctx context.Context, instrumentIDs []uuid.UUID) (map[uuid.UUID][]InstrumentSetting, error)
+	UpsertInstrumentSettings(ctx context.Context, instrumentID uuid.UUID, settings []InstrumentSetting) error
+	DeleteInstrumentSettings(ctx context.Context, ids []uuid.UUID) error
 	CheckAnalytesUsage(ctx context.Context, analyteIDs []uuid.UUID) ([]uuid.UUID, error)
 	CreateTransaction() (db.DbConnector, error)
 	WithTransaction(tx db.DbConnector) InstrumentRepository
@@ -483,6 +522,78 @@ func (r *instrumentRepository) UpsertProtocolAbilities(ctx context.Context, prot
 			log.Error().Err(err).Msg(msgUpsertProtocolAbilitiesFailed)
 			return ErrUpsertProtocolAbilitiesFailed
 		}
+	}
+	return nil
+}
+
+func (r *instrumentRepository) GetProtocolSettings(ctx context.Context, protocolID uuid.UUID) ([]ProtocolSetting, error) {
+	query := `SELECT * FROM %s.sk_protocol_settings WHERE protocol_id = $1 AND deleted_at IS NULL;`
+	rows, err := r.db.QueryxContext(ctx, query, protocolID)
+	if err != nil {
+		log.Error().Err(err).Msg(msgGetProtocolSettingsFailed)
+		return nil, ErrGetProtocolSettingsFailed
+	}
+	defer rows.Close()
+	protocolSettings := make([]ProtocolSetting, 0)
+	for rows.Next() {
+		var psDao protocolSettingDAO
+		err = rows.StructScan(&psDao)
+		if err != nil {
+			log.Error().Err(err).Msg(msgGetProtocolSettingsFailed)
+			return nil, ErrGetProtocolSettingsFailed
+		}
+		ps := ProtocolSetting{
+			ID:   psDao.ID,
+			Key:  psDao.Key,
+			Type: psDao.Type,
+		}
+		if psDao.Description.Valid {
+			ps.Description = &psDao.Description.String
+		}
+		protocolSettings = append(protocolSettings, ps)
+	}
+	return protocolSettings, nil
+}
+
+func (r *instrumentRepository) UpsertProtocolSettings(ctx context.Context, protocolID uuid.UUID, protocolSettings []ProtocolSetting) error {
+	if len(protocolSettings) == 0 {
+		return nil
+	}
+	psDaos := make([]protocolSettingDAO, len(protocolSettings))
+	for i := range protocolSettings {
+		psDaos[i] = protocolSettingDAO{
+			ID:         protocolSettings[i].ID,
+			ProtocolID: protocolID,
+			Key:        protocolSettings[i].Key,
+			Type:       protocolSettings[i].Type,
+		}
+		if protocolSettings[i].Description != nil {
+			psDaos[i].Description = sql.NullString{
+				String: *protocolSettings[i].Description,
+				Valid:  len(*protocolSettings[i].Description) > 0,
+			}
+		}
+	}
+	query := `INSERT INTO %s.sk_protocol_settings(id, protocol_id, "key", description, "type") VALUES(:id, :protocol_id, :key, :description, :type)
+	ON CONFLICT (id) DO UPDATE "key" = :key, description = :description, "type" = :type, modified_at = now()
+	ON CONFLICT (protocol_id, "key") DO UPDATE description = :description, "type" = :type, modified_at = now();`
+
+	_, err := r.db.NamedExecContext(ctx, query, psDaos)
+	if err != nil {
+		log.Error().Err(err).Msg(msgUpsertProtocolSettingsFailed)
+		return ErrUpsertProtocolSettingsFailed
+	}
+	return nil
+}
+
+func (r *instrumentRepository) DeleteProtocolSettings(ctx context.Context, protocolSettingIDs []uuid.UUID) error {
+	query := fmt.Sprintf(`UPDATE %s.sk_protocol_settings SET deleted_at = now() WHERE id IN (?);`, r.dbSchema)
+	query, args, _ := sqlx.In(query, protocolSettingIDs)
+	query = r.db.Rebind(query)
+	_, err := r.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		log.Error().Err(err).Msg(msgDeleteProtocolMappingFailed)
+		return ErrDeleteProtocolMappingFailed
 	}
 	return nil
 }
@@ -857,6 +968,69 @@ func (r *instrumentRepository) GetEncodings(ctx context.Context) ([]string, erro
 		encodings = append(encodings, encoding)
 	}
 	return encodings, nil
+}
+
+func (r *instrumentRepository) GetInstrumentsSettings(ctx context.Context, instrumentIDs []uuid.UUID) (map[uuid.UUID][]InstrumentSetting, error) {
+	query := fmt.Sprintf(`SELECT * FROM %s.sk_instrument_settings WHERE instrument_id IN (?) AND deleted_at IS NULL;`, r.dbSchema)
+	query, args, _ := sqlx.In(query, instrumentIDs)
+	query = r.db.Rebind(query)
+	rows, err := r.db.QueryxContext(ctx, query, args...)
+	if err != nil {
+		log.Error().Err(err).Msg(msgGetInstrumentsSettingsFailed)
+		return nil, ErrGetInstrumentsSettingsFailed
+	}
+	defer rows.Close()
+	settingsMap := make(map[uuid.UUID][]InstrumentSetting)
+	for rows.Next() {
+		var settingDao instrumentSettingDao
+		err = rows.StructScan(&settingDao)
+		if err != nil {
+			log.Error().Err(err).Msg(msgGetInstrumentsSettingsFailed)
+			return nil, ErrGetInstrumentsSettingsFailed
+		}
+		settingsMap[settingDao.InstrumentID] = append(settingsMap[settingDao.InstrumentID], InstrumentSetting{
+			ID:                settingDao.ID,
+			ProtocolSettingID: settingDao.ProtocolSettingID,
+			Value:             settingDao.Value,
+		})
+	}
+	return settingsMap, nil
+}
+
+func (r *instrumentRepository) UpsertInstrumentSettings(ctx context.Context, instrumentID uuid.UUID, settings []InstrumentSetting) error {
+	if len(settings) == 0 {
+		return nil
+	}
+	settingDaos := make([]instrumentSettingDao, len(settings))
+	for i := range settings {
+		settingDaos[i] = instrumentSettingDao{
+			ID:                settings[i].ID,
+			InstrumentID:      instrumentID,
+			ProtocolSettingID: settings[i].ProtocolSettingID,
+			Value:             settings[i].Value,
+		}
+	}
+	query := fmt.Sprintf(`INSERT INTO %s.sk_instrument_settings(id, instrument_id, protocol_setting_id, "value") VALUES(:id, :instrument_id, :protocol_setting_id, :value)
+	ON CONFLICT (id) DO UPDATE SET "value" = :value, modified_at = now()
+	ON CONFLICT (instrument_id, protocol_setting_id) DO UPDATE SET "value" = :value, modified_at = now()`, r.dbSchema)
+	_, err := r.db.NamedExecContext(ctx, query, settingDaos)
+	if err != nil {
+		log.Error().Err(err).Msg(msgUpsertInstrumentSettingsFailed)
+		return ErrUpsertInstrumentSettingsFailed
+	}
+	return nil
+}
+
+func (r *instrumentRepository) DeleteInstrumentSettings(ctx context.Context, ids []uuid.UUID) error {
+	query := fmt.Sprintf(`UPDATE %s.sk_instrument_settings SET deleted_at = now() WHERE id IN (?);`)
+	query, args, _ := sqlx.In(query, ids)
+	query = r.db.Rebind(query)
+	_, err := r.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		log.Error().Err(err).Msg(msgDeleteInstrumentSettingsFailed)
+		return ErrDeleteInstrumentSettingsFailed
+	}
+	return nil
 }
 
 func (r *instrumentRepository) CheckAnalytesUsage(ctx context.Context, analyteIDs []uuid.UUID) ([]uuid.UUID, error) {

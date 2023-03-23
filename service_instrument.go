@@ -21,8 +21,7 @@ type InstrumentService interface {
 	GetProtocolAbilities(ctx context.Context, protocolID uuid.UUID) ([]ProtocolAbility, error)
 	GetManufacturerTests(ctx context.Context, instrumentID uuid.UUID, protocolID uuid.UUID) ([]SupportedManufacturerTests, error)
 	GetEncodings(ctx context.Context, protocolID uuid.UUID) ([]string, error)
-	UpsertSupportedProtocol(ctx context.Context, id uuid.UUID, name string, description string) error
-	UpsertProtocolAbilities(ctx context.Context, protocolID uuid.UUID, protocolAbilities []ProtocolAbility) error
+	UpsertSupportedProtocol(ctx context.Context, id uuid.UUID, name string, description string, abilities []ProtocolAbility, settings []ProtocolSetting) error
 	UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error
 	EnqueueUnsentInstrumentsToCerberus(ctx context.Context)
 	CheckAnalytesUsage(ctx context.Context, analyteIDs []uuid.UUID) (AnalytesUsageResponse, error)
@@ -171,6 +170,17 @@ func (s *instrumentService) GetInstruments(ctx context.Context) ([]Instrument, e
 		requestMappingsByIDs[requestMappingID].AnalyteIDs = analyteIDs
 	}
 
+	settingsMap, err := s.instrumentRepository.GetInstrumentsSettings(ctx, instrumentIDs)
+	if err != nil {
+		return nil, err
+	}
+	for instrumentID, settings := range settingsMap {
+		if _, ok := instrumentsByIDs[instrumentID]; !ok {
+			continue
+		}
+		instrumentsByIDs[instrumentID].Settings = settings
+	}
+
 	s.instrumentCache.Set(instruments)
 
 	return instruments, nil
@@ -243,6 +253,14 @@ func (s *instrumentService) GetInstrumentByID(ctx context.Context, tx db.DbConne
 		requestMappingsByIDs[requestMappingID].AnalyteIDs = analyteIDs
 	}
 
+	settingsMap, err := s.instrumentRepository.GetInstrumentsSettings(ctx, instrumentIDs)
+	if err != nil {
+		return instrument, err
+	}
+	if _, ok := settingsMap[id]; ok {
+		instrument.Settings = settingsMap[id]
+	}
+
 	return instrument, nil
 }
 
@@ -273,6 +291,7 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 	deletedChannelMappingIDs := make([]uuid.UUID, 0)
 	deletedResultMappingIDs := make([]uuid.UUID, 0)
 	deletedRequestMappingIDs := make([]uuid.UUID, 0)
+	deletedSettingIDs := make([]uuid.UUID, 0)
 
 	for _, oldAnalyteMapping := range oldInstrument.AnalyteMappings {
 		analyteMappingFound := false
@@ -322,7 +341,18 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 			deletedRequestMappingIDs = append(deletedRequestMappingIDs, oldRequestMapping.ID)
 		}
 	}
-
+	for _, oldSetting := range oldInstrument.Settings {
+		found := false
+		for i := range instrument.Settings {
+			if instrument.Settings[i].ID == oldSetting.ID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			deletedSettingIDs = append(deletedSettingIDs, oldSetting.ID)
+		}
+	}
 	err = s.instrumentRepository.WithTransaction(tx).DeleteAnalyteMappings(ctx, deletedAnalyteMappingIDs)
 	if err != nil {
 		_ = tx.Rollback()
@@ -339,6 +369,11 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 		return err
 	}
 	err = s.instrumentRepository.WithTransaction(tx).DeleteRequestMappings(ctx, deletedRequestMappingIDs)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	err = s.instrumentRepository.WithTransaction(tx).DeleteInstrumentSettings(ctx, deletedSettingIDs)
 	if err != nil {
 		_ = tx.Rollback()
 		return err
@@ -442,6 +477,12 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 		return err
 	}
 
+	err = s.instrumentRepository.WithTransaction(tx).UpsertInstrumentSettings(ctx, instrument.ID, instrument.Settings)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
 	newInstrument, err := s.GetInstrumentByID(ctx, tx, instrument.ID, true)
 	if err != nil {
 		return err
@@ -460,6 +501,7 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 		return db.ErrCommitTransactionFailed
 	}
 
+	s.instrumentCache.Invalidate()
 	s.manager.EnqueueInstrument(instrument.ID, InstrumentUpdatedEvent)
 	return nil
 }
@@ -514,8 +556,56 @@ func (s *instrumentService) GetEncodings(ctx context.Context, protocolID uuid.UU
 	return encodings, nil
 }
 
-func (s *instrumentService) UpsertSupportedProtocol(ctx context.Context, id uuid.UUID, name string, description string) error {
-	return s.instrumentRepository.UpsertSupportedProtocol(ctx, id, name, description)
+func (s *instrumentService) UpsertSupportedProtocol(ctx context.Context, id uuid.UUID, name string, description string, abilities []ProtocolAbility, settings []ProtocolSetting) error {
+	tx, err := s.instrumentRepository.CreateTransaction()
+	if err != nil {
+		return err
+	}
+	oldSettings, err := s.instrumentRepository.WithTransaction(tx).GetProtocolSettings(ctx, id)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	deletedSettingIDs := make([]uuid.UUID, 0)
+	for i := range oldSettings {
+		found := false
+		for j := range settings {
+			if oldSettings[i].ID == settings[j].ID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			deletedSettingIDs = append(deletedSettingIDs, oldSettings[i].ID)
+		}
+	}
+	err = s.instrumentRepository.WithTransaction(tx).UpsertSupportedProtocol(ctx, id, name, description)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	err = s.instrumentRepository.WithTransaction(tx).UpsertProtocolAbilities(ctx, id, abilities)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	err = s.instrumentRepository.WithTransaction(tx).DeleteProtocolSettings(ctx, deletedSettingIDs)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	err = s.instrumentRepository.WithTransaction(tx).UpsertProtocolSettings(ctx, id, settings)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	err = tx.Commit()
+	if err != nil {
+		log.Error().Err(err).Msg(msgUpsertSupportedProtocolFailed)
+		_ = tx.Rollback()
+		return ErrUpsertProtocolAbilitiesFailed
+	}
+	return nil
 }
 
 func (s *instrumentService) UpsertProtocolAbilities(ctx context.Context, protocolID uuid.UUID, protocolAbilities []ProtocolAbility) error {

@@ -288,12 +288,8 @@ func (s *skeleton) FindResultEntities(InstrumentID uuid.UUID, sampleCode string,
 	return instrument, analysisRequests, analyteMapping, nil
 }
 
-func (s *skeleton) RegisterProtocol(ctx context.Context, id uuid.UUID, name string, description string, abilities []ProtocolAbility) error {
-	err := s.instrumentService.UpsertSupportedProtocol(ctx, id, name, description)
-	if err != nil {
-		return err
-	}
-	return s.instrumentService.UpsertProtocolAbilities(ctx, id, abilities)
+func (s *skeleton) RegisterProtocol(ctx context.Context, id uuid.UUID, name string, description string, abilities []ProtocolAbility, settings []ProtocolSetting) error {
+	return s.instrumentService.UpsertSupportedProtocol(ctx, id, name, description, abilities, settings)
 }
 
 func (s *skeleton) SetOnlineStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error {
