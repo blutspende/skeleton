@@ -3,7 +3,7 @@ package migrator
 const migration_4 = `
 CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_protocol_settings_types(
     "type" varchar not null,
-    constraint sk_pk_protocol_settings_types primary key(id)
+    constraint sk_pk_protocol_settings_types primary key("type")
 );
 
 INSERT INTO <SCHEMA_PLACEHOLDER>.sk_protocol_settings_types("type") VALUES('string'),('int'),('bool');
@@ -19,7 +19,7 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_protocol_settings(
     deleted_at timestamp,
 	constraint sk_pk_protocol_settings primary key(id),
 	constraint sk_fk_protocol_settings_protocol_id foreign key(protocol_id) references <SCHEMA_PLACEHOLDER>.sk_supported_protocols(id),
-	constraint sk_fk_protocol_settings_type foreign key("type") references <SCHEMA_PLACEHOLDER>.sk_protocol_configuration_option_types("type")
+	constraint sk_fk_protocol_settings_type foreign key("type") references <SCHEMA_PLACEHOLDER>.sk_protocol_settings_types("type")
 );
 
 CREATE INDEX sk_idx_protocol_settings_protocol_id ON <SCHEMA_PLACEHOLDER>.sk_protocol_settings(protocol_id);
