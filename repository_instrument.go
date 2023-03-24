@@ -559,23 +559,26 @@ func (r *instrumentRepository) UpsertProtocolSettings(ctx context.Context, proto
 	if len(protocolSettings) == 0 {
 		return nil
 	}
-	psDaos := make([]protocolSettingDAO, len(protocolSettings))
+	psDaos := make([]map[string]interface{}, len(protocolSettings))
+	//NamedExec with ON CONFLICT DO UPDATE not working properly in bulk inserts
 	for i := range protocolSettings {
-		psDaos[i] = protocolSettingDAO{
-			ID:         protocolSettings[i].ID,
-			ProtocolID: protocolID,
-			Key:        protocolSettings[i].Key,
-			Type:       protocolSettings[i].Type,
+		psDaos[i] = map[string]interface{}{
+			"id":           protocolSettings[i].ID,
+			"protocol_id":  protocolID,
+			"key":          protocolSettings[i].Key,
+			"description":  nil,
+			"description2": nil,
+			"key2":         protocolSettings[i].Key,
+			"type":         protocolSettings[i].Type,
+			"type2":        protocolSettings[i].Type,
 		}
-		if protocolSettings[i].Description != nil {
-			psDaos[i].Description = sql.NullString{
-				String: *protocolSettings[i].Description,
-				Valid:  len(*protocolSettings[i].Description) > 0,
-			}
+		if protocolSettings[i].Description != nil && len(*protocolSettings[i].Description) > 0 {
+			psDaos[i]["description"] = *protocolSettings[i].Description
+			psDaos[i]["description2"] = *protocolSettings[i].Description
 		}
 	}
 	query := fmt.Sprintf(`INSERT INTO %s.sk_protocol_settings(id, protocol_id, "key", description, "type") VALUES(:id, :protocol_id, :key, :description, :type)
-	ON CONFLICT (id) DO UPDATE SET "key" = :key, description = :description, "type" = :type, modified_at = now();`, r.dbSchema)
+	ON CONFLICT (id) DO UPDATE SET "key" = :key2, description = :description2, "type" = :type2, modified_at = now();`, r.dbSchema)
 
 	_, err := r.db.NamedExecContext(ctx, query, psDaos)
 	if err != nil {
@@ -1000,17 +1003,19 @@ func (r *instrumentRepository) UpsertInstrumentSettings(ctx context.Context, ins
 	if len(settings) == 0 {
 		return nil
 	}
-	settingDaos := make([]instrumentSettingDao, len(settings))
+	//NamedExec with ON CONFLICT DO UPDATE not working properly in bulk inserts
+	settingDaos := make([]map[string]interface{}, len(settings))
 	for i := range settings {
-		settingDaos[i] = instrumentSettingDao{
-			ID:                settings[i].ID,
-			InstrumentID:      instrumentID,
-			ProtocolSettingID: settings[i].ProtocolSettingID,
-			Value:             settings[i].Value,
+		settingDaos[i] = map[string]interface{}{
+			"id":                  settings[i].ID,
+			"instrument_id":       instrumentID,
+			"protocol_setting_id": settings[i].ProtocolSettingID,
+			"value":               settings[i].Value,
+			"value2":              settings[i].Value,
 		}
 	}
 	query := fmt.Sprintf(`INSERT INTO %s.sk_instrument_settings(id, instrument_id, protocol_setting_id, "value") VALUES(:id, :instrument_id, :protocol_setting_id, :value)
-	ON CONFLICT (id) DO UPDATE SET "value" = :value, modified_at = now();`, r.dbSchema)
+	ON CONFLICT (id) DO UPDATE SET "value" = :value2, modified_at = now();`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, settingDaos)
 	if err != nil {
 		log.Error().Err(err).Msg(msgUpsertInstrumentSettingsFailed)
