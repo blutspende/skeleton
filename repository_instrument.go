@@ -527,7 +527,7 @@ func (r *instrumentRepository) UpsertProtocolAbilities(ctx context.Context, prot
 }
 
 func (r *instrumentRepository) GetProtocolSettings(ctx context.Context, protocolID uuid.UUID) ([]ProtocolSetting, error) {
-	query := `SELECT * FROM %s.sk_protocol_settings WHERE protocol_id = $1 AND deleted_at IS NULL;`
+	query := fmt.Sprintf(`SELECT * FROM %s.sk_protocol_settings WHERE protocol_id = $1 AND deleted_at IS NULL;`, r.dbSchema)
 	rows, err := r.db.QueryxContext(ctx, query, protocolID)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetProtocolSettingsFailed)
@@ -574,9 +574,9 @@ func (r *instrumentRepository) UpsertProtocolSettings(ctx context.Context, proto
 			}
 		}
 	}
-	query := `INSERT INTO %s.sk_protocol_settings(id, protocol_id, "key", description, "type") VALUES(:id, :protocol_id, :key, :description, :type)
+	query := fmt.Sprintf(`INSERT INTO %s.sk_protocol_settings(id, protocol_id, "key", description, "type") VALUES(:id, :protocol_id, :key, :description, :type)
 	ON CONFLICT (id) DO UPDATE "key" = :key, description = :description, "type" = :type, modified_at = now()
-	ON CONFLICT (protocol_id, "key") DO UPDATE description = :description, "type" = :type, modified_at = now();`
+	ON CONFLICT (protocol_id, "key") DO UPDATE description = :description, "type" = :type, modified_at = now();`, r.dbSchema)
 
 	_, err := r.db.NamedExecContext(ctx, query, psDaos)
 	if err != nil {
