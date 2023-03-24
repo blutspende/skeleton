@@ -575,8 +575,8 @@ func (r *instrumentRepository) UpsertProtocolSettings(ctx context.Context, proto
 		}
 	}
 	query := fmt.Sprintf(`INSERT INTO %s.sk_protocol_settings(id, protocol_id, "key", description, "type") VALUES(:id, :protocol_id, :key, :description, :type)
-	ON CONFLICT (id) DO UPDATE "key" = :key, description = :description, "type" = :type, modified_at = now()
-	ON CONFLICT (protocol_id, "key") DO UPDATE description = :description, "type" = :type, modified_at = now();`, r.dbSchema)
+	ON CONFLICT (id) DO UPDATE SET "key" = :key, description = :description, "type" = :type, modified_at = now()
+	ON CONFLICT (protocol_id, "key") DO UPDATE SET description = :description, "type" = :type, modified_at = now();`, r.dbSchema)
 
 	_, err := r.db.NamedExecContext(ctx, query, psDaos)
 	if err != nil {
