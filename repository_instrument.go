@@ -575,8 +575,7 @@ func (r *instrumentRepository) UpsertProtocolSettings(ctx context.Context, proto
 		}
 	}
 	query := fmt.Sprintf(`INSERT INTO %s.sk_protocol_settings(id, protocol_id, "key", description, "type") VALUES(:id, :protocol_id, :key, :description, :type)
-	ON CONFLICT (id) DO UPDATE SET "key" = :key, description = :description, "type" = :type, modified_at = now()
-	ON CONFLICT (protocol_id, "key") DO UPDATE SET description = :description, "type" = :type, modified_at = now();`, r.dbSchema)
+	ON CONFLICT (id) DO UPDATE SET "key" = :key, description = :description, "type" = :type, modified_at = now();`, r.dbSchema)
 
 	_, err := r.db.NamedExecContext(ctx, query, psDaos)
 	if err != nil {
@@ -1011,8 +1010,7 @@ func (r *instrumentRepository) UpsertInstrumentSettings(ctx context.Context, ins
 		}
 	}
 	query := fmt.Sprintf(`INSERT INTO %s.sk_instrument_settings(id, instrument_id, protocol_setting_id, "value") VALUES(:id, :instrument_id, :protocol_setting_id, :value)
-	ON CONFLICT (id) DO UPDATE SET "value" = :value, modified_at = now()
-	ON CONFLICT (instrument_id, protocol_setting_id) DO UPDATE SET "value" = :value, modified_at = now()`, r.dbSchema)
+	ON CONFLICT (id) DO UPDATE SET "value" = :value, modified_at = now();`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, settingDaos)
 	if err != nil {
 		log.Error().Err(err).Msg(msgUpsertInstrumentSettingsFailed)
