@@ -204,7 +204,7 @@ type protocolSettingDAO struct {
 	ID          uuid.UUID           `db:"id"`
 	ProtocolID  uuid.UUID           `db:"protocol_id"`
 	Key         string              `db:"key"`
-	Type        ProtocolSettingType `db:"key"`
+	Type        ProtocolSettingType `db:"type"`
 	Description sql.NullString      `db:"description"`
 	CreatedAt   time.Time           `db:"created_at"`
 	ModifiedAt  sql.NullTime        `db:"modified_at"`
