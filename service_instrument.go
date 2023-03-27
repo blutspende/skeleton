@@ -528,6 +528,11 @@ func (s *instrumentService) GetSupportedProtocols(ctx context.Context) ([]Suppor
 			return nil, err
 		}
 		supportedProtocols[i].ProtocolAbilities = abilities
+		settings, err := s.instrumentRepository.GetProtocolSettings(ctx, supportedProtocols[i].ID)
+		if err != nil {
+			return nil, err
+		}
+		supportedProtocols[i].ProtocolSettings = settings
 	}
 	return supportedProtocols, nil
 }
