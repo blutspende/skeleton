@@ -232,7 +232,7 @@ type InstrumentRepository interface {
 	GetProtocolAbilities(ctx context.Context, protocolID uuid.UUID) ([]ProtocolAbility, error)
 	UpsertProtocolAbilities(ctx context.Context, protocolID uuid.UUID, protocolAbilities []ProtocolAbility) error
 	GetProtocolSettings(ctx context.Context, protocolID uuid.UUID) ([]ProtocolSetting, error)
-	UpsertProtocolSettings(ctx context.Context, protocolID uuid.UUID, protocolSettings []ProtocolSetting) error
+	UpsertProtocolSetting(ctx context.Context, protocolID uuid.UUID, protocolSetting ProtocolSetting) error
 	DeleteProtocolSettings(ctx context.Context, protocolSettingIDs []uuid.UUID) error
 	UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error
 	CreateAnalyteMappings(ctx context.Context, analyteMappings []AnalyteMapping, instrumentID uuid.UUID) ([]uuid.UUID, error)
@@ -256,7 +256,7 @@ type InstrumentRepository interface {
 	DeleteRequestMappingAnalytes(ctx context.Context, requestMappingID uuid.UUID, analyteIDs []uuid.UUID) error
 	GetEncodings(ctx context.Context) ([]string, error)
 	GetInstrumentsSettings(ctx context.Context, instrumentIDs []uuid.UUID) (map[uuid.UUID][]InstrumentSetting, error)
-	UpsertInstrumentSettings(ctx context.Context, instrumentID uuid.UUID, settings []InstrumentSetting) error
+	UpsertInstrumentSetting(ctx context.Context, instrumentID uuid.UUID, setting InstrumentSetting) error
 	DeleteInstrumentSettings(ctx context.Context, ids []uuid.UUID) error
 	CheckAnalytesUsage(ctx context.Context, analyteIDs []uuid.UUID) ([]uuid.UUID, error)
 	CreateTransaction() (db.DbConnector, error)
@@ -555,32 +555,24 @@ func (r *instrumentRepository) GetProtocolSettings(ctx context.Context, protocol
 	return protocolSettings, nil
 }
 
-func (r *instrumentRepository) UpsertProtocolSettings(ctx context.Context, protocolID uuid.UUID, protocolSettings []ProtocolSetting) error {
-	if len(protocolSettings) == 0 {
-		return nil
+func (r *instrumentRepository) UpsertProtocolSetting(ctx context.Context, protocolID uuid.UUID, protocolSetting ProtocolSetting) error {
+	psDao := protocolSettingDAO{
+		ID:         protocolSetting.ID,
+		ProtocolID: protocolID,
+		Key:        protocolSetting.Key,
+		Type:       protocolSetting.Type,
 	}
-	psDaos := make([]map[string]interface{}, len(protocolSettings))
-	//NamedExec with ON CONFLICT DO UPDATE not working properly in bulk inserts
-	for i := range protocolSettings {
-		psDaos[i] = map[string]interface{}{
-			"id":           protocolSettings[i].ID,
-			"protocol_id":  protocolID,
-			"key":          protocolSettings[i].Key,
-			"description":  nil,
-			"description2": nil,
-			"key2":         protocolSettings[i].Key,
-			"type":         protocolSettings[i].Type,
-			"type2":        protocolSettings[i].Type,
-		}
-		if protocolSettings[i].Description != nil && len(*protocolSettings[i].Description) > 0 {
-			psDaos[i]["description"] = *protocolSettings[i].Description
-			psDaos[i]["description2"] = *protocolSettings[i].Description
+	if protocolSetting.Description != nil && len(*protocolSetting.Description) > 0 {
+		psDao.Description = sql.NullString{
+			String: *protocolSetting.Description,
+			Valid:  true,
 		}
 	}
-	query := fmt.Sprintf(`INSERT INTO %s.sk_protocol_settings(id, protocol_id, "key", description, "type") VALUES(:id, :protocol_id, :key, :description, :type)
-	ON CONFLICT (id) DO UPDATE SET "key" = :key2, description = :description2, "type" = :type2, modified_at = now();`, r.dbSchema)
 
-	_, err := r.db.NamedExecContext(ctx, query, psDaos)
+	query := fmt.Sprintf(`INSERT INTO %s.sk_protocol_settings(id, protocol_id, "key", description, "type") VALUES(:id, :protocol_id, :key, :description, :type)
+	ON CONFLICT (id) DO UPDATE SET "key" = :key, description = :description, "type" = :type, modified_at = now();`, r.dbSchema)
+
+	_, err := r.db.NamedExecContext(ctx, query, psDao)
 	if err != nil {
 		log.Error().Err(err).Msg(msgUpsertProtocolSettingsFailed)
 		return ErrUpsertProtocolSettingsFailed
@@ -999,24 +991,16 @@ func (r *instrumentRepository) GetInstrumentsSettings(ctx context.Context, instr
 	return settingsMap, nil
 }
 
-func (r *instrumentRepository) UpsertInstrumentSettings(ctx context.Context, instrumentID uuid.UUID, settings []InstrumentSetting) error {
-	if len(settings) == 0 {
-		return nil
-	}
-	//NamedExec with ON CONFLICT DO UPDATE not working properly in bulk inserts
-	settingDaos := make([]map[string]interface{}, len(settings))
-	for i := range settings {
-		settingDaos[i] = map[string]interface{}{
-			"id":                  settings[i].ID,
-			"instrument_id":       instrumentID,
-			"protocol_setting_id": settings[i].ProtocolSettingID,
-			"value":               settings[i].Value,
-			"value2":              settings[i].Value,
-		}
+func (r *instrumentRepository) UpsertInstrumentSetting(ctx context.Context, instrumentID uuid.UUID, setting InstrumentSetting) error {
+	settingDao := instrumentSettingDao{
+		ID:                setting.ID,
+		InstrumentID:      instrumentID,
+		ProtocolSettingID: setting.ProtocolSettingID,
+		Value:             setting.Value,
 	}
 	query := fmt.Sprintf(`INSERT INTO %s.sk_instrument_settings(id, instrument_id, protocol_setting_id, "value") VALUES(:id, :instrument_id, :protocol_setting_id, :value)
-	ON CONFLICT (id) DO UPDATE SET "value" = :value2, modified_at = now();`, r.dbSchema)
-	_, err := r.db.NamedExecContext(ctx, query, settingDaos)
+	ON CONFLICT (id) DO UPDATE SET "value" = :value, modified_at = now();`, r.dbSchema)
+	_, err := r.db.NamedExecContext(ctx, query, settingDao)
 	if err != nil {
 		log.Error().Err(err).Msg(msgUpsertInstrumentSettingsFailed)
 		return ErrUpsertInstrumentSettingsFailed

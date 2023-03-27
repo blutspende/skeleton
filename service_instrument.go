@@ -477,10 +477,12 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 		return err
 	}
 
-	err = s.instrumentRepository.WithTransaction(tx).UpsertInstrumentSettings(ctx, instrument.ID, instrument.Settings)
-	if err != nil {
-		_ = tx.Rollback()
-		return err
+	for i := range instrument.Settings {
+		err = s.instrumentRepository.WithTransaction(tx).UpsertInstrumentSetting(ctx, instrument.ID, instrument.Settings[i])
+		if err != nil {
+			_ = tx.Rollback()
+			return err
+		}
 	}
 
 	newInstrument, err := s.GetInstrumentByID(ctx, tx, instrument.ID, true)
@@ -594,11 +596,14 @@ func (s *instrumentService) UpsertSupportedProtocol(ctx context.Context, id uuid
 		_ = tx.Rollback()
 		return err
 	}
-	err = s.instrumentRepository.WithTransaction(tx).UpsertProtocolSettings(ctx, id, settings)
-	if err != nil {
-		_ = tx.Rollback()
-		return err
+	for i := range settings {
+		err = s.instrumentRepository.WithTransaction(tx).UpsertProtocolSetting(ctx, id, settings[i])
+		if err != nil {
+			_ = tx.Rollback()
+			return err
+		}
 	}
+
 	err = tx.Commit()
 	if err != nil {
 		log.Error().Err(err).Msg(msgUpsertSupportedProtocolFailed)
