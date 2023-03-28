@@ -48,6 +48,7 @@ const (
 	msgUpdateRequestMappingFailed         = "update request mapping failed"
 	msgDeleteRequestMappingAnalytesFailed = "delete request mapping analytes failed"
 	msgGetEncodingsFailed                 = "get encodings failed"
+	msgCheckAnalyteUsageFailed            = "check analyte usage failed"
 )
 
 var (
@@ -83,6 +84,7 @@ var (
 	ErrUpdateRequestMappingFailed         = errors.New(msgUpdateRequestMappingFailed)
 	ErrDeleteRequestMappingAnalytesFailed = errors.New(msgDeleteRequestMappingAnalytesFailed)
 	ErrGetEncodingsFailed                 = errors.New(msgGetEncodingsFailed)
+	ErrCheckAnalyteUsageFailed            = errors.New(msgCheckAnalyteUsageFailed)
 )
 
 type instrumentDAO struct {
@@ -217,7 +219,7 @@ type InstrumentRepository interface {
 	DeleteRequestMappings(ctx context.Context, requestMappingIDs []uuid.UUID) error
 	DeleteRequestMappingAnalytes(ctx context.Context, requestMappingID uuid.UUID, analyteIDs []uuid.UUID) error
 	GetEncodings(ctx context.Context) ([]string, error)
-
+	CheckAnalytesUsage(ctx context.Context, analyteIDs []uuid.UUID) ([]uuid.UUID, error)
 	CreateTransaction() (db.DbConnector, error)
 	WithTransaction(tx db.DbConnector) InstrumentRepository
 }
@@ -855,6 +857,29 @@ func (r *instrumentRepository) GetEncodings(ctx context.Context) ([]string, erro
 		encodings = append(encodings, encoding)
 	}
 	return encodings, nil
+}
+
+func (r *instrumentRepository) CheckAnalytesUsage(ctx context.Context, analyteIDs []uuid.UUID) ([]uuid.UUID, error) {
+	query := fmt.Sprintf(`SELECT analyte_id FROM %s.sk_analyte_mappings WHERE analyte_id IN (?) AND deleted_at IS NULL;`, r.dbSchema)
+	query, args, _ := sqlx.In(query, analyteIDs)
+	query = r.db.Rebind(query)
+	rows, err := r.db.QueryxContext(ctx, query, args...)
+	if err != nil {
+		log.Error().Err(err).Msg(msgCheckAnalyteUsageFailed)
+		return nil, ErrCheckAnalyteUsageFailed
+	}
+	defer rows.Close()
+	usedAnalyteIDs := make([]uuid.UUID, 0, len(analyteIDs))
+	for rows.Next() {
+		var analyteID uuid.UUID
+		err = rows.Scan(&analyteID)
+		if err != nil {
+			log.Error().Err(err).Msg(msgCheckAnalyteUsageFailed)
+			return nil, ErrCheckAnalyteUsageFailed
+		}
+		usedAnalyteIDs = append(usedAnalyteIDs)
+	}
+	return usedAnalyteIDs, nil
 }
 
 func (r *instrumentRepository) CreateTransaction() (db.DbConnector, error) {
