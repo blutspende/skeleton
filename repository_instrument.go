@@ -998,6 +998,9 @@ func (r *instrumentRepository) UpsertInstrumentSetting(ctx context.Context, inst
 		ProtocolSettingID: setting.ProtocolSettingID,
 		Value:             setting.Value,
 	}
+	if settingDao.ID == uuid.Nil {
+		settingDao.ID = uuid.New()
+	}
 	query := fmt.Sprintf(`INSERT INTO %s.sk_instrument_settings(id, instrument_id, protocol_setting_id, "value") VALUES(:id, :instrument_id, :protocol_setting_id, :value)
 	ON CONFLICT (id) DO UPDATE SET "value" = :value, modified_at = now();`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, settingDao)
