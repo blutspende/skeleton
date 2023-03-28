@@ -1012,7 +1012,7 @@ func (r *instrumentRepository) UpsertInstrumentSetting(ctx context.Context, inst
 }
 
 func (r *instrumentRepository) DeleteInstrumentSettings(ctx context.Context, ids []uuid.UUID) error {
-	query := fmt.Sprintf(`UPDATE %s.sk_instrument_settings SET deleted_at = now() WHERE id IN (?);`)
+	query := fmt.Sprintf(`UPDATE %s.sk_instrument_settings SET deleted_at = now() WHERE id IN (?);`, r.dbSchema)
 	query, args, _ := sqlx.In(query, ids)
 	query = r.db.Rebind(query)
 	_, err := r.db.ExecContext(ctx, query, args...)
