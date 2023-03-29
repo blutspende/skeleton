@@ -379,3 +379,8 @@ const (
 	InstrumentReady   InstrumentStatus = "READY"
 	InstrumentOnline  InstrumentStatus = "ONLINE"
 )
+
+type AnalytesUsageResponse struct {
+	Used    []uuid.UUID `json:"used"`
+	NotUsed []uuid.UUID `json:"notUsed"`
+}

@@ -8,6 +8,18 @@ import (
 	"time"
 )
 
+const (
+	MsgCanNotBindRequestBody = "can not bind request body"
+	keyBadRequest            = "badRequest"
+)
+
+type clientError struct {
+	MessageKey    string            `json:"messageKey"`
+	MessageParams map[string]string `json:"messageParams"`
+	Message       string            `json:"message"`
+	Errors        []clientError     `json:"errors"`
+}
+
 type subjectType string
 
 const (
@@ -180,4 +192,26 @@ func (api *api) ReexamineAnalysisRequestBatch(c *gin.Context) {
 	}
 
 	c.Status(http.StatusNoContent)
+}
+
+func (api *api) CheckAnalytesUsage(c *gin.Context) {
+	var ids []uuid.UUID
+
+	err := c.ShouldBindJSON(&ids)
+	if err != nil {
+		log.Error().Err(err).Msg(MsgCanNotBindRequestBody)
+		c.AbortWithStatusJSON(http.StatusBadRequest, clientError{
+			Message:    MsgCanNotBindRequestBody,
+			MessageKey: keyBadRequest,
+		})
+		return
+	}
+
+	response, err := api.instrumentService.CheckAnalytesUsage(c, ids)
+	if err != nil {
+		log.Error().Err(err).Send()
+		c.AbortWithStatusJSON(http.StatusInternalServerError, nil)
+	}
+
+	c.JSON(http.StatusOK, response)
 }
