@@ -11,23 +11,24 @@ import (
 )
 
 type instrumentTO struct {
-	ID                 uuid.UUID          `json:"id"`
-	Name               string             `json:"name"`
-	ProtocolID         uuid.UUID          `json:"protocolId"`
-	ProtocolName       Protocol           `json:"type"`
-	Enabled            bool               `json:"enabled"`
-	ConnectionMode     ConnectionMode     `json:"connectionMode"`
-	ResultMode         ResultMode         `json:"runningMode"`
-	CaptureResults     bool               `json:"captureResults"`
-	CaptureDiagnostics bool               `json:"captureDiagnostics"`
-	ReplyToQuery       bool               `json:"replyToQuery"`
-	Status             string             `json:"status"`
-	FileEncoding       string             `json:"fileEncoding"`
-	Timezone           string             `json:"timezone"`
-	Hostname           string             `json:"hostname"`
-	ClientPort         *int               `json:"clientPort"`
-	AnalyteMappings    []analyteMappingTO `json:"analyteMappings"`
-	RequestMappings    []requestMappingTO `json:"requestMappings"`
+	ID                 uuid.UUID             `json:"id"`
+	Name               string                `json:"name"`
+	ProtocolID         uuid.UUID             `json:"protocolId"`
+	ProtocolName       Protocol              `json:"type"`
+	Enabled            bool                  `json:"enabled"`
+	ConnectionMode     ConnectionMode        `json:"connectionMode"`
+	ResultMode         ResultMode            `json:"runningMode"`
+	CaptureResults     bool                  `json:"captureResults"`
+	CaptureDiagnostics bool                  `json:"captureDiagnostics"`
+	ReplyToQuery       bool                  `json:"replyToQuery"`
+	Status             string                `json:"status"`
+	FileEncoding       string                `json:"fileEncoding"`
+	Timezone           string                `json:"timezone"`
+	Hostname           string                `json:"hostname"`
+	ClientPort         *int                  `json:"clientPort"`
+	AnalyteMappings    []analyteMappingTO    `json:"analyteMappings"`
+	RequestMappings    []requestMappingTO    `json:"requestMappings"`
+	Settings           []instrumentSettingTO `json:"instrumentSettings"`
 }
 
 type listInstrumentTO struct {
@@ -67,10 +68,23 @@ type resultMappingTO struct {
 	Index int       `json:"index"`
 }
 
+type instrumentSettingTO struct {
+	ID                uuid.UUID `json:"id"`
+	ProtocolSettingID uuid.UUID `json:"protocolSettingId"`
+	Value             string    `json:"value"`
+}
+
 type protocolAbilityTO struct {
 	ConnectionMode          ConnectionMode `json:"connectionMode"`
 	Abilities               []Ability      `json:"abilities"`
 	RequestMappingAvailable bool           `json:"requestMappingAvailable"`
+}
+
+type protocolSettingTO struct {
+	ID          uuid.UUID           `json:"id"`
+	Key         string              `json:"key"`
+	Description *string             `json:"description"`
+	Type        ProtocolSettingType `json:"type"`
 }
 
 type supportedProtocolTO struct {
@@ -78,6 +92,7 @@ type supportedProtocolTO struct {
 	Name              Protocol            `json:"name"`
 	Description       *string             `json:"description"`
 	ProtocolAbilities []protocolAbilityTO `json:"protocolAbilities"`
+	ProtocolSettings  []protocolSettingTO `json:"protocolSettings"`
 }
 
 type supportedManufacturerTestTO struct {
@@ -537,6 +552,7 @@ func convertInstrumentTOToInstrument(instrumentTO instrumentTO) Instrument {
 		ClientPort:         instrumentTO.ClientPort,
 		AnalyteMappings:    make([]AnalyteMapping, len(instrumentTO.AnalyteMappings)),
 		RequestMappings:    make([]RequestMapping, len(instrumentTO.RequestMappings)),
+		Settings:           convertInstrumentSettingTOsToInstrumentSettings(instrumentTO.Settings),
 	}
 
 	if instrumentTO.Status == "" {
@@ -573,6 +589,7 @@ func convertInstrumentToInstrumentTO(instrument Instrument) instrumentTO {
 		ClientPort:         instrument.ClientPort,
 		AnalyteMappings:    make([]analyteMappingTO, len(instrument.AnalyteMappings)),
 		RequestMappings:    make([]requestMappingTO, len(instrument.RequestMappings)),
+		Settings:           convertInstrumentSettingsToSettingsTOs(instrument.Settings),
 	}
 
 	for i, analyteMapping := range instrument.AnalyteMappings {
@@ -584,6 +601,38 @@ func convertInstrumentToInstrumentTO(instrument Instrument) instrumentTO {
 	}
 
 	return model
+}
+
+func convertInstrumentSettingsToSettingsTOs(settings []InstrumentSetting) []instrumentSettingTO {
+	settingTOs := make([]instrumentSettingTO, len(settings))
+	for i := range settings {
+		settingTOs[i] = convertInstrumentSettingToSettingTO(settings[i])
+	}
+	return settingTOs
+}
+
+func convertInstrumentSettingToSettingTO(setting InstrumentSetting) instrumentSettingTO {
+	return instrumentSettingTO{
+		ID:                setting.ID,
+		ProtocolSettingID: setting.ProtocolSettingID,
+		Value:             setting.Value,
+	}
+}
+
+func convertInstrumentSettingTOsToInstrumentSettings(settingTOs []instrumentSettingTO) []InstrumentSetting {
+	settings := make([]InstrumentSetting, len(settingTOs))
+	for i := range settings {
+		settings[i] = convertInstrumentSettingTOToInstrumentSetting(settingTOs[i])
+	}
+	return settings
+}
+
+func convertInstrumentSettingTOToInstrumentSetting(settingTO instrumentSettingTO) InstrumentSetting {
+	return InstrumentSetting{
+		ID:                settingTO.ID,
+		ProtocolSettingID: settingTO.ProtocolSettingID,
+		Value:             settingTO.Value,
+	}
 }
 
 func convertAnalyteMappingTOToAnalyteMapping(analyteMappingTO analyteMappingTO) AnalyteMapping {
@@ -685,10 +734,8 @@ func convertSupportedProtocolToSupportedProtocolTO(supportedProtocol SupportedPr
 		ID:                supportedProtocol.ID,
 		Name:              supportedProtocol.Name,
 		Description:       supportedProtocol.Description,
-		ProtocolAbilities: make([]protocolAbilityTO, len(supportedProtocol.ProtocolAbilities)),
-	}
-	for i := range supportedProtocol.ProtocolAbilities {
-		to.ProtocolAbilities[i] = convertProtocolAbilityToProtocolAbilityTO(supportedProtocol.ProtocolAbilities[i])
+		ProtocolAbilities: convertProtocolAbilitiesToProtocolAbilitiesTOs(supportedProtocol.ProtocolAbilities),
+		ProtocolSettings:  convertProtocolSettingsToProtocolSettingsTOs(supportedProtocol.ProtocolSettings),
 	}
 	return to
 }
@@ -701,7 +748,7 @@ func convertSupportedProtocolsToSupportedProtocolTOs(supportedProtocols []Suppor
 	return tos
 }
 
-func convertProtocolAbilityToProtocolAbilitiesTO(protocolAbility ProtocolAbility) protocolAbilityTO {
+func convertProtocolAbilityToProtocolAbilityTO(protocolAbility ProtocolAbility) protocolAbilityTO {
 	to := protocolAbilityTO{
 		ConnectionMode:          protocolAbility.ConnectionMode,
 		Abilities:               protocolAbility.Abilities,
@@ -713,17 +760,26 @@ func convertProtocolAbilityToProtocolAbilitiesTO(protocolAbility ProtocolAbility
 func convertProtocolAbilitiesToProtocolAbilitiesTOs(protocolAbilities []ProtocolAbility) []protocolAbilityTO {
 	tos := make([]protocolAbilityTO, len(protocolAbilities))
 	for i := range protocolAbilities {
-		tos[i] = convertProtocolAbilityToProtocolAbilitiesTO(protocolAbilities[i])
+		tos[i] = convertProtocolAbilityToProtocolAbilityTO(protocolAbilities[i])
 	}
 	return tos
 }
 
-func convertProtocolAbilityToProtocolAbilityTO(protocolAbility ProtocolAbility) protocolAbilityTO {
-	return protocolAbilityTO{
-		ConnectionMode:          protocolAbility.ConnectionMode,
-		Abilities:               protocolAbility.Abilities,
-		RequestMappingAvailable: protocolAbility.RequestMappingAvailable,
+func convertProtocolSettingToProtocolSettingTO(setting ProtocolSetting) protocolSettingTO {
+	return protocolSettingTO{
+		ID:          setting.ID,
+		Key:         setting.Key,
+		Description: setting.Description,
+		Type:        setting.Type,
 	}
+}
+
+func convertProtocolSettingsToProtocolSettingsTOs(settings []ProtocolSetting) []protocolSettingTO {
+	tos := make([]protocolSettingTO, len(settings))
+	for i := range settings {
+		tos[i] = convertProtocolSettingToProtocolSettingTO(settings[i])
+	}
+	return tos
 }
 
 func convertSupportedManufacturerTestToSupportedManufacturerTestTO(supportedManufacturerTest SupportedManufacturerTests) supportedManufacturerTestTO {

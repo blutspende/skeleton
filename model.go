@@ -155,6 +155,7 @@ type Instrument struct {
 	ClientPort         *int
 	AnalyteMappings    []AnalyteMapping
 	RequestMappings    []RequestMapping
+	Settings           []InstrumentSetting
 	CreatedAt          time.Time
 	ModifiedAt         *time.Time
 	DeletedAt          *time.Time
@@ -310,9 +311,12 @@ type AnalysisBatch struct {
 
 // Image Images are Id's as returned by the DEA service where they get uploaded to
 type Image struct {
-	ID          uuid.UUID
-	Name        string
-	Description *string
+	ID              uuid.UUID
+	Name            string
+	Description     *string
+	ImageBytes      []byte
+	DeaImageID      uuid.NullUUID
+	UploadedToDeaAt *time.Time
 }
 
 type SubmitType string
@@ -352,12 +356,26 @@ type SupportedProtocol struct {
 	Name              Protocol
 	Description       *string
 	ProtocolAbilities []ProtocolAbility
+	ProtocolSettings  []ProtocolSetting
 }
 
 type ProtocolAbility struct {
 	ConnectionMode          ConnectionMode
 	Abilities               []Ability
 	RequestMappingAvailable bool
+}
+
+type ProtocolSetting struct {
+	ID          uuid.UUID
+	Key         string
+	Description *string
+	Type        ProtocolSettingType
+}
+
+type InstrumentSetting struct {
+	ID                uuid.UUID
+	ProtocolSettingID uuid.UUID
+	Value             string
 }
 
 type Ability string
@@ -378,6 +396,14 @@ const (
 	InstrumentOffline InstrumentStatus = "OFFLINE"
 	InstrumentReady   InstrumentStatus = "READY"
 	InstrumentOnline  InstrumentStatus = "ONLINE"
+)
+
+type ProtocolSettingType string
+
+const (
+	String ProtocolSettingType = "string"
+	Int    ProtocolSettingType = "int"
+	Bool   ProtocolSettingType = "bool"
 )
 
 type AnalytesUsageResponse struct {

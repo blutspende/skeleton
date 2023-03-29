@@ -26,6 +26,7 @@ type DbConnector interface {
 	Rebind(query string) string
 	Commit() error
 	Rollback() error
+	Ping() error
 }
 
 type dbConnector struct {
@@ -158,6 +159,10 @@ func (c *dbConnector) PrepareNamed(query string) (*sqlx.NamedStmt, error) {
 	} else {
 		return c.db.PrepareNamed(query)
 	}
+}
+
+func (c *dbConnector) Ping() error {
+	return c.db.Ping()
 }
 
 func CreateDbConnector(db *sqlx.DB) DbConnector {

@@ -113,6 +113,7 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 			}, nil
 		},
 	}
+	deaClientMock := &deaClientMock{}
 
 	analysisService := NewAnalysisService(analysisRepository, skeletonManager)
 	instrumentService := NewInstrumentService(&config, instrumentRepository, skeletonManager, NewInstrumentCache(), cerberusClientMock)
@@ -123,7 +124,7 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 
 	api := newAPI(ginEngine, &config, &authManager, analysisService, instrumentService, consoleLogService, nil)
 
-	skeletonInstance, _ := NewSkeleton(sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, skeletonManager, cerberusClientMock)
+	skeletonInstance, _ := NewSkeleton(sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, skeletonManager, cerberusClientMock, deaClientMock)
 
 	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description)
 		VALUES ('abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
@@ -219,13 +220,15 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 		},
 	}
 
+	deaClientMock := &deaClientMock{}
+
 	analysisService := NewAnalysisService(analysisRepository, skeletonManager)
 	instrumentService := NewInstrumentService(&config, instrumentRepository, skeletonManager, NewInstrumentCache(), cerberusClientMock)
 	consoleLogService := service.NewConsoleLogService(consoleLogRepository, nil)
 
 	api := NewAPI(&config, &authManager, analysisService, instrumentService, consoleLogService, nil)
 
-	skeletonInstance, _ := NewSkeleton(sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, skeletonManager, cerberusClientMock)
+	skeletonInstance, _ := NewSkeleton(sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, skeletonManager, cerberusClientMock, deaClientMock)
 
 	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('9bec3063-435d-490f-bec0-88a6633ef4c2', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
 
@@ -442,6 +445,13 @@ func (m *authManagerMock) InvalidateClientCredential() {
 		return
 	}
 	m.invalidateClientCredentialFunc()
+}
+
+type deaClientMock struct {
+}
+
+func (m *deaClientMock) UploadImage(fileData []byte, name, contentType string) (uuid.UUID, error) {
+	return uuid.New(), nil
 }
 
 type cerberusClientMock struct {

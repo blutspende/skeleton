@@ -85,7 +85,7 @@ type analysisResultTO struct {
 }
 
 type imageTO struct {
-	ID          uuid.UUID `json:"id"`
+	ID          uuid.UUID `json:"imageId"`
 	Name        string    `json:"name"`
 	Description *string   `json:"description,omitempty"`
 }
@@ -215,13 +215,35 @@ func (cia *cerberus) SendAnalysisResultBatch(analysisResults []AnalysisResult) (
 			analysisResultTO.ExtraValues = append(analysisResultTO.ExtraValues, extraValueTO)
 		}
 
+		for _, img := range ar.Images {
+			if !img.DeaImageID.Valid {
+				continue
+			}
+			imageTO := imageTO{
+				ID:          img.DeaImageID.UUID,
+				Name:        img.Name,
+				Description: img.Description,
+			}
+			analysisResultTO.Images = append(analysisResultTO.Images, imageTO)
+		}
+
 		for _, cr := range ar.ChannelResults {
 			channelResultTO := channelResultTO{
 				ChannelID:             cr.ChannelID,
 				QualitativeResult:     cr.QualitativeResult,
 				QualitativeResultEdit: cr.QualitativeResultEdit,
 				QuantitativeResults:   cr.QuantitativeResults,
-				Images:                []imageTO{}, // Todo fill
+			}
+			for _, img := range cr.Images {
+				if !img.DeaImageID.Valid {
+					continue
+				}
+				imageTO := imageTO{
+					ID:          img.DeaImageID.UUID,
+					Name:        img.Name,
+					Description: img.Description,
+				}
+				channelResultTO.Images = append(channelResultTO.Images, imageTO)
 			}
 			analysisResultTO.ChannelResults = append(analysisResultTO.ChannelResults, channelResultTO)
 		}

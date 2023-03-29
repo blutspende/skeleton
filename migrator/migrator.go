@@ -11,6 +11,8 @@ import (
 var migrations = map[int]string{
 	1: migration_1,
 	2: migration_2,
+	3: migration_3,
+	4: migration_4,
 }
 
 type skeletonMigrator struct {

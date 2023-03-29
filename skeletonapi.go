@@ -96,7 +96,7 @@ type SkeletonAPI interface {
 	FindResultMapping(searchValue string, mapping []ResultMapping) (string, error)
 
 	// RegisterProtocol - Registers
-	RegisterProtocol(ctx context.Context, id uuid.UUID, name string, description string, abilities []ProtocolAbility) error
+	RegisterProtocol(ctx context.Context, id uuid.UUID, name string, description string, abilities []ProtocolAbility, settings []ProtocolSetting) error
 
 	SetOnlineStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error
 
@@ -115,6 +115,10 @@ func New(sqlConn *sqlx.DB, dbSchema string) (SkeletonAPI, error) {
 		NewRestyClient(context.Background(), &config, true))
 	internalApiRestyClient := NewRestyClientWithAuthManager(context.Background(), &config, authManager)
 	cerberusClient, err := NewCerberusClient(config.CerberusURL, internalApiRestyClient)
+	if err != nil {
+		return nil, err
+	}
+	deaClient, err := NewDEAClient(config.DeaURL, internalApiRestyClient)
 	if err != nil {
 		return nil, err
 	}
@@ -141,10 +145,10 @@ func New(sqlConn *sqlx.DB, dbSchema string) (SkeletonAPI, error) {
 		},
 	})
 
-	return NewSkeleton(sqlConn, dbSchema, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, manager, cerberusClient)
+	return NewSkeleton(sqlConn, dbSchema, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, manager, cerberusClient, deaClient)
 }
 
-func NewForTest(config config2.Configuration, sqlConn *sqlx.DB, dbSchema string, cerberusClient Cerberus, authManager AuthManager) (SkeletonAPI, error) {
+func NewForTest(config config2.Configuration, sqlConn *sqlx.DB, dbSchema string, cerberusClient Cerberus, deaClient DeaClientV1, authManager AuthManager) (SkeletonAPI, error) {
 	dbConn := db.CreateDbConnector(sqlConn)
 	manager := NewSkeletonManager()
 	instrumentCache := NewInstrumentCache()
@@ -157,5 +161,5 @@ func NewForTest(config config2.Configuration, sqlConn *sqlx.DB, dbSchema string,
 	consoleLogService := service.NewConsoleLogService(consoleLogRepository, consoleLogSSEServer)
 	api := NewAPI(&config, authManager, analysisService, instrumentService, consoleLogService, consoleLogSSEServer)
 
-	return NewSkeleton(sqlConn, dbSchema, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, manager, cerberusClient)
+	return NewSkeleton(sqlConn, dbSchema, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, manager, cerberusClient, deaClient)
 }
