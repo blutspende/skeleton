@@ -33,8 +33,8 @@ type Configuration struct {
 	TCPListenerPort                   int           `envconfig:"TCP_LISTENER_PORT" required:"true" default:"5000"`
 	LocalEnvironment                  bool          `envconfig:"LOCAL_ENVIRONMENT" default:"false"`
 	InstrumentTransferRetryDelayInMs  int           `envconfig:"INSTRUMENT_TRANSFER_DELAY" default:"600000"`
-	CerberusURL                       string        `envconfig:"CERBERUS_URL" required:"true" default:"localhost"`
-	DeaURL                            string        `envconfig:"DEA_URL" required:"true" default:"localhost"`
+	CerberusURL                       string        `envconfig:"CERBERUS_URL" required:"true" default:"http://cerberus"`
+	DeaURL                            string        `envconfig:"DEA_URL" required:"true" default:"http://dea"`
 	LookBackDays                      int           `envconfig:"LOOK_BACK_DAYS" default:"14"`
 	TCPServerMaxConnections           int           `envconfig:"MAX_TCP_CONNECTIONS" required:"true" default:"50"`
 	Proxy                             string        `envconfig:"PROXY" default:""`
