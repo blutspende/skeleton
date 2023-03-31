@@ -14,6 +14,7 @@ var migrations = map[int]string{
 	3: migration_3,
 	4: migration_4,
 	5: migration_5,
+	6: migration_6,
 }
 
 type skeletonMigrator struct {
