@@ -205,8 +205,9 @@ func (s *skeleton) saveImages(ctx context.Context, resultData *AnalysisResult) e
 					Valid:  true,
 				}
 			}
+
 			filename := fmt.Sprintf("%s_chres_%d_%d.jpg", resultData.ID.String(), i, j)
-			id, err := s.deaClient.UploadImage(resultData.Images[i].ImageBytes, filename, imageContentType)
+			id, err := s.deaClient.UploadImage(resultData.ChannelResults[i].Images[j].ImageBytes, filename, imageContentType)
 			if err != nil {
 				imageDao.ImageBytes = resultData.ChannelResults[i].Images[j].ImageBytes
 				imageDao.UploadError = sql.NullString{
