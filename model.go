@@ -241,7 +241,7 @@ type AnalysisResult struct {
 }
 
 type AnalysisResultBatchItemInfo struct {
-	AnalysisResult           *AnalysisResult
+	AnalysisResult           *AnalysisResultTO
 	CerberusAnalysisResultID *uuid.UUID
 	ErrorMessage             string
 }
