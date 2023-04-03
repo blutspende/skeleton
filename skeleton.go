@@ -426,7 +426,7 @@ func (s *skeleton) submitAnalysisResultsToCerberus(ctx context.Context) {
 
 			sentResultCount := 0
 			for _, queueItem := range queueItems {
-				var analysisResult []AnalysisResult
+				var analysisResult []AnalysisResultTO
 				if err := json.Unmarshal([]byte(queueItem.JsonMessage), &analysisResult); err != nil {
 					log.Error().Err(err).Msg("Failed to unmarshal analysis results")
 					continue

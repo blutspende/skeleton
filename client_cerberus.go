@@ -23,7 +23,7 @@ var (
 
 type Cerberus interface {
 	RegisterInstrument(instrument Instrument) error
-	SendAnalysisResultBatch(analysisResults []AnalysisResult) (AnalysisResultBatchResponse, error)
+	SendAnalysisResultBatch(analysisResults []AnalysisResultTO) (AnalysisResultBatchResponse, error)
 }
 
 type cerberus struct {
@@ -42,7 +42,7 @@ type ciaInstrumentTO struct {
 	Name string    `json:"name"`
 }
 
-type extraValueTO struct {
+type ExtraValueTO struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
 }
@@ -53,15 +53,15 @@ type createAnalysisResultResponseItemTO struct {
 	Error      *string       `json:"error"`
 }
 
-type channelResultTO struct {
+type ChannelResultTO struct {
 	ChannelID             uuid.UUID         `json:"channelId"`
 	QualitativeResult     string            `json:"qualitativeResult"`
 	QualitativeResultEdit bool              `json:"edited"`
 	QuantitativeResults   map[string]string `json:"quantitativeResults"`
-	Images                []imageTO         `json:"images"`
+	Images                []ImageTO         `json:"images"`
 }
 
-type analysisResultTO struct {
+type AnalysisResultTO struct {
 	WorkingItemID            uuid.UUID         `json:"workItemId"`
 	ValidUntil               time.Time         `json:"validUntil"`
 	Status                   string            `json:"status"`
@@ -76,21 +76,21 @@ type analysisResultTO struct {
 	RunCounter               int               `json:"runCounter" `
 	Edited                   bool              `json:"resultEdit"`
 	EditReason               string            `json:"editReason"`
-	ChannelResults           []channelResultTO `json:"channelResults"`
-	ExtraValues              []extraValueTO    `json:"extraValues"`
-	ReagentInfos             []reagentInfoTO   `json:"reagentInfos"`
-	Images                   []imageTO         `json:"images"`
+	ChannelResults           []ChannelResultTO `json:"channelResults"`
+	ExtraValues              []ExtraValueTO    `json:"extraValues"`
+	ReagentInfos             []ReagentInfoTO   `json:"reagentInfos"`
+	Images                   []ImageTO         `json:"images"`
 	WarnFlag                 bool              `json:"warnFlag"`
 	Warnings                 []string          `json:"warnings"`
 }
 
-type imageTO struct {
+type ImageTO struct {
 	ID          uuid.UUID `json:"imageId"`
 	Name        string    `json:"name"`
 	Description *string   `json:"description,omitempty"`
 }
 
-type reagentInfoTO struct {
+type ReagentInfoTO struct {
 	SerialNumber            string    `json:"serialNo"`
 	Name                    string    `json:"name"`
 	Code                    string    `json:"code"`
@@ -146,136 +146,18 @@ func (c *cerberus) RegisterInstrument(instrument Instrument) error {
 }
 
 // SendAnalysisResultBatch Submit a list of AnalysisResults to Cerberus
-func (cia *cerberus) SendAnalysisResultBatch(analysisResults []AnalysisResult) (AnalysisResultBatchResponse, error) {
+func (cia *cerberus) SendAnalysisResultBatch(analysisResults []AnalysisResultTO) (AnalysisResultBatchResponse, error) {
 	if len(analysisResults) < 1 {
 		return AnalysisResultBatchResponse{}, nil
 	}
 
-	analysisResultsTOs := make([]analysisResultTO, len(analysisResults))
 	analysisResultBatchItemInfoList := make([]AnalysisResultBatchItemInfo, len(analysisResults))
 
 	var hasError bool
-	for i, ar := range analysisResults {
-		info := AnalysisResultBatchItemInfo{
+	for i := range analysisResults {
+		analysisResultBatchItemInfoList[i] = AnalysisResultBatchItemInfo{
 			AnalysisResult: &analysisResults[i],
 		}
-
-		analysisResultTO := analysisResultTO{
-			WorkingItemID:            ar.AnalysisRequest.WorkItemID,
-			ValidUntil:               ar.ValidUntil,
-			ResultYieldDateTime:      ar.ResultYieldDateTime,
-			ExaminedMaterial:         ar.AnalysisRequest.MaterialID,
-			Result:                   ar.Result,
-			Operator:                 ar.Operator,
-			TechnicalReleaseDateTime: ar.TechnicalReleaseDateTime,
-			InstrumentID:             ar.Instrument.ID,
-			InstrumentRunID:          ar.InstrumentRunID,
-			RunCounter:               ar.RunCounter,
-			Edited:                   ar.Edited,
-			EditReason:               ar.EditReason,
-			ChannelResults:           []channelResultTO{},
-			ExtraValues:              []extraValueTO{},
-			ReagentInfos:             []reagentInfoTO{},
-			Images:                   []imageTO{},
-			WarnFlag:                 ar.WarnFlag,
-			Warnings:                 ar.Warnings,
-		}
-
-		switch ar.Status {
-		case Preliminary:
-			analysisResultTO.Status = "PRE"
-		case Final:
-			analysisResultTO.Status = "FIN"
-		default:
-			hasError = true
-			info.ErrorMessage = fmt.Sprintf("Invalid result-status (%s)", ar.Status)
-			log.Debug().Msg(info.ErrorMessage)
-		}
-
-		switch ar.ResultMode {
-		case Simulation:
-			//analysisResultTO.Mode = "SIMULATION"
-			analysisResultTO.Mode = "TEST"
-		case Qualify:
-			//analysisResultTO.Mode = "QUALIFY"
-			analysisResultTO.Mode = "VALIDATION"
-		case Production:
-			analysisResultTO.Mode = "PRODUCTION"
-		default:
-			hasError = true
-			info.ErrorMessage = fmt.Sprintf("Invalid result-mode (%s)", ar.Instrument.ResultMode)
-			log.Debug().Msg(info.ErrorMessage)
-		}
-
-		for _, ev := range ar.ExtraValues {
-			extraValueTO := extraValueTO{
-				Key:   ev.Key,
-				Value: ev.Value,
-			}
-			analysisResultTO.ExtraValues = append(analysisResultTO.ExtraValues, extraValueTO)
-		}
-
-		for _, img := range ar.Images {
-			if !img.DeaImageID.Valid {
-				continue
-			}
-			imageTO := imageTO{
-				ID:          img.DeaImageID.UUID,
-				Name:        img.Name,
-				Description: img.Description,
-			}
-			analysisResultTO.Images = append(analysisResultTO.Images, imageTO)
-		}
-
-		for _, cr := range ar.ChannelResults {
-			channelResultTO := channelResultTO{
-				ChannelID:             cr.ChannelID,
-				QualitativeResult:     cr.QualitativeResult,
-				QualitativeResultEdit: cr.QualitativeResultEdit,
-				QuantitativeResults:   cr.QuantitativeResults,
-			}
-			for _, img := range cr.Images {
-				if !img.DeaImageID.Valid {
-					continue
-				}
-				imageTO := imageTO{
-					ID:          img.DeaImageID.UUID,
-					Name:        img.Name,
-					Description: img.Description,
-				}
-				channelResultTO.Images = append(channelResultTO.Images, imageTO)
-			}
-			analysisResultTO.ChannelResults = append(analysisResultTO.ChannelResults, channelResultTO)
-		}
-
-		for _, ri := range ar.ReagentInfos {
-			reagentInfoTO := reagentInfoTO{
-				SerialNumber:            ri.SerialNumber,
-				Name:                    ri.Name,
-				Code:                    ri.Code,
-				LotNo:                   ri.LotNo,
-				ReagentManufacturerDate: ri.ReagentManufacturerDate,
-				UseUntil:                ri.UseUntil,
-				ShelfLife:               ri.ShelfLife,
-				//TODO Add an expiry : ExpiryDateTime: (this has to be added to database as well)
-				ManufacturerName: ri.ManufacturerName,
-				DateCreated:      ri.DateCreated,
-			}
-
-			switch ri.ReagentType {
-			case Reagent:
-				reagentInfoTO.ReagentType = "Reagent"
-			case Diluent:
-				reagentInfoTO.ReagentType = "Diluent"
-			default:
-				hasError = true
-				info.ErrorMessage = fmt.Sprintf("Invalid reagent type (%s)", ri.ReagentType)
-				log.Debug().Msg(info.ErrorMessage)
-			}
-		}
-
-		analysisResultBatchItemInfoList[i] = info
-		analysisResultsTOs[i] = analysisResultTO
 	}
 
 	if hasError {
@@ -288,7 +170,7 @@ func (cia *cerberus) SendAnalysisResultBatch(analysisResults []AnalysisResult) (
 
 	resp, err := cia.client.R().
 		SetHeader("Content-Type", "application/json").
-		SetBody(analysisResultsTOs).
+		SetBody(analysisResults).
 		Post(cia.cerberusUrl + "/v1/analysis-results/batch")
 
 	if err != nil {
@@ -362,133 +244,3 @@ func (cia *cerberus) SendAnalysisResultBatch(analysisResults []AnalysisResult) (
 		return response, err
 	}
 }
-
-/*
-func (cia *cerberusV1) PostAnalysisResult(analysisResult v1.AnalysisResult) (v1.AnalysisResultBatchResponse, error) {
-		var responseBodyStr string
-		requestBody, _ := json.Marshal(cia.mapAnalysisResultToAnalysisResultDTO(analysisResult))
-		requestBodyStr := string(requestBody)
-
-		resp, err := cia.client.R().
-			SetHeader("Content-Type", "application/json").
-			SetBody(cia.mapAnalysisResultToAnalysisResultDTO(analysisResult)).
-			Post(cia.config.CerberusURL + "/v1/analysis-results")
-
-		if err != nil {
-			log.Error().Err(err).Msg("Can not call internal cerberus api")
-			cia.ciaHistoryService.Create(model.TYPE_AnalysisResultBatch, err.Error(), requestBodyStr, 0, nil, []uuid.UUID{analysisResult.ID})
-			return nil, err
-		}
-
-		respBodyBytes := resp.Body()
-		responseBodyStr = string(respBodyBytes)
-
-		if resp.StatusCode() == http.StatusInternalServerError {
-			errReps := errorResponseV1TO{}
-			err = json.Unmarshal(resp.Body(), &errReps)
-			if err != nil {
-				log.Error().Err(err).Msg("Can not unmarshal error of resp")
-				return nil, err
-			}
-			return nil, errors.New(errReps.Message)
-		}
-
-		_, err = cia.ciaHistoryService.Create(model.TYPE_AnalysisResultBatch, requestBodyStr, responseBodyStr, resp.StatusCode(), nil, []uuid.UUID{analysisResult.ID})
-		if err != nil {
-			log.Error().Err(err).Msg("Can not create cia http history")
-		}
-		if resp.StatusCode() == http.StatusAccepted {
-			err = v1.ErrSendResultBatchPartiallyFailed
-		}
-
-		return resp, nil
-	return nil, nil
-}
-*/
-/*
-	func (cia *cerberusV1) mapAnalysisResultToAnalysisResultDTO(analysisRes v1.AnalysisResult) analysisResultV1TO {
-		return analysisResultV1TO{
-			WorkingItemID:            analysisRes.WorkItemID,
-			ValidUntil:               analysisRes.ValidUntil,
-			Status:                   analysisRes.Status.ToString(),
-			Mode:                     analysisRes.ResultMode.ToString(),
-			ResultYieldDateTime:      analysisRes.ResultYieldDateTime,
-			ExaminedMaterial:         analysisRes.ExaminedMaterial,
-			Result:                   fmt.Sprint(analysisRes.Result),
-			Operator:                 analysisRes.Operator,
-			TechnicalReleaseDateTime: analysisRes.TechnicalReleaseDateTime,
-			InstrumentID:             analysisRes.InstrumentID,
-			InstrumentRunID:          analysisRes.InstrumentRunID,
-			ReagentInfos:             cia.mapReagentInfoToReagentInfoDTO(analysisRes.ReagentInfos),
-			RunCounter:               analysisRes.RunCounter,
-			ExtraValues:              cia.mapExtraValuesToExtraValuesDTO(analysisRes.ExtraValues),
-			Edited:                   analysisRes.Edited,
-			EditReason:               analysisRes.EditReason,
-			WarnFlag:                 analysisRes.WarnFlag,
-			Warnings:                 analysisRes.Warnings,
-			ChannelResults:           cia.mapChannelResultsToChannelResultsDTO(analysisRes.ChannelResults),
-			Images:                   cia.mapImageToImageDTO(analysisRes.Images),
-		}
-	}
-
-func (cia *cerberusV1) mapImageToImageDTO(images []v1.Image) []imageTO {
-	imagesDTO := make([]imageTO, 0)
-	for _, image := range images {
-		imagesDTO = append(imagesDTO, imageTO{
-			ID:          image.ID,
-			Name:        image.Name,
-			Description: image.Description,
-		})
-	}
-
-	return imagesDTO
-}
-
-func (cia *cerberusV1) mapReagentInfoToReagentInfoDTO(reagentInfos []v1.ReagentInfo) []reagentInfoV1TO {
-	reagentInfoList := make([]reagentInfoV1TO, 0)
-
-	for _, reagentInfoItem := range reagentInfos {
-		reagentInfoList = append(reagentInfoList, reagentInfoV1TO{
-			SerialNumber:            reagentInfoItem.SerialNumber,
-			Name:                    reagentInfoItem.Name,
-			ShelfLife:               reagentInfoItem.ShelfLife,
-			ManufacturerName:        reagentInfoItem.ManufacturerName,
-			ReagentManufacturerDate: reagentInfoItem.ReagentManufacturerDate,
-			ReagentType:             reagentInfoItem.ReagentType.ToString(),
-			DateCreated:             reagentInfoItem.DateCreated,
-		})
-	}
-
-	return reagentInfoList
-}
-
-// TODO: Eliminate and move to model
-func (cia *cerberusV1) mapExtraValuesToExtraValuesDTO(extraValues []v1.ExtraValue) []extraValueV1TO {
-	extraValueList := make([]extraValueV1TO, 0)
-
-	for _, extraValueItem := range extraValues {
-		extraValueList = append(extraValueList, extraValueV1TO{
-			Key:   extraValueItem.Key,
-			Value: extraValueItem.Value,
-		})
-	}
-
-	return extraValueList
-}
-
-func (cia *cerberusV1) mapChannelResultsToChannelResultsDTO(channels []v1.ChannelResult) []channelResultV1TO {
-	channelResultList := make([]channelResultV1TO, 0)
-
-	for _, channel := range channels {
-		channelResultList = append(channelResultList, channelResultV1TO{
-			ChannelID:             channel.ChannelID,
-			QualitativeResult:     channel.QualitativeResult,
-			QualitativeResultEdit: channel.QualitativeResultEdit,
-			QuantitativeResults:   channel.QuantitativeResults,
-			Images:                cia.mapImageToImageDTO(channel.Images),
-		})
-	}
-
-	return channelResultList
-}
-*/
