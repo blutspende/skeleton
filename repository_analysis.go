@@ -1753,6 +1753,7 @@ func convertAnalysisResultToTO(ar AnalysisResult) (AnalysisResultTO, error) {
 			QualitativeResult:     cr.QualitativeResult,
 			QualitativeResultEdit: cr.QualitativeResultEdit,
 			QuantitativeResults:   cr.QuantitativeResults,
+			Images:                make([]ImageTO, 0),
 		}
 		for _, img := range cr.Images {
 			if !img.DeaImageID.Valid {
