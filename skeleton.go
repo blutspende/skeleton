@@ -152,8 +152,6 @@ func (s *skeleton) SubmitAnalysisResult(ctx context.Context, resultData Analysis
 	return nil
 }
 
-const imageContentType = "image/jpeg"
-
 func (s *skeleton) saveImages(ctx context.Context, resultData *AnalysisResult) error {
 	if resultData == nil {
 		return nil
@@ -172,7 +170,7 @@ func (s *skeleton) saveImages(ctx context.Context, resultData *AnalysisResult) e
 			}
 		}
 		filename := fmt.Sprintf("%s_%d.jpg", resultData.ID.String(), i)
-		id, err := s.deaClient.UploadImage(resultData.Images[i].ImageBytes, filename, imageContentType)
+		id, err := s.deaClient.UploadImage(resultData.Images[i].ImageBytes, filename)
 		if err != nil {
 			imageDao.ImageBytes = resultData.Images[i].ImageBytes
 			imageDao.UploadError = sql.NullString{
@@ -207,7 +205,7 @@ func (s *skeleton) saveImages(ctx context.Context, resultData *AnalysisResult) e
 			}
 
 			filename := fmt.Sprintf("%s_chres_%d_%d.jpg", resultData.ID.String(), i, j)
-			id, err := s.deaClient.UploadImage(resultData.ChannelResults[i].Images[j].ImageBytes, filename, imageContentType)
+			id, err := s.deaClient.UploadImage(resultData.ChannelResults[i].Images[j].ImageBytes, filename)
 			if err != nil {
 				imageDao.ImageBytes = resultData.ChannelResults[i].Images[j].ImageBytes
 				imageDao.UploadError = sql.NullString{
