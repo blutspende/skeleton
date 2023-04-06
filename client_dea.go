@@ -10,7 +10,7 @@ import (
 )
 
 type DeaClientV1 interface {
-	UploadImage(fileData []byte, name, contentType string) (uuid.UUID, error)
+	UploadImage(fileData []byte, name string) (uuid.UUID, error)
 }
 
 type deaClientV1 struct {
@@ -29,11 +29,11 @@ func NewDEAClient(deaUrl string, restyClient *resty.Client) (DeaClientV1, error)
 	}, nil
 }
 
-func (dea *deaClientV1) UploadImage(fileData []byte, name, contentType string) (uuid.UUID, error) {
+func (dea *deaClientV1) UploadImage(fileData []byte, name string) (uuid.UUID, error) {
 	var imageID uuid.UUID
 
 	resp, err := dea.client.R().
-		SetFileReader("file", name+"."+contentType, bytes.NewReader(fileData)).
+		SetFileReader("file", name, bytes.NewReader(fileData)).
 		Post(dea.deaUrl + "/v1/image/upload")
 	if err != nil {
 		log.Error().Err(err).Msg("Can not call internal dea api")
