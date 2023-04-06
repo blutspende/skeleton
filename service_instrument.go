@@ -268,7 +268,83 @@ func (s *instrumentService) GetInstrumentByIP(ctx context.Context, ip string) (I
 	if instrument, ok := s.instrumentCache.GetByIP(ip); ok {
 		return instrument, nil
 	}
-	return s.instrumentRepository.GetInstrumentByIP(ctx, ip)
+
+	instrument, err := s.instrumentRepository.GetInstrumentByIP(ctx, ip)
+	if err != nil {
+		return instrument, err
+	}
+	instrumentIDs := []uuid.UUID{instrument.ID}
+
+	protocol, err := s.instrumentRepository.GetProtocolByID(ctx, instrument.ProtocolID)
+	if err != nil {
+		return instrument, err
+	}
+	instrument.ProtocolName = protocol.Name
+
+	analyteMappingsByInstrumentID, err := s.instrumentRepository.GetAnalyteMappings(ctx, instrumentIDs)
+	if err != nil {
+		return instrument, err
+	}
+	analyteMappingsIDs := make([]uuid.UUID, 0)
+	analyteMappingIDInstrumentIDMap := make(map[uuid.UUID]uuid.UUID)
+	analyteMappingsByIDs := make(map[uuid.UUID]*AnalyteMapping)
+
+	for instrumentID, analyteMappings := range analyteMappingsByInstrumentID {
+		instrument.AnalyteMappings = analyteMappings
+		for i := range instrument.AnalyteMappings {
+			analyteMappingsIDs = append(analyteMappingsIDs, analyteMappings[i].ID)
+			analyteMappingIDInstrumentIDMap[analyteMappings[i].ID] = instrumentID
+			analyteMappingsByIDs[analyteMappings[i].ID] = &instrument.AnalyteMappings[i]
+		}
+	}
+	channelMappingsByAnalyteMappingID, err := s.instrumentRepository.GetChannelMappings(ctx, analyteMappingsIDs)
+	if err != nil {
+		return instrument, err
+	}
+	for analyteMappingID, channelMappings := range channelMappingsByAnalyteMappingID {
+		analyteMappingsByIDs[analyteMappingID].ChannelMappings = channelMappings
+	}
+
+	resultMappingsByAnalyteMappingID, err := s.instrumentRepository.GetResultMappings(ctx, analyteMappingsIDs)
+	if err != nil {
+		return instrument, err
+	}
+	for analyteMappingID, resultMappings := range resultMappingsByAnalyteMappingID {
+		analyteMappingsByIDs[analyteMappingID].ResultMappings = resultMappings
+	}
+
+	requestMappingsByInstrumentID, err := s.instrumentRepository.GetRequestMappings(ctx, instrumentIDs)
+	if err != nil {
+		return instrument, err
+	}
+	requestMappingIDs := make([]uuid.UUID, 0)
+	requestMappingsByIDs := make(map[uuid.UUID]*RequestMapping)
+	for _, requestMappings := range requestMappingsByInstrumentID {
+		instrument.RequestMappings = requestMappings
+		for i := range instrument.RequestMappings {
+			requestMappingIDs = append(requestMappingIDs, requestMappings[i].ID)
+			requestMappingsByIDs[requestMappings[i].ID] = &instrument.RequestMappings[i]
+		}
+	}
+
+	requestMappingAnalyteIDs, err := s.instrumentRepository.GetRequestMappingAnalytes(ctx, requestMappingIDs)
+	if err != nil {
+		return instrument, err
+	}
+
+	for requestMappingID, analyteIDs := range requestMappingAnalyteIDs {
+		requestMappingsByIDs[requestMappingID].AnalyteIDs = analyteIDs
+	}
+
+	settingsMap, err := s.instrumentRepository.GetInstrumentsSettings(ctx, instrumentIDs)
+	if err != nil {
+		return instrument, err
+	}
+	if _, ok := settingsMap[instrument.ID]; ok {
+		instrument.Settings = settingsMap[instrument.ID]
+	}
+
+	return instrument, nil
 }
 
 func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Instrument) error {
@@ -623,7 +699,14 @@ func (s *instrumentService) UpsertProtocolAbilities(ctx context.Context, protoco
 }
 
 func (s *instrumentService) UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error {
-	return s.instrumentRepository.UpdateInstrumentStatus(ctx, id, status)
+	err := s.instrumentRepository.UpdateInstrumentStatus(ctx, id, status)
+	if err != nil {
+		return err
+	}
+
+	s.instrumentCache.Invalidate()
+
+	return nil
 }
 
 func (s *instrumentService) EnqueueUnsentInstrumentsToCerberus(ctx context.Context) {
