@@ -512,7 +512,8 @@ func (r *instrumentRepository) GetProtocolAbilities(ctx context.Context, protoco
 
 func (r *instrumentRepository) UpsertProtocolAbilities(ctx context.Context, protocolID uuid.UUID, protocolAbilities []ProtocolAbility) error {
 	query := fmt.Sprintf(`INSERT INTO %s.sk_protocol_abilities(protocol_id, connection_mode, abilities, request_mapping_available)
-		VALUES(:protocol_id, :connection_mode, :abilities, :request_mapping_available) ON CONFLICT (protocol_id, connection_mode, deleted_at)
+		VALUES(:protocol_id, :connection_mode, :abilities, :request_mapping_available)
+		ON CONFLICT (protocol_id, connection_mode) WHERE deleted_at IS NULL
 		DO UPDATE SET abilities = :abilities, request_mapping_available = :request_mapping_available, modified_at = timezone('utc', now());`, r.dbSchema)
 	protocolAbilityDAOs := convertProtocolAbilitiesToDAOs(protocolAbilities, protocolID)
 	// Todo - check and improve it cuz gives error with batch insert. Old and fixed(?): https://github.com/jmoiron/sqlx/issues/505
