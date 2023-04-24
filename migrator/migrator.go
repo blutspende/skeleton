@@ -8,14 +8,15 @@ import (
 	"strings"
 )
 
-var migrations = map[int]string{
-	1: migration_1,
-	2: migration_2,
-	3: migration_3,
-	4: migration_4,
-	5: migration_5,
-	6: migration_6,
-	7: migration_7,
+// in order! do not skip any number
+var migrations = []string{
+	migration_1,
+	migration_2,
+	migration_3,
+	migration_4,
+	migration_5,
+	migration_6,
+	migration_7,
 }
 
 type skeletonMigrator struct {
@@ -39,7 +40,8 @@ func (sm *skeletonMigrator) Run(ctx context.Context, db *sqlx.DB, schemaName str
 	if err != nil {
 		return err
 	}
-	for version, query := range migrations {
+	for i, query := range migrations {
+		version := i + 1
 		if version <= currentVersion {
 			continue
 		}
