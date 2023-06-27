@@ -148,6 +148,7 @@ func (c *cerberus) RegisterInstrument(instrument Instrument) error {
 // SendAnalysisResultBatch Submit a list of AnalysisResults to Cerberus
 func (cia *cerberus) SendAnalysisResultBatch(analysisResults []AnalysisResultTO) (AnalysisResultBatchResponse, error) {
 	if len(analysisResults) < 1 {
+		log.Warn().Msg("Send analysis results batch called with empty array")
 		return AnalysisResultBatchResponse{}, nil
 	}
 
