@@ -7,7 +7,6 @@ import (
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/config"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/db"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/migrator"
-	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/assert"
@@ -16,10 +15,7 @@ import (
 )
 
 func TestRegisterCreatedInstrument(t *testing.T) {
-	postgres := embeddedpostgres.NewDatabase()
-	_ = postgres.Start()
-	defer postgres.Stop()
-	sqlConn, _ := sqlx.Connect("postgres", "host=localhost port=5432 user=postgres password=postgres dbname=postgres sslmode=disable")
+	sqlConn, _ := sqlx.Connect("postgres", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
 	schemaName := "instrument_test"
 	_, _ = sqlConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
 	_, _ = sqlConn.Exec(fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schemaName))
@@ -73,10 +69,7 @@ func TestRegisterCreatedInstrument(t *testing.T) {
 }
 
 func TestUpdateInstrument(t *testing.T) {
-	postgres := embeddedpostgres.NewDatabase()
-	_ = postgres.Start()
-	defer postgres.Stop()
-	sqlConn, _ := sqlx.Connect("postgres", "host=localhost port=5432 user=postgres password=postgres dbname=postgres sslmode=disable")
+	sqlConn, _ := sqlx.Connect("postgres", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
 	schemaName := "instrument_test"
 	_, _ = sqlConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
 	_, _ = sqlConn.Exec(fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schemaName))
@@ -108,7 +101,10 @@ func TestUpdateInstrument(t *testing.T) {
 
 	clientPort := 1234
 
-	instrumentID, err := instrumentService.CreateInstrument(context.Background(), Instrument{
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, "Authorization", "BearerToken")
+
+	instrumentID, err := instrumentService.CreateInstrument(ctx, Instrument{
 		Name:               "TestInstrument",
 		ProtocolID:         protocolID,
 		ProtocolName:       "TestProtocol",
@@ -126,7 +122,7 @@ func TestUpdateInstrument(t *testing.T) {
 	})
 	assert.Nil(t, err)
 
-	instrument, err := instrumentService.GetInstrumentByID(context.Background(), nil, instrumentID, false)
+	instrument, err := instrumentService.GetInstrumentByID(ctx, nil, instrumentID, false)
 	assert.Nil(t, err)
 	assert.Equal(t, "TestInstrument", instrument.Name)
 	assert.Equal(t, protocolID, instrument.ProtocolID)
@@ -134,7 +130,7 @@ func TestUpdateInstrument(t *testing.T) {
 	analyteID1 := uuid.New()
 	channelID1 := uuid.New()
 
-	err = instrumentService.UpdateInstrument(context.Background(), Instrument{
+	err = instrumentService.UpdateInstrument(ctx, Instrument{
 		ID:                 instrumentID,
 		Name:               "TestInstrumentUpdated",
 		ProtocolID:         protocolID,
@@ -187,7 +183,7 @@ func TestUpdateInstrument(t *testing.T) {
 	})
 
 	assert.Nil(t, err)
-	instrument, err = instrumentService.GetInstrumentByID(context.Background(), nil, instrumentID, false)
+	instrument, err = instrumentService.GetInstrumentByID(ctx, nil, instrumentID, false)
 	assert.Equal(t, "TestInstrumentUpdated", instrument.Name)
 	assert.Len(t, instrument.AnalyteMappings, 1)
 	assert.Equal(t, analyteID1, instrument.AnalyteMappings[0].AnalyteID)
@@ -219,7 +215,7 @@ func TestUpdateInstrument(t *testing.T) {
 	analyteID3 := uuid.New()
 	channelID2 := uuid.New()
 
-	err = instrumentService.UpdateInstrument(context.Background(), Instrument{
+	err = instrumentService.UpdateInstrument(ctx, Instrument{
 		ID:                 instrumentID,
 		Name:               "TestInstrumentUpdated2",
 		ProtocolID:         protocolID,
@@ -295,7 +291,7 @@ func TestUpdateInstrument(t *testing.T) {
 	})
 
 	assert.Nil(t, err)
-	instrument, err = instrumentService.GetInstrumentByID(context.Background(), nil, instrumentID, false)
+	instrument, err = instrumentService.GetInstrumentByID(ctx, nil, instrumentID, false)
 	assert.Equal(t, "TestInstrumentUpdated2", instrument.Name)
 	assert.Len(t, instrument.AnalyteMappings, 2)
 

@@ -17,7 +17,6 @@ import (
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/db"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/migrator"
 	"github.com/MicahParks/keyfunc"
-	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	_ "github.com/jackc/pgx/v4/stdlib"
@@ -26,10 +25,7 @@ import (
 )
 
 func TestSkeletonStart(t *testing.T) {
-	postgres := embeddedpostgres.NewDatabase(embeddedpostgres.DefaultConfig().Port(5433))
-	postgres.Start()
-	defer postgres.Stop()
-	sqlConn, err := sqlx.Connect("pgx", "host=localhost port=5433 user=postgres password=postgres dbname=postgres sslmode=disable")
+	sqlConn, err := sqlx.Connect("pgx", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
 	assert.Nil(t, err)
 
 	skeletonApi, err := New(sqlConn, "skeleton")
@@ -49,10 +45,7 @@ func TestSkeletonStart(t *testing.T) {
 }
 
 func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
-	postgres := embeddedpostgres.NewDatabase(embeddedpostgres.DefaultConfig().Port(5433))
-	postgres.Start()
-	defer postgres.Stop()
-	sqlConn, _ := sqlx.Connect("pgx", "host=localhost port=5433 user=postgres password=postgres dbname=postgres sslmode=disable")
+	sqlConn, _ := sqlx.Connect("pgx", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
 
 	schemaName := "testSubmitAnalysisResultsWithoutRequests"
 	_, _ = sqlConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
@@ -91,18 +84,18 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 		registerInstrumentFunc: func(instrument Instrument) error {
 			return nil
 		},
-		sendAnalysisResultBatchFunc: func(analysisResults []AnalysisResult) (AnalysisResultBatchResponse, error) {
+		sendAnalysisResultBatchFunc: func(analysisResults []AnalysisResultTO) (AnalysisResultBatchResponse, error) {
 			result1ID := uuid.MustParse("dcb320af-e842-46af-a4ee-878db18c95a3")
 			result2ID := uuid.MustParse("147bff1c-55e0-4318-8ce5-23e0e12d073e")
 			return AnalysisResultBatchResponse{
 				AnalysisResultBatchItemInfoList: []AnalysisResultBatchItemInfo{
 					{
-						AnalysisResult:           &analysisResultsWithoutAnalysisRequestsTest_analysisResults[0],
+						AnalysisResult:           &analysisResultsWithoutAnalysisRequestsTest_analysisResultTOs[0],
 						CerberusAnalysisResultID: &result1ID,
 						ErrorMessage:             "",
 					},
 					{
-						AnalysisResult:           &analysisResultsWithoutAnalysisRequestsTest_analysisResults[1],
+						AnalysisResult:           &analysisResultsWithoutAnalysisRequestsTest_analysisResultTOs[1],
 						CerberusAnalysisResultID: &result2ID,
 						ErrorMessage:             "",
 					},
@@ -166,25 +159,18 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 
 	time.Sleep(70 * time.Second)
 	assert.Equal(t, 2, len(cerberusClientMock.AnalysisResults))
-	assert.Equal(t, uuid.MustParse("660d1095-c8f6-4899-946e-935bfddfaa69"), cerberusClientMock.AnalysisResults[0].AnalysisRequest.WorkItemID)
-	assert.Equal(t, "TestSampleCode1", cerberusClientMock.AnalysisResults[0].AnalysisRequest.SampleCode)
-	assert.Equal(t, uuid.MustParse("51bfea41-1b7e-48f7-8b35-46d930216de7"), cerberusClientMock.AnalysisResults[0].AnalysisRequest.AnalyteID)
-	assert.Equal(t, analysisResultsWithoutAnalysisRequestsTest_instrument.ID, cerberusClientMock.AnalysisResults[0].Instrument.ID)
+	assert.Equal(t, uuid.MustParse("660d1095-c8f6-4899-946e-935bfddfaa69"), cerberusClientMock.AnalysisResults[0].WorkingItemID)
+	assert.Equal(t, analysisResultsWithoutAnalysisRequestsTest_instrument.ID, cerberusClientMock.AnalysisResults[0].InstrumentID)
 	assert.Equal(t, analysisResultsWithoutAnalysisRequestsTest_analysisResults[0].Result, cerberusClientMock.AnalysisResults[0].Result)
-	assert.Equal(t, uuid.MustParse("55abb455-5c35-464a-aa9b-26ea5690c6ca"), cerberusClientMock.AnalysisResults[1].AnalysisRequest.WorkItemID)
-	assert.Equal(t, "TestSampleCode2", cerberusClientMock.AnalysisResults[1].AnalysisRequest.SampleCode)
-	assert.Equal(t, uuid.MustParse("51bfea41-1b7e-48f7-8b35-46d930216de7"), cerberusClientMock.AnalysisResults[1].AnalysisRequest.AnalyteID)
-	assert.Equal(t, analysisResultsWithoutAnalysisRequestsTest_instrument.ID, cerberusClientMock.AnalysisResults[1].Instrument.ID)
+	assert.Equal(t, uuid.MustParse("55abb455-5c35-464a-aa9b-26ea5690c6ca"), cerberusClientMock.AnalysisResults[1].WorkingItemID)
+	assert.Equal(t, analysisResultsWithoutAnalysisRequestsTest_instrument.ID, cerberusClientMock.AnalysisResults[1].InstrumentID)
 	assert.Equal(t, analysisResultsWithoutAnalysisRequestsTest_analysisResults[1].Result, cerberusClientMock.AnalysisResults[1].Result)
 	assert.NotEqual(t, AnalysisResultBatchItemInfo{}, cerberusClientMock.BatchResponse)
 }
 
 // Todo - Complete the test
 func TestSubmitAnalysisResultWithRequests(t *testing.T) {
-	postgres := embeddedpostgres.NewDatabase(embeddedpostgres.DefaultConfig().Port(5433))
-	postgres.Start()
-	defer postgres.Stop()
-	sqlConn, _ := sqlx.Connect("pgx", "host=localhost port=5433 user=postgres password=postgres dbname=postgres sslmode=disable")
+	sqlConn, _ := sqlx.Connect("pgx", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
 
 	schemaName := "testSubmitAnalysisResultsWithRequests"
 	_, _ = sqlConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
@@ -214,6 +200,11 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 		},
 	}
 	skeletonManager := NewSkeletonManager()
+	skeletonManager.SetCallbackHandler(&skeletonCallbackHandlerV1Mock{
+		handleAnalysisRequestsFunc: func(request []AnalysisRequest) error {
+			return nil
+		},
+	})
 	cerberusClientMock := &cerberusClientMock{
 		registerInstrumentFunc: func(instrument Instrument) error {
 			return nil
@@ -326,13 +317,12 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 			BatchID:                  batchID,
 			Result:                   "pos",
 			ResultMode:               "TEST",
-			Status:                   "",
-			ResultYieldDateTime:      time.Now().Add(-2 * time.Minute),
+			Status:                   "PRE",
+			ResultYieldDateTime:      nil,
 			ValidUntil:               time.Now().Add(1 * time.Minute),
 			Operator:                 "TestOperator",
-			TechnicalReleaseDateTime: time.Now(),
+			TechnicalReleaseDateTime: nil,
 			InstrumentRunID:          uuid.Nil,
-			RunCounter:               1,
 			Edited:                   false,
 			EditReason:               "",
 			WarnFlag:                 false,
@@ -351,13 +341,12 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 			BatchID:                  batchID,
 			Result:                   "pos",
 			ResultMode:               "TEST",
-			Status:                   "",
-			ResultYieldDateTime:      time.Now().Add(-1 * time.Minute),
+			Status:                   "PRE",
+			ResultYieldDateTime:      nil,
 			ValidUntil:               time.Now().Add(2 * time.Minute),
 			Operator:                 "TestOperator",
-			TechnicalReleaseDateTime: time.Now(),
+			TechnicalReleaseDateTime: nil,
 			InstrumentRunID:          uuid.Nil,
-			RunCounter:               1,
 			Edited:                   false,
 			EditReason:               "",
 			WarnFlag:                 false,
@@ -450,15 +439,15 @@ func (m *authManagerMock) InvalidateClientCredential() {
 type deaClientMock struct {
 }
 
-func (m *deaClientMock) UploadImage(fileData []byte, name, contentType string) (uuid.UUID, error) {
+func (m *deaClientMock) UploadImage(fileData []byte, name string) (uuid.UUID, error) {
 	return uuid.New(), nil
 }
 
 type cerberusClientMock struct {
 	registerInstrumentFunc      func(instrument Instrument) error
-	sendAnalysisResultBatchFunc func(analysisResults []AnalysisResult) (AnalysisResultBatchResponse, error)
+	sendAnalysisResultBatchFunc func(analysisResults []AnalysisResultTO) (AnalysisResultBatchResponse, error)
 
-	AnalysisResults []AnalysisResult
+	AnalysisResults []AnalysisResultTO
 	BatchResponse   AnalysisResultBatchResponse
 }
 
@@ -469,7 +458,7 @@ func (m *cerberusClientMock) RegisterInstrument(instrument Instrument) error {
 	return m.registerInstrumentFunc(instrument)
 }
 
-func (m *cerberusClientMock) SendAnalysisResultBatch(analysisResults []AnalysisResult) (AnalysisResultBatchResponse, error) {
+func (m *cerberusClientMock) SendAnalysisResultBatch(analysisResults []AnalysisResultTO) (AnalysisResultBatchResponse, error) {
 	m.AnalysisResults = append(m.AnalysisResults, analysisResults...)
 	if m.sendAnalysisResultBatchFunc == nil {
 		return AnalysisResultBatchResponse{}, errors.New("not implemented")
@@ -489,13 +478,12 @@ var analysisResultsWithoutAnalysisRequestsTest_analysisResults = []AnalysisResul
 		BatchID:                  uuid.MustParse("ddd34c4d-62f9-4621-bb16-efad459a9bfe"),
 		Result:                   "pos",
 		ResultMode:               "TEST",
-		Status:                   "",
-		ResultYieldDateTime:      time.Now().Add(-2 * time.Minute),
+		Status:                   "PRE",
+		ResultYieldDateTime:      nil,
 		ValidUntil:               time.Now().Add(1 * time.Minute),
 		Operator:                 "TestOperator",
-		TechnicalReleaseDateTime: time.Now(),
+		TechnicalReleaseDateTime: nil,
 		InstrumentRunID:          uuid.Nil,
-		RunCounter:               1,
 		Edited:                   false,
 		EditReason:               "",
 		WarnFlag:                 false,
@@ -514,13 +502,12 @@ var analysisResultsWithoutAnalysisRequestsTest_analysisResults = []AnalysisResul
 		BatchID:                  uuid.MustParse("ddd34c4d-62f9-4621-bb16-efad459a9bfe"),
 		Result:                   "pos",
 		ResultMode:               "TEST",
-		Status:                   "",
-		ResultYieldDateTime:      time.Now().Add(-1 * time.Minute),
+		Status:                   "PRE",
+		ResultYieldDateTime:      nil,
 		ValidUntil:               time.Now().Add(2 * time.Minute),
 		Operator:                 "TestOperator",
-		TechnicalReleaseDateTime: time.Now(),
+		TechnicalReleaseDateTime: nil,
 		InstrumentRunID:          uuid.Nil,
-		RunCounter:               1,
 		Edited:                   false,
 		EditReason:               "",
 		WarnFlag:                 false,
@@ -529,6 +516,47 @@ var analysisResultsWithoutAnalysisRequestsTest_analysisResults = []AnalysisResul
 		ExtraValues:              []ExtraValue{},
 		ReagentInfos:             []ReagentInfo{},
 		Images:                   []Image{},
+	},
+}
+
+var analysisResultsWithoutAnalysisRequestsTest_analysisResultTOs = []AnalysisResultTO{
+	{
+		InstrumentID:             analysisResultsWithoutAnalysisRequestsTest_instrument.ID,
+		Result:                   "pos",
+		Mode:                     "TEST",
+		Status:                   "PRE",
+		ResultYieldDateTime:      nil,
+		ValidUntil:               time.Now().Add(1 * time.Minute),
+		Operator:                 "TestOperator",
+		TechnicalReleaseDateTime: nil,
+		InstrumentRunID:          uuid.Nil,
+		Edited:                   false,
+		EditReason:               "",
+		WarnFlag:                 false,
+		Warnings:                 []string{"test warning"},
+		ChannelResults:           []ChannelResultTO{},
+		ExtraValues:              []ExtraValueTO{},
+		ReagentInfos:             []ReagentInfoTO{},
+		Images:                   []ImageTO{},
+	},
+	{
+		InstrumentID:             analysisResultsWithoutAnalysisRequestsTest_instrument.ID,
+		Result:                   "pos",
+		Mode:                     "TEST",
+		Status:                   "PRE",
+		ResultYieldDateTime:      nil,
+		ValidUntil:               time.Now().Add(2 * time.Minute),
+		Operator:                 "TestOperator",
+		TechnicalReleaseDateTime: nil,
+		InstrumentRunID:          uuid.Nil,
+		Edited:                   false,
+		EditReason:               "",
+		WarnFlag:                 false,
+		Warnings:                 []string{},
+		ChannelResults:           []ChannelResultTO{},
+		ExtraValues:              []ExtraValueTO{},
+		ReagentInfos:             []ReagentInfoTO{},
+		Images:                   []ImageTO{},
 	},
 }
 

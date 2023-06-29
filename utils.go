@@ -101,7 +101,11 @@ func isSorted(pageable Pageable) bool {
 func applyPagination(pageable Pageable, tableAlias, defaultSort string) string {
 	var paginationQueryPart string
 	if isSorted(pageable) {
-		paginationQueryPart += " ORDER BY " + tableAlias + "." + pageable.Sort
+		var tableAliasWithDot = ""
+		if tableAlias != "" {
+			tableAliasWithDot = tableAlias + "."
+		}
+		paginationQueryPart += " ORDER BY " + tableAliasWithDot + pageable.Sort
 		if pageable.Direction != SortNone {
 			paginationQueryPart += " " + strings.ToUpper(pageable.Direction.String())
 		}

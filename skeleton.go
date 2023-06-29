@@ -111,9 +111,6 @@ func (s *skeleton) SubmitAnalysisResult(ctx context.Context, resultData Analysis
 	if resultData.Instrument.ID == uuid.Nil {
 		return errors.New("instrument ID is missing")
 	}
-	if resultData.TechnicalReleaseDateTime.IsZero() {
-		return errors.New("technical release date-time is missing")
-	}
 
 	if resultData.ResultMode == "" {
 		resultData.ResultMode = resultData.Instrument.ResultMode

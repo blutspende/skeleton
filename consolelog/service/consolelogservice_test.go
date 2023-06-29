@@ -3,6 +3,7 @@ package service
 import (
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/consolelog/model"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/consolelog/repository"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/server"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -10,7 +11,8 @@ import (
 
 func TestMessages(t *testing.T) {
 	consoleLogRepository := repository.NewConsoleLogRepository(5)
-	consoleLogService := NewConsoleLogService(consoleLogRepository, nil)
+	consoleLogSSEServer := server.NewConsoleLogSSEServer(nil)
+	consoleLogService := NewConsoleLogService(consoleLogRepository, consoleLogSSEServer)
 
 	instrumentID := uuid.MustParse("845b73b5-c92d-4797-93a6-0165b3366404")
 
