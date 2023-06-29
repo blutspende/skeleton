@@ -224,12 +224,11 @@ type AnalysisResult struct {
 	Result                   string
 	ResultMode               ResultMode
 	Status                   ResultStatus
-	ResultYieldDateTime      time.Time
+	ResultYieldDateTime      *time.Time
 	ValidUntil               time.Time
 	Operator                 string
-	TechnicalReleaseDateTime time.Time
+	TechnicalReleaseDateTime *time.Time
 	InstrumentRunID          uuid.UUID
-	RunCounter               int
 	Edited                   bool
 	EditReason               string
 	WarnFlag                 bool // Todo use it
@@ -279,6 +278,7 @@ type AnalysisRequestInfo struct {
 	WorkItemID        uuid.UUID
 	AnalyteID         uuid.UUID
 	RequestCreatedAt  time.Time
+	ResultCreatedAt   *time.Time
 	ResultID          *uuid.UUID
 	AnalyteMappingsID *uuid.UUID
 	TestName          *string

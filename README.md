@@ -30,15 +30,14 @@ workItemId               uuid.UUID  Reference to the Workitem
 validUntil               time.Time  Time-Limit until when the result can be regarded as valid 
 status                   enum "FIN" = Final results, "PRE" = Preliminary results
 mode                     enum "TEST" = Testsystem, do not process further, "VAL" = Validation mode = Process but dont export, "PROD" = do everything
-resultYieldDateTime      time.Time When the result was yield
+resultYieldDateTime      *time.Time When the result was yield
 examinedMaterial         uuid.UUID The material (different from request) that was actually examined
 result                   string 
 operator                 string
-technicalReleaseDateTime time.time
+technicalReleaseDateTime *time.time
 instrumentId             uuid.UUID
 instrumentRunId          uuid.UUID
 reagentInfos
-runCounter               int
 extraValues              []ExtraValues
 resultEdit               bool
 editReason               string

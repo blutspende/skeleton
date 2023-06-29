@@ -12,10 +12,10 @@ import (
 )
 
 func TestSkeletonMigrations(t *testing.T) {
-	postgres := embeddedpostgres.NewDatabase()
+	postgres := embeddedpostgres.NewDatabase(embeddedpostgres.DefaultConfig().Port(5551))
 	postgres.Start()
 	defer postgres.Stop()
-	dbConn, err := sqlx.Connect("postgres", "host=localhost port=5432 user=postgres password=postgres dbname=postgres sslmode=disable")
+	dbConn, err := sqlx.Connect("postgres", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
 
 	schemaName := "test"
 	assert.Nil(t, err)
@@ -42,5 +42,5 @@ func TestSkeletonMigrations(t *testing.T) {
 	assert.Nil(t, err)
 
 	//MODIFY THE EXPECTED VERSION AFTER ADDING NEW SKELETON MIGRATION!!!
-	assert.Equal(t, 1, version)
+	assert.Equal(t, 8, version)
 }

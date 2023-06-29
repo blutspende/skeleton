@@ -9,7 +9,7 @@ import (
 
 func TestSliceContains(t *testing.T) {
 
-	fruits := []string{"cherry", "banana", "pineapple",
+	fruits := []string{"cherry", "banana", "pineapple", "apple",
 		"peach", "pea", "ananas", "elderberry", "blackberry", "strawberry"}
 
 	assert.True(t, utils.SliceContains("apple", fruits))

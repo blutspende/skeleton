@@ -66,14 +66,13 @@ type AnalysisResultTO struct {
 	ValidUntil               time.Time         `json:"validUntil"`
 	Status                   string            `json:"status"`
 	Mode                     string            `json:"mode"` // ResultMode
-	ResultYieldDateTime      time.Time         `json:"resultYieldDateTime"`
+	ResultYieldDateTime      *time.Time        `json:"resultYieldDateTime"`
 	ExaminedMaterial         uuid.UUID         `json:"examinedMaterial"`
 	Result                   string            `json:"result"`
 	Operator                 string            `json:"operator"`
-	TechnicalReleaseDateTime time.Time         `json:"technicalReleaseDateTime"`
+	TechnicalReleaseDateTime *time.Time        `json:"technicalReleaseDateTime"`
 	InstrumentID             uuid.UUID         `json:"instrumentId"`
-	InstrumentRunID          uuid.UUID         `json:"instrumentRunId" `
-	RunCounter               int               `json:"runCounter" `
+	InstrumentRunID          uuid.UUID         `json:"instrumentRunId"`
 	Edited                   bool              `json:"resultEdit"`
 	EditReason               string            `json:"editReason"`
 	ChannelResults           []ChannelResultTO `json:"channelResults"`

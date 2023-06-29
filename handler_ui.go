@@ -112,6 +112,7 @@ type analysisRequestInfoTO struct {
 	TestName         *string    `json:"testName"`
 	TestResult       *string    `json:"testResult"`
 	BatchCreatedAt   *time.Time `json:"transmissionDate"`
+	ResultCreatedAt  *time.Time `json:"resultCreatedAt"`
 	Status           string     `json:"status"`
 	//SentToCerberusAt  *time.Time `json:"-"`
 	SourceIP string `json:"sourceIP"` // Todo
@@ -808,6 +809,7 @@ func convertAnalysisRequestInfoToAnalysisRequestInfoTO(analysisRequestInfo Analy
 		TestResult:       analysisRequestInfo.TestResult,
 		RequestCreatedAt: analysisRequestInfo.RequestCreatedAt,
 		BatchCreatedAt:   analysisRequestInfo.BatchCreatedAt,
+		ResultCreatedAt:  analysisRequestInfo.ResultCreatedAt,
 		Status:           analysisRequestInfo.Status,
 		SourceIP:         analysisRequestInfo.SourceIP,
 		MappingError:     analysisRequestInfo.MappingError,

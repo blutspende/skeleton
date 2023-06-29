@@ -78,11 +78,10 @@ type analysisResultDAO struct {
 	Result                   string            `db:"result"`
 	Status                   ResultStatus      `db:"status"`
 	ResultMode               ResultMode        `db:"result_mode"`
-	YieldedAt                time.Time         `db:"yielded_at"`
+	YieldedAt                sql.NullTime      `db:"yielded_at"`
 	ValidUntil               time.Time         `db:"valid_until"`
 	Operator                 string            `db:"operator"`
-	TechnicalReleaseDateTime time.Time         `db:"technical_release_datetime"`
-	RunCounter               int               `db:"run_counter"`
+	TechnicalReleaseDateTime sql.NullTime      `db:"technical_release_datetime"`
 	Edited                   bool              `db:"edited"`
 	EditReason               sql.NullString    `db:"edit_reason"`
 	AnalyteMapping           analyteMappingDAO `db:"analyte_mapping"`
@@ -157,6 +156,7 @@ type analysisRequestInfoDAO struct {
 	WorkItemID        uuid.UUID      `db:"work_item_id"`
 	AnalyteID         uuid.UUID      `db:"analyte_id"`
 	RequestCreatedAt  time.Time      `db:"request_date"`
+	ResultCreatedAt   sql.NullTime   `db:"result_date"`
 	AnalyteMappingsID uuid.NullUUID  `db:"analyte_mapping_id"`
 	ResultID          uuid.NullUUID  `db:"result_id"`
 	TestName          sql.NullString `db:"test_name"`
@@ -405,7 +405,9 @@ func (r *analysisRepository) GetAnalysisRequestsInfo(ctx context.Context, instru
 		"instrument_id": instrumentID,
 	}
 
-	query := `SELECT req.id AS request_id,
+	query := `select * from (
+        SELECT distinct on (req.created_at, req.id)
+       req.id AS request_id,
 	   req.sample_code AS sample_code,
 	   req.work_item_id AS work_item_id,
 	   req.analyte_id AS analyte_id,
@@ -413,20 +415,24 @@ func (r *analysisRepository) GetAnalysisRequestsInfo(ctx context.Context, instru
 	   am.analyte_id as analyte_mapping_id,
 	   res.id AS result_id,
 	   res."result" AS test_result,
+       res.created_at AS result_date,
 	   i.hostname as source_ip,
 	   i.id as instrument_id
 FROM %schema_name%.sk_analysis_requests req
 LEFT JOIN %schema_name%.sk_analysis_results res ON (res.sample_code = req.sample_code and res.instrument_id = :instrument_id)
+LEFT JOIN %schema_name%.sk_analysis_results res2 ON (res2.sample_code = req.sample_code AND res2.instrument_id = :instrument_id AND res.created_at < res2.created_at)
 LEFT JOIN %schema_name%.sk_instruments i ON i.id = res.instrument_id
 LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = i.id AND req.analyte_id = am.analyte_id
-WHERE 1 = 1`
+WHERE res2 IS NULL`
 
-	countQuery := `SELECT count(req.id)
+	countQuery := `select count(request_id) from (
+    SELECT distinct on (req.created_at, req.id) req.id as request_id
 FROM %schema_name%.sk_analysis_requests req
 LEFT JOIN %schema_name%.sk_analysis_results res ON (res.sample_code = req.sample_code and res.instrument_id = :instrument_id)
+LEFT JOIN %schema_name%.sk_analysis_results res2 ON (res2.sample_code = req.sample_code AND res2.instrument_id = :instrument_id AND res.created_at < res2.created_at)
 LEFT JOIN %schema_name%.sk_instruments i ON i.id = res.instrument_id
 LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = i.id AND req.analyte_id = am.analyte_id
-WHERE 1 = 1`
+WHERE res2 IS NULL`
 
 	if filter.TimeFrom != nil {
 		preparedValues["time_from"] = filter.TimeFrom.UTC()
@@ -443,7 +449,11 @@ WHERE 1 = 1`
 	}
 
 	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
-	query += applyPagination(filter.Pageable, "req", "req.created_at DESC, req.id") + `;`
+
+	query += ` order by req.created_at desc, req.id) as sub `
+	countQuery += `) as sub `
+
+	query += applyPagination(filter.Pageable, "", "") + `;`
 
 	countQuery = strings.ReplaceAll(countQuery, "%schema_name%", r.dbSchema)
 
@@ -776,8 +786,8 @@ func (r *analysisRepository) createAnalysisResultsBatch(ctx context.Context, ana
 			analysisResults[i].ID = uuid.New()
 		}
 	}
-	query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_results(id, analyte_mapping_id, instrument_id, sample_code, instrument_run_id, result_record_id, batch_id, "result", status, result_mode, yielded_at, valid_until, operator, technical_release_datetime, run_counter, edited, edit_reason)
-		VALUES(:id, :analyte_mapping_id, :instrument_id, :sample_code, :instrument_run_id, :result_record_id, :batch_id, :result, :status, :result_mode, :yielded_at, :valid_until, :operator, :technical_release_datetime, :run_counter, :edited, :edit_reason);`, r.dbSchema)
+	query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_results(id, analyte_mapping_id, instrument_id, sample_code, instrument_run_id, result_record_id, batch_id, "result", status, result_mode, yielded_at, valid_until, operator, technical_release_datetime, edited, edit_reason)
+		VALUES(:id, :analyte_mapping_id, :instrument_id, :sample_code, :instrument_run_id, :result_record_id, :batch_id, :result, :status, :result_mode, :yielded_at, :valid_until, :operator, :technical_release_datetime, :edited, :edit_reason);`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, convertAnalysisResultsToDAOs(analysisResults))
 	if err != nil {
 		log.Error().Err(err).Msg("create analysis result batch failed")
@@ -1707,7 +1717,6 @@ func convertAnalysisResultToTO(ar AnalysisResult) (AnalysisResultTO, error) {
 		TechnicalReleaseDateTime: ar.TechnicalReleaseDateTime,
 		InstrumentID:             ar.Instrument.ID,
 		InstrumentRunID:          ar.InstrumentRunID,
-		RunCounter:               ar.RunCounter,
 		Edited:                   ar.Edited,
 		EditReason:               ar.EditReason,
 		ChannelResults:           make([]ChannelResultTO, 0),
@@ -1879,27 +1888,41 @@ func convertAnalysisRequestDAOsToAnalysisRequests(analysisRequestDAOs []analysis
 }
 
 func convertAnalysisResultToDAO(analysisResult AnalysisResult) analysisResultDAO {
-	return analysisResultDAO{
-		ID:                       analysisResult.ID,
-		AnalyteMappingID:         analysisResult.AnalyteMapping.ID,
-		InstrumentID:             analysisResult.Instrument.ID,
-		ResultMode:               analysisResult.ResultMode,
-		SampleCode:               analysisResult.SampleCode,
-		InstrumentRunID:          analysisResult.InstrumentRunID,
-		ResultRecordID:           analysisResult.ResultRecordID,
-		BatchID:                  analysisResult.BatchID,
-		Result:                   analysisResult.Result,
-		Status:                   analysisResult.Status,
-		YieldedAt:                analysisResult.ResultYieldDateTime,
-		ValidUntil:               analysisResult.ValidUntil,
-		Operator:                 analysisResult.Operator,
-		TechnicalReleaseDateTime: analysisResult.TechnicalReleaseDateTime,
-		Edited:                   analysisResult.Edited,
+	analysisResultDAO := analysisResultDAO{
+		ID:               analysisResult.ID,
+		AnalyteMappingID: analysisResult.AnalyteMapping.ID,
+		InstrumentID:     analysisResult.Instrument.ID,
+		ResultMode:       analysisResult.ResultMode,
+		SampleCode:       analysisResult.SampleCode,
+		InstrumentRunID:  analysisResult.InstrumentRunID,
+		ResultRecordID:   analysisResult.ResultRecordID,
+		BatchID:          analysisResult.BatchID,
+		Result:           analysisResult.Result,
+		Status:           analysisResult.Status,
+		ValidUntil:       analysisResult.ValidUntil,
+		Operator:         analysisResult.Operator,
+		Edited:           analysisResult.Edited,
 		EditReason: sql.NullString{
 			String: analysisResult.EditReason,
 			Valid:  true,
 		},
 	}
+
+	if analysisResult.ResultYieldDateTime != nil {
+		analysisResultDAO.YieldedAt = sql.NullTime{
+			Time:  *analysisResult.ResultYieldDateTime,
+			Valid: true,
+		}
+	}
+
+	if analysisResult.TechnicalReleaseDateTime != nil {
+		analysisResultDAO.TechnicalReleaseDateTime = sql.NullTime{
+			Time:  *analysisResult.TechnicalReleaseDateTime,
+			Valid: true,
+		}
+	}
+
+	return analysisResultDAO
 }
 
 func convertAnalysisResultsToDAOs(analysisResults []AnalysisResult) []analysisResultDAO {
@@ -1910,33 +1933,40 @@ func convertAnalysisResultsToDAOs(analysisResults []AnalysisResult) []analysisRe
 	return DAOs
 }
 
-func convertAnalysisResultDAOToAnalysisResult(analysisResult analysisResultDAO) AnalysisResult {
-	return AnalysisResult{
-		ID:             analysisResult.ID,
-		AnalyteMapping: convertAnalyteMappingDaoToAnalyteMapping(analysisResult.AnalyteMapping),
+func convertAnalysisResultDAOToAnalysisResult(analysisResultDAO analysisResultDAO) AnalysisResult {
+	analysisResult := AnalysisResult{
+		ID:             analysisResultDAO.ID,
+		AnalyteMapping: convertAnalyteMappingDaoToAnalyteMapping(analysisResultDAO.AnalyteMapping),
 		Instrument: Instrument{
-			ID: analysisResult.InstrumentID,
+			ID: analysisResultDAO.InstrumentID,
 		},
-		SampleCode:               analysisResult.SampleCode,
-		ResultRecordID:           analysisResult.ResultRecordID,
-		BatchID:                  analysisResult.BatchID,
-		Result:                   analysisResult.Result,
-		ResultMode:               analysisResult.ResultMode,
-		Status:                   analysisResult.Status,
-		ResultYieldDateTime:      analysisResult.YieldedAt,
-		ValidUntil:               analysisResult.ValidUntil,
-		Operator:                 analysisResult.Operator,
-		TechnicalReleaseDateTime: analysisResult.TechnicalReleaseDateTime,
-		InstrumentRunID:          analysisResult.InstrumentRunID,
-		RunCounter:               analysisResult.RunCounter,
-		Edited:                   analysisResult.Edited,
-		EditReason:               nullStringToString(analysisResult.EditReason),
-		Warnings:                 convertAnalysisWarningDAOsToWarnings(analysisResult.Warnings),
-		ChannelResults:           convertChannelResultDAOsToChannelResults(analysisResult.ChannelResults),
-		ExtraValues:              convertExtraValueDAOsToExtraValues(analysisResult.ExtraValues),
-		ReagentInfos:             convertReagentInfoDAOsToReagentInfoList(analysisResult.ReagentInfos),
-		Images:                   convertImageDAOsToImages(analysisResult.Images),
+		SampleCode:      analysisResultDAO.SampleCode,
+		ResultRecordID:  analysisResultDAO.ResultRecordID,
+		BatchID:         analysisResultDAO.BatchID,
+		Result:          analysisResultDAO.Result,
+		ResultMode:      analysisResultDAO.ResultMode,
+		Status:          analysisResultDAO.Status,
+		ValidUntil:      analysisResultDAO.ValidUntil,
+		Operator:        analysisResultDAO.Operator,
+		InstrumentRunID: analysisResultDAO.InstrumentRunID,
+		Edited:          analysisResultDAO.Edited,
+		EditReason:      nullStringToString(analysisResultDAO.EditReason),
+		Warnings:        convertAnalysisWarningDAOsToWarnings(analysisResultDAO.Warnings),
+		ChannelResults:  convertChannelResultDAOsToChannelResults(analysisResultDAO.ChannelResults),
+		ExtraValues:     convertExtraValueDAOsToExtraValues(analysisResultDAO.ExtraValues),
+		ReagentInfos:    convertReagentInfoDAOsToReagentInfoList(analysisResultDAO.ReagentInfos),
+		Images:          convertImageDAOsToImages(analysisResultDAO.Images),
 	}
+
+	if analysisResultDAO.YieldedAt.Valid {
+		analysisResult.ResultYieldDateTime = &analysisResultDAO.YieldedAt.Time
+	}
+
+	if analysisResultDAO.TechnicalReleaseDateTime.Valid {
+		analysisResult.TechnicalReleaseDateTime = &analysisResultDAO.TechnicalReleaseDateTime.Time
+	}
+
+	return analysisResult
 }
 
 func convertAnalysisResultDAOsToAnalysisResults(analysisResults []analysisResultDAO) []AnalysisResult {
@@ -2131,7 +2161,7 @@ func convertRequestInfoDAOToRequestInfo(analysisRequestInfoDAO analysisRequestIn
 		ResultID:          nullUUIDToUUIDPointer(analysisRequestInfoDAO.ResultID),
 		AnalyteMappingsID: nullUUIDToUUIDPointer(analysisRequestInfoDAO.AnalyteMappingsID),
 		TestName:          nullStringToStringPointer(analysisRequestInfoDAO.TestName),
-		TestResult:        nullStringToStringPointer(analysisRequestInfoDAO.TestName),
+		TestResult:        nullStringToStringPointer(analysisRequestInfoDAO.TestResult),
 		BatchCreatedAt:    nullTimeToTimePointer(analysisRequestInfoDAO.BatchCreatedAt),
 		Status:            AnalysisRequestStatusOpen,
 		SentToCerberusAt:  nullTimeToTimePointer(analysisRequestInfoDAO.SentToCerberusAt),
@@ -2146,6 +2176,10 @@ func convertRequestInfoDAOToRequestInfo(analysisRequestInfoDAO analysisRequestIn
 
 	if !analysisRequestInfoDAO.AnalyteMappingsID.Valid {
 		analysisRequestInfo.MappingError = true
+	}
+
+	if analysisRequestInfoDAO.ResultCreatedAt.Valid {
+		analysisRequestInfo.ResultCreatedAt = &analysisRequestInfoDAO.ResultCreatedAt.Time
 	}
 
 	return analysisRequestInfo
