@@ -108,7 +108,7 @@ type analysisRequestInfoTO struct {
 	AnalyteID  uuid.UUID `json:"analyteId"`
 	//AnalyteMappingsID *uuid.UUID `json:"-"`
 	WorkItemID       uuid.UUID  `json:"workitemId"` // Todo
-	RequestCreatedAt time.Time  `json:"createdAt"`
+	RequestCreatedAt time.Time  `json:"requestCreatedAt"`
 	TestName         *string    `json:"testName"`
 	TestResult       *string    `json:"testResult"`
 	BatchCreatedAt   *time.Time `json:"transmissionDate"`
@@ -121,15 +121,15 @@ type analysisRequestInfoTO struct {
 }
 
 type analysisResultInfoTO struct {
-	ID              uuid.UUID  `json:"id"`
-	RequestDate     *time.Time `json:"requestDate"`
-	WorkItemID      *uuid.UUID `json:"workItemId"`
-	SampleCode      string     `json:"sampleCode"`
-	AnalyteID       uuid.UUID  `json:"analyteId"`
-	ResultCreatedAt time.Time  `json:"transmissionDate"`
-	TestName        *string    `json:"testName"`
-	TestResult      *string    `json:"testResult"`
-	Status          string     `json:"status"`
+	ID               uuid.UUID  `json:"id"`
+	RequestCreatedAt *time.Time `json:"requestCreatedAt"`
+	WorkItemID       *uuid.UUID `json:"workItemId"`
+	SampleCode       string     `json:"sampleCode"`
+	AnalyteID        uuid.UUID  `json:"analyteId"`
+	ResultCreatedAt  time.Time  `json:"resultCreatedAt"`
+	TestName         *string    `json:"testName"`
+	TestResult       *string    `json:"testResult"`
+	Status           string     `json:"status"`
 }
 
 type analysisBatchTO struct {
@@ -818,15 +818,15 @@ func convertAnalysisRequestInfoToAnalysisRequestInfoTO(analysisRequestInfo Analy
 
 func convertAnalysisResultInfoToAnalysisResultInfoTO(analysisResultInfo AnalysisResultInfo) analysisResultInfoTO {
 	return analysisResultInfoTO{
-		ID:              analysisResultInfo.ID,
-		RequestDate:     analysisResultInfo.RequestDate,
-		WorkItemID:      analysisResultInfo.WorkItemID,
-		SampleCode:      analysisResultInfo.SampleCode,
-		AnalyteID:       analysisResultInfo.AnalyteID,
-		ResultCreatedAt: analysisResultInfo.ResultCreatedAt,
-		TestName:        analysisResultInfo.TestName,
-		TestResult:      analysisResultInfo.TestResult,
-		Status:          analysisResultInfo.Status,
+		ID:               analysisResultInfo.ID,
+		RequestCreatedAt: analysisResultInfo.RequestCreatedAt,
+		WorkItemID:       analysisResultInfo.WorkItemID,
+		SampleCode:       analysisResultInfo.SampleCode,
+		AnalyteID:        analysisResultInfo.AnalyteID,
+		ResultCreatedAt:  analysisResultInfo.ResultCreatedAt,
+		TestName:         analysisResultInfo.TestName,
+		TestResult:       analysisResultInfo.TestResult,
+		Status:           analysisResultInfo.Status,
 	}
 }
 

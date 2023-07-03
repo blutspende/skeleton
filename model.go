@@ -292,16 +292,16 @@ type AnalysisRequestInfo struct {
 }
 
 type AnalysisResultInfo struct {
-	ID              uuid.UUID
-	BatchID         *uuid.UUID
-	RequestDate     *time.Time
-	WorkItemID      *uuid.UUID
-	SampleCode      string
-	AnalyteID       uuid.UUID
-	ResultCreatedAt time.Time
-	TestName        *string
-	TestResult      *string
-	Status          string
+	ID               uuid.UUID
+	BatchID          *uuid.UUID
+	RequestCreatedAt *time.Time
+	WorkItemID       *uuid.UUID
+	SampleCode       string
+	AnalyteID        uuid.UUID
+	ResultCreatedAt  time.Time
+	TestName         *string
+	TestResult       *string
+	Status           string
 }
 
 type AnalysisBatch struct {
