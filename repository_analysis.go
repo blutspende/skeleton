@@ -155,8 +155,8 @@ type analysisRequestInfoDAO struct {
 	SampleCode        string         `db:"sample_code"`
 	WorkItemID        uuid.UUID      `db:"work_item_id"`
 	AnalyteID         uuid.UUID      `db:"analyte_id"`
-	RequestCreatedAt  time.Time      `db:"request_date"`
-	ResultCreatedAt   sql.NullTime   `db:"result_date"`
+	RequestCreatedAt  time.Time      `db:"request_created_at"`
+	ResultCreatedAt   sql.NullTime   `db:"result_created_at"`
 	AnalyteMappingsID uuid.NullUUID  `db:"analyte_mapping_id"`
 	ResultID          uuid.NullUUID  `db:"result_id"`
 	TestName          sql.NullString `db:"test_name"`
@@ -168,16 +168,16 @@ type analysisRequestInfoDAO struct {
 }
 
 type analysisResultInfoDAO struct {
-	ID              uuid.UUID      `db:"result_id"`
-	BatchID         uuid.NullUUID  `db:"batch_id"`
-	RequestDate     sql.NullTime   `db:"request_date"`
-	WorkItemID      uuid.NullUUID  `db:"work_item_id"`
-	SampleCode      string         `db:"sample_code"`
-	AnalyteID       uuid.UUID      `db:"analyte_id"`
-	ResultCreatedAt time.Time      `db:"yielded_at"`
-	TestName        sql.NullString `db:"test_name"`
-	TestResult      sql.NullString `db:"test_result"`
-	Status          string         `db:"status"`
+	ID               uuid.UUID      `db:"result_id"`
+	BatchID          uuid.NullUUID  `db:"batch_id"`
+	RequestCreatedAt sql.NullTime   `db:"request_created_at"`
+	WorkItemID       uuid.NullUUID  `db:"work_item_id"`
+	SampleCode       string         `db:"sample_code"`
+	AnalyteID        uuid.UUID      `db:"analyte_id"`
+	ResultCreatedAt  time.Time      `db:"result_created_at"`
+	TestName         sql.NullString `db:"test_name"`
+	TestResult       sql.NullString `db:"test_result"`
+	Status           string         `db:"status"`
 }
 
 type cerberusQueueItemDAO struct {
@@ -411,11 +411,12 @@ func (r *analysisRepository) GetAnalysisRequestsInfo(ctx context.Context, instru
 	   req.sample_code AS sample_code,
 	   req.work_item_id AS work_item_id,
 	   req.analyte_id AS analyte_id,
-	   req.created_at as request_date,
+	   req.created_at as request_created_at,
 	   am.analyte_id as analyte_mapping_id,
+       am.instrument_analyte as test_name,
 	   res.id AS result_id,
 	   res."result" AS test_result,
-       res.created_at AS result_date,
+       res.created_at AS result_created_at,
 	   i.hostname as source_ip,
 	   i.id as instrument_id
 FROM %schema_name%.sk_analysis_requests req
@@ -498,11 +499,11 @@ func (r *analysisRepository) GetAnalysisResultsInfo(ctx context.Context, instrum
 	query := `SELECT res.id AS result_id,
 	   res.sample_code AS sample_code,
 	   am.analyte_id AS analyte_id,
-	   res.yielded_at as yielded_at,
+	   res.created_at as result_created_at,
        am.instrument_analyte as test_name,
 	   res.result AS test_result,
        res.status AS status,
-       req.created_at AS request_date,
+       req.created_at AS request_created_at,
        req.work_item_id as work_item_id
 FROM %schema_name%.sk_analysis_results res
 LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = res.instrument_id AND res.analyte_mapping_id = am.id
@@ -518,8 +519,8 @@ WHERE res.instrument_id = :instrument_id`
 	if filter.TimeFrom != nil {
 		preparedValues["time_from"] = filter.TimeFrom.UTC()
 
-		query += ` AND res.yielded_at >= :time_from`
-		countQuery += ` AND res.yielded_at >= :time_from`
+		query += ` AND res.created_at >= :time_from`
+		countQuery += ` AND res.created_at >= :time_from`
 	}
 
 	if filter.Filter != nil {
@@ -530,7 +531,7 @@ WHERE res.instrument_id = :instrument_id`
 	}
 
 	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
-	query += applyPagination(filter.Pageable, "req", "req.created_at DESC, res.id") + `;`
+	query += applyPagination(filter.Pageable, "res", "req.created_at DESC, res.id") + `;`
 
 	countQuery = strings.ReplaceAll(countQuery, "%schema_name%", r.dbSchema)
 	log.Trace().Str("query", query).Interface("args", preparedValues).Msg("GetAnalysisResultsInfo")
@@ -1134,11 +1135,11 @@ func (r *analysisRepository) GetAnalysisResultsByBatchIDsMapped(ctx context.Cont
        res.batch_id AS batch_id,
 	   res.sample_code AS sample_code,
 	   am.analyte_id AS analyte_id,
-	   res.yielded_at as yielded_at,
+	   res.created_at as result_created_at,
        am.instrument_analyte as test_name,
 	   res.result AS test_result,
        res.status AS status,
-       req.created_at AS request_date,
+       req.created_at AS request_created_at,
        req.work_item_id as work_item_id
 FROM %schema_name%.sk_analysis_results res
 LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = res.instrument_id AND res.analyte_mapping_id = am.id
@@ -2187,16 +2188,16 @@ func convertRequestInfoDAOToRequestInfo(analysisRequestInfoDAO analysisRequestIn
 
 func convertResultInfoDAOToResultInfo(analysisResultInfoDAO analysisResultInfoDAO) AnalysisResultInfo {
 	analysisResultInfo := AnalysisResultInfo{
-		ID:              analysisResultInfoDAO.ID,
-		BatchID:         nullUUIDToUUIDPointer(analysisResultInfoDAO.BatchID),
-		RequestDate:     nullTimeToTimePointer(analysisResultInfoDAO.RequestDate),
-		WorkItemID:      nullUUIDToUUIDPointer(analysisResultInfoDAO.WorkItemID),
-		AnalyteID:       analysisResultInfoDAO.AnalyteID,
-		SampleCode:      analysisResultInfoDAO.SampleCode,
-		ResultCreatedAt: analysisResultInfoDAO.ResultCreatedAt,
-		TestName:        nullStringToStringPointer(analysisResultInfoDAO.TestName),
-		TestResult:      nullStringToStringPointer(analysisResultInfoDAO.TestResult),
-		Status:          analysisResultInfoDAO.Status,
+		ID:               analysisResultInfoDAO.ID,
+		BatchID:          nullUUIDToUUIDPointer(analysisResultInfoDAO.BatchID),
+		RequestCreatedAt: nullTimeToTimePointer(analysisResultInfoDAO.RequestCreatedAt),
+		WorkItemID:       nullUUIDToUUIDPointer(analysisResultInfoDAO.WorkItemID),
+		AnalyteID:        analysisResultInfoDAO.AnalyteID,
+		SampleCode:       analysisResultInfoDAO.SampleCode,
+		ResultCreatedAt:  analysisResultInfoDAO.ResultCreatedAt,
+		TestName:         nullStringToStringPointer(analysisResultInfoDAO.TestName),
+		TestResult:       nullStringToStringPointer(analysisResultInfoDAO.TestResult),
+		Status:           analysisResultInfoDAO.Status,
 	}
 
 	return analysisResultInfo
