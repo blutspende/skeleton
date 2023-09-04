@@ -625,6 +625,14 @@ func (s *instrumentService) GetManufacturerTests(ctx context.Context, instrument
 	if len(tests) < 1 {
 		return []SupportedManufacturerTests{}, nil
 	}
+	for i := range tests {
+		if tests[i].Channels == nil {
+			tests[i].Channels = make([]string, 0)
+		}
+		if tests[i].ValidResultValues == nil {
+			tests[i].ValidResultValues = make([]string, 0)
+		}
+	}
 	return tests, nil
 }
 
