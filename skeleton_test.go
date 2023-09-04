@@ -567,7 +567,7 @@ var analysisResultsWithoutAnalysisRequestsTest_instrument = Instrument{
 	ProtocolName:       "IH-1000 v5.2",
 	Enabled:            true,
 	ConnectionMode:     "TCP_SERVER_ONLY",
-	ResultMode:         "TEST",
+	ResultMode:         "SIMULATION",
 	CaptureResults:     true,
 	CaptureDiagnostics: true,
 	ReplyToQuery:       true,

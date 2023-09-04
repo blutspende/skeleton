@@ -52,7 +52,7 @@ func TestCreateInstrument(t *testing.T) {
   "replyToQuery": true,
   "status": "OFFLINE",
   "connectionMode": "TCP_SERVER_ONLY",
-  "runningMode": "TEST",
+  "runningMode": "SIMULATION",
   "analyteMappings": [
     {
       "id": "6b40e8ad-a66c-405a-87e1-c9278c54d6a8",
@@ -144,7 +144,7 @@ func TestCreateInstrumentWithoutRequestMapping(t *testing.T) {
   "replyToQuery": true,
   "status": "OFFLINE",
   "connectionMode": "TCP_SERVER_ONLY",
-  "runningMode": "TEST",
+  "runningMode": "SIMULATION",
   "analyteMappings": [
     {
       "id": "6b40e8ad-a66c-405a-87e1-c9278c54d6a8",

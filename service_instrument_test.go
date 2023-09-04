@@ -55,7 +55,7 @@ func TestRegisterCreatedInstrument(t *testing.T) {
 		ProtocolName:   "Test Protocol",
 		Enabled:        true,
 		ConnectionMode: "TCP_MIXED",
-		ResultMode:     "TEST",
+		ResultMode:     "SIMULATION",
 		Status:         "ONLINE",
 		FileEncoding:   "UTF8",
 		Timezone:       "Europe/Budapest",
