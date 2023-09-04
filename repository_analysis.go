@@ -1714,6 +1714,8 @@ func convertAnalysisResultToTO(ar AnalysisResult) (AnalysisResultTO, error) {
 		ResultYieldDateTime:      ar.ResultYieldDateTime,
 		ExaminedMaterial:         ar.AnalysisRequest.MaterialID,
 		Result:                   ar.Result,
+		Mode:                     string(ar.ResultMode),
+		Status:                   string(ar.Status),
 		Operator:                 ar.Operator,
 		TechnicalReleaseDateTime: ar.TechnicalReleaseDateTime,
 		InstrumentID:             ar.Instrument.ID,
