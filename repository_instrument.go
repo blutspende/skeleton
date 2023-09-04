@@ -107,7 +107,7 @@ type instrumentDAO struct {
 	ClientPort         sql.NullInt32 `db:"client_port"`
 	Enabled            bool          `db:"enabled"`
 	ConnectionMode     string        `db:"connection_mode"`
-	RunningMode        string        `db:"running_mode"`
+	RunningMode        ResultMode    `db:"running_mode"`
 	CaptureResults     bool          `db:"captureresults"`
 	CaptureDiagnostics bool          `db:"capturediagnostics"`
 	ReplyToQuery       bool          `db:"replytoquery"`
@@ -1092,8 +1092,8 @@ func convertInstrumentToDAO(instrument Instrument) (instrumentDAO, error) {
 		return dao, ErrInvalidConnectionMode
 	}
 	switch instrument.ResultMode {
-	case Simulation, Qualify, Production:
-		dao.RunningMode = string(instrument.ResultMode)
+	case Simulation, Qualification, Production:
+		dao.RunningMode = instrument.ResultMode
 	default:
 		return dao, ErrInvalidResultMode
 	}
@@ -1136,14 +1136,8 @@ func convertInstrumentDaoToInstrument(dao instrumentDAO) (Instrument, error) {
 		return instrument, ErrInvalidConnectionMode
 	}
 	switch dao.RunningMode {
-	case "TEST":
-		//case "SIMULATION":
+	case Simulation, Qualification, Production:
 		instrument.ResultMode = Simulation
-	case "VALIDATION":
-		//case "QUALIFY":
-		instrument.ResultMode = Qualify
-	case "PRODUCTION":
-		instrument.ResultMode = Production
 	default:
 		return instrument, ErrInvalidResultMode
 	}
