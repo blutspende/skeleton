@@ -61,6 +61,7 @@ func newAPI(engine *gin.Engine, config *config.Configuration, authManager AuthMa
 	}
 
 	engine.Use(gin.Recovery())
+	engine.Use(gin.Logger())
 
 	api := api{
 		config:              config,
