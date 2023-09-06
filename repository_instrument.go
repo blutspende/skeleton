@@ -647,7 +647,7 @@ func (r *instrumentRepository) GetAnalyteMappings(ctx context.Context, instrumen
 }
 
 func (r *instrumentRepository) UpdateAnalyteMapping(ctx context.Context, analyteMapping AnalyteMapping) error {
-	query := fmt.Sprintf(`UPDATE %s.sk_analyte_mappings SET instrument_analyte = :instrument_analyte, analyte_id = :analyte_id, modified_at = timezone('utc', now()) WHERE id = :id;`, r.dbSchema)
+	query := fmt.Sprintf(`UPDATE %s.sk_analyte_mappings SET instrument_analyte = :instrument_analyte, analyte_id = :analyte_id, result_type = :result_type, modified_at = timezone('utc', now()) WHERE id = :id;`, r.dbSchema)
 	dao := convertAnalyteMappingToDAO(analyteMapping, uuid.Nil)
 	_, err := r.db.NamedExecContext(ctx, query, dao)
 	if err != nil {
