@@ -694,6 +694,9 @@ func (r *analysisRepository) GetAnalysisRequestsByWorkItemIDs(ctx context.Contex
 }
 
 func (r *analysisRepository) RevokeAnalysisRequests(ctx context.Context, workItemIds []uuid.UUID) error {
+	if len(workItemIds) == 0 {
+		return nil
+	}
 	query := fmt.Sprintf(`DELETE FROM %s.sk_analysis_requests WHERE work_item_id IN (?);`, r.dbSchema)
 
 	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
@@ -710,6 +713,9 @@ func (r *analysisRepository) RevokeAnalysisRequests(ctx context.Context, workIte
 }
 
 func (r *analysisRepository) IncreaseReexaminationRequestedCount(ctx context.Context, workItemIDs []uuid.UUID) error {
+	if len(workItemIDs) == 0 {
+		return nil
+	}
 	query := fmt.Sprintf(`UPDATE %s.sk_analysis_requests SET reexamination_requested_count = reexamination_requested_count + 1 WHERE work_item_id IN (?);`, r.dbSchema)
 
 	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
@@ -726,6 +732,9 @@ func (r *analysisRepository) IncreaseReexaminationRequestedCount(ctx context.Con
 }
 
 func (r *analysisRepository) IncreaseSentToInstrumentCounter(ctx context.Context, analysisRequestIDs []uuid.UUID) error {
+	if len(analysisRequestIDs) == 0 {
+		return nil
+	}
 	query := fmt.Sprintf(`UPDATE %s.sk_analysis_requests SET sent_to_instrument_count = sent_to_instrument_count + 1 WHERE id IN (?);`, r.dbSchema)
 
 	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
@@ -1025,6 +1034,9 @@ func (r *analysisRepository) GetAnalysisResultByID(ctx context.Context, id uuid.
 }
 
 func (r *analysisRepository) GetAnalysisResultsByBatchIDs(ctx context.Context, batchIDs []uuid.UUID) ([]AnalysisResult, error) {
+	if len(batchIDs) == 0 {
+		return []AnalysisResult{}, nil
+	}
 	query := `SELECT sar.id, sar.analyte_mapping_id, sar.instrument_id, sar.sample_code, sar.instrument_run_id, sar.result_record_id, sar.batch_id, sar."result", sar.status, sar.result_mode, sar.yielded_at, sar.valid_until, sar.operator, sar.edited, sar.edit_reason,
 					sam.id AS "analyte_mapping.id", sam.instrument_id AS "analyte_mapping.instrument_id", sam.instrument_analyte AS "analyte_mapping.instrument_analyte", sam.analyte_id AS "analyte_mapping.analyte_id", sam.result_type AS "analyte_mapping.result_type", sam.created_at AS "analyte_mapping.created_at", sam.modified_at AS "analyte_mapping.modified_at"
 			FROM %schema_name%.sk_analysis_results sar
