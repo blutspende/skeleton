@@ -1152,7 +1152,7 @@ func convertInstrumentDaoToInstrument(dao instrumentDAO) (Instrument, error) {
 	}
 	switch dao.RunningMode {
 	case Simulation, Qualification, Production:
-		instrument.ResultMode = Simulation
+		instrument.ResultMode = dao.RunningMode
 	default:
 		return instrument, ErrInvalidResultMode
 	}
