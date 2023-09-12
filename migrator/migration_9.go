@@ -15,11 +15,11 @@ WHERE result_mode = 'VALIDATION';
 
 UPDATE <SCHEMA_PLACEHOLDER>.sk_instruments
 SET running_mode = 'SIMULATION'
-WHERE running_mode = 'TEST'
+WHERE running_mode = 'TEST';
 
 UPDATE <SCHEMA_PLACEHOLDER>.sk_instruments
 SET running_mode = 'QUALIFICATION'
-WHERE running_mode = 'VALIDATION'
+WHERE running_mode = 'VALIDATION';
 
 DELETE FROM <SCHEMA_PLACEHOLDER>.sk_result_mode_definitions
 WHERE result_mode IN ('TEST','VALIDATION');`
