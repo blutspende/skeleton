@@ -184,6 +184,10 @@ func (s *skeleton) saveImages(ctx context.Context, resultData *AnalysisResult) e
 				UUID:  id,
 				Valid: true,
 			}
+			imageDao.UploadedToDeaAt = sql.NullTime{
+				Time:  time.Now().UTC(),
+				Valid: true,
+			}
 		}
 		imagePtrs = append(imagePtrs, &resultData.Images[i])
 		imageDaos = append(imageDaos, imageDao)
@@ -221,6 +225,10 @@ func (s *skeleton) saveImages(ctx context.Context, resultData *AnalysisResult) e
 			} else {
 				imageDao.DeaImageID = uuid.NullUUID{
 					UUID:  id,
+					Valid: true,
+				}
+				imageDao.UploadedToDeaAt = sql.NullTime{
+					Time:  time.Now().UTC(),
 					Valid: true,
 				}
 			}
