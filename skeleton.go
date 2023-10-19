@@ -17,19 +17,20 @@ import (
 )
 
 type skeleton struct {
-	sqlConn            *sqlx.DB
-	dbSchema           string
-	migrator           migrator.SkeletonMigrator
-	api                GinApi
-	analysisRepository AnalysisRepository
-	analysisService    AnalysisService
-	instrumentService  InstrumentService
-	consoleLogService  service.ConsoleLogService
-	resultsBuffer      []AnalysisResult
-	resultBatchesChan  chan []AnalysisResult
-	cerberusClient     Cerberus
-	deaClient          DeaClientV1
-	manager            Manager
+	sqlConn                    *sqlx.DB
+	dbSchema                   string
+	migrator                   migrator.SkeletonMigrator
+	api                        GinApi
+	analysisRepository         AnalysisRepository
+	analysisService            AnalysisService
+	instrumentService          InstrumentService
+	consoleLogService          service.ConsoleLogService
+	resultsBuffer              []AnalysisResult
+	resultBatchesChan          chan []AnalysisResult
+	cerberusClient             Cerberus
+	deaClient                  DeaClientV1
+	manager                    Manager
+	resultTransferFlushTimeout int
 }
 
 func (s *skeleton) SetCallbackHandler(eventHandler SkeletonCallbackHandlerV1) {
@@ -54,13 +55,13 @@ func (s *skeleton) LogDebug(instrumentID uuid.UUID, msg string) {
 	s.consoleLogService.Debug(instrumentID, "[GENERAL]", msg)
 }
 
-func (s *skeleton) GetAnalysisRequestWithNoResults(currentPage, itemsPerPage int) (requests []AnalysisRequest, maxPages int, err error) {
+func (s *skeleton) GetAnalysisRequestWithNoResults(ctx context.Context, currentPage, itemsPerPage int) (requests []AnalysisRequest, maxPages int, err error) {
 
 	return []AnalysisRequest{}, 0, nil
 }
 
-func (s *skeleton) GetAnalysisRequestsBySampleCode(sampleCode string) ([]AnalysisRequest, error) {
-	analysisRequests, err := s.analysisRepository.GetAnalysisRequestsBySampleCodes(context.TODO(), []string{sampleCode})
+func (s *skeleton) GetAnalysisRequestsBySampleCode(ctx context.Context, sampleCode string, allowResending bool) ([]AnalysisRequest, error) {
+	analysisRequests, err := s.analysisRepository.GetAnalysisRequestsBySampleCodes(ctx, []string{sampleCode}, allowResending)
 	if err != nil {
 		return []AnalysisRequest{}, nil
 	}
@@ -68,8 +69,8 @@ func (s *skeleton) GetAnalysisRequestsBySampleCode(sampleCode string) ([]Analysi
 	return analysisRequests[sampleCode], nil
 }
 
-func (s *skeleton) GetAnalysisRequestsBySampleCodes(sampleCodes []string) (map[string][]AnalysisRequest, error) {
-	analysisRequests, err := s.analysisRepository.GetAnalysisRequestsBySampleCodes(context.TODO(), sampleCodes)
+func (s *skeleton) GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string, allowResending bool) (map[string][]AnalysisRequest, error) {
+	analysisRequests, err := s.analysisRepository.GetAnalysisRequestsBySampleCodes(ctx, sampleCodes, allowResending)
 	if err != nil {
 		return map[string][]AnalysisRequest{}, nil
 	}
@@ -100,7 +101,7 @@ func (s *skeleton) SaveAnalysisRequestsInstrumentTransmissions(ctx context.Conte
 	return nil
 }
 
-func (s *skeleton) GetRequestMappingsByInstrumentID(instrumentID uuid.UUID) ([]RequestMapping, error) {
+func (s *skeleton) GetRequestMappingsByInstrumentID(ctx context.Context, instrumentID uuid.UUID) ([]RequestMapping, error) {
 	return []RequestMapping{}, nil
 }
 
@@ -247,16 +248,16 @@ func (s *skeleton) saveImages(ctx context.Context, resultData *AnalysisResult) e
 	return nil
 }
 
-func (s *skeleton) GetInstrument(instrumentID uuid.UUID) (Instrument, error) {
-	return s.instrumentService.GetInstrumentByID(context.TODO(), nil, instrumentID, false)
+func (s *skeleton) GetInstrument(ctx context.Context, instrumentID uuid.UUID) (Instrument, error) {
+	return s.instrumentService.GetInstrumentByID(ctx, nil, instrumentID, false)
 }
 
-func (s *skeleton) GetInstrumentByIP(ip string) (Instrument, error) {
-	return s.instrumentService.GetInstrumentByIP(context.TODO(), ip)
+func (s *skeleton) GetInstrumentByIP(ctx context.Context, ip string) (Instrument, error) {
+	return s.instrumentService.GetInstrumentByIP(ctx, ip)
 }
 
-func (s *skeleton) GetInstruments() ([]Instrument, error) {
-	return s.instrumentService.GetInstruments(context.TODO())
+func (s *skeleton) GetInstruments(ctx context.Context) ([]Instrument, error) {
+	return s.instrumentService.GetInstruments(ctx)
 }
 
 func (s *skeleton) FindAnalyteByManufacturerTestCode(instrument Instrument, testCode string) AnalyteMapping {
@@ -267,8 +268,8 @@ func (s *skeleton) FindResultMapping(searchValue string, mapping []ResultMapping
 	return "", nil
 }
 
-func (s *skeleton) FindResultEntities(InstrumentID uuid.UUID, sampleCode string, ManufacturerTestCode string) (Instrument, []AnalysisRequest, AnalyteMapping, error) {
-	instrument, err := s.GetInstrument(InstrumentID)
+func (s *skeleton) FindResultEntities(ctx context.Context, InstrumentID uuid.UUID, sampleCode string, ManufacturerTestCode string) (Instrument, []AnalysisRequest, AnalyteMapping, error) {
+	instrument, err := s.GetInstrument(ctx, InstrumentID)
 	if err != nil {
 		return Instrument{}, []AnalysisRequest{}, AnalyteMapping{}, err
 	}
@@ -281,7 +282,7 @@ func (s *skeleton) FindResultEntities(InstrumentID uuid.UUID, sampleCode string,
 		}
 	}
 
-	allAnalysisRequests, err := s.GetAnalysisRequestsBySampleCode(sampleCode) // if there are none, that shouldnt be an error but an empty array
+	allAnalysisRequests, err := s.GetAnalysisRequestsBySampleCode(ctx, sampleCode, true) // if there are none, that shouldnt be an error but an empty array
 	if err != nil {
 		return Instrument{}, []AnalysisRequest{}, AnalyteMapping{}, err
 	}
@@ -417,7 +418,7 @@ func (s *skeleton) cleanUpCerberusQueueItems(ctx context.Context) {
 }
 
 func (s *skeleton) submitAnalysisResultsToCerberus(ctx context.Context) {
-	tickerTriggerDuration := 60 * time.Second
+	tickerTriggerDuration := time.Duration(s.resultTransferFlushTimeout) * time.Second
 	ticker := time.NewTicker(tickerTriggerDuration)
 	continuousTrigger := make(chan []CerberusQueueItem)
 	for {
@@ -501,21 +502,22 @@ func (s *skeleton) submitAnalysisResultsToCerberus(ctx context.Context) {
 	}
 }
 
-func NewSkeleton(sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api GinApi, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService service.ConsoleLogService, manager Manager, cerberusClient Cerberus, deaClient DeaClientV1) (SkeletonAPI, error) {
+func NewSkeleton(sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api GinApi, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService service.ConsoleLogService, manager Manager, cerberusClient Cerberus, deaClient DeaClientV1, resultTransferFlushTimeout int) (SkeletonAPI, error) {
 	skeleton := &skeleton{
-		sqlConn:            sqlConn,
-		dbSchema:           dbSchema,
-		migrator:           migrator,
-		api:                api,
-		analysisRepository: analysisRepository,
-		analysisService:    analysisService,
-		instrumentService:  instrumentService,
-		consoleLogService:  consoleLogService,
-		manager:            manager,
-		cerberusClient:     cerberusClient,
-		deaClient:          deaClient,
-		resultsBuffer:      make([]AnalysisResult, 0, 500),
-		resultBatchesChan:  make(chan []AnalysisResult, 10),
+		sqlConn:                    sqlConn,
+		dbSchema:                   dbSchema,
+		migrator:                   migrator,
+		api:                        api,
+		analysisRepository:         analysisRepository,
+		analysisService:            analysisService,
+		instrumentService:          instrumentService,
+		consoleLogService:          consoleLogService,
+		manager:                    manager,
+		cerberusClient:             cerberusClient,
+		deaClient:                  deaClient,
+		resultsBuffer:              make([]AnalysisResult, 0, 500),
+		resultBatchesChan:          make(chan []AnalysisResult, 10),
+		resultTransferFlushTimeout: resultTransferFlushTimeout,
 	}
 
 	err := skeleton.migrateUp(context.Background(), skeleton.sqlConn, skeleton.dbSchema)

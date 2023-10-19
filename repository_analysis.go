@@ -196,7 +196,7 @@ type cerberusQueueItemDAO struct {
 type AnalysisRepository interface {
 	CreateAnalysisRequestsBatch(ctx context.Context, analysisRequests []AnalysisRequest) ([]uuid.UUID, []uuid.UUID, error)
 	GetAnalysisRequestsBySampleCodeAndAnalyteID(ctx context.Context, sampleCodes string, analyteID uuid.UUID) ([]AnalysisRequest, error)
-	GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string) (map[string][]AnalysisRequest, error)
+	GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string, allowResending bool) (map[string][]AnalysisRequest, error)
 	GetAnalysisRequestsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisRequestInfo, int, error)
 	GetAnalysisResultsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisResultInfo, int, error)
 	GetAnalysisBatches(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisBatch, int, error)
@@ -363,15 +363,18 @@ func (r *analysisRepository) GetAnalysisRequestsBySampleCodeAndAnalyteID(ctx con
 	return analysisRequests, err
 }
 
-func (r *analysisRepository) GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string) (map[string][]AnalysisRequest, error) {
+func (r *analysisRepository) GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string, allowResending bool) (map[string][]AnalysisRequest, error) {
 	analysisRequestsBySampleCodes := make(map[string][]AnalysisRequest)
 	if len(sampleCodes) == 0 {
 		return analysisRequestsBySampleCodes, nil
 	}
 	query := fmt.Sprintf(`SELECT * FROM %s.sk_analysis_requests 
 					WHERE sample_code in (?)
-					AND valid_until_time >= timezone('utc',now())
-					AND reexamination_requested_count >= sent_to_instrument_count;`, r.dbSchema)
+					AND valid_until_time >= timezone('utc',now())`, r.dbSchema)
+	if !allowResending {
+		query += " AND reexamination_requested_count >= sent_to_instrument_count"
+	}
+	query += ";"
 
 	query, args, _ := sqlx.In(query, sampleCodes)
 	query = r.db.Rebind(query)

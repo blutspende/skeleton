@@ -50,13 +50,14 @@ type SkeletonAPI interface {
 	// GetAnalysisRequestWithNoResults - return those requests that have no results yet
 
 	//TODO maybe remove
-	GetAnalysisRequestWithNoResults(currentPage, itemsPerPage int) (requests []AnalysisRequest, maxPages int, err error)
-	GetAnalysisRequestsBySampleCode(sampleCode string) ([]AnalysisRequest, error)
+	GetAnalysisRequestWithNoResults(ctx context.Context, currentPage, itemsPerPage int) (requests []AnalysisRequest, maxPages int, err error)
+	GetAnalysisRequestsBySampleCode(ctx context.Context, sampleCode string, allowResending bool) ([]AnalysisRequest, error)
 
 	// GetAnalysisRequestsBySampleCodes - Return a list of AnalysisRequests that contains the sampleCodes
 	// Empty List if nothing is found. Error occurs only on Database-error
-	GetAnalysisRequestsBySampleCodes(sampleCodes []string) (map[string][]AnalysisRequest, error)
-	GetRequestMappingsByInstrumentID(instrumentID uuid.UUID) ([]RequestMapping, error)
+	// if allowResending is true, returns all analysis requests for the sample code, without checking if they were already sent to the instrument
+	GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string, allowResending bool) (map[string][]AnalysisRequest, error)
+	GetRequestMappingsByInstrumentID(ctx context.Context, instrumentID uuid.UUID) ([]RequestMapping, error)
 
 	SaveAnalysisRequestsInstrumentTransmissions(ctx context.Context, analysisRequestIDs []uuid.UUID, instrumentID uuid.UUID) error
 
@@ -73,22 +74,22 @@ type SkeletonAPI interface {
 
 	// GetInstrument returns all the settings regarding an instrument
 	// contains AnalyteMappings[] and RequestMappings[]
-	GetInstrument(instrumentID uuid.UUID) (Instrument, error)
+	GetInstrument(ctx context.Context, instrumentID uuid.UUID) (Instrument, error)
 
 	// GetInstrumentByIP returns all the settings regarding an instrument
 	// contains AnalyteMappings[] and RequestMappings[]
-	GetInstrumentByIP(ip string) (Instrument, error)
+	GetInstrumentByIP(ctx context.Context, ip string) (Instrument, error)
 
 	// GetInstruments - Returns a list of instruments configured for this Driver class
 	// contains AnalyteMappings[] and RequestMappings[]
-	GetInstruments() ([]Instrument, error)
+	GetInstruments(ctx context.Context) ([]Instrument, error)
 
 	// FindAnalyteByManufacturerTestCode - Search for the analyte that is mapped (check ui for more info)
 	// Returns the mapping or model.EmptyAnalyteMapping
 	FindAnalyteByManufacturerTestCode(instrument Instrument, testCode string) AnalyteMapping
 
 	// FindResultEntities - Convienient: Lookup Instrument, AnalysisRequest and ResulteMapping for the analyte at once
-	FindResultEntities(InstrumentID uuid.UUID, SampleCode string, ManufacturerTestCode string) (Instrument, []AnalysisRequest, AnalyteMapping, error)
+	FindResultEntities(ctx context.Context, InstrumentID uuid.UUID, SampleCode string, ManufacturerTestCode string) (Instrument, []AnalysisRequest, AnalyteMapping, error)
 
 	// FindResultMapping - Helper function to search for the RESULT mapping
 	// ResultMappings can be made via the ui to translate results
@@ -145,7 +146,7 @@ func New(sqlConn *sqlx.DB, dbSchema string) (SkeletonAPI, error) {
 		},
 	})
 
-	return NewSkeleton(sqlConn, dbSchema, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, manager, cerberusClient, deaClient)
+	return NewSkeleton(sqlConn, dbSchema, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, manager, cerberusClient, deaClient, config.ResultTransferFlushTimeout)
 }
 
 func NewForTest(config config2.Configuration, sqlConn *sqlx.DB, dbSchema string, cerberusClient Cerberus, deaClient DeaClientV1, authManager AuthManager) (SkeletonAPI, error) {
@@ -161,5 +162,5 @@ func NewForTest(config config2.Configuration, sqlConn *sqlx.DB, dbSchema string,
 	consoleLogService := service.NewConsoleLogService(consoleLogRepository, consoleLogSSEServer)
 	api := NewAPI(&config, authManager, analysisService, instrumentService, consoleLogService, consoleLogSSEServer)
 
-	return NewSkeleton(sqlConn, dbSchema, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, manager, cerberusClient, deaClient)
+	return NewSkeleton(sqlConn, dbSchema, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, manager, cerberusClient, deaClient, config.ResultTransferFlushTimeout)
 }
