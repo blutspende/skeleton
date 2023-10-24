@@ -258,7 +258,7 @@ type InstrumentRepository interface {
 	GetInstrumentsSettings(ctx context.Context, instrumentIDs []uuid.UUID) (map[uuid.UUID][]InstrumentSetting, error)
 	UpsertInstrumentSetting(ctx context.Context, instrumentID uuid.UUID, setting InstrumentSetting) error
 	DeleteInstrumentSettings(ctx context.Context, ids []uuid.UUID) error
-	CheckAnalytesUsage(ctx context.Context, analyteIDs []uuid.UUID) ([]uuid.UUID, error)
+	CheckAnalytesUsage(ctx context.Context, analyteIDs []uuid.UUID) (map[uuid.UUID][]Instrument, error)
 	CreateTransaction() (db.DbConnector, error)
 	WithTransaction(tx db.DbConnector) InstrumentRepository
 }
@@ -1039,8 +1039,9 @@ func (r *instrumentRepository) DeleteInstrumentSettings(ctx context.Context, ids
 	return nil
 }
 
-func (r *instrumentRepository) CheckAnalytesUsage(ctx context.Context, analyteIDs []uuid.UUID) ([]uuid.UUID, error) {
-	query := fmt.Sprintf(`SELECT analyte_id FROM %s.sk_analyte_mappings WHERE analyte_id IN (?) AND deleted_at IS NULL;`, r.dbSchema)
+func (r *instrumentRepository) CheckAnalytesUsage(ctx context.Context, analyteIDs []uuid.UUID) (map[uuid.UUID][]Instrument, error) {
+	query := fmt.Sprintf(`SELECT am.analyte_id, i.id, i.name, FROM %s.sk_analyte_mappings am INNER JOIN %s.sk_instruments i ON am.instrument_id = i.id
+	  WHERE am.analyte_id IN (?) AND am.deleted_at IS NULL AND i.deleted_at IS NULL;`, r.dbSchema, r.dbSchema)
 	query, args, _ := sqlx.In(query, analyteIDs)
 	query = r.db.Rebind(query)
 	rows, err := r.db.QueryxContext(ctx, query, args...)
@@ -1049,17 +1050,18 @@ func (r *instrumentRepository) CheckAnalytesUsage(ctx context.Context, analyteID
 		return nil, ErrCheckAnalyteUsageFailed
 	}
 	defer rows.Close()
-	usedAnalyteIDs := make([]uuid.UUID, 0, len(analyteIDs))
+	analyteUsageMap := make(map[uuid.UUID][]Instrument)
 	for rows.Next() {
-		var analyteID uuid.UUID
-		err = rows.Scan(&analyteID)
+		var analyteID, instrumentID uuid.UUID
+		var name string
+		err = rows.Scan(&analyteID, &instrumentID, &name)
 		if err != nil {
 			log.Error().Err(err).Msg(msgCheckAnalyteUsageFailed)
 			return nil, ErrCheckAnalyteUsageFailed
 		}
-		usedAnalyteIDs = append(usedAnalyteIDs)
+		analyteUsageMap[analyteID] = append(analyteUsageMap[analyteID], Instrument{ID: instrumentID, Name: name})
 	}
-	return usedAnalyteIDs, nil
+	return analyteUsageMap, nil
 }
 
 func (r *instrumentRepository) CreateTransaction() (db.DbConnector, error) {

@@ -55,6 +55,16 @@ type analysisRequestStatusTO struct {
 	Error      string    `json:"error,omitempty"`
 }
 
+type analyteUsageResponseItem struct {
+	AnalyteID   uuid.UUID    `json:"analyteId"`
+	Instruments []nameIDPair `json:"instruments"`
+}
+
+type nameIDPair struct {
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
+}
+
 // CreateAnalysisRequestBatch
 // @Summary Create a batch of Analysis Request and process them
 // @Description Create multiple analysis requests. If results are present then cerberus will receive a response for results.
@@ -196,7 +206,6 @@ func (api *api) ReexamineAnalysisRequestBatch(c *gin.Context) {
 
 func (api *api) CheckAnalytesUsage(c *gin.Context) {
 	var ids []uuid.UUID
-
 	err := c.ShouldBindJSON(&ids)
 	if err != nil {
 		log.Error().Err(err).Msg(MsgCanNotBindRequestBody)
@@ -207,10 +216,26 @@ func (api *api) CheckAnalytesUsage(c *gin.Context) {
 		return
 	}
 
-	response, err := api.instrumentService.CheckAnalytesUsage(c, ids)
+	analyteUsage, err := api.instrumentService.CheckAnalytesUsage(c, ids)
 	if err != nil {
 		log.Error().Err(err).Send()
 		c.AbortWithStatusJSON(http.StatusInternalServerError, nil)
+	}
+	response := make([]analyteUsageResponseItem, 0)
+	for analyteID, instruments := range analyteUsage {
+		if len(instruments) == 0 {
+			continue
+		}
+		respItem := analyteUsageResponseItem{
+			AnalyteID: analyteID,
+		}
+		for _, instrument := range instruments {
+			respItem.Instruments = append(respItem.Instruments, nameIDPair{
+				ID:   instrument.ID,
+				Name: instrument.Name,
+			})
+		}
+		response = append(response, respItem)
 	}
 
 	c.JSON(http.StatusOK, response)

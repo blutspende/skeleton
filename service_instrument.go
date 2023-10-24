@@ -24,7 +24,7 @@ type InstrumentService interface {
 	UpsertSupportedProtocol(ctx context.Context, id uuid.UUID, name string, description string, abilities []ProtocolAbility, settings []ProtocolSetting) error
 	UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error
 	EnqueueUnsentInstrumentsToCerberus(ctx context.Context)
-	CheckAnalytesUsage(ctx context.Context, analyteIDs []uuid.UUID) (AnalytesUsageResponse, error)
+	CheckAnalytesUsage(ctx context.Context, analyteIDs []uuid.UUID) (map[uuid.UUID][]Instrument, error)
 }
 
 type instrumentService struct {
@@ -746,33 +746,8 @@ func (s *instrumentService) ProcessInstrumentEvent(instrumentID uuid.UUID, event
 	}
 }
 
-func (s *instrumentService) CheckAnalytesUsage(ctx context.Context, analyteIDs []uuid.UUID) (AnalytesUsageResponse, error) {
-	usedAnalyteIDs, err := s.instrumentRepository.CheckAnalytesUsage(ctx, analyteIDs)
-	resp := AnalytesUsageResponse{
-		Used:    usedAnalyteIDs,
-		NotUsed: make([]uuid.UUID, 0, len(analyteIDs)-len(usedAnalyteIDs)),
-	}
-	if len(usedAnalyteIDs) == 0 {
-		resp.NotUsed = analyteIDs
-		return resp, nil
-	}
-
-	for i := range analyteIDs {
-		found := false
-		for j := range usedAnalyteIDs {
-			if analyteIDs[i] == usedAnalyteIDs[j] {
-				found = true
-				break
-			}
-		}
-		if !found {
-			resp.NotUsed = append(resp.NotUsed, analyteIDs[i])
-		}
-	}
-	if err != nil {
-		return resp, err
-	}
-	return resp, err
+func (s *instrumentService) CheckAnalytesUsage(ctx context.Context, analyteIDs []uuid.UUID) (map[uuid.UUID][]Instrument, error) {
+	return s.instrumentRepository.CheckAnalytesUsage(ctx, analyteIDs)
 }
 
 func (s *instrumentService) registerInstrument(ctx context.Context, instrumentID uuid.UUID) (bool, error) {
