@@ -405,8 +405,3 @@ const (
 	Int    ProtocolSettingType = "int"
 	Bool   ProtocolSettingType = "bool"
 )
-
-type AnalytesUsageResponse struct {
-	Used    []uuid.UUID `json:"used"`
-	NotUsed []uuid.UUID `json:"notUsed"`
-}
