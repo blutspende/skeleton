@@ -117,12 +117,12 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 
 	api := newAPI(ginEngine, &config, &authManager, analysisService, instrumentService, consoleLogService, nil)
 
-	skeletonInstance, _ := NewSkeleton(sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, skeletonManager, cerberusClientMock, deaClientMock)
+	skeletonInstance, _ := NewSkeleton(sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, skeletonManager, cerberusClientMock, deaClientMock, 5)
 
 	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description)
 		VALUES ('abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
 	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_instruments(id, protocol_id, "name", hostname, client_port, enabled, connection_mode, running_mode, captureresults, capturediagnostics, replytoquery, status, sent_to_cerberus, timezone, file_encoding) 
-		VALUES ('93f36696-5ff0-45a9-87eb-ca5c064c5890', 'abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'TestInstrument', '192.168.1.13', NULL, TRUE, 'TCP_SERVER_ONLY', 'TEST', TRUE, TRUE, TRUE, 'ONLINE', TRUE, 'Europe/Budapest', 'UTF8');`, schemaName))
+		VALUES ('93f36696-5ff0-45a9-87eb-ca5c064c5890', 'abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'TestInstrument', '192.168.1.13', NULL, TRUE, 'TCP_SERVER_ONLY', 'PRODUCTION', TRUE, TRUE, TRUE, 'ONLINE', TRUE, 'Europe/Budapest', 'UTF8');`, schemaName))
 	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_analyte_mappings(id, instrument_id, instrument_analyte, analyte_id, result_type)
 		VALUES ('8facbaeb-368f-482a-9169-4b128632f9e0', '93f36696-5ff0-45a9-87eb-ca5c064c5890', 'TESTANALYTE', '51bfea41-1b7e-48f7-8b35-46d930216de7', 'pein');`, schemaName))
 	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_channel_mappings(id, instrument_channel, channel_id, analyte_mapping_id) 
@@ -157,7 +157,7 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 		t.Errorf("Expected status %d, got %d", http.StatusOK, responseRecorder.Code)
 	}
 
-	time.Sleep(70 * time.Second)
+	time.Sleep(10 * time.Second)
 	assert.Equal(t, 2, len(cerberusClientMock.AnalysisResults))
 	assert.Equal(t, uuid.MustParse("660d1095-c8f6-4899-946e-935bfddfaa69"), cerberusClientMock.AnalysisResults[0].WorkingItemID)
 	assert.Equal(t, analysisResultsWithoutAnalysisRequestsTest_instrument.ID, cerberusClientMock.AnalysisResults[0].InstrumentID)
@@ -219,7 +219,7 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 
 	api := NewAPI(&config, &authManager, analysisService, instrumentService, consoleLogService, nil)
 
-	skeletonInstance, _ := NewSkeleton(sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, skeletonManager, cerberusClientMock, deaClientMock)
+	skeletonInstance, _ := NewSkeleton(sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, skeletonManager, cerberusClientMock, deaClientMock, 5)
 
 	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('9bec3063-435d-490f-bec0-88a6633ef4c2', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
 
@@ -281,7 +281,7 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 		ProtocolName:       "IH-1000 v5.2",
 		Enabled:            true,
 		ConnectionMode:     "TCP_SERVER_ONLY",
-		ResultMode:         "TEST",
+		ResultMode:         "PRODUCTION",
 		CaptureResults:     true,
 		CaptureDiagnostics: true,
 		ReplyToQuery:       true,
@@ -316,7 +316,7 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 			ResultRecordID:           uuid.MustParse("2f369489-77d3-464e-87e2-edbeffa62ae7"),
 			BatchID:                  batchID,
 			Result:                   "pos",
-			ResultMode:               "TEST",
+			ResultMode:               "PRODUCTION",
 			Status:                   "PRE",
 			ResultYieldDateTime:      nil,
 			ValidUntil:               time.Now().Add(1 * time.Minute),
@@ -340,7 +340,7 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 			ResultRecordID:           uuid.MustParse("43a7b261-3e1d-4065-935a-ac15841f13e4"),
 			BatchID:                  batchID,
 			Result:                   "pos",
-			ResultMode:               "TEST",
+			ResultMode:               "PRODUCTION",
 			Status:                   "PRE",
 			ResultYieldDateTime:      nil,
 			ValidUntil:               time.Now().Add(2 * time.Minute),
@@ -477,7 +477,7 @@ var analysisResultsWithoutAnalysisRequestsTest_analysisResults = []AnalysisResul
 		ResultRecordID:           uuid.MustParse("2f369489-77d3-464e-87e2-edbeffa62ae7"),
 		BatchID:                  uuid.MustParse("ddd34c4d-62f9-4621-bb16-efad459a9bfe"),
 		Result:                   "pos",
-		ResultMode:               "TEST",
+		ResultMode:               "PRODUCTION",
 		Status:                   "PRE",
 		ResultYieldDateTime:      nil,
 		ValidUntil:               time.Now().Add(1 * time.Minute),
@@ -501,7 +501,7 @@ var analysisResultsWithoutAnalysisRequestsTest_analysisResults = []AnalysisResul
 		ResultRecordID:           uuid.MustParse("43a7b261-3e1d-4065-935a-ac15841f13e4"),
 		BatchID:                  uuid.MustParse("ddd34c4d-62f9-4621-bb16-efad459a9bfe"),
 		Result:                   "pos",
-		ResultMode:               "TEST",
+		ResultMode:               "PRODUCTION",
 		Status:                   "PRE",
 		ResultYieldDateTime:      nil,
 		ValidUntil:               time.Now().Add(2 * time.Minute),
@@ -523,7 +523,7 @@ var analysisResultsWithoutAnalysisRequestsTest_analysisResultTOs = []AnalysisRes
 	{
 		InstrumentID:             analysisResultsWithoutAnalysisRequestsTest_instrument.ID,
 		Result:                   "pos",
-		Mode:                     "TEST",
+		Mode:                     "PRODUCTION",
 		Status:                   "PRE",
 		ResultYieldDateTime:      nil,
 		ValidUntil:               time.Now().Add(1 * time.Minute),
@@ -542,7 +542,7 @@ var analysisResultsWithoutAnalysisRequestsTest_analysisResultTOs = []AnalysisRes
 	{
 		InstrumentID:             analysisResultsWithoutAnalysisRequestsTest_instrument.ID,
 		Result:                   "pos",
-		Mode:                     "TEST",
+		Mode:                     "PRODUCTION",
 		Status:                   "PRE",
 		ResultYieldDateTime:      nil,
 		ValidUntil:               time.Now().Add(2 * time.Minute),
@@ -567,7 +567,7 @@ var analysisResultsWithoutAnalysisRequestsTest_instrument = Instrument{
 	ProtocolName:       "IH-1000 v5.2",
 	Enabled:            true,
 	ConnectionMode:     "TCP_SERVER_ONLY",
-	ResultMode:         "SIMULATION",
+	ResultMode:         "PRODUCTION",
 	CaptureResults:     true,
 	CaptureDiagnostics: true,
 	ReplyToQuery:       true,
