@@ -108,7 +108,7 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 	}
 	deaClientMock := &deaClientMock{}
 
-	analysisService := NewAnalysisService(analysisRepository, skeletonManager)
+	analysisService := NewAnalysisService(analysisRepository, deaClientMock, cerberusClientMock, skeletonManager)
 	instrumentService := NewInstrumentService(&config, instrumentRepository, skeletonManager, NewInstrumentCache(), cerberusClientMock)
 	consoleLogService := service.NewConsoleLogService(consoleLogRepository, nil)
 
@@ -117,7 +117,7 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 
 	api := newAPI(ginEngine, &config, &authManager, analysisService, instrumentService, consoleLogService, nil)
 
-	skeletonInstance, _ := NewSkeleton(sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, skeletonManager, cerberusClientMock, deaClientMock, 5)
+	skeletonInstance, _ := NewSkeleton(sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, skeletonManager, cerberusClientMock, deaClientMock, 5, 60)
 
 	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description)
 		VALUES ('abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
@@ -213,13 +213,13 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 
 	deaClientMock := &deaClientMock{}
 
-	analysisService := NewAnalysisService(analysisRepository, skeletonManager)
+	analysisService := NewAnalysisService(analysisRepository, deaClientMock, cerberusClientMock, skeletonManager)
 	instrumentService := NewInstrumentService(&config, instrumentRepository, skeletonManager, NewInstrumentCache(), cerberusClientMock)
 	consoleLogService := service.NewConsoleLogService(consoleLogRepository, nil)
 
 	api := NewAPI(&config, &authManager, analysisService, instrumentService, consoleLogService, nil)
 
-	skeletonInstance, _ := NewSkeleton(sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, skeletonManager, cerberusClientMock, deaClientMock, 5)
+	skeletonInstance, _ := NewSkeleton(sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, skeletonManager, cerberusClientMock, deaClientMock, 5, 60)
 
 	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('9bec3063-435d-490f-bec0-88a6633ef4c2', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
 
@@ -444,8 +444,9 @@ func (m *deaClientMock) UploadImage(fileData []byte, name string) (uuid.UUID, er
 }
 
 type cerberusClientMock struct {
-	registerInstrumentFunc      func(instrument Instrument) error
-	sendAnalysisResultBatchFunc func(analysisResults []AnalysisResultTO) (AnalysisResultBatchResponse, error)
+	registerInstrumentFunc           func(instrument Instrument) error
+	sendAnalysisResultBatchFunc      func(analysisResults []AnalysisResultTO) (AnalysisResultBatchResponse, error)
+	sendAnalysisResultImageBatchFunc func(images []WorkItemResultImageTO) error
 
 	AnalysisResults []AnalysisResultTO
 	BatchResponse   AnalysisResultBatchResponse
@@ -466,6 +467,14 @@ func (m *cerberusClientMock) SendAnalysisResultBatch(analysisResults []AnalysisR
 	response, err := m.sendAnalysisResultBatchFunc(analysisResults)
 	m.BatchResponse = response
 	return response, err
+}
+
+func (m *cerberusClientMock) SendAnalysisResultImageBatch(images []WorkItemResultImageTO) error {
+	if m.sendAnalysisResultImageBatchFunc == nil {
+		return errors.New("not implemented")
+	}
+
+	return m.sendAnalysisResultImageBatchFunc(images)
 }
 
 var analysisResultsWithoutAnalysisRequestsTest_analysisResults = []AnalysisResult{

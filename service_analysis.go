@@ -2,6 +2,7 @@ package skeleton
 
 import (
 	"context"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/utils"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 )
@@ -16,16 +17,22 @@ type AnalysisService interface {
 	GetAnalysisBatches(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisBatch, int, error)
 	RetransmitResult(ctx context.Context, resultID uuid.UUID) error
 	RetransmitResultBatches(ctx context.Context, batchIDs []uuid.UUID) error
+	ProcessStuckImagesToDEA(ctx context.Context)
+	ProcessStuckImagesToCerberus(ctx context.Context)
 }
 
 type analysisService struct {
 	analysisRepository AnalysisRepository
+	deaClient          DeaClientV1
+	cerberusClient     Cerberus
 	manager            Manager
 }
 
-func NewAnalysisService(analysisRepository AnalysisRepository, manager Manager) AnalysisService {
+func NewAnalysisService(analysisRepository AnalysisRepository, deaClient DeaClientV1, cerberusClient Cerberus, manager Manager) AnalysisService {
 	return &analysisService{
 		analysisRepository: analysisRepository,
+		deaClient:          deaClient,
+		cerberusClient:     cerberusClient,
 		manager:            manager,
 	}
 }
@@ -146,4 +153,89 @@ func (as *analysisService) RetransmitResultBatches(ctx context.Context, batchIDs
 	}
 
 	return nil
+}
+
+const stuckImageBatchSize = 500
+
+func (as *analysisService) ProcessStuckImagesToDEA(ctx context.Context) {
+	stuckImageIDs, err := as.analysisRepository.GetStuckImageIDsForDEA(ctx)
+	if err != nil {
+		return
+	}
+
+	if len(stuckImageIDs) == 0 {
+		return
+	}
+
+	_ = utils.Partition(len(stuckImageIDs), stuckImageBatchSize, func(low int, high int) error {
+		images, err := as.analysisRepository.GetImagesForDEAUploadByIDs(ctx, stuckImageIDs[low:high])
+		if err != nil {
+			return err
+		}
+
+		for _, image := range images {
+			deaImageID, err := as.deaClient.UploadImage(image.ImageBytes, image.Name)
+			if err != nil {
+				_ = as.analysisRepository.IncreaseImageUploadRetryCount(ctx, image.ID, err.Error())
+				continue
+			}
+
+			_ = as.analysisRepository.SaveDEAImageID(ctx, image.ID, deaImageID)
+		}
+
+		return nil
+	})
+}
+
+func (as *analysisService) ProcessStuckImagesToCerberus(ctx context.Context) {
+	stuckImageIDs, err := as.analysisRepository.GetStuckImageIDsForCerberus(ctx)
+	if err != nil {
+		return
+	}
+
+	if len(stuckImageIDs) == 0 {
+		return
+	}
+
+	_ = utils.Partition(len(stuckImageIDs), stuckImageBatchSize, func(low int, high int) error {
+		imageDAOs, err := as.analysisRepository.GetImagesForCerberusSyncByIDs(ctx, stuckImageIDs[low:high])
+		if err != nil {
+			return err
+		}
+
+		imageTOs := make([]WorkItemResultImageTO, 0)
+
+		for _, imageDAO := range imageDAOs {
+			imageTO := WorkItemResultImageTO{
+				WorkItemID: imageDAO.WorkItemID,
+				Image: ImageTO{
+					ID:   imageDAO.DeaImageID,
+					Name: imageDAO.Name,
+				},
+			}
+
+			if imageDAO.ChannelID.Valid {
+				imageTO.ChannelID = &imageDAO.ChannelID.UUID
+			}
+
+			if imageDAO.YieldedAt.Valid {
+				imageTO.ResultYieldDateTime = &imageDAO.YieldedAt.Time
+			}
+
+			if imageDAO.Description.Valid {
+				imageTO.Image.Description = &imageDAO.Description.String
+			}
+
+			imageTOs = append(imageTOs, imageTO)
+		}
+
+		err = as.cerberusClient.SendAnalysisResultImageBatch(imageTOs)
+		if err != nil {
+			return err
+		}
+
+		_ = as.analysisRepository.MarkImagesAsSyncedToCerberus(ctx, stuckImageIDs[low:high])
+
+		return nil
+	})
 }
