@@ -42,6 +42,7 @@ type Configuration struct {
 	ResultTransferBatchSize           int           `envconfig:"RESULT_TRANSFER_BATCH_SIZE" default:"100"`
 	ResultTransferFlushTimeout        int           `envconfig:"RESULT_TRANSFER_FLUSH_TIMEOUT" default:"5"`
 	ResultTransferRetryTimeout        int           `envconfig:"RESULT_TRANSFER_RETRY_TIMEOUT" default:"5"`
+	ImageRetrySeconds                 int           `envconfig:"IMAGE_RETRY_SECONDS" default:"60"`
 	AnalysisRequestsChannelBufferSize int           `envconfig:"ANALYSIS_REQUESTS_CHANNEL_BUFFER_SIZE" default:"1024"`
 	AnalysisResultsChannelBufferSize  int           `envconfig:"ANALYSIS_RESULTS_CHANNEL_BUFFER_SIZE" default:"1024"`
 	LogComURL                         string        `envconfig:"LOG_COM_URL" required:"true" default:"http://logcom"`

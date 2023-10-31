@@ -26,6 +26,12 @@ const (
 	msgCreateSubjectsFailed                                = "create subject failed"
 	msgCreateReagentInfoFailed                             = "create analysis result reagent infos failed"
 	msgCreateWarningsFailed                                = "create warnings failed"
+	msgFailedToSaveDEAImageID                              = "failed to save DEA image id"
+	msgFailedToIncreaseImageUploadRetryCount               = "failed to increase image upload retry count"
+	msgFailedToGetStuckImages                              = "failed to get stuck images"
+	msgFailedToScanStuckImageId                            = "failed to scan stuck image id"
+	msgFailedToScanStuckImageData                          = "failed to scan stuck image data"
+	msgFailedToMarkImagesAsSyncedToCerberus                = "failed to mark images as synced to cerberus"
 )
 
 var (
@@ -39,6 +45,12 @@ var (
 	ErrCreateSubjectsFailed                                = errors.New(msgCreateSubjectsFailed)
 	ErrCreateReagentInfoFailed                             = errors.New(msgCreateReagentInfoFailed)
 	ErrCreateWarningsFailed                                = errors.New(msgCreateWarningsFailed)
+	ErrFailedToSaveDEAImageID                              = errors.New(msgFailedToSaveDEAImageID)
+	ErrFailedToIncreaseImageUploadRetryCount               = errors.New(msgFailedToSaveDEAImageID)
+	ErrFailedToGetStuckImages                              = errors.New(msgFailedToGetStuckImages)
+	ErrFailedToScanStuckImageId                            = errors.New(msgFailedToScanStuckImageId)
+	ErrFailedToScanStuckImageData                          = errors.New(msgFailedToScanStuckImageData)
+	ErrFailedToMarkImagesAsSyncedToCerberus                = errors.New(msgFailedToMarkImagesAsSyncedToCerberus)
 )
 
 type analysisRequestDAO struct {
@@ -144,6 +156,16 @@ type imageDAO struct {
 	UploadError      sql.NullString `db:"upload_error"`
 }
 
+type cerberusImageDAO struct {
+	ID          uuid.UUID      `db:"id"`
+	DeaImageID  uuid.UUID      `db:"dea_image_id"`
+	Name        string         `db:"name"`
+	Description sql.NullString `db:"description"`
+	YieldedAt   sql.NullTime   `db:"yielded_at"`
+	WorkItemID  uuid.UUID      `db:"work_item_id"`
+	ChannelID   uuid.NullUUID  `db:"channel_id"`
+}
+
 type warningDAO struct {
 	ID               uuid.UUID `db:"id"`
 	AnalysisResultID uuid.UUID `db:"analysis_result_id"`
@@ -221,6 +243,13 @@ type AnalysisRepository interface {
 	CreateAnalysisResultQueueItem(ctx context.Context, analysisResults []AnalysisResult) (uuid.UUID, error)
 
 	SaveImages(ctx context.Context, images []imageDAO) ([]uuid.UUID, error)
+	GetStuckImageIDsForDEA(ctx context.Context) ([]uuid.UUID, error)
+	GetStuckImageIDsForCerberus(ctx context.Context) ([]uuid.UUID, error)
+	GetImagesForDEAUploadByIDs(ctx context.Context, ids []uuid.UUID) ([]imageDAO, error)
+	GetImagesForCerberusSyncByIDs(ctx context.Context, ids []uuid.UUID) ([]cerberusImageDAO, error)
+	SaveDEAImageID(ctx context.Context, imageID, deaImageID uuid.UUID) error
+	IncreaseImageUploadRetryCount(ctx context.Context, imageID uuid.UUID, error string) error
+	MarkImagesAsSyncedToCerberus(ctx context.Context, ids []uuid.UUID) error
 
 	CreateTransaction() (db.DbConnector, error)
 	WithTransaction(tx db.DbConnector) AnalysisRepository
@@ -1863,6 +1892,175 @@ func (r *analysisRepository) UpdateAnalysisResultQueueItemStatus(ctx context.Con
 		log.Error().Err(err).Msg("Update result transmission status failed")
 		return err
 	}
+	return nil
+}
+
+func (r *analysisRepository) GetStuckImageIDsForDEA(ctx context.Context) ([]uuid.UUID, error) {
+	query := fmt.Sprintf(`SELECT sari.id FROM %s.sk_analysis_result_images sari WHERE sari.dea_image_id IS NULL AND sari.image_bytes IS NOT NULL;`, r.dbSchema)
+
+	imageIDs := make([]uuid.UUID, 0)
+
+	rows, err := r.db.QueryxContext(ctx, query)
+	if err != nil {
+		log.Error().Err(err).Msg(msgFailedToGetStuckImages)
+		return imageIDs, ErrFailedToGetStuckImages
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var id uuid.UUID
+		err := rows.Scan(&id)
+		if err != nil {
+			log.Error().Err(err).Msg(msgFailedToScanStuckImageId)
+			return imageIDs, ErrFailedToScanStuckImageId
+		}
+
+		imageIDs = append(imageIDs, id)
+	}
+
+	return imageIDs, err
+}
+
+func (r *analysisRepository) GetStuckImageIDsForCerberus(ctx context.Context) ([]uuid.UUID, error) {
+	query := fmt.Sprintf(`SELECT sari.id FROM %s.sk_analysis_result_images sari WHERE sari.sync_to_cerberus_needed IS TRUE;`, r.dbSchema)
+
+	imageIDs := make([]uuid.UUID, 0)
+
+	rows, err := r.db.QueryxContext(ctx, query)
+	if err != nil {
+		log.Error().Err(err).Msg(msgFailedToGetStuckImages)
+		return imageIDs, ErrFailedToGetStuckImages
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var id uuid.UUID
+		err := rows.Scan(&id)
+		if err != nil {
+			log.Error().Err(err).Msg(msgFailedToScanStuckImageId)
+			return imageIDs, ErrFailedToScanStuckImageId
+		}
+
+		imageIDs = append(imageIDs, id)
+	}
+
+	return imageIDs, err
+}
+
+func (r *analysisRepository) GetImagesForDEAUploadByIDs(ctx context.Context, ids []uuid.UUID) ([]imageDAO, error) {
+	if len(ids) == 0 {
+		return []imageDAO{}, nil
+	}
+
+	query := fmt.Sprintf(`SELECT sari.id, sari.image_bytes, sari.name FROM %s.sk_analysis_result_images sari WHERE sari.id IN (?);`, r.dbSchema)
+
+	query, args, _ := sqlx.In(query, ids)
+	query = r.db.Rebind(query)
+
+	rows, err := r.db.QueryxContext(ctx, query, args...)
+	if err != nil {
+		log.Error().Err(err).Msg(msgFailedToGetStuckImages)
+		return []imageDAO{}, ErrFailedToGetStuckImages
+	}
+	defer rows.Close()
+
+	images := make([]imageDAO, 0)
+	for rows.Next() {
+		image := imageDAO{}
+		err := rows.StructScan(&image)
+		if err != nil {
+			log.Error().Err(err).Msg(msgFailedToScanStuckImageData)
+			return []imageDAO{}, ErrFailedToScanStuckImageData
+		}
+
+		images = append(images, image)
+	}
+
+	return images, err
+}
+
+func (r *analysisRepository) GetImagesForCerberusSyncByIDs(ctx context.Context, ids []uuid.UUID) ([]cerberusImageDAO, error) {
+	if len(ids) == 0 {
+		return []cerberusImageDAO{}, nil
+	}
+
+	query := `SELECT sari.id, sari.dea_image_id, sari."name", sari.description, sar.yielded_at, sar2.work_item_id, scr.channel_id
+				FROM %schema_name%.sk_analysis_result_images sari
+				INNER JOIN %schema_name%.sk_analysis_results sar on sar.id = sari.analysis_result_id
+				INNER JOIN %schema_name%.sk_channel_results scr on scr.id = sari.channel_result_id
+				INNER JOIN %schema_name%.sk_analyte_mappings sam on sam.id = sar.analyte_mapping_id 
+				LEFT JOIN %schema_name%.sk_analysis_requests sar2 on (sar2.sample_code = sar.sample_code and sar2.analyte_id = sam.analyte_id)
+				WHERE sari.id IN (?);`
+
+	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
+
+	query, args, _ := sqlx.In(query, ids)
+	query = r.db.Rebind(query)
+
+	rows, err := r.db.QueryxContext(ctx, query, args...)
+	if err != nil {
+		log.Error().Err(err).Msg(msgFailedToGetStuckImages)
+		return []cerberusImageDAO{}, ErrFailedToGetStuckImages
+	}
+	defer rows.Close()
+
+	images := make([]cerberusImageDAO, 0)
+	for rows.Next() {
+		image := cerberusImageDAO{}
+		err := rows.StructScan(&image)
+		if err != nil {
+			log.Error().Err(err).Msg(msgFailedToScanStuckImageData)
+			return []cerberusImageDAO{}, ErrFailedToScanStuckImageData
+		}
+
+		images = append(images, image)
+	}
+
+	return images, err
+}
+
+func (r *analysisRepository) SaveDEAImageID(ctx context.Context, imageID, deaImageID uuid.UUID) error {
+	query := fmt.Sprintf(`
+		UPDATE %s.sk_analysis_result_images
+		SET dea_image_id = $2, image_bytes = NULL,
+		    uploaded_to_dea_at = timezone('utc', now()),
+		    upload_error = NULL, 
+		    sync_to_cerberus_needed = true 
+		WHERE id = $1;`, r.dbSchema)
+
+	_, err := r.db.ExecContext(ctx, query, imageID, deaImageID)
+	if err != nil {
+		log.Error().Err(err).Msg(msgFailedToSaveDEAImageID)
+		return ErrFailedToSaveDEAImageID
+	}
+
+	return nil
+}
+
+func (r *analysisRepository) IncreaseImageUploadRetryCount(ctx context.Context, imageID uuid.UUID, error string) error {
+	query := fmt.Sprintf(`UPDATE %s.sk_analysis_result_images SET upload_retry_count = upload_retry_count + 1, upload_error = $2 WHERE id = $1;`, r.dbSchema)
+
+	_, err := r.db.ExecContext(ctx, query, imageID, error)
+	if err != nil {
+		log.Error().Err(err).Msg(msgFailedToIncreaseImageUploadRetryCount)
+		return ErrFailedToIncreaseImageUploadRetryCount
+	}
+
+	return nil
+}
+
+func (r *analysisRepository) MarkImagesAsSyncedToCerberus(ctx context.Context, ids []uuid.UUID) error {
+	query := fmt.Sprintf(`UPDATE %s.sk_analysis_result_images SET sync_to_cerberus_needed = false WHERE id IN (?);`, r.dbSchema)
+
+	query, args, _ := sqlx.In(query, ids)
+	query = r.db.Rebind(query)
+
+	_, err := r.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		log.Error().Err(err).Msg(msgFailedToMarkImagesAsSyncedToCerberus)
+		return ErrFailedToMarkImagesAsSyncedToCerberus
+	}
+
 	return nil
 }
 

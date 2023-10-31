@@ -24,6 +24,7 @@ var (
 type Cerberus interface {
 	RegisterInstrument(instrument Instrument) error
 	SendAnalysisResultBatch(analysisResults []AnalysisResultTO) (AnalysisResultBatchResponse, error)
+	SendAnalysisResultImageBatch(images []WorkItemResultImageTO) error
 }
 
 type cerberus struct {
@@ -101,6 +102,13 @@ type ReagentInfoTO struct {
 	ReagentType             string    `json:"reagentType"`
 	UseUntil                time.Time `json:"useUntil"`
 	DateCreated             time.Time `json:"dateCreated"`
+}
+
+type WorkItemResultImageTO struct {
+	WorkItemID          uuid.UUID  `json:"workItemId"`
+	ResultYieldDateTime *time.Time `json:"resultYieldDateTime"`
+	ChannelID           *uuid.UUID `json:"channelId"`
+	Image               ImageTO    `json:"image"`
 }
 
 func NewCerberusClient(cerberusUrl string, restyClient *resty.Client) (Cerberus, error) {
@@ -243,4 +251,18 @@ func (cia *cerberus) SendAnalysisResultBatch(analysisResults []AnalysisResultTO)
 		}
 		return response, err
 	}
+}
+
+func (cia *cerberus) SendAnalysisResultImageBatch(images []WorkItemResultImageTO) error {
+	_, err := cia.client.R().
+		SetHeader("Content-Type", "application/json").
+		SetBody(images).
+		Post(cia.cerberusUrl + "/v1/analysis-results/image/batch")
+
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to call Cerberus API (/v1/analysis-results/image/batch)")
+		return err
+	}
+
+	return nil
 }

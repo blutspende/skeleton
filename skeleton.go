@@ -31,6 +31,7 @@ type skeleton struct {
 	deaClient                  DeaClientV1
 	manager                    Manager
 	resultTransferFlushTimeout int
+	imageRetrySeconds          int
 }
 
 func (s *skeleton) SetCallbackHandler(eventHandler SkeletonCallbackHandlerV1) {
@@ -316,6 +317,8 @@ func (s *skeleton) Start() error {
 	go s.processAnalysisResults(context.Background())
 	go s.processAnalysisResultBatches(context.Background())
 	go s.submitAnalysisResultsToCerberus(context.Background())
+	go s.processStuckImagesToDEA(context.Background())
+	go s.processStuckImagesToCerberus(context.Background())
 
 	// Todo - use cancellable context what is passed to the routines above too
 	err := s.api.Run()
@@ -502,7 +505,45 @@ func (s *skeleton) submitAnalysisResultsToCerberus(ctx context.Context) {
 	}
 }
 
-func NewSkeleton(sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api GinApi, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService service.ConsoleLogService, manager Manager, cerberusClient Cerberus, deaClient DeaClientV1, resultTransferFlushTimeout int) (SkeletonAPI, error) {
+func (s *skeleton) processStuckImagesToDEA(ctx context.Context) {
+	tickerTriggerDuration := time.Duration(s.imageRetrySeconds) * time.Second
+	ticker := time.NewTicker(tickerTriggerDuration)
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Debug().Msg("Stopping DEA stuck image processing job")
+			ticker.Stop()
+			return
+		case <-ticker.C:
+			ticker.Stop()
+			log.Trace().Msg("Scheduled DEA stuck image processing")
+			s.analysisService.ProcessStuckImagesToDEA(ctx)
+			ticker.Reset(tickerTriggerDuration)
+		}
+	}
+}
+
+func (s *skeleton) processStuckImagesToCerberus(ctx context.Context) {
+	tickerTriggerDuration := time.Duration(s.imageRetrySeconds) * time.Second
+	ticker := time.NewTicker(tickerTriggerDuration)
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Debug().Msg("Stopping cerberus stuck image processing job")
+			ticker.Stop()
+			return
+		case <-ticker.C:
+			ticker.Stop()
+			log.Trace().Msg("Scheduled cerberus stuck image processing")
+			s.analysisService.ProcessStuckImagesToCerberus(ctx)
+			ticker.Reset(tickerTriggerDuration)
+		}
+	}
+}
+
+func NewSkeleton(sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api GinApi, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService service.ConsoleLogService, manager Manager, cerberusClient Cerberus, deaClient DeaClientV1, resultTransferFlushTimeout int, imageRetrySeconds int) (SkeletonAPI, error) {
 	skeleton := &skeleton{
 		sqlConn:                    sqlConn,
 		dbSchema:                   dbSchema,
@@ -518,6 +559,7 @@ func NewSkeleton(sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMi
 		resultsBuffer:              make([]AnalysisResult, 0, 500),
 		resultBatchesChan:          make(chan []AnalysisResult, 10),
 		resultTransferFlushTimeout: resultTransferFlushTimeout,
+		imageRetrySeconds:          imageRetrySeconds,
 	}
 
 	err := skeleton.migrateUp(context.Background(), skeleton.sqlConn, skeleton.dbSchema)
