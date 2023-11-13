@@ -1040,7 +1040,7 @@ func (r *instrumentRepository) DeleteInstrumentSettings(ctx context.Context, ids
 }
 
 func (r *instrumentRepository) CheckAnalytesUsage(ctx context.Context, analyteIDs []uuid.UUID) (map[uuid.UUID][]Instrument, error) {
-	query := fmt.Sprintf(`SELECT am.analyte_id, i.id, i.name, FROM %s.sk_analyte_mappings am INNER JOIN %s.sk_instruments i ON am.instrument_id = i.id
+	query := fmt.Sprintf(`SELECT am.analyte_id, i.id, i.name FROM %s.sk_analyte_mappings am INNER JOIN %s.sk_instruments i ON am.instrument_id = i.id
 	  WHERE am.analyte_id IN (?) AND am.deleted_at IS NULL AND i.deleted_at IS NULL;`, r.dbSchema, r.dbSchema)
 	query, args, _ := sqlx.In(query, analyteIDs)
 	query = r.db.Rebind(query)
