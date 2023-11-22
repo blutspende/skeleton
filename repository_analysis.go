@@ -877,8 +877,12 @@ func (r *analysisRepository) createAnalysisResultsBatch(ctx context.Context, ana
 }
 
 func (r *analysisRepository) GetAnalysisResultsBySampleCodeAndAnalyteID(ctx context.Context, sampleCode string, analyteID uuid.UUID) ([]AnalysisResult, error) {
-	query := `SELECT sar.id, sar.analyte_mapping_id, sar.instrument_id, sar.sample_code, sar.instrument_run_id, sar.result_record_id, sar.batch_id, sar."result", sar.status, sar.result_mode, sar.yielded_at, sar.valid_until, sar.operator, sar.edited, sar.edit_reason,
-					sam.id AS "analyte_mapping.id", sam.instrument_id AS "analyte_mapping.instrument_id", sam.instrument_analyte AS "analyte_mapping.instrument_analyte", sam.analyte_id AS "analyte_mapping.analyte_id", sam.result_type AS "analyte_mapping.result_type", sam.created_at AS "analyte_mapping.created_at", sam.modified_at AS "analyte_mapping.modified_at"
+	query := `SELECT sar.id, sar.analyte_mapping_id, sar.instrument_id, sar.sample_code, sar.instrument_run_id,
+       				sar.result_record_id, sar.batch_id, sar."result", sar.status, sar.result_mode, sar.yielded_at,
+       				sar.valid_until, sar.operator, sar.edited, sar.edit_reason, sam.id AS "analyte_mapping.id",
+       				sam.instrument_id AS "analyte_mapping.instrument_id", sam.instrument_analyte AS "analyte_mapping.instrument_analyte",
+					sam.analyte_id AS "analyte_mapping.analyte_id", sam.result_type AS "analyte_mapping.result_type",
+					sam.created_at AS "analyte_mapping.created_at", sam.modified_at AS "analyte_mapping.modified_at"
 			FROM %schema_name%.sk_analysis_results sar
 			INNER JOIN %schema_name%.sk_analyte_mappings sam ON sar.analyte_mapping_id = sam.id AND sam.deleted_at IS NULL
 			WHERE sar.sample_code = $1
@@ -910,37 +914,37 @@ func (r *analysisRepository) GetAnalysisResultsBySampleCodeAndAnalyteID(ctx cont
 	}
 
 	analysisResults := make([]AnalysisResult, len(analysisResultDAOs))
-	for analysisResultIndex, dao := range analysisResultDAOs {
-		extraValues, err := r.getExtraValues(ctx, dao.ID)
+	for analysisResultIndex := range analysisResultDAOs {
+		extraValues, err := r.getExtraValues(ctx, analysisResultDAOs[analysisResultIndex].ID)
 		if err != nil {
 			return nil, err
 		}
-		dao.ExtraValues = extraValues
+		analysisResultDAOs[analysisResultIndex].ExtraValues = extraValues
 
-		reagentInfoList, err := r.getReagentInfoList(ctx, dao.ID)
+		reagentInfoList, err := r.getReagentInfoList(ctx, analysisResultDAOs[analysisResultIndex].ID)
 		if err != nil {
 			return nil, err
 		}
-		dao.ReagentInfos = reagentInfoList
+		analysisResultDAOs[analysisResultIndex].ReagentInfos = reagentInfoList
 
-		images, err := r.getImages(ctx, dao.ID)
+		images, err := r.getImages(ctx, analysisResultDAOs[analysisResultIndex].ID)
 		if err != nil {
 			return nil, err
 		}
-		dao.Images = images
+		analysisResultDAOs[analysisResultIndex].Images = images
 
-		warnings, err := r.getWarnings(ctx, dao.ID)
+		warnings, err := r.getWarnings(ctx, analysisResultDAOs[analysisResultIndex].ID)
 		if err != nil {
 			return nil, err
 		}
-		dao.Warnings = warnings
+		analysisResultDAOs[analysisResultIndex].Warnings = warnings
 
-		channelResults, err := r.getChannelResults(ctx, dao.ID)
+		channelResults, err := r.getChannelResults(ctx, analysisResultDAOs[analysisResultIndex].ID)
 		if err != nil {
 			return nil, err
 		}
 		for i := range channelResults {
-			channelResultImages, err := r.getChannelResultImages(ctx, dao.ID, channelResults[i].ID)
+			channelResultImages, err := r.getChannelResultImages(ctx, analysisResultDAOs[analysisResultIndex].ID, channelResults[i].ID)
 			if err != nil {
 				return nil, err
 			}
@@ -952,17 +956,17 @@ func (r *analysisRepository) GetAnalysisResultsBySampleCodeAndAnalyteID(ctx cont
 			}
 			channelResults[i].QuantitativeResults = quantitativeValues
 		}
-		dao.ChannelResults = channelResults
+		analysisResultDAOs[analysisResultIndex].ChannelResults = channelResults
 
-		analysisResult := convertAnalysisResultDAOToAnalysisResult(dao)
+		analysisResult := convertAnalysisResultDAOToAnalysisResult(analysisResultDAOs[analysisResultIndex])
 
-		channelMappings, err := r.getChannelMappings(ctx, dao.AnalyteMappingID)
+		channelMappings, err := r.getChannelMappings(ctx, analysisResultDAOs[analysisResultIndex].AnalyteMappingID)
 		if err != nil {
 			return nil, err
 		}
 		analysisResult.AnalyteMapping.ChannelMappings = channelMappings
 
-		resultMappings, err := r.getResultMappings(ctx, dao.AnalyteMappingID)
+		resultMappings, err := r.getResultMappings(ctx, analysisResultDAOs[analysisResultIndex].AnalyteMappingID)
 		if err != nil {
 			return nil, err
 		}
@@ -1104,37 +1108,37 @@ func (r *analysisRepository) GetAnalysisResultsByBatchIDs(ctx context.Context, b
 	}
 
 	analysisResults := make([]AnalysisResult, len(analysisResultDAOs))
-	for analysisResultIndex, dao := range analysisResultDAOs {
-		extraValues, err := r.getExtraValues(ctx, dao.ID)
+	for analysisResultIndex := range analysisResultDAOs {
+		extraValues, err := r.getExtraValues(ctx, analysisResultDAOs[analysisResultIndex].ID)
 		if err != nil {
 			return nil, err
 		}
-		dao.ExtraValues = extraValues
+		analysisResultDAOs[analysisResultIndex].ExtraValues = extraValues
 
-		reagentInfoList, err := r.getReagentInfoList(ctx, dao.ID)
+		reagentInfoList, err := r.getReagentInfoList(ctx, analysisResultDAOs[analysisResultIndex].ID)
 		if err != nil {
 			return nil, err
 		}
-		dao.ReagentInfos = reagentInfoList
+		analysisResultDAOs[analysisResultIndex].ReagentInfos = reagentInfoList
 
-		images, err := r.getImages(ctx, dao.ID)
+		images, err := r.getImages(ctx, analysisResultDAOs[analysisResultIndex].ID)
 		if err != nil {
 			return nil, err
 		}
-		dao.Images = images
+		analysisResultDAOs[analysisResultIndex].Images = images
 
-		warnings, err := r.getWarnings(ctx, dao.ID)
+		warnings, err := r.getWarnings(ctx, analysisResultDAOs[analysisResultIndex].ID)
 		if err != nil {
 			return nil, err
 		}
-		dao.Warnings = warnings
+		analysisResultDAOs[analysisResultIndex].Warnings = warnings
 
-		channelResults, err := r.getChannelResults(ctx, dao.ID)
+		channelResults, err := r.getChannelResults(ctx, analysisResultDAOs[analysisResultIndex].ID)
 		if err != nil {
 			return nil, err
 		}
 		for i := range channelResults {
-			channelResultImages, err := r.getChannelResultImages(ctx, dao.ID, channelResults[i].ID)
+			channelResultImages, err := r.getChannelResultImages(ctx, analysisResultDAOs[analysisResultIndex].ID, channelResults[i].ID)
 			if err != nil {
 				return nil, err
 			}
@@ -1146,17 +1150,17 @@ func (r *analysisRepository) GetAnalysisResultsByBatchIDs(ctx context.Context, b
 			}
 			channelResults[i].QuantitativeResults = quantitativeValues
 		}
-		dao.ChannelResults = channelResults
+		analysisResultDAOs[analysisResultIndex].ChannelResults = channelResults
 
-		analysisResult := convertAnalysisResultDAOToAnalysisResult(dao)
+		analysisResult := convertAnalysisResultDAOToAnalysisResult(analysisResultDAOs[analysisResultIndex])
 
-		channelMappings, err := r.getChannelMappings(ctx, dao.AnalyteMappingID)
+		channelMappings, err := r.getChannelMappings(ctx, analysisResultDAOs[analysisResultIndex].AnalyteMappingID)
 		if err != nil {
 			return nil, err
 		}
 		analysisResult.AnalyteMapping.ChannelMappings = channelMappings
 
-		resultMappings, err := r.getResultMappings(ctx, dao.AnalyteMappingID)
+		resultMappings, err := r.getResultMappings(ctx, analysisResultDAOs[analysisResultIndex].AnalyteMappingID)
 		if err != nil {
 			return nil, err
 		}
@@ -1540,7 +1544,7 @@ func (r *analysisRepository) createReagentInfos(ctx context.Context, reagentInfo
 }
 
 func (r *analysisRepository) getImages(ctx context.Context, analysisResultID uuid.UUID) ([]imageDAO, error) {
-	query := fmt.Sprintf(`SELECT sari.id, sari.analysis_result_id, sari.channel_result_id, sari.name, sari.description FROM %s.sk_analysis_result_images sari WHERE sari.analysis_result_id = $1;`, r.dbSchema)
+	query := fmt.Sprintf(`SELECT sari.id, sari.analysis_result_id, sari.channel_result_id, sari.name, sari.description, sari.dea_image_id FROM %s.sk_analysis_result_images sari WHERE sari.analysis_result_id = $1;`, r.dbSchema)
 
 	rows, err := r.db.QueryxContext(ctx, query, analysisResultID)
 	if err != nil {
@@ -2530,6 +2534,7 @@ func convertImageDAOsToImages(imageDAOs []imageDAO) []Image {
 			ID:          imageDAO.ID,
 			Name:        imageDAO.Name,
 			Description: nullStringToStringPointer(imageDAO.Description),
+			DeaImageID:  imageDAO.DeaImageID,
 		}
 	}
 	return images
