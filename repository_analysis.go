@@ -1544,7 +1544,7 @@ func (r *analysisRepository) createReagentInfos(ctx context.Context, reagentInfo
 }
 
 func (r *analysisRepository) getImages(ctx context.Context, analysisResultID uuid.UUID) ([]imageDAO, error) {
-	query := fmt.Sprintf(`SELECT sari.id, sari.analysis_result_id, sari.channel_result_id, sari.name, sari.description, sari.dea_image_id FROM %s.sk_analysis_result_images sari WHERE sari.analysis_result_id = $1;`, r.dbSchema)
+	query := fmt.Sprintf(`SELECT sari.id, sari.analysis_result_id, sari.channel_result_id, sari.name, sari.description, sari.dea_image_id FROM %s.sk_analysis_result_images sari WHERE sari.analysis_result_id = $1 AND sari.channel_result_id IS NULL;`, r.dbSchema)
 
 	rows, err := r.db.QueryxContext(ctx, query, analysisResultID)
 	if err != nil {
@@ -1573,7 +1573,7 @@ func (r *analysisRepository) getImages(ctx context.Context, analysisResultID uui
 }
 
 func (r *analysisRepository) getChannelResultImages(ctx context.Context, analysisResultID uuid.UUID, channelResultID uuid.UUID) ([]imageDAO, error) {
-	query := fmt.Sprintf(`SELECT sari.id, sari.analysis_result_id, sari.channel_result_id, sari.name, sari.description
+	query := fmt.Sprintf(`SELECT sari.id, sari.analysis_result_id, sari.channel_result_id, sari.name, sari.description, sari.dea_image_id
 		FROM %s.sk_analysis_result_images sari WHERE sari.analysis_result_id = $1 AND sari.channel_result_id = $2;`, r.dbSchema)
 
 	rows, err := r.db.QueryxContext(ctx, query, analysisResultID, channelResultID)
