@@ -142,7 +142,7 @@ type batchRetransmitTO struct {
 }
 
 func (api *api) GetInstruments(c *gin.Context) {
-	instruments, err := api.instrumentService.GetInstruments(c)
+	instruments, err := api.instrumentService.GetInstruments(c, true)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, "GetInstruments Error")
 		return
@@ -164,7 +164,7 @@ func (api *api) GetInstrumentByID(c *gin.Context) {
 		return
 	}
 
-	instrument, err := api.instrumentService.GetInstrumentByID(c, nil, id, false)
+	instrument, err := api.instrumentService.GetInstrumentByID(c, nil, id, false, true)
 	if err != nil {
 		if err == ErrInstrumentNotFound {
 			c.AbortWithStatus(http.StatusNotFound)

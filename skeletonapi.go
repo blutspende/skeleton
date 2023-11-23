@@ -2,12 +2,13 @@ package skeleton
 
 import (
 	"context"
+	"net/http"
+
 	"github.com/DRK-Blutspende-BaWueHe/logcom-api/logcom"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/consolelog/repository"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/consolelog/service"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/server"
 	"github.com/gin-gonic/gin"
-	"net/http"
 
 	config2 "github.com/DRK-Blutspende-BaWueHe/skeleton/config"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/db"
