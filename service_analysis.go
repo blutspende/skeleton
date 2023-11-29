@@ -205,25 +205,25 @@ func (as *analysisService) ProcessStuckImagesToCerberus(ctx context.Context) {
 
 		imageTOs := make([]WorkItemResultImageTO, 0)
 
-		for _, imageDAO := range imageDAOs {
+		for i := range imageDAOs {
 			imageTO := WorkItemResultImageTO{
-				WorkItemID: imageDAO.WorkItemID,
+				WorkItemID: imageDAOs[i].WorkItemID,
 				Image: ImageTO{
-					ID:   imageDAO.DeaImageID,
-					Name: imageDAO.Name,
+					ID:   imageDAOs[i].DeaImageID,
+					Name: imageDAOs[i].Name,
 				},
 			}
 
-			if imageDAO.ChannelID.Valid {
-				imageTO.ChannelID = &imageDAO.ChannelID.UUID
+			if imageDAOs[i].ChannelID.Valid {
+				imageTO.ChannelID = &imageDAOs[i].ChannelID.UUID
 			}
 
-			if imageDAO.YieldedAt.Valid {
-				imageTO.ResultYieldDateTime = &imageDAO.YieldedAt.Time
+			if imageDAOs[i].YieldedAt.Valid {
+				imageTO.ResultYieldDateTime = &imageDAOs[i].YieldedAt.Time
 			}
 
-			if imageDAO.Description.Valid {
-				imageTO.Image.Description = &imageDAO.Description.String
+			if imageDAOs[i].Description.Valid {
+				imageTO.Image.Description = &imageDAOs[i].Description.String
 			}
 
 			imageTOs = append(imageTOs, imageTO)
