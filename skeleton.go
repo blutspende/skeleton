@@ -6,10 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/consolelog/service"
 	"strings"
 	"time"
-
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/consolelog/service"
 
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/migrator"
 	"github.com/google/uuid"
@@ -251,15 +250,15 @@ func (s *skeleton) saveImages(ctx context.Context, resultData *AnalysisResult) e
 }
 
 func (s *skeleton) GetInstrument(ctx context.Context, instrumentID uuid.UUID) (Instrument, error) {
-	return s.instrumentService.GetInstrumentByID(ctx, nil, instrumentID, false, false)
+	return s.instrumentService.GetInstrumentByID(ctx, nil, instrumentID, false)
 }
 
 func (s *skeleton) GetInstrumentByIP(ctx context.Context, ip string) (Instrument, error) {
-	return s.instrumentService.GetInstrumentByIP(ctx, ip, false)
+	return s.instrumentService.GetInstrumentByIP(ctx, ip)
 }
 
 func (s *skeleton) GetInstruments(ctx context.Context) ([]Instrument, error) {
-	return s.instrumentService.GetInstruments(ctx, false)
+	return s.instrumentService.GetInstruments(ctx)
 }
 
 func (s *skeleton) FindAnalyteByManufacturerTestCode(instrument Instrument, testCode string) AnalyteMapping {
@@ -570,7 +569,7 @@ func NewSkeleton(sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMi
 
 	// Note: Cache instruments on startup
 	go func() {
-		_, _ = instrumentService.GetInstruments(context.Background(), false)
+		_, _ = instrumentService.GetInstruments(context.Background())
 	}()
 
 	return skeleton, nil
