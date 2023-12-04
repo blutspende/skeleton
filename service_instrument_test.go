@@ -4,15 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"testing"
-	"time"
-
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/config"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/db"
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/migrator"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/assert"
+	"testing"
+	"time"
 )
 
 func TestRegisterCreatedInstrument(t *testing.T) {
@@ -123,7 +122,7 @@ func TestUpdateInstrument(t *testing.T) {
 	})
 	assert.Nil(t, err)
 
-	instrument, err := instrumentService.GetInstrumentByID(ctx, nil, instrumentID, false, false)
+	instrument, err := instrumentService.GetInstrumentByID(ctx, nil, instrumentID, false)
 	assert.Nil(t, err)
 	assert.Equal(t, "TestInstrument", instrument.Name)
 	assert.Equal(t, protocolID, instrument.ProtocolID)
@@ -184,7 +183,7 @@ func TestUpdateInstrument(t *testing.T) {
 	})
 
 	assert.Nil(t, err)
-	instrument, err = instrumentService.GetInstrumentByID(ctx, nil, instrumentID, false, false)
+	instrument, err = instrumentService.GetInstrumentByID(ctx, nil, instrumentID, false)
 	assert.Equal(t, "TestInstrumentUpdated", instrument.Name)
 	assert.Len(t, instrument.AnalyteMappings, 1)
 	assert.Equal(t, analyteID1, instrument.AnalyteMappings[0].AnalyteID)
@@ -292,7 +291,7 @@ func TestUpdateInstrument(t *testing.T) {
 	})
 
 	assert.Nil(t, err)
-	instrument, err = instrumentService.GetInstrumentByID(ctx, nil, instrumentID, false, false)
+	instrument, err = instrumentService.GetInstrumentByID(ctx, nil, instrumentID, false)
 	assert.Equal(t, "TestInstrumentUpdated2", instrument.Name)
 	assert.Len(t, instrument.AnalyteMappings, 2)
 

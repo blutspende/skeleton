@@ -4,9 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"strings"
-
 	"github.com/jmoiron/sqlx"
+	"strings"
 )
 
 // in order! do not skip any number
@@ -22,7 +21,6 @@ var migrations = []string{
 	migration_9,
 	migration_10,
 	migration_11,
-	migration_12,
 }
 
 type skeletonMigrator struct {

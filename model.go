@@ -401,8 +401,7 @@ const (
 type ProtocolSettingType string
 
 const (
-	String   ProtocolSettingType = "string"
-	Int      ProtocolSettingType = "int"
-	Bool     ProtocolSettingType = "bool"
-	Password ProtocolSettingType = "password"
+	String ProtocolSettingType = "string"
+	Int    ProtocolSettingType = "int"
+	Bool   ProtocolSettingType = "bool"
 )
