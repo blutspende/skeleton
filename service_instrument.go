@@ -26,6 +26,7 @@ type InstrumentService interface {
 	UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error
 	EnqueueUnsentInstrumentsToCerberus(ctx context.Context)
 	CheckAnalytesUsage(ctx context.Context, analyteIDs []uuid.UUID) (map[uuid.UUID][]Instrument, error)
+	HidePassword(ctx context.Context, instrument *Instrument) error
 }
 
 type instrumentService struct {
@@ -55,12 +56,17 @@ func (s *instrumentService) CreateInstrument(ctx context.Context, instrument Ins
 	if err != nil {
 		return uuid.Nil, err
 	}
+
 	id, err := s.instrumentRepository.WithTransaction(transaction).CreateInstrument(ctx, instrument)
 	if err != nil {
 		_ = transaction.Rollback()
 		return uuid.Nil, err
 	}
 	analyteMappingIDs, err := s.instrumentRepository.WithTransaction(transaction).CreateAnalyteMappings(ctx, instrument.AnalyteMappings, id)
+	if err != nil {
+		_ = transaction.Rollback()
+		return uuid.Nil, err
+	}
 	for i, analyteMappingID := range analyteMappingIDs {
 		_, err = s.instrumentRepository.WithTransaction(transaction).CreateChannelMappings(ctx, instrument.AnalyteMappings[i].ChannelMappings, analyteMappingID)
 		if err != nil {
@@ -96,6 +102,7 @@ func (s *instrumentService) CreateInstrument(ctx context.Context, instrument Ins
 }
 
 func (s *instrumentService) GetInstruments(ctx context.Context) ([]Instrument, error) {
+	var err error
 	if instruments := s.instrumentCache.GetAll(); len(instruments) > 0 {
 		return instruments, nil
 	}
@@ -188,6 +195,7 @@ func (s *instrumentService) GetInstruments(ctx context.Context) ([]Instrument, e
 }
 
 func (s *instrumentService) GetInstrumentByID(ctx context.Context, tx db.DbConnector, id uuid.UUID, bypassCache bool) (Instrument, error) {
+	var err error
 	if !bypassCache {
 		if instrument, ok := s.instrumentCache.GetByID(id); ok {
 			return instrument, nil
@@ -254,18 +262,20 @@ func (s *instrumentService) GetInstrumentByID(ctx context.Context, tx db.DbConne
 		requestMappingsByIDs[requestMappingID].AnalyteIDs = analyteIDs
 	}
 
-	settingsMap, err := s.instrumentRepository.GetInstrumentsSettings(ctx, instrumentIDs)
+	settingsMap, err := s.instrumentRepository.WithTransaction(tx).GetInstrumentsSettings(ctx, instrumentIDs)
 	if err != nil {
 		return instrument, err
 	}
-	if _, ok := settingsMap[id]; ok {
-		instrument.Settings = settingsMap[id]
+
+	if instrumentSettings, ok := settingsMap[id]; ok {
+		instrument.Settings = instrumentSettings
 	}
 
 	return instrument, nil
 }
 
 func (s *instrumentService) GetInstrumentByIP(ctx context.Context, ip string) (Instrument, error) {
+	var err error
 	if instrument, ok := s.instrumentCache.GetByIP(ip); ok {
 		return instrument, nil
 	}
@@ -335,14 +345,6 @@ func (s *instrumentService) GetInstrumentByIP(ctx context.Context, ip string) (I
 
 	for requestMappingID, analyteIDs := range requestMappingAnalyteIDs {
 		requestMappingsByIDs[requestMappingID].AnalyteIDs = analyteIDs
-	}
-
-	settingsMap, err := s.instrumentRepository.GetInstrumentsSettings(ctx, instrumentIDs)
-	if err != nil {
-		return instrument, err
-	}
-	if _, ok := settingsMap[instrument.ID]; ok {
-		instrument.Settings = settingsMap[instrument.ID]
 	}
 
 	return instrument, nil
@@ -554,7 +556,28 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 		return err
 	}
 
+	protocolSettings, err := s.instrumentRepository.GetProtocolSettings(ctx, instrument.ProtocolID)
+	if err != nil {
+		return err
+	}
 	for i := range instrument.Settings {
+		isSettingUpdateExcluded := false
+		for _, protocolSetting := range protocolSettings {
+			if instrument.Settings[i].ProtocolSettingID != protocolSetting.ID {
+				continue
+			}
+			if protocolSetting.Type != Password {
+				break
+			}
+
+			if instrument.Settings[i].Value == "" {
+				isSettingUpdateExcluded = true
+			}
+			break
+		}
+		if isSettingUpdateExcluded {
+			continue
+		}
 		err = s.instrumentRepository.WithTransaction(tx).UpsertInstrumentSetting(ctx, instrument.ID, instrument.Settings[i])
 		if err != nil {
 			_ = tx.Rollback()
@@ -796,4 +819,29 @@ func (s *instrumentService) retryInstrumentRegistration(ctx context.Context, id 
 			}
 		}
 	}()
+}
+
+func (s *instrumentService) HidePassword(ctx context.Context, instrument *Instrument) error {
+	protocolSettings, err := s.instrumentRepository.GetProtocolSettings(ctx, instrument.ProtocolID)
+	if err != nil {
+		return err
+	}
+	passwordProtocolSettingsMap := make(map[uuid.UUID]any)
+	for _, protocolSetting := range protocolSettings {
+		if protocolSetting.Type == Password {
+			passwordProtocolSettingsMap[protocolSetting.ID] = nil
+		}
+	}
+
+	if len(passwordProtocolSettingsMap) == 0 {
+		return nil
+	}
+
+	for i := range instrument.Settings {
+		if _, ok := passwordProtocolSettingsMap[instrument.Settings[i].ProtocolSettingID]; ok {
+			instrument.Settings[i].Value = ""
+		}
+	}
+
+	return nil
 }

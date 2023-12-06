@@ -6,9 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/consolelog/service"
 	"strings"
 	"time"
+
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/consolelog/service"
 
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/migrator"
 	"github.com/google/uuid"

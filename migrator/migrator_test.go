@@ -3,12 +3,13 @@ package migrator_test
 import (
 	"context"
 	"fmt"
+	"testing"
+
 	"github.com/DRK-Blutspende-BaWueHe/skeleton/migrator"
 	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/proullon/ramsql/driver"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 func TestSkeletonMigrations(t *testing.T) {
@@ -42,5 +43,5 @@ func TestSkeletonMigrations(t *testing.T) {
 	assert.Nil(t, err)
 
 	//MODIFY THE EXPECTED VERSION AFTER ADDING NEW SKELETON MIGRATION!!!
-	assert.Equal(t, 11, version)
+	assert.Equal(t, 12, version)
 }

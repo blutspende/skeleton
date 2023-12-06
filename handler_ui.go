@@ -172,7 +172,11 @@ func (api *api) GetInstrumentByID(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, "GetInstrumentByID Error")
 		return
 	}
-
+	err = api.instrumentService.HidePassword(c, &instrument)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, "GetInstrumentByID Error")
+		return
+	}
 	c.JSON(http.StatusOK, convertInstrumentToInstrumentTO(instrument))
 }
 
