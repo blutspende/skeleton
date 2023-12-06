@@ -347,6 +347,14 @@ func (s *instrumentService) GetInstrumentByIP(ctx context.Context, ip string) (I
 		requestMappingsByIDs[requestMappingID].AnalyteIDs = analyteIDs
 	}
 
+	settingsMap, err := s.instrumentRepository.GetInstrumentsSettings(ctx, instrumentIDs)
+	if err != nil {
+		return instrument, err
+	}
+	if _, ok := settingsMap[instrument.ID]; ok {
+		instrument.Settings = settingsMap[instrument.ID]
+	}
+
 	return instrument, nil
 }
 
