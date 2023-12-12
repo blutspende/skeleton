@@ -47,6 +47,7 @@ type Configuration struct {
 	AnalysisResultsChannelBufferSize  int           `envconfig:"ANALYSIS_RESULTS_CHANNEL_BUFFER_SIZE" default:"1024"`
 	LogComURL                         string        `envconfig:"LOG_COM_URL" required:"true" default:"http://logcom"`
 	LogComServiceName                 string        `envconfig:"LOG_COM_SERVICE_NAME" required:"true"`
+	AnalysisRequestWorkerPoolSize     int           `envconfig:"ANALYSIS_REQUEST_WORKER_POOL_SIZE" default:"3"`
 
 	ClientCredentialAuthHeaderValue string
 }

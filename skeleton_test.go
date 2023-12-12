@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"runtime"
+	"sync"
 	"testing"
 	"time"
 
@@ -22,13 +23,19 @@ import (
 	_ "github.com/jackc/pgx/v4/stdlib"
 	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/assert"
+
+	timeout "github.com/vearne/gin-timeout"
 )
 
 func TestSkeletonStart(t *testing.T) {
 	sqlConn, err := sqlx.Connect("pgx", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
 	assert.Nil(t, err)
 
-	skeletonApi, err := New(sqlConn, "skeleton")
+	ctx, cancel := context.WithCancel(context.Background())
+
+	defer cancel()
+
+	skeletonApi, err := New(ctx, sqlConn, "skeleton")
 	if err != nil {
 		return
 	}
@@ -44,7 +51,7 @@ func TestSkeletonStart(t *testing.T) {
 	}
 }
 
-func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
+func TestSubmitAnalysisRequestsParallel(t *testing.T) {
 	sqlConn, _ := sqlx.Connect("pgx", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
 
 	schemaName := "testSubmitAnalysisResultsWithoutRequests"
@@ -52,13 +59,15 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 	_, _ = sqlConn.Exec(fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schemaName))
 	_, _ = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
 
-	config := config.Configuration{
-		APIPort:                          5000,
+	configuration := config.Configuration{
+		APIPort:                          5678,
 		Authorization:                    false,
 		PermittedOrigin:                  "*",
-		ApplicationName:                  "Instrument API Test",
+		ApplicationName:                  "Submit Analysis Request Parallel Test",
 		TCPListenerPort:                  5401,
 		InstrumentTransferRetryDelayInMs: 100,
+		ResultTransferFlushTimeout:       5,
+		ImageRetrySeconds:                60,
 	}
 	dbConn := db.CreateDbConnector(sqlConn)
 
@@ -74,7 +83,124 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 			return "authtoken", nil
 		},
 	}
-	skeletonManager := NewSkeletonManager()
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	defer cancel()
+
+	skeletonManager := NewSkeletonManager(ctx)
+	skeletonManager.SetCallbackHandler(&skeletonCallbackHandlerV1Mock{
+		handleAnalysisRequestsFunc: func(request []AnalysisRequest) error {
+			time.Sleep(2 * time.Second)
+			return nil
+		},
+	})
+	cerberusClientMock := &cerberusClientMock{
+		registerInstrumentFunc: func(instrument Instrument) error {
+			return nil
+		},
+		sendAnalysisResultBatchFunc: func(analysisResults []AnalysisResultTO) (AnalysisResultBatchResponse, error) {
+			result1ID := uuid.MustParse("dcb320af-e842-46af-a4ee-878db18c95a3")
+			result2ID := uuid.MustParse("147bff1c-55e0-4318-8ce5-23e0e12d073e")
+			return AnalysisResultBatchResponse{
+				AnalysisResultBatchItemInfoList: []AnalysisResultBatchItemInfo{
+					{
+						AnalysisResult:           &analysisResultsWithoutAnalysisRequestsTest_analysisResultTOs[0],
+						CerberusAnalysisResultID: &result1ID,
+						ErrorMessage:             "",
+					},
+					{
+						AnalysisResult:           &analysisResultsWithoutAnalysisRequestsTest_analysisResultTOs[1],
+						CerberusAnalysisResultID: &result2ID,
+						ErrorMessage:             "",
+					},
+				},
+				ErrorMessage:   "",
+				HTTPStatusCode: 202,
+				RawResponse:    "",
+			}, nil
+		},
+	}
+	deaClientMock := &deaClientMock{}
+
+	analysisService := NewAnalysisService(analysisRepository, deaClientMock, cerberusClientMock, skeletonManager)
+	instrumentService := NewInstrumentService(&configuration, instrumentRepository, skeletonManager, NewInstrumentCache(), cerberusClientMock)
+	consoleLogService := service.NewConsoleLogService(consoleLogRepository, nil)
+
+	ginEngine := gin.New()
+
+	ginEngine.Use(timeout.Timeout(timeout.WithTimeout(5*time.Second), timeout.WithErrorHttpCode(http.StatusRequestTimeout)))
+
+	api := newAPI(ginEngine, &configuration, &authManager, analysisService, instrumentService, consoleLogService, nil)
+
+	skeletonInstance, _ := NewSkeleton(ctx, sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, skeletonManager, cerberusClientMock, deaClientMock, configuration)
+
+	go func() {
+		_ = skeletonInstance.Start()
+	}()
+
+	var wg sync.WaitGroup
+
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			responseRecorder := &httptest.ResponseRecorder{}
+			ginContext := gin.CreateTestContextOnly(responseRecorder, ginEngine)
+
+			ginContext.Request, _ = http.NewRequest(http.MethodPost, "/v1/analysis-requests/batch", bytes.NewBuffer([]byte(generateAnalysisRequestsJson(500))))
+			ginEngine.ServeHTTP(responseRecorder, ginContext.Request)
+
+			if responseRecorder.Code != http.StatusOK {
+				t.Errorf("Expected status %d, got %d", http.StatusOK, responseRecorder.Code)
+			}
+		}()
+	}
+
+	wg.Wait()
+}
+
+func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
+	sqlConn, _ := sqlx.Connect("pgx", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
+
+	schemaName := "testSubmitAnalysisResultsWithoutRequests"
+	_, _ = sqlConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
+	_, _ = sqlConn.Exec(fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schemaName))
+	_, _ = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
+
+	configuration := config.Configuration{
+		APIPort:                          5000,
+		Authorization:                    false,
+		PermittedOrigin:                  "*",
+		ApplicationName:                  "Instrument API Test",
+		TCPListenerPort:                  5401,
+		InstrumentTransferRetryDelayInMs: 100,
+		ResultTransferFlushTimeout:       5,
+		ImageRetrySeconds:                60,
+		AnalysisRequestWorkerPoolSize:    1,
+	}
+	dbConn := db.CreateDbConnector(sqlConn)
+
+	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
+	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
+	consoleLogRepository := repository.NewConsoleLogRepository(500)
+
+	authManager := authManagerMock{
+		getJWKSFunc: func() (*keyfunc.JWKS, error) {
+			return &keyfunc.JWKS{}, nil
+		},
+		getClientCredentialFunc: func() (string, error) {
+			return "authtoken", nil
+		},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	defer cancel()
+
+	skeletonManager := NewSkeletonManager(ctx)
 	skeletonManager.SetCallbackHandler(&skeletonCallbackHandlerV1Mock{
 		handleAnalysisRequestsFunc: func(request []AnalysisRequest) error {
 			return nil
@@ -109,15 +235,15 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 	deaClientMock := &deaClientMock{}
 
 	analysisService := NewAnalysisService(analysisRepository, deaClientMock, cerberusClientMock, skeletonManager)
-	instrumentService := NewInstrumentService(&config, instrumentRepository, skeletonManager, NewInstrumentCache(), cerberusClientMock)
+	instrumentService := NewInstrumentService(&configuration, instrumentRepository, skeletonManager, NewInstrumentCache(), cerberusClientMock)
 	consoleLogService := service.NewConsoleLogService(consoleLogRepository, nil)
 
 	responseRecorder := &httptest.ResponseRecorder{}
 	ginContext, ginEngine := gin.CreateTestContext(responseRecorder)
 
-	api := newAPI(ginEngine, &config, &authManager, analysisService, instrumentService, consoleLogService, nil)
+	api := newAPI(ginEngine, &configuration, &authManager, analysisService, instrumentService, consoleLogService, nil)
 
-	skeletonInstance, _ := NewSkeleton(sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, skeletonManager, cerberusClientMock, deaClientMock, 5, 60)
+	skeletonInstance, _ := NewSkeleton(ctx, sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, skeletonManager, cerberusClientMock, deaClientMock, configuration)
 
 	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description)
 		VALUES ('abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
@@ -177,13 +303,15 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 	_, _ = sqlConn.Exec(fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schemaName))
 	_, _ = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
 
-	config := config.Configuration{
+	configuration := config.Configuration{
 		APIPort:                          5000,
 		Authorization:                    false,
 		PermittedOrigin:                  "*",
 		ApplicationName:                  "Instrument API Test",
 		TCPListenerPort:                  5401,
 		InstrumentTransferRetryDelayInMs: 100,
+		ResultTransferFlushTimeout:       5,
+		ImageRetrySeconds:                60,
 	}
 	dbConn := db.CreateDbConnector(sqlConn)
 
@@ -199,7 +327,12 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 			return "authtoken", nil
 		},
 	}
-	skeletonManager := NewSkeletonManager()
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	defer cancel()
+
+	skeletonManager := NewSkeletonManager(ctx)
 	skeletonManager.SetCallbackHandler(&skeletonCallbackHandlerV1Mock{
 		handleAnalysisRequestsFunc: func(request []AnalysisRequest) error {
 			return nil
@@ -214,12 +347,12 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 	deaClientMock := &deaClientMock{}
 
 	analysisService := NewAnalysisService(analysisRepository, deaClientMock, cerberusClientMock, skeletonManager)
-	instrumentService := NewInstrumentService(&config, instrumentRepository, skeletonManager, NewInstrumentCache(), cerberusClientMock)
+	instrumentService := NewInstrumentService(&configuration, instrumentRepository, skeletonManager, NewInstrumentCache(), cerberusClientMock)
 	consoleLogService := service.NewConsoleLogService(consoleLogRepository, nil)
 
-	api := NewAPI(&config, &authManager, analysisService, instrumentService, consoleLogService, nil)
+	api := NewAPI(&configuration, &authManager, analysisService, instrumentService, consoleLogService, nil)
 
-	skeletonInstance, _ := NewSkeleton(sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, skeletonManager, cerberusClientMock, deaClientMock, 5, 60)
+	skeletonInstance, _ := NewSkeleton(ctx, sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, skeletonManager, cerberusClientMock, deaClientMock, configuration)
 
 	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('9bec3063-435d-490f-bec0-88a6633ef4c2', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
 
@@ -475,6 +608,30 @@ func (m *cerberusClientMock) SendAnalysisResultImageBatch(images []WorkItemResul
 	}
 
 	return m.sendAnalysisResultImageBatchFunc(images)
+}
+
+func generateAnalysisRequestsJson(count int) string {
+	json := `[`
+
+	for i := 0; i < count; i++ {
+		json += fmt.Sprintf(`{
+					"workItemId": "%s",
+					"analyteId": "51bfea41-1b7e-48f7-8b35-46d930216de7",
+					"sampleCode": "TestSampleCode%d",
+					"materialId": "50820d7e-3f5b-4452-aa4b-bebfc3c15002",
+					"laboratoryId": "3072973a-25d7-43d0-840f-d5a3de8e3aa5",
+					"validUntilTime": "2099-01-10T11:30:59.000Z",
+					"subject": null
+				}`, uuid.New(), i)
+
+		if i != count-1 {
+			json += `,`
+		}
+	}
+
+	json += `]`
+
+	return json
 }
 
 var analysisResultsWithoutAnalysisRequestsTest_analysisResults = []AnalysisResult{
