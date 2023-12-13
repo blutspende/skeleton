@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/config"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/utils"
 	"strings"
 	"time"
 
@@ -18,6 +20,8 @@ import (
 )
 
 type skeleton struct {
+	ctx                        context.Context
+	config                     config.Configuration
 	sqlConn                    *sqlx.DB
 	dbSchema                   string
 	migrator                   migrator.SkeletonMigrator
@@ -312,14 +316,17 @@ func (s *skeleton) migrateUp(ctx context.Context, db *sqlx.DB, schemaName string
 }
 
 func (s *skeleton) Start() error {
-	go s.cleanUpCerberusQueueItems(context.Background())
-	go s.sendUnsentInstrumentsToCerberus(context.Background())
-	go s.processAnalysisRequests(context.Background())
-	go s.processAnalysisResults(context.Background())
-	go s.processAnalysisResultBatches(context.Background())
-	go s.submitAnalysisResultsToCerberus(context.Background())
-	go s.processStuckImagesToDEA(context.Background())
-	go s.processStuckImagesToCerberus(context.Background())
+	go s.cleanUpCerberusQueueItems(s.ctx)
+	go s.sendUnsentInstrumentsToCerberus(s.ctx)
+	for i := 0; i < s.config.AnalysisRequestWorkerPoolSize; i++ {
+		go s.processAnalysisRequests(s.ctx)
+	}
+	go s.processAnalysisResults(s.ctx)
+	go s.processAnalysisResultBatches(s.ctx)
+	go s.submitAnalysisResultsToCerberus(s.ctx)
+	go s.processStuckImagesToDEA(s.ctx)
+	go s.processStuckImagesToCerberus(s.ctx)
+	go s.enqueueUnprocessedAnalysisRequests(s.ctx)
 
 	// Todo - use cancellable context what is passed to the routines above too
 	err := s.api.Run()
@@ -347,15 +354,72 @@ func (s *skeleton) sendUnsentInstrumentsToCerberus(ctx context.Context) {
 	}
 }
 
+func (s *skeleton) enqueueUnprocessedAnalysisRequests(ctx context.Context) {
+	for {
+		requests, err := s.analysisRepository.GetUnprocessedAnalysisRequests(ctx)
+		if err != nil {
+			time.Sleep(5 * time.Minute)
+			continue
+		}
+
+		for {
+			failed := make([]AnalysisRequest, 0)
+
+			err = utils.Partition(len(requests), 500, func(low int, high int) error {
+				partition := requests[low:high]
+
+				requestIDs := make([]uuid.UUID, 0)
+
+				for _, request := range partition {
+					requestIDs = append(requestIDs, request.ID)
+				}
+
+				subjects, err := s.analysisRepository.GetSubjectsByAnalysisRequestIDs(ctx, requestIDs)
+				if err != nil {
+					failed = append(failed, partition...)
+					return err
+				}
+
+				for i, _ := range partition {
+					if subject, ok := subjects[partition[i].ID]; ok {
+						partition[i].SubjectInfo = &subject
+					}
+				}
+
+				s.manager.GetProcessableAnalysisRequestQueue().Enqueue(partition)
+
+				return nil
+			})
+
+			if err != nil {
+				requests = failed
+				time.Sleep(5 * time.Minute)
+				continue
+			}
+
+			break
+		}
+
+		break
+	}
+}
+
 func (s *skeleton) processAnalysisRequests(ctx context.Context) {
+	log.Trace().Msg("Starting to process analysis requests")
+
 	for {
 		select {
 		case <-ctx.Done():
+			log.Trace().Msg("Stopping to process analysis requests")
 			return
-		case requests, ok := <-s.manager.GetProcessableAnalysisRequestsChan():
-			if !ok {
-				log.Fatal().Msg("processing analysis requests stopped: requests channel closed")
+		default:
+			requests := s.manager.GetProcessableAnalysisRequestQueue().Dequeue()
+
+			if ctx.Err() != nil {
+				log.Trace().Msg("Stopping to process analysis requests")
+				return
 			}
+
 			err := s.GetCallbackHandler().HandleAnalysisRequests(requests)
 			if err != nil {
 				log.Error().Err(err).Msg("Received veto from analysis result handler, aborting result transmission for the whole batch")
@@ -544,8 +608,10 @@ func (s *skeleton) processStuckImagesToCerberus(ctx context.Context) {
 	}
 }
 
-func NewSkeleton(sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api GinApi, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService service.ConsoleLogService, manager Manager, cerberusClient Cerberus, deaClient DeaClientV1, resultTransferFlushTimeout int, imageRetrySeconds int) (SkeletonAPI, error) {
+func NewSkeleton(ctx context.Context, sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api GinApi, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService service.ConsoleLogService, manager Manager, cerberusClient Cerberus, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
 	skeleton := &skeleton{
+		ctx:                        ctx,
+		config:                     config,
 		sqlConn:                    sqlConn,
 		dbSchema:                   dbSchema,
 		migrator:                   migrator,
@@ -559,8 +625,8 @@ func NewSkeleton(sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMi
 		deaClient:                  deaClient,
 		resultsBuffer:              make([]AnalysisResult, 0, 500),
 		resultBatchesChan:          make(chan []AnalysisResult, 10),
-		resultTransferFlushTimeout: resultTransferFlushTimeout,
-		imageRetrySeconds:          imageRetrySeconds,
+		resultTransferFlushTimeout: config.ResultTransferFlushTimeout,
+		imageRetrySeconds:          config.ImageRetrySeconds,
 	}
 
 	err := skeleton.migrateUp(context.Background(), skeleton.sqlConn, skeleton.dbSchema)

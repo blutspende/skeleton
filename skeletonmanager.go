@@ -1,6 +1,8 @@
 package skeleton
 
 import (
+	"context"
+	"github.com/DRK-Blutspende-BaWueHe/skeleton/utils"
 	"sync"
 
 	"github.com/google/uuid"
@@ -35,7 +37,7 @@ type Manager interface {
 	GetCallbackHandler() SkeletonCallbackHandlerV1
 
 	SendAnalysisRequestsForProcessing(analysisRequests []AnalysisRequest)
-	GetProcessableAnalysisRequestsChan() chan []AnalysisRequest
+	GetProcessableAnalysisRequestQueue() *utils.ConcurrentQueue[[]AnalysisRequest]
 
 	SendResultForProcessing(analysisResult AnalysisResult)
 	GetResultChan() chan AnalysisResult
@@ -49,6 +51,7 @@ type instrumentEvent struct {
 type manager struct {
 	resultsChan                         chan AnalysisResult
 	processableAnalysisRequestBatchChan chan []AnalysisRequest
+	processableAnalysisRequestQueue     *utils.ConcurrentQueue[[]AnalysisRequest]
 	instrumentEventChan                 chan instrumentEvent
 	instrumentQueueListeners            map[instrumentEventType][]InstrumentQueueListener
 	instrumentQueueListenersMutex       sync.Mutex
@@ -56,10 +59,11 @@ type manager struct {
 	callbackEventHandlerMutex           sync.Mutex
 }
 
-func NewSkeletonManager() Manager {
+func NewSkeletonManager(ctx context.Context) Manager {
 	skeletonManager := &manager{
 		resultsChan:                         make(chan AnalysisResult, 500),
 		processableAnalysisRequestBatchChan: make(chan []AnalysisRequest, 0),
+		processableAnalysisRequestQueue:     utils.NewConcurrentQueue[[]AnalysisRequest](ctx),
 		instrumentEventChan:                 make(chan instrumentEvent, 0),
 		instrumentQueueListeners:            make(map[instrumentEventType][]InstrumentQueueListener, 0),
 	}
@@ -103,11 +107,11 @@ func (sm *manager) RegisterInstrumentQueueListener(listener InstrumentQueueListe
 func (sm *manager) SendAnalysisRequestsForProcessing(analysisRequests []AnalysisRequest) {
 	log.Trace().Msgf("Sending %d analysis request(s) for processing", len(analysisRequests))
 
-	sm.processableAnalysisRequestBatchChan <- analysisRequests
+	sm.processableAnalysisRequestQueue.Enqueue(analysisRequests)
 }
 
-func (sm *manager) GetProcessableAnalysisRequestsChan() chan []AnalysisRequest {
-	return sm.processableAnalysisRequestBatchChan
+func (sm *manager) GetProcessableAnalysisRequestQueue() *utils.ConcurrentQueue[[]AnalysisRequest] {
+	return sm.processableAnalysisRequestQueue
 }
 
 func (sm *manager) SendResultForProcessing(analysisResult AnalysisResult) {

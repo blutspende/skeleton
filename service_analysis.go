@@ -58,12 +58,16 @@ func (as *analysisService) CreateAnalysisRequests(ctx context.Context, analysisR
 
 func (as *analysisService) ProcessAnalysisRequests(ctx context.Context, analysisRequests []AnalysisRequest) error {
 	completableRequestCount := 0
+	processedAnalysisRequestIDs := make([]uuid.UUID, 0)
+
 	for _, request := range analysisRequests {
 		analysisResults, err := as.analysisRepository.GetAnalysisResultsBySampleCodeAndAnalyteID(ctx, request.SampleCode, request.AnalyteID)
 		if err != nil {
 			log.Debug().Err(err).Str("requestID", request.ID.String()).Msg("Failed to load analysis results for the request")
 			return err
 		}
+
+		processedAnalysisRequestIDs = append(processedAnalysisRequestIDs, request.ID)
 
 		if len(analysisResults) < 1 {
 			continue
@@ -76,6 +80,8 @@ func (as *analysisService) ProcessAnalysisRequests(ctx context.Context, analysis
 			as.manager.SendResultForProcessing(analysisResults[i])
 		}
 	}
+
+	_ = as.analysisRepository.MarkAsProcessedBatch(ctx, processedAnalysisRequestIDs)
 
 	log.Trace().Msgf("%d processed request(s) has results out from %d", completableRequestCount, len(analysisRequests))
 

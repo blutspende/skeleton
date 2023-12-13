@@ -16,6 +16,7 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		log.Error().Err(err).Msg("starting embedded postgres failed")
 	}
+
 	configureLogger()
 
 	code := m.Run()

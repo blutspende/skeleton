@@ -32,6 +32,7 @@ const (
 	msgFailedToScanStuckImageId                            = "failed to scan stuck image id"
 	msgFailedToScanStuckImageData                          = "failed to scan stuck image data"
 	msgFailedToMarkImagesAsSyncedToCerberus                = "failed to mark images as synced to cerberus"
+	msgFailedToMarkAnalysisRequestsAsProcessed             = "failed to mark analysis requests as processed"
 )
 
 var (
@@ -51,6 +52,7 @@ var (
 	ErrFailedToScanStuckImageId                            = errors.New(msgFailedToScanStuckImageId)
 	ErrFailedToScanStuckImageData                          = errors.New(msgFailedToScanStuckImageData)
 	ErrFailedToMarkImagesAsSyncedToCerberus                = errors.New(msgFailedToMarkImagesAsSyncedToCerberus)
+	ErrFailedToMarkAnalysisRequestsAsProcessed             = errors.New(msgFailedToMarkAnalysisRequestsAsProcessed)
 )
 
 type analysisRequestDAO struct {
@@ -250,6 +252,9 @@ type AnalysisRepository interface {
 	SaveDEAImageID(ctx context.Context, imageID, deaImageID uuid.UUID) error
 	IncreaseImageUploadRetryCount(ctx context.Context, imageID uuid.UUID, error string) error
 	MarkImagesAsSyncedToCerberus(ctx context.Context, ids []uuid.UUID) error
+
+	GetUnprocessedAnalysisRequests(ctx context.Context) ([]AnalysisRequest, error)
+	MarkAsProcessedBatch(ctx context.Context, analysisRequestIDs []uuid.UUID) error
 
 	CreateTransaction() (db.DbConnector, error)
 	WithTransaction(tx db.DbConnector) AnalysisRepository
@@ -2063,6 +2068,52 @@ func (r *analysisRepository) MarkImagesAsSyncedToCerberus(ctx context.Context, i
 	if err != nil {
 		log.Error().Err(err).Msg(msgFailedToMarkImagesAsSyncedToCerberus)
 		return ErrFailedToMarkImagesAsSyncedToCerberus
+	}
+
+	return nil
+}
+
+func (r *analysisRepository) GetUnprocessedAnalysisRequests(ctx context.Context) ([]AnalysisRequest, error) {
+	query := fmt.Sprintf(`SELECT sar.id, sar.work_item_id, sar.analyte_id, sar.sample_code, sar.material_id, sar.laboratory_id, sar.valid_until_time, sar.created_at
+					FROM %s.sk_analysis_requests sar
+					WHERE sar.is_processed IS FALSE;`, r.dbSchema)
+
+	rows, err := r.db.QueryxContext(ctx, query)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			log.Trace().Msg("No analysis requests")
+			return []AnalysisRequest{}, nil
+		}
+		log.Error().Err(err).Msg("Can not search for AnalysisRequests")
+		return []AnalysisRequest{}, err
+	}
+	defer rows.Close()
+
+	analysisRequests := make([]AnalysisRequest, 0)
+	for rows.Next() {
+		request := analysisRequestDAO{}
+		err := rows.StructScan(&request)
+		if err != nil {
+			log.Error().Err(err).Msg("Can not scan data")
+			return []AnalysisRequest{}, err
+		}
+
+		analysisRequests = append(analysisRequests, convertAnalysisRequestDAOToAnalysisRequest(request))
+	}
+
+	return analysisRequests, err
+}
+
+func (r *analysisRepository) MarkAsProcessedBatch(ctx context.Context, analysisRequestIDs []uuid.UUID) error {
+	query := fmt.Sprintf(`UPDATE %s.sk_analysis_requests SET is_processed = true WHERE id IN (?);`, r.dbSchema)
+
+	query, args, _ := sqlx.In(query, analysisRequestIDs)
+	query = r.db.Rebind(query)
+
+	_, err := r.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		log.Error().Err(err).Msg(msgFailedToMarkAnalysisRequestsAsProcessed)
+		return ErrFailedToMarkAnalysisRequestsAsProcessed
 	}
 
 	return nil

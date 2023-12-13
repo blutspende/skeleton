@@ -47,7 +47,12 @@ func TestRegisterCreatedInstrument(t *testing.T) {
 		},
 	}
 	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
-	instrumentService := NewInstrumentService(&config, instrumentRepository, NewSkeletonManager(), NewInstrumentCache(), cerberusClientMock)
+
+	ctx, cancelSkeleton := context.WithCancel(context.Background())
+
+	defer cancelSkeleton()
+
+	instrumentService := NewInstrumentService(&config, instrumentRepository, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
 
 	_, _ = instrumentService.CreateInstrument(context.Background(), Instrument{
 		ID:             uuid.MustParse("68f34e1d-1faa-4101-9e79-a743b420ab4e"),
@@ -94,7 +99,12 @@ func TestUpdateInstrument(t *testing.T) {
 		},
 	}
 	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
-	instrumentService := NewInstrumentService(&configuration, instrumentRepository, NewSkeletonManager(), NewInstrumentCache(), cerberusClientMock)
+
+	ctxWithCancel, cancel := context.WithCancel(context.Background())
+
+	defer cancel()
+
+	instrumentService := NewInstrumentService(&configuration, instrumentRepository, NewSkeletonManager(ctxWithCancel), NewInstrumentCache(), cerberusClientMock)
 
 	var protocolID uuid.UUID
 	err := dbConn.QueryRowx(`INSERT INTO instrument_test.sk_supported_protocols (name, description) VALUES('Test Protocol', 'Test Protocol Description') RETURNING id;`).Scan(&protocolID)
@@ -363,7 +373,12 @@ func TestHidePassword(t *testing.T) {
 		},
 	}
 	mockInstrumentRepo := &instrumentRepositoryMock{db.CreateDbConnector(&sqlx.DB{})}
-	instrumentService := NewInstrumentService(&configuration, mockInstrumentRepo, NewSkeletonManager(), NewInstrumentCache(), cerberusClientMock)
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	defer cancel()
+
+	instrumentService := NewInstrumentService(&configuration, mockInstrumentRepo, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
 	instrument, err := instrumentService.GetInstrumentByID(context.TODO(), mockInstrumentRepo.db, uuid.MustParse("68f34e1d-1faa-4101-9e79-a743b420ab4e"), false)
 	assert.Nil(t, err)
 	assert.Equal(t, 2, len(instrument.Settings))
