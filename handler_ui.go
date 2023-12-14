@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/utils"
+	"github.com/blutspende/skeleton/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"

@@ -2,7 +2,7 @@ package server
 
 import (
 	"context"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/consolelog/model"
+	"github.com/blutspende/skeleton/consolelog/model"
 	"github.com/gin-contrib/sse"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"

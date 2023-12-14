@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/DRK-Blutspende-BaWueHe/logcom-api/logcom"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/config"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/db"
+	"github.com/blutspende/logcom-api/logcom"
+	"github.com/blutspende/skeleton/config"
+	"github.com/blutspende/skeleton/db"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 )

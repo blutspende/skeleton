@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/db"
+	"github.com/blutspende/skeleton/db"
 	"github.com/pkg/errors"
 	"strings"
 	"time"

@@ -6,14 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/config"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/utils"
+	"github.com/blutspende/skeleton/config"
+	"github.com/blutspende/skeleton/utils"
 	"strings"
 	"time"
 
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/consolelog/service"
+	"github.com/blutspende/skeleton/consolelog/service"
 
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/migrator"
+	"github.com/blutspende/skeleton/migrator"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/rs/zerolog/log"

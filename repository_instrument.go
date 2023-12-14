@@ -4,11 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/utils"
+	"github.com/blutspende/skeleton/utils"
 	"strings"
 	"time"
 
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/db"
+	"github.com/blutspende/skeleton/db"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"

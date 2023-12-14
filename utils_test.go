@@ -1,7 +1,7 @@
 package skeleton_test
 
 import (
-	"github.com/DRK-Blutspende-BaWueHe/skeleton"
+	"github.com/blutspende/skeleton"
 	"testing"
 
 	assert "github.com/go-playground/assert/v2"

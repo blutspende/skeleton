@@ -2,10 +2,10 @@ package skeleton
 
 import (
 	"fmt"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/config"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/consolelog/service"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/middleware"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/server"
+	"github.com/blutspende/skeleton/config"
+	"github.com/blutspende/skeleton/consolelog/service"
+	"github.com/blutspende/skeleton/middleware"
+	"github.com/blutspende/skeleton/server"
 	"net/http/pprof"
 	"sync"
 

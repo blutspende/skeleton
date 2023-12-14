@@ -5,7 +5,7 @@ import (
 	"crypto/tls"
 	"net/http"
 
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/config"
+	"github.com/blutspende/skeleton/config"
 	"github.com/go-resty/resty/v2"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"

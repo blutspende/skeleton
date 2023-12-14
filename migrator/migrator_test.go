@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/migrator"
+	"github.com/blutspende/skeleton/migrator"
 	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/proullon/ramsql/driver"

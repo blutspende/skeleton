@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/config"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/db"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/migrator"
+	"github.com/blutspende/skeleton/config"
+	"github.com/blutspende/skeleton/db"
+	"github.com/blutspende/skeleton/migrator"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/assert"

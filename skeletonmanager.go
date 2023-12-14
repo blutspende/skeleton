@@ -2,7 +2,7 @@ package skeleton
 
 import (
 	"context"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/utils"
+	"github.com/blutspende/skeleton/utils"
 	"sync"
 
 	"github.com/google/uuid"

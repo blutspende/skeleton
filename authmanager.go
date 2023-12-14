@@ -5,8 +5,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/config"
 	"github.com/MicahParks/keyfunc"
+	"github.com/blutspende/skeleton/config"
 	"github.com/go-resty/resty/v2"
 	"github.com/rs/zerolog/log"
 )

@@ -4,15 +4,15 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/DRK-Blutspende-BaWueHe/logcom-api/logcom"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/consolelog/repository"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/consolelog/service"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/server"
+	"github.com/blutspende/logcom-api/logcom"
+	"github.com/blutspende/skeleton/consolelog/repository"
+	"github.com/blutspende/skeleton/consolelog/service"
+	"github.com/blutspende/skeleton/server"
 	"github.com/gin-gonic/gin"
 
-	config2 "github.com/DRK-Blutspende-BaWueHe/skeleton/config"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/db"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/migrator"
+	config2 "github.com/blutspende/skeleton/config"
+	"github.com/blutspende/skeleton/db"
+	"github.com/blutspende/skeleton/migrator"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 )

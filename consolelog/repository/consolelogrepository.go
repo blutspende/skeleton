@@ -1,7 +1,7 @@
 package repository
 
 import (
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/consolelog/model"
+	"github.com/blutspende/skeleton/consolelog/model"
 	"github.com/google/uuid"
 	"sync"
 

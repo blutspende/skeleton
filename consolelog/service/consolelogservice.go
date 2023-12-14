@@ -1,9 +1,9 @@
 package service
 
 import (
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/consolelog/model"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/consolelog/repository"
-	"github.com/DRK-Blutspende-BaWueHe/skeleton/server"
+	"github.com/blutspende/skeleton/consolelog/model"
+	"github.com/blutspende/skeleton/consolelog/repository"
+	"github.com/blutspende/skeleton/server"
 	"github.com/google/uuid"
 	"time"
 )
