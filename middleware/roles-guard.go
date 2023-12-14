@@ -40,13 +40,13 @@ func RoleProtection(roles []string, strict, authMode bool) gin.HandlerFunc {
 					return
 				}
 			}
-			log.Error().Msg(fmt.Sprintf("%s. roles=%v", ErrNoPrivileges.Message, roles))
+			log.Error().Str("user", user.Email).Msg(fmt.Sprintf("%s. roles=%v", ErrNoPrivileges.Message, roles))
 			c.AbortWithStatusJSON(http.StatusUnauthorized, ErrNoPrivileges)
 			return
 		}
 
 		if !containsAll(user.Roles, roles) {
-			log.Error().Msg(fmt.Sprintf("%s. roles=%v", ErrNoPrivileges.Message, roles))
+			log.Error().Str("user", user.Email).Msg(fmt.Sprintf("%s. roles=%v", ErrNoPrivileges.Message, roles))
 			c.AbortWithStatusJSON(http.StatusUnauthorized, ErrNoPrivileges)
 			return
 		}
