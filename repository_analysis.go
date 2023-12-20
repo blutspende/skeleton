@@ -907,6 +907,7 @@ func (r *analysisRepository) GetAnalysisResultsBySampleCodeAndAnalyteID(ctx cont
 	defer rows.Close()
 
 	analysisResultDAOs := make([]analysisResultDAO, 0)
+	analysisResultIDs := make([]uuid.UUID, 0)
 	for rows.Next() {
 		result := analysisResultDAO{}
 		err := rows.StructScan(&result)
@@ -916,52 +917,71 @@ func (r *analysisRepository) GetAnalysisResultsBySampleCodeAndAnalyteID(ctx cont
 		}
 
 		analysisResultDAOs = append(analysisResultDAOs, result)
+		analysisResultIDs = append(analysisResultIDs, result.ID)
+	}
+
+	extraValuesMap, err := r.getExtraValues(ctx, analysisResultIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	reagentInfoMap, err := r.getReagentInfoMap(ctx, analysisResultIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	imagesMap, err := r.getImages(ctx, analysisResultIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	warningsMap, err := r.getWarnings(ctx, analysisResultIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	channelResultsMap, err := r.getChannelResults(ctx, analysisResultIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	channelResultIDs := make([]uuid.UUID, 0)
+	for _, channelResults := range channelResultsMap {
+		for _, channelResult := range channelResults {
+			channelResultIDs = append(channelResultIDs, channelResult.ID)
+		}
+	}
+
+	channelResultQuantitativeValuesMap, err := r.getChannelResultQuantitativeValues(ctx, channelResultIDs)
+	if err != nil {
+		return nil, err
 	}
 
 	analysisResults := make([]AnalysisResult, len(analysisResultDAOs))
 	for analysisResultIndex := range analysisResultDAOs {
-		extraValues, err := r.getExtraValues(ctx, analysisResultDAOs[analysisResultIndex].ID)
-		if err != nil {
-			return nil, err
-		}
-		analysisResultDAOs[analysisResultIndex].ExtraValues = extraValues
+		analysisResultDAOs[analysisResultIndex].ExtraValues = extraValuesMap[analysisResultDAOs[analysisResultIndex].ID]
+		analysisResultDAOs[analysisResultIndex].ReagentInfos = reagentInfoMap[analysisResultDAOs[analysisResultIndex].ID]
 
-		reagentInfoList, err := r.getReagentInfoList(ctx, analysisResultDAOs[analysisResultIndex].ID)
-		if err != nil {
-			return nil, err
-		}
-		analysisResultDAOs[analysisResultIndex].ReagentInfos = reagentInfoList
-
-		images, err := r.getImages(ctx, analysisResultDAOs[analysisResultIndex].ID)
-		if err != nil {
-			return nil, err
-		}
-		analysisResultDAOs[analysisResultIndex].Images = images
-
-		warnings, err := r.getWarnings(ctx, analysisResultDAOs[analysisResultIndex].ID)
-		if err != nil {
-			return nil, err
-		}
-		analysisResultDAOs[analysisResultIndex].Warnings = warnings
-
-		channelResults, err := r.getChannelResults(ctx, analysisResultDAOs[analysisResultIndex].ID)
-		if err != nil {
-			return nil, err
-		}
-		for i := range channelResults {
-			channelResultImages, err := r.getChannelResultImages(ctx, analysisResultDAOs[analysisResultIndex].ID, channelResults[i].ID)
-			if err != nil {
-				return nil, err
+		for _, image := range imagesMap[analysisResultDAOs[analysisResultIndex].ID] {
+			if image.ChannelResultID.Valid {
+				continue
 			}
-			channelResults[i].Images = channelResultImages
-
-			quantitativeValues, err := r.getChannelResultQuantitativeValues(ctx, channelResults[i].ID)
-			if err != nil {
-				return nil, err
-			}
-			channelResults[i].QuantitativeResults = quantitativeValues
+			analysisResultDAOs[analysisResultIndex].Images = append(analysisResultDAOs[analysisResultIndex].Images, image)
 		}
-		analysisResultDAOs[analysisResultIndex].ChannelResults = channelResults
+
+		analysisResultDAOs[analysisResultIndex].Warnings = warningsMap[analysisResultDAOs[analysisResultIndex].ID]
+
+		for _, channelResult := range channelResultsMap[analysisResultDAOs[analysisResultIndex].ID] {
+			for _, image := range imagesMap[analysisResultDAOs[analysisResultIndex].ID] {
+				if !image.ChannelResultID.Valid || (image.ChannelResultID.Valid && image.ChannelResultID.UUID != channelResult.ID) {
+					continue
+				}
+				channelResult.Images = append(channelResult.Images)
+			}
+
+			channelResult.QuantitativeResults = channelResultQuantitativeValuesMap[channelResult.ID]
+			analysisResultDAOs[analysisResultIndex].ChannelResults = append(analysisResultDAOs[analysisResultIndex].ChannelResults, channelResult)
+		}
 
 		analysisResult := convertAnalysisResultDAOToAnalysisResult(analysisResultDAOs[analysisResultIndex])
 
@@ -1014,48 +1034,62 @@ func (r *analysisRepository) GetAnalysisResultByID(ctx context.Context, id uuid.
 		return AnalysisResult{}, err
 	}
 
-	extraValues, err := r.getExtraValues(ctx, result.ID)
+	extraValues, err := r.getExtraValues(ctx, []uuid.UUID{result.ID})
 	if err != nil {
 		return AnalysisResult{}, err
 	}
-	result.ExtraValues = extraValues
+	result.ExtraValues = extraValues[result.ID]
 
-	reagentInfoList, err := r.getReagentInfoList(ctx, result.ID)
+	reagentInfoMap, err := r.getReagentInfoMap(ctx, []uuid.UUID{result.ID})
 	if err != nil {
 		return AnalysisResult{}, err
 	}
-	result.ReagentInfos = reagentInfoList
+	result.ReagentInfos = reagentInfoMap[result.ID]
 
-	images, err := r.getImages(ctx, result.ID)
+	imagesMap, err := r.getImages(ctx, []uuid.UUID{result.ID})
 	if err != nil {
 		return AnalysisResult{}, err
 	}
-	result.Images = images
-
-	warnings, err := r.getWarnings(ctx, result.ID)
-	if err != nil {
-		return AnalysisResult{}, err
-	}
-	result.Warnings = warnings
-
-	channelResults, err := r.getChannelResults(ctx, result.ID)
-	if err != nil {
-		return AnalysisResult{}, err
-	}
-	for i := range channelResults {
-		channelResultImages, err := r.getChannelResultImages(ctx, result.ID, channelResults[i].ID)
-		if err != nil {
-			return AnalysisResult{}, err
+	for _, image := range imagesMap[result.ID] {
+		if image.ChannelResultID.Valid {
+			continue
 		}
-		channelResults[i].Images = channelResultImages
-
-		quantitativeValues, err := r.getChannelResultQuantitativeValues(ctx, channelResults[i].ID)
-		if err != nil {
-			return AnalysisResult{}, err
-		}
-		channelResults[i].QuantitativeResults = quantitativeValues
+		result.Images = append(result.Images, image)
 	}
-	result.ChannelResults = channelResults
+
+	warningsMap, err := r.getWarnings(ctx, []uuid.UUID{result.ID})
+	if err != nil {
+		return AnalysisResult{}, err
+	}
+	result.Warnings = warningsMap[result.ID]
+
+	channelResultsMap, err := r.getChannelResults(ctx, []uuid.UUID{result.ID})
+	if err != nil {
+		return AnalysisResult{}, err
+	}
+
+	channelResultIDs := make([]uuid.UUID, len(channelResultsMap))
+	for i := range channelResultsMap[result.ID] {
+		channelResultIDs[i] = channelResultsMap[result.ID][i].ID
+	}
+
+	quantitativeValuesByChannelResultID, err := r.getChannelResultQuantitativeValues(ctx, channelResultIDs)
+	if err != nil {
+		return AnalysisResult{}, err
+	}
+
+	for _, channelResult := range channelResultsMap[result.ID] {
+		channelResult.QuantitativeResults = quantitativeValuesByChannelResultID[channelResult.ID]
+
+		for _, image := range imagesMap[result.ID] {
+			if !image.ChannelResultID.Valid || (image.ChannelResultID.Valid && image.ChannelResultID.UUID != channelResult.ID) {
+				continue
+			}
+			channelResult.Images = append(channelResult.Images, image)
+		}
+
+		result.ChannelResults = append(result.ChannelResults, channelResult)
+	}
 
 	analysisResult := convertAnalysisResultDAOToAnalysisResult(result)
 
@@ -1101,6 +1135,7 @@ func (r *analysisRepository) GetAnalysisResultsByBatchIDs(ctx context.Context, b
 	defer rows.Close()
 
 	analysisResultDAOs := make([]analysisResultDAO, 0)
+	analysisResultIDs := make([]uuid.UUID, 0)
 	for rows.Next() {
 		result := analysisResultDAO{}
 		err := rows.StructScan(&result)
@@ -1110,52 +1145,71 @@ func (r *analysisRepository) GetAnalysisResultsByBatchIDs(ctx context.Context, b
 		}
 
 		analysisResultDAOs = append(analysisResultDAOs, result)
+		analysisResultIDs = append(analysisResultIDs, result.ID)
+	}
+
+	extraValuesMap, err := r.getExtraValues(ctx, analysisResultIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	reagentInfoMap, err := r.getReagentInfoMap(ctx, analysisResultIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	imagesMap, err := r.getImages(ctx, analysisResultIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	warningsMap, err := r.getWarnings(ctx, analysisResultIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	channelResultsMap, err := r.getChannelResults(ctx, analysisResultIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	channelResultIDs := make([]uuid.UUID, 0)
+	for _, channelResults := range channelResultsMap {
+		for _, channelResult := range channelResults {
+			channelResultIDs = append(channelResultIDs, channelResult.ID)
+		}
+	}
+
+	channelResultQuantitativeValuesMap, err := r.getChannelResultQuantitativeValues(ctx, channelResultIDs)
+	if err != nil {
+		return nil, err
 	}
 
 	analysisResults := make([]AnalysisResult, len(analysisResultDAOs))
 	for analysisResultIndex := range analysisResultDAOs {
-		extraValues, err := r.getExtraValues(ctx, analysisResultDAOs[analysisResultIndex].ID)
-		if err != nil {
-			return nil, err
-		}
-		analysisResultDAOs[analysisResultIndex].ExtraValues = extraValues
+		analysisResultDAOs[analysisResultIndex].ExtraValues = extraValuesMap[analysisResultDAOs[analysisResultIndex].ID]
+		analysisResultDAOs[analysisResultIndex].ReagentInfos = reagentInfoMap[analysisResultDAOs[analysisResultIndex].ID]
 
-		reagentInfoList, err := r.getReagentInfoList(ctx, analysisResultDAOs[analysisResultIndex].ID)
-		if err != nil {
-			return nil, err
-		}
-		analysisResultDAOs[analysisResultIndex].ReagentInfos = reagentInfoList
-
-		images, err := r.getImages(ctx, analysisResultDAOs[analysisResultIndex].ID)
-		if err != nil {
-			return nil, err
-		}
-		analysisResultDAOs[analysisResultIndex].Images = images
-
-		warnings, err := r.getWarnings(ctx, analysisResultDAOs[analysisResultIndex].ID)
-		if err != nil {
-			return nil, err
-		}
-		analysisResultDAOs[analysisResultIndex].Warnings = warnings
-
-		channelResults, err := r.getChannelResults(ctx, analysisResultDAOs[analysisResultIndex].ID)
-		if err != nil {
-			return nil, err
-		}
-		for i := range channelResults {
-			channelResultImages, err := r.getChannelResultImages(ctx, analysisResultDAOs[analysisResultIndex].ID, channelResults[i].ID)
-			if err != nil {
-				return nil, err
+		for _, image := range imagesMap[analysisResultDAOs[analysisResultIndex].ID] {
+			if image.ChannelResultID.Valid {
+				continue
 			}
-			channelResults[i].Images = channelResultImages
-
-			quantitativeValues, err := r.getChannelResultQuantitativeValues(ctx, channelResults[i].ID)
-			if err != nil {
-				return nil, err
-			}
-			channelResults[i].QuantitativeResults = quantitativeValues
+			analysisResultDAOs[analysisResultIndex].Images = append(analysisResultDAOs[analysisResultIndex].Images, image)
 		}
-		analysisResultDAOs[analysisResultIndex].ChannelResults = channelResults
+
+		analysisResultDAOs[analysisResultIndex].Warnings = warningsMap[analysisResultDAOs[analysisResultIndex].ID]
+
+		for _, channelResult := range channelResultsMap[analysisResultDAOs[analysisResultIndex].ID] {
+			for _, image := range imagesMap[analysisResultDAOs[analysisResultIndex].ID] {
+				if !image.ChannelResultID.Valid || (image.ChannelResultID.Valid && image.ChannelResultID.UUID != channelResult.ID) {
+					continue
+				}
+				channelResult.Images = append(channelResult.Images)
+			}
+
+			channelResult.QuantitativeResults = channelResultQuantitativeValuesMap[channelResult.ID]
+			analysisResultDAOs[analysisResultIndex].ChannelResults = append(analysisResultDAOs[analysisResultIndex].ChannelResults, channelResult)
+		}
 
 		analysisResult := convertAnalysisResultDAOToAnalysisResult(analysisResultDAOs[analysisResultIndex])
 
@@ -1268,34 +1322,36 @@ func (r *analysisRepository) getResultMappings(ctx context.Context, analyteMappi
 	return resultMappings, nil
 }
 
-func (r *analysisRepository) getExtraValues(ctx context.Context, analysisResultID uuid.UUID) ([]extraValueDAO, error) {
+func (r *analysisRepository) getExtraValues(ctx context.Context, analysisResultIDs []uuid.UUID) (map[uuid.UUID][]extraValueDAO, error) {
 	query := fmt.Sprintf(`SELECT sare.id, sare.analysis_result_id, sare."key", sare."value"
-		FROM %s.sk_analysis_result_extravalues sare WHERE sare.analysis_result_id = $1;`, r.dbSchema)
+		FROM %s.sk_analysis_result_extravalues sare WHERE sare.analysis_result_id IN (?);`, r.dbSchema)
+	query, args, _ := sqlx.In(query, analysisResultIDs)
+	query = r.db.Rebind(query)
 
-	rows, err := r.db.QueryxContext(ctx, query, analysisResultID)
+	extraValuesMap := make(map[uuid.UUID][]extraValueDAO)
+	rows, err := r.db.QueryxContext(ctx, query, args...)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			log.Trace().Msg("No extra value")
-			return []extraValueDAO{}, nil
+			return extraValuesMap, nil
 		}
 		log.Error().Err(err).Msg("Can not search for extra values")
-		return []extraValueDAO{}, err
+		return nil, err
 	}
 	defer rows.Close()
 
-	extraValues := make([]extraValueDAO, 0)
 	for rows.Next() {
 		extraValue := extraValueDAO{}
-		err := rows.StructScan(&extraValue)
+		err = rows.StructScan(&extraValue)
 		if err != nil {
 			log.Error().Err(err).Msg("Can not scan data")
-			return []extraValueDAO{}, err
+			return nil, err
 		}
 
-		extraValues = append(extraValues, extraValue)
+		extraValuesMap[extraValue.AnalysisResultID] = append(extraValuesMap[extraValue.AnalysisResultID], extraValue)
 	}
 
-	return extraValues, err
+	return extraValuesMap, err
 }
 
 const extraValueBatchSize = 15000
@@ -1337,34 +1393,35 @@ func (r *analysisRepository) createExtraValues(ctx context.Context, extraValues 
 	return nil
 }
 
-func (r *analysisRepository) getChannelResults(ctx context.Context, analysisResultID uuid.UUID) ([]channelResultDAO, error) {
+func (r *analysisRepository) getChannelResults(ctx context.Context, analysisResultIDs []uuid.UUID) (map[uuid.UUID][]channelResultDAO, error) {
 	query := fmt.Sprintf(`SELECT scr.id, scr.analysis_result_id, scr.channel_id, scr.qualitative_result, scr.qualitative_result_edited
 		FROM %s.sk_channel_results scr WHERE scr.analysis_result_id = $1;`, r.dbSchema)
-
-	rows, err := r.db.QueryxContext(ctx, query, analysisResultID)
+	query, args, _ := sqlx.In(query, analysisResultIDs)
+	query = r.db.Rebind(query)
+	channelResultsMap := make(map[uuid.UUID][]channelResultDAO)
+	rows, err := r.db.QueryxContext(ctx, query, args...)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			log.Trace().Msg("No channel result")
-			return []channelResultDAO{}, nil
+			return channelResultsMap, nil
 		}
 		log.Error().Err(err).Msg("Can not search for channel results")
-		return []channelResultDAO{}, err
+		return nil, err
 	}
 	defer rows.Close()
 
-	channelResults := make([]channelResultDAO, 0)
 	for rows.Next() {
 		channelResult := channelResultDAO{}
 		err := rows.StructScan(&channelResult)
 		if err != nil {
 			log.Error().Err(err).Msg("Can not scan data")
-			return []channelResultDAO{}, err
+			return nil, err
 		}
 
-		channelResults = append(channelResults, channelResult)
+		channelResultsMap[channelResult.AnalysisResultID] = append(channelResultsMap[channelResult.AnalysisResultID], channelResult)
 	}
 
-	return channelResults, err
+	return channelResultsMap, err
 }
 
 const channelResultBatchSize = 12000
@@ -1409,34 +1466,36 @@ func (r *analysisRepository) createChannelResults(ctx context.Context, channelRe
 	return ids, nil
 }
 
-func (r *analysisRepository) getChannelResultQuantitativeValues(ctx context.Context, channelResultID uuid.UUID) ([]quantitativeChannelResultDAO, error) {
+func (r *analysisRepository) getChannelResultQuantitativeValues(ctx context.Context, channelResultIDs []uuid.UUID) (map[uuid.UUID][]quantitativeChannelResultDAO, error) {
 	query := fmt.Sprintf(`SELECT scrqv.id, scrqv.channel_result_id, scrqv.metric, scrqv."value"
-		FROM %s.sk_channel_result_quantitative_values scrqv WHERE scrqv.channel_result_id = $1;`, r.dbSchema)
+		FROM %s.sk_channel_result_quantitative_values scrqv WHERE scrqv.channel_result_id IN (?);`, r.dbSchema)
+	query, args, _ := sqlx.In(query, channelResultIDs)
+	query = r.db.Rebind(query)
 
-	rows, err := r.db.QueryxContext(ctx, query, channelResultID)
+	valuesByChannelResultID := make(map[uuid.UUID][]quantitativeChannelResultDAO)
+
+	rows, err := r.db.QueryxContext(ctx, query, args...)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			log.Trace().Msg("No quantitative channel result")
-			return []quantitativeChannelResultDAO{}, nil
+			return valuesByChannelResultID, nil
 		}
 		log.Error().Err(err).Msg("Can not search for quantitative channel results")
-		return []quantitativeChannelResultDAO{}, err
+		return nil, err
 	}
 	defer rows.Close()
-
-	quantitativeChannelResults := make([]quantitativeChannelResultDAO, 0)
 	for rows.Next() {
 		quantitativeChannelResult := quantitativeChannelResultDAO{}
 		err := rows.StructScan(&quantitativeChannelResult)
 		if err != nil {
 			log.Error().Err(err).Msg("Can not scan data")
-			return []quantitativeChannelResultDAO{}, err
+			return nil, err
 		}
 
-		quantitativeChannelResults = append(quantitativeChannelResults, quantitativeChannelResult)
+		valuesByChannelResultID[quantitativeChannelResult.ChannelResultID] = append(valuesByChannelResultID[quantitativeChannelResult.ChannelResultID], quantitativeChannelResult)
 	}
 
-	return quantitativeChannelResults, err
+	return valuesByChannelResultID, err
 }
 
 const channelResultQVBatchSize = 15000
@@ -1478,35 +1537,35 @@ func (r *analysisRepository) createChannelResultQuantitativeValues(ctx context.C
 	return nil
 }
 
-func (r *analysisRepository) getReagentInfoList(ctx context.Context, analysisResultID uuid.UUID) ([]reagentInfoDAO, error) {
+func (r *analysisRepository) getReagentInfoMap(ctx context.Context, analysisResultIDs []uuid.UUID) (map[uuid.UUID][]reagentInfoDAO, error) {
 	query := fmt.Sprintf(`SELECT sarri.id, sarri.analysis_result_id, sarri.serial, sarri."name", sarri.code, sarri.shelf_life, sarri.lot_no, sarri.manufacturer_name, sarri.reagent_manufacturer_date,
         sarri.reagent_type, sarri.use_until, sarri.date_created
-		FROM %s.sk_analysis_result_reagent_infos sarri WHERE sarri.analysis_result_id = $1;`, r.dbSchema)
-
-	rows, err := r.db.QueryxContext(ctx, query, analysisResultID)
+		FROM %s.sk_analysis_result_reagent_infos sarri WHERE sarri.analysis_result_id IN (?);`, r.dbSchema)
+	query, args, _ := sqlx.In(query, analysisResultIDs)
+	query = r.db.Rebind(query)
+	reagentInfosMap := make(map[uuid.UUID][]reagentInfoDAO)
+	rows, err := r.db.QueryxContext(ctx, query, args...)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			log.Trace().Msg("No reagent info")
-			return []reagentInfoDAO{}, nil
+			return reagentInfosMap, nil
 		}
 		log.Error().Err(err).Msg("Can not search for reagent info")
-		return []reagentInfoDAO{}, err
+		return nil, err
 	}
 	defer rows.Close()
 
-	reagentInfoList := make([]reagentInfoDAO, 0)
 	for rows.Next() {
 		reagentInfo := reagentInfoDAO{}
 		err := rows.StructScan(&reagentInfo)
 		if err != nil {
 			log.Error().Err(err).Msg("Can not scan data")
-			return []reagentInfoDAO{}, err
+			return nil, err
 		}
-
-		reagentInfoList = append(reagentInfoList, reagentInfo)
+		reagentInfosMap[reagentInfo.AnalysisResultID] = append(reagentInfosMap[reagentInfo.AnalysisResultID], reagentInfo)
 	}
 
-	return reagentInfoList, err
+	return reagentInfosMap, err
 }
 
 const reagentInfoBatchSize = 5000
@@ -1548,63 +1607,34 @@ func (r *analysisRepository) createReagentInfos(ctx context.Context, reagentInfo
 	return nil
 }
 
-func (r *analysisRepository) getImages(ctx context.Context, analysisResultID uuid.UUID) ([]imageDAO, error) {
-	query := fmt.Sprintf(`SELECT sari.id, sari.analysis_result_id, sari.channel_result_id, sari.name, sari.description, sari.dea_image_id FROM %s.sk_analysis_result_images sari WHERE sari.analysis_result_id = $1 AND sari.channel_result_id IS NULL;`, r.dbSchema)
-
-	rows, err := r.db.QueryxContext(ctx, query, analysisResultID)
+func (r *analysisRepository) getImages(ctx context.Context, analysisResultIDs []uuid.UUID) (map[uuid.UUID][]imageDAO, error) {
+	query := fmt.Sprintf(`SELECT sari.id, sari.analysis_result_id, sari.channel_result_id, sari.name, sari.description, sari.dea_image_id FROM %s.sk_analysis_result_images sari WHERE sari.analysis_result_id IN (?);`, r.dbSchema)
+	query, args, _ := sqlx.In(query, analysisResultIDs)
+	query = r.db.Rebind(query)
+	imagesMap := make(map[uuid.UUID][]imageDAO)
+	rows, err := r.db.QueryxContext(ctx, query, args...)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			log.Trace().Msg("No images")
-			return []imageDAO{}, nil
+			return imagesMap, nil
 		}
 		log.Error().Err(err).Msg("Can not search for Images")
-		return []imageDAO{}, err
+		return nil, err
 	}
 	defer rows.Close()
 
-	images := make([]imageDAO, 0)
 	for rows.Next() {
 		image := imageDAO{}
 		err := rows.StructScan(&image)
 		if err != nil {
 			log.Error().Err(err).Msg("Can not scan data")
-			return []imageDAO{}, err
+			return nil, err
 		}
 
-		images = append(images, image)
+		imagesMap[image.AnalysisResultID] = append(imagesMap[image.AnalysisResultID], image)
 	}
 
-	return images, err
-}
-
-func (r *analysisRepository) getChannelResultImages(ctx context.Context, analysisResultID uuid.UUID, channelResultID uuid.UUID) ([]imageDAO, error) {
-	query := fmt.Sprintf(`SELECT sari.id, sari.analysis_result_id, sari.channel_result_id, sari.name, sari.description, sari.dea_image_id
-		FROM %s.sk_analysis_result_images sari WHERE sari.analysis_result_id = $1 AND sari.channel_result_id = $2;`, r.dbSchema)
-
-	rows, err := r.db.QueryxContext(ctx, query, analysisResultID, channelResultID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			log.Trace().Msg("No images")
-			return []imageDAO{}, nil
-		}
-		log.Error().Err(err).Msg("Can not search for Images")
-		return []imageDAO{}, err
-	}
-	defer rows.Close()
-
-	images := make([]imageDAO, 0)
-	for rows.Next() {
-		image := imageDAO{}
-		err := rows.StructScan(&image)
-		if err != nil {
-			log.Error().Err(err).Msg("Can not scan data")
-			return []imageDAO{}, err
-		}
-
-		images = append(images, image)
-	}
-
-	return images, err
+	return imagesMap, err
 }
 
 const imageBatchSize = 8000
@@ -1647,33 +1677,34 @@ func (r *analysisRepository) saveImages(ctx context.Context, images []imageDAO) 
 	return ids, nil
 }
 
-func (r *analysisRepository) getWarnings(ctx context.Context, analysisResultID uuid.UUID) ([]warningDAO, error) {
-	query := fmt.Sprintf(`SELECT sarw.id, sarw.analysis_result_id, sarw.warning FROM %s.sk_analysis_result_warnings sarw WHERE sarw.analysis_result_id = $1;`, r.dbSchema)
-
-	rows, err := r.db.QueryxContext(ctx, query, analysisResultID)
+func (r *analysisRepository) getWarnings(ctx context.Context, analysisResultIDs []uuid.UUID) (map[uuid.UUID][]warningDAO, error) {
+	query := fmt.Sprintf(`SELECT sarw.id, sarw.analysis_result_id, sarw.warning FROM %s.sk_analysis_result_warnings sarw WHERE sarw.analysis_result_id IN (?);`, r.dbSchema)
+	query, args, _ := sqlx.In(query, analysisResultIDs)
+	query = r.db.Rebind(query)
+	warningsMap := make(map[uuid.UUID][]warningDAO)
+	rows, err := r.db.QueryxContext(ctx, query, args...)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			log.Trace().Msg("No analysis result warnings")
-			return []warningDAO{}, nil
+			return warningsMap, nil
 		}
 		log.Error().Err(err).Msg("Can not search for AnalysisResultWarnings")
-		return []warningDAO{}, err
+		return nil, err
 	}
 	defer rows.Close()
 
-	warnings := make([]warningDAO, 0)
 	for rows.Next() {
 		warning := warningDAO{}
 		err := rows.StructScan(&warning)
 		if err != nil {
 			log.Error().Err(err).Msg("Can not scan data")
-			return []warningDAO{}, err
+			return nil, err
 		}
 
-		warnings = append(warnings, warning)
+		warningsMap[warning.AnalysisResultID] = append(warningsMap[warning.AnalysisResultID], warning)
 	}
 
-	return warnings, err
+	return warningsMap, err
 }
 
 const warningBatchCount = 20000
