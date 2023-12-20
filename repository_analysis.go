@@ -908,6 +908,7 @@ func (r *analysisRepository) GetAnalysisResultsBySampleCodeAndAnalyteID(ctx cont
 
 	analysisResultDAOs := make([]analysisResultDAO, 0)
 	analysisResultIDs := make([]uuid.UUID, 0)
+	analyteMappingIDsMap := make(map[uuid.UUID]any)
 	for rows.Next() {
 		result := analysisResultDAO{}
 		err := rows.StructScan(&result)
@@ -918,6 +919,11 @@ func (r *analysisRepository) GetAnalysisResultsBySampleCodeAndAnalyteID(ctx cont
 
 		analysisResultDAOs = append(analysisResultDAOs, result)
 		analysisResultIDs = append(analysisResultIDs, result.ID)
+		analyteMappingIDsMap[result.AnalyteMappingID] = nil
+	}
+	analyteMappingIDs := make([]uuid.UUID, len(analyteMappingIDsMap))
+	for analyteMappingID := range analyteMappingIDsMap {
+		analyteMappingIDs = append(analyteMappingIDs, analyteMappingID)
 	}
 
 	extraValuesMap, err := r.getExtraValues(ctx, analysisResultIDs)
@@ -957,6 +963,15 @@ func (r *analysisRepository) GetAnalysisResultsBySampleCodeAndAnalyteID(ctx cont
 		return nil, err
 	}
 
+	channelMappingsMap, err := r.getChannelMappings(ctx, analyteMappingIDs)
+	if err != nil {
+		return nil, err
+	}
+	resultMappingsMap, err := r.getResultMappings(ctx, analyteMappingIDs)
+	if err != nil {
+		return nil, err
+	}
+
 	analysisResults := make([]AnalysisResult, len(analysisResultDAOs))
 	for analysisResultIndex := range analysisResultDAOs {
 		analysisResultDAOs[analysisResultIndex].ExtraValues = extraValuesMap[analysisResultDAOs[analysisResultIndex].ID]
@@ -984,19 +999,8 @@ func (r *analysisRepository) GetAnalysisResultsBySampleCodeAndAnalyteID(ctx cont
 		}
 
 		analysisResult := convertAnalysisResultDAOToAnalysisResult(analysisResultDAOs[analysisResultIndex])
-
-		channelMappings, err := r.getChannelMappings(ctx, analysisResultDAOs[analysisResultIndex].AnalyteMappingID)
-		if err != nil {
-			return nil, err
-		}
-		analysisResult.AnalyteMapping.ChannelMappings = channelMappings
-
-		resultMappings, err := r.getResultMappings(ctx, analysisResultDAOs[analysisResultIndex].AnalyteMappingID)
-		if err != nil {
-			return nil, err
-		}
-		analysisResult.AnalyteMapping.ResultMappings = resultMappings
-
+		analysisResult.AnalyteMapping.ChannelMappings = channelMappingsMap[analysisResultDAOs[analysisResultIndex].AnalyteMappingID]
+		analysisResult.AnalyteMapping.ResultMappings = resultMappingsMap[analysisResultDAOs[analysisResultIndex].AnalyteMappingID]
 		analysisResults[analysisResultIndex] = analysisResult
 	}
 
@@ -1078,6 +1082,15 @@ func (r *analysisRepository) GetAnalysisResultByID(ctx context.Context, id uuid.
 		return AnalysisResult{}, err
 	}
 
+	channelMappingsMap, err := r.getChannelMappings(ctx, []uuid.UUID{result.AnalyteMappingID})
+	if err != nil {
+		return AnalysisResult{}, err
+	}
+	resultMappingsMap, err := r.getResultMappings(ctx, []uuid.UUID{result.AnalyteMappingID})
+	if err != nil {
+		return AnalysisResult{}, err
+	}
+
 	for _, channelResult := range channelResultsMap[result.ID] {
 		channelResult.QuantitativeResults = quantitativeValuesByChannelResultID[channelResult.ID]
 
@@ -1093,17 +1106,8 @@ func (r *analysisRepository) GetAnalysisResultByID(ctx context.Context, id uuid.
 
 	analysisResult := convertAnalysisResultDAOToAnalysisResult(result)
 
-	channelMappings, err := r.getChannelMappings(ctx, result.AnalyteMappingID)
-	if err != nil {
-		return AnalysisResult{}, err
-	}
-	analysisResult.AnalyteMapping.ChannelMappings = channelMappings
-
-	resultMappings, err := r.getResultMappings(ctx, result.AnalyteMappingID)
-	if err != nil {
-		return AnalysisResult{}, err
-	}
-	analysisResult.AnalyteMapping.ResultMappings = resultMappings
+	analysisResult.AnalyteMapping.ChannelMappings = channelMappingsMap[result.AnalyteMappingID]
+	analysisResult.AnalyteMapping.ResultMappings = resultMappingsMap[result.AnalyteMappingID]
 
 	return analysisResult, err
 }
@@ -1136,6 +1140,7 @@ func (r *analysisRepository) GetAnalysisResultsByBatchIDs(ctx context.Context, b
 
 	analysisResultDAOs := make([]analysisResultDAO, 0)
 	analysisResultIDs := make([]uuid.UUID, 0)
+	analyteMappingIDsMap := make(map[uuid.UUID]any)
 	for rows.Next() {
 		result := analysisResultDAO{}
 		err := rows.StructScan(&result)
@@ -1146,6 +1151,11 @@ func (r *analysisRepository) GetAnalysisResultsByBatchIDs(ctx context.Context, b
 
 		analysisResultDAOs = append(analysisResultDAOs, result)
 		analysisResultIDs = append(analysisResultIDs, result.ID)
+		analyteMappingIDsMap[result.AnalyteMappingID] = nil
+	}
+	analyteMappingIDs := make([]uuid.UUID, len(analyteMappingIDsMap))
+	for analyteMappingID := range analyteMappingIDsMap {
+		analyteMappingIDs = append(analyteMappingIDs, analyteMappingID)
 	}
 
 	extraValuesMap, err := r.getExtraValues(ctx, analysisResultIDs)
@@ -1185,6 +1195,16 @@ func (r *analysisRepository) GetAnalysisResultsByBatchIDs(ctx context.Context, b
 		return nil, err
 	}
 
+	channelMappingsMap, err := r.getChannelMappings(ctx, analyteMappingIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	resultMappingsMap, err := r.getResultMappings(ctx, analyteMappingIDs)
+	if err != nil {
+		return nil, err
+	}
+
 	analysisResults := make([]AnalysisResult, len(analysisResultDAOs))
 	for analysisResultIndex := range analysisResultDAOs {
 		analysisResultDAOs[analysisResultIndex].ExtraValues = extraValuesMap[analysisResultDAOs[analysisResultIndex].ID]
@@ -1213,17 +1233,8 @@ func (r *analysisRepository) GetAnalysisResultsByBatchIDs(ctx context.Context, b
 
 		analysisResult := convertAnalysisResultDAOToAnalysisResult(analysisResultDAOs[analysisResultIndex])
 
-		channelMappings, err := r.getChannelMappings(ctx, analysisResultDAOs[analysisResultIndex].AnalyteMappingID)
-		if err != nil {
-			return nil, err
-		}
-		analysisResult.AnalyteMapping.ChannelMappings = channelMappings
-
-		resultMappings, err := r.getResultMappings(ctx, analysisResultDAOs[analysisResultIndex].AnalyteMappingID)
-		if err != nil {
-			return nil, err
-		}
-		analysisResult.AnalyteMapping.ResultMappings = resultMappings
+		analysisResult.AnalyteMapping.ChannelMappings = channelMappingsMap[analysisResultDAOs[analysisResultIndex].AnalyteMappingID]
+		analysisResult.AnalyteMapping.ResultMappings = resultMappingsMap[analysisResultDAOs[analysisResultIndex].AnalyteMappingID]
 
 		analysisResults[analysisResultIndex] = analysisResult
 	}
@@ -1280,15 +1291,16 @@ WHERE res.batch_id IN (?)`
 	return resultMap, nil
 }
 
-func (r *analysisRepository) getChannelMappings(ctx context.Context, analyteMappingID uuid.UUID) ([]ChannelMapping, error) {
-	query := fmt.Sprintf(`SELECT * FROM %s.sk_channel_mappings WHERE analyte_mapping_id = $1 AND deleted_at IS NULL;`, r.dbSchema)
-	rows, err := r.db.QueryxContext(ctx, query, analyteMappingID)
+func (r *analysisRepository) getChannelMappings(ctx context.Context, analyteMappingIDs []uuid.UUID) (map[uuid.UUID][]ChannelMapping, error) {
+	query := fmt.Sprintf(`SELECT * FROM %s.sk_channel_mappings WHERE analyte_mapping_id IN (?) AND deleted_at IS NULL;`, r.dbSchema)
+	query, args, _ := sqlx.In(query, analyteMappingIDs)
+	rows, err := r.db.QueryxContext(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetChannelMappingsFailed)
 		return nil, ErrGetChannelMappingsFailed
 	}
 	defer rows.Close()
-	channelMappings := make([]ChannelMapping, 0)
+	channelMappingsMap := make(map[uuid.UUID][]ChannelMapping)
 	for rows.Next() {
 		var dao channelMappingDAO
 		err = rows.StructScan(&dao)
@@ -1296,20 +1308,22 @@ func (r *analysisRepository) getChannelMappings(ctx context.Context, analyteMapp
 			log.Error().Err(err).Msg(msgGetChannelMappingsFailed)
 			return nil, ErrGetChannelMappingsFailed
 		}
-		channelMappings = append(channelMappings, convertChannelMappingDaoToChannelMapping(dao))
+		channelMappingsMap[dao.AnalyteMappingID] = append(channelMappingsMap[dao.AnalyteMappingID], convertChannelMappingDaoToChannelMapping(dao))
 	}
-	return channelMappings, nil
+	return channelMappingsMap, nil
 }
 
-func (r *analysisRepository) getResultMappings(ctx context.Context, analyteMappingID uuid.UUID) ([]ResultMapping, error) {
-	query := fmt.Sprintf(`SELECT * FROM %s.sk_result_mappings WHERE analyte_mapping_id = $1 AND deleted_at IS NULL;`, r.dbSchema)
-	rows, err := r.db.QueryxContext(ctx, query, analyteMappingID)
+func (r *analysisRepository) getResultMappings(ctx context.Context, analyteMappingIDs []uuid.UUID) (map[uuid.UUID][]ResultMapping, error) {
+	query := fmt.Sprintf(`SELECT * FROM %s.sk_result_mappings WHERE analyte_mapping_id IN (?) AND deleted_at IS NULL;`, r.dbSchema)
+	query, args, _ := sqlx.In(query, analyteMappingIDs)
+	query = r.db.Rebind(query)
+	rows, err := r.db.QueryxContext(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetResultMappingsFailed)
 		return nil, ErrGetResultMappingsFailed
 	}
 	defer rows.Close()
-	resultMappings := make([]ResultMapping, 0)
+	resultMappingsMap := make(map[uuid.UUID][]ResultMapping)
 	for rows.Next() {
 		var dao resultMappingDAO
 		err = rows.StructScan(&dao)
@@ -1317,9 +1331,9 @@ func (r *analysisRepository) getResultMappings(ctx context.Context, analyteMappi
 			log.Error().Err(err).Msg(msgGetResultMappingsFailed)
 			return nil, ErrGetResultMappingsFailed
 		}
-		resultMappings = append(resultMappings, convertResultMappingDaoToChannelMapping(dao))
+		resultMappingsMap[dao.AnalyteMappingID] = append(resultMappingsMap[dao.AnalyteMappingID], convertResultMappingDaoToChannelMapping(dao))
 	}
-	return resultMappings, nil
+	return resultMappingsMap, nil
 }
 
 func (r *analysisRepository) getExtraValues(ctx context.Context, analysisResultIDs []uuid.UUID) (map[uuid.UUID][]extraValueDAO, error) {
