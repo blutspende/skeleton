@@ -1294,6 +1294,7 @@ WHERE res.batch_id IN (?)`
 func (r *analysisRepository) getChannelMappings(ctx context.Context, analyteMappingIDs []uuid.UUID) (map[uuid.UUID][]ChannelMapping, error) {
 	query := fmt.Sprintf(`SELECT * FROM %s.sk_channel_mappings WHERE analyte_mapping_id IN (?) AND deleted_at IS NULL;`, r.dbSchema)
 	query, args, _ := sqlx.In(query, analyteMappingIDs)
+	query = r.db.Rebind(query)
 	rows, err := r.db.QueryxContext(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetChannelMappingsFailed)
