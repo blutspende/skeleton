@@ -1,0 +1,10 @@
+package migrator
+
+const migration_14 = `
+CREATE INDEX idx_sk_analysis_result_extravalues_analysis_result_id ON <SCHEMA_PLACEHOLDER>.sk_analysis_result_extravalues(analysis_result_id);
+CREATE INDEX idx_sk_analysis_result_reagent_infos_analysis_result_id ON <SCHEMA_PLACEHOLDER>.sk_analysis_result_reagent_infos(analysis_result_id);
+CREATE INDEX idx_sk_analysis_result_warnings_analysis_result_id ON <SCHEMA_PLACEHOLDER>.sk_analysis_result_warnings(analysis_result_id);
+CREATE INDEX idx_sk_channel_results_analysis_result_id ON <SCHEMA_PLACEHOLDER>.sk_channel_results(analysis_result_id);
+CREATE INDEX idx_sk_channel_result_quantitative_values_channel_result_id ON <SCHEMA_PLACEHOLDER>.sk_channel_result_quantitative_values(channel_result_id);
+CREATE INDEX idx_sk_channel_mappings ON <SCHEMA_PLACEHOLDER>.sk_channel_mappings(analyte_mapping_id);
+CREATE INDEX idx_sk_result_mappings ON <SCHEMA_PLACEHOLDER>.sk_result_mappings(analyte_mapping_id);`

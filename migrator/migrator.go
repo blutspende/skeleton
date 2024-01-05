@@ -24,6 +24,7 @@ var migrations = []string{
 	migration_11,
 	migration_12,
 	migration_13,
+	migration_14,
 }
 
 type skeletonMigrator struct {
