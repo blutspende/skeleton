@@ -5,10 +5,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"github.com/blutspende/skeleton/db"
-	"github.com/pkg/errors"
 	"strings"
 	"time"
+
+	"github.com/blutspende/skeleton/db"
+	"github.com/pkg/errors"
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
@@ -66,6 +67,7 @@ type analysisRequestDAO struct {
 	ReexaminationRequestedCount int       `db:"reexamination_requested_count"`
 	SentToInstrumentCount       int       `db:"sent_to_instrument_count"`
 	CreatedAt                   time.Time `db:"created_at"`
+	IsProcessed                 bool      `db:"is_processed"`
 }
 
 type subjectInfoDAO struct {
