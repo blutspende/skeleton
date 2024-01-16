@@ -34,6 +34,7 @@ const (
 	msgFailedToScanStuckImageData                          = "failed to scan stuck image data"
 	msgFailedToMarkImagesAsSyncedToCerberus                = "failed to mark images as synced to cerberus"
 	msgFailedToMarkAnalysisRequestsAsProcessed             = "failed to mark analysis requests as processed"
+	msgFailedToMarkAnalysisResultsAsProcessed              = "failed to mark analysis results as processed"
 )
 
 var (
@@ -54,6 +55,7 @@ var (
 	ErrFailedToScanStuckImageData                          = errors.New(msgFailedToScanStuckImageData)
 	ErrFailedToMarkImagesAsSyncedToCerberus                = errors.New(msgFailedToMarkImagesAsSyncedToCerberus)
 	ErrFailedToMarkAnalysisRequestsAsProcessed             = errors.New(msgFailedToMarkAnalysisRequestsAsProcessed)
+	ErrFailedToMarkAnalysisResultsAsProcessed              = errors.New(msgFailedToMarkAnalysisResultsAsProcessed)
 )
 
 type analysisRequestDAO struct {
@@ -239,6 +241,7 @@ type AnalysisRepository interface {
 	CreateAnalysisResultsBatch(ctx context.Context, analysisResults []AnalysisResult) ([]AnalysisResult, error)
 	GetAnalysisResultsBySampleCodeAndAnalyteID(ctx context.Context, sampleCode string, analyteID uuid.UUID) ([]AnalysisResult, error)
 	GetAnalysisResultByID(ctx context.Context, id uuid.UUID, allowDeletedAnalyteMapping bool) (AnalysisResult, error)
+	GetAnalysisResultsByIDs(ctx context.Context, ids []uuid.UUID) ([]AnalysisResult, error)
 	GetAnalysisResultsByBatchIDs(ctx context.Context, batchIDs []uuid.UUID) ([]AnalysisResult, error)
 	GetAnalysisResultsByBatchIDsMapped(ctx context.Context, batchIDs []uuid.UUID) (map[uuid.UUID][]AnalysisResultInfo, error)
 
@@ -256,7 +259,9 @@ type AnalysisRepository interface {
 	MarkImagesAsSyncedToCerberus(ctx context.Context, ids []uuid.UUID) error
 
 	GetUnprocessedAnalysisRequests(ctx context.Context) ([]AnalysisRequest, error)
-	MarkAsProcessedBatch(ctx context.Context, analysisRequestIDs []uuid.UUID) error
+	GetUnprocessedAnalysisResultIDs(ctx context.Context) ([]uuid.UUID, error)
+	MarkAnalysisRequestsAsProcessed(ctx context.Context, analysisRequestIDs []uuid.UUID) error
+	MarkAnalysisResultsAsProcessed(ctx context.Context, analysisRequestIDs []uuid.UUID) error
 
 	CreateTransaction() (db.DbConnector, error)
 	WithTransaction(tx db.DbConnector) AnalysisRepository
@@ -1112,6 +1117,137 @@ func (r *analysisRepository) GetAnalysisResultByID(ctx context.Context, id uuid.
 	analysisResult.AnalyteMapping.ResultMappings = resultMappingsMap[result.AnalyteMappingID]
 
 	return analysisResult, err
+}
+
+func (r *analysisRepository) GetAnalysisResultsByIDs(ctx context.Context, ids []uuid.UUID) ([]AnalysisResult, error) {
+	if len(ids) == 0 {
+		return []AnalysisResult{}, nil
+	}
+
+	query := `SELECT sar.id, sar.analyte_mapping_id, sar.instrument_id, sar.sample_code, sar.instrument_run_id, sar.result_record_id, sar.batch_id, sar."result", sar.status, sar.result_mode, sar.yielded_at, sar.valid_until, sar.operator, sar.edited, sar.edit_reason,
+					sam.id AS "analyte_mapping.id", sam.instrument_id AS "analyte_mapping.instrument_id", sam.instrument_analyte AS "analyte_mapping.instrument_analyte", sam.analyte_id AS "analyte_mapping.analyte_id", sam.result_type AS "analyte_mapping.result_type", sam.created_at AS "analyte_mapping.created_at", sam.modified_at AS "analyte_mapping.modified_at"
+			FROM %schema_name%.sk_analysis_results sar
+			INNER JOIN %schema_name%.sk_analyte_mappings sam ON sar.analyte_mapping_id = sam.id
+			WHERE sar.id IN (?);`
+
+	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
+
+	query, args, _ := sqlx.In(query, ids)
+	query = r.db.Rebind(query)
+
+	rows, err := r.db.QueryxContext(ctx, query, args...)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			log.Trace().Msg("No analysis requests")
+			return []AnalysisResult{}, nil
+		}
+		log.Error().Err(err).Msg("Can not search for AnalysisRequests")
+		return []AnalysisResult{}, err
+	}
+	defer rows.Close()
+
+	analysisResultDAOs := make([]analysisResultDAO, 0)
+	for rows.Next() {
+		result := analysisResultDAO{}
+		err := rows.StructScan(&result)
+		if err != nil {
+			log.Error().Err(err).Msg("Can not scan data")
+			return []AnalysisResult{}, err
+		}
+
+		analysisResultDAOs = append(analysisResultDAOs, result)
+	}
+
+	extraValues, err := r.getExtraValues(ctx, ids)
+	if err != nil {
+		return []AnalysisResult{}, err
+	}
+
+	reagentInfoMap, err := r.getReagentInfoMap(ctx, ids)
+	if err != nil {
+		return []AnalysisResult{}, err
+	}
+
+	imagesMap, err := r.getImages(ctx, ids)
+	if err != nil {
+		return []AnalysisResult{}, err
+	}
+
+	warningsMap, err := r.getWarnings(ctx, ids)
+	if err != nil {
+		return []AnalysisResult{}, err
+	}
+
+	channelResultsMap, err := r.getChannelResults(ctx, ids)
+	if err != nil {
+		return []AnalysisResult{}, err
+	}
+
+	channelResultIDs := make([]uuid.UUID, len(channelResultsMap))
+
+	for _, channelResult := range channelResultsMap {
+		for i := range channelResult {
+			channelResultIDs[i] = channelResult[i].ID
+		}
+	}
+
+	quantitativeValuesByChannelResultID, err := r.getChannelResultQuantitativeValues(ctx, channelResultIDs)
+	if err != nil {
+		return []AnalysisResult{}, err
+	}
+
+	analyteMappingIDs := make([]uuid.UUID, 0)
+
+	for _, analysisResultDAO := range analysisResultDAOs {
+		analyteMappingIDs = append(analyteMappingIDs, analysisResultDAO.AnalyteMappingID)
+	}
+
+	channelMappingsMap, err := r.getChannelMappings(ctx, analyteMappingIDs)
+	if err != nil {
+		return []AnalysisResult{}, err
+	}
+	resultMappingsMap, err := r.getResultMappings(ctx, analyteMappingIDs)
+	if err != nil {
+		return []AnalysisResult{}, err
+	}
+
+	analysisResults := make([]AnalysisResult, 0)
+
+	for i := range analysisResultDAOs {
+		analysisResultDAOs[i].ExtraValues = extraValues[analysisResultDAOs[i].ID]
+		analysisResultDAOs[i].ReagentInfos = reagentInfoMap[analysisResultDAOs[i].ID]
+
+		for _, image := range imagesMap[analysisResultDAOs[i].ID] {
+			if image.ChannelResultID.Valid {
+				continue
+			}
+			analysisResultDAOs[i].Images = append(analysisResultDAOs[i].Images, image)
+		}
+
+		analysisResultDAOs[i].Warnings = warningsMap[analysisResultDAOs[i].ID]
+
+		for _, channelResult := range channelResultsMap[analysisResultDAOs[i].ID] {
+			channelResult.QuantitativeResults = quantitativeValuesByChannelResultID[channelResult.ID]
+
+			for _, image := range imagesMap[analysisResultDAOs[i].ID] {
+				if !image.ChannelResultID.Valid || (image.ChannelResultID.Valid && image.ChannelResultID.UUID != channelResult.ID) {
+					continue
+				}
+				channelResult.Images = append(channelResult.Images, image)
+			}
+
+			analysisResultDAOs[i].ChannelResults = append(analysisResultDAOs[i].ChannelResults, channelResult)
+		}
+
+		analysisResult := convertAnalysisResultDAOToAnalysisResult(analysisResultDAOs[i])
+
+		analysisResult.AnalyteMapping.ChannelMappings = channelMappingsMap[analysisResultDAOs[i].AnalyteMappingID]
+		analysisResult.AnalyteMapping.ResultMappings = resultMappingsMap[analysisResultDAOs[i].AnalyteMappingID]
+
+		analysisResults = append(analysisResults, analysisResult)
+	}
+
+	return analysisResults, err
 }
 
 func (r *analysisRepository) GetAnalysisResultsByBatchIDs(ctx context.Context, batchIDs []uuid.UUID) ([]AnalysisResult, error) {
@@ -2152,7 +2288,36 @@ func (r *analysisRepository) GetUnprocessedAnalysisRequests(ctx context.Context)
 	return analysisRequests, err
 }
 
-func (r *analysisRepository) MarkAsProcessedBatch(ctx context.Context, analysisRequestIDs []uuid.UUID) error {
+func (r *analysisRepository) GetUnprocessedAnalysisResultIDs(ctx context.Context) ([]uuid.UUID, error) {
+	query := fmt.Sprintf(`SELECT sar.id FROM %s.sk_analysis_results sar WHERE sar.is_processed IS FALSE;`, r.dbSchema)
+
+	rows, err := r.db.QueryxContext(ctx, query)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			log.Trace().Msg("Unprocessed analysis results not found")
+			return []uuid.UUID{}, nil
+		}
+		log.Error().Err(err).Msg("Failed to get unprocessed analysis result ids")
+		return []uuid.UUID{}, err
+	}
+	defer rows.Close()
+
+	analysisResultIDs := make([]uuid.UUID, 0)
+	for rows.Next() {
+		var id uuid.UUID
+		err := rows.Scan(&id)
+		if err != nil {
+			log.Error().Err(err).Msg("Can not scan unprocessed analysis result id")
+			return []uuid.UUID{}, err
+		}
+
+		analysisResultIDs = append(analysisResultIDs, id)
+	}
+
+	return analysisResultIDs, err
+}
+
+func (r *analysisRepository) MarkAnalysisRequestsAsProcessed(ctx context.Context, analysisRequestIDs []uuid.UUID) error {
 	query := fmt.Sprintf(`UPDATE %s.sk_analysis_requests SET is_processed = true WHERE id IN (?);`, r.dbSchema)
 
 	query, args, _ := sqlx.In(query, analysisRequestIDs)
@@ -2162,6 +2327,21 @@ func (r *analysisRepository) MarkAsProcessedBatch(ctx context.Context, analysisR
 	if err != nil {
 		log.Error().Err(err).Msg(msgFailedToMarkAnalysisRequestsAsProcessed)
 		return ErrFailedToMarkAnalysisRequestsAsProcessed
+	}
+
+	return nil
+}
+
+func (r *analysisRepository) MarkAnalysisResultsAsProcessed(ctx context.Context, analysisRequestIDs []uuid.UUID) error {
+	query := fmt.Sprintf(`UPDATE %s.sk_analysis_results SET is_processed = true WHERE id IN (?);`, r.dbSchema)
+
+	query, args, _ := sqlx.In(query, analysisRequestIDs)
+	query = r.db.Rebind(query)
+
+	_, err := r.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		log.Error().Err(err).Msg(msgFailedToMarkAnalysisResultsAsProcessed)
+		return ErrFailedToMarkAnalysisResultsAsProcessed
 	}
 
 	return nil

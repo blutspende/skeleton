@@ -15,6 +15,7 @@ type AnalysisService interface {
 	GetAnalysisRequestsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisRequestInfo, int, error)
 	GetAnalysisResultsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisResultInfo, int, error)
 	GetAnalysisBatches(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisBatch, int, error)
+	QueueAnalysisResults(ctx context.Context, results []AnalysisResult) error
 	RetransmitResult(ctx context.Context, resultID uuid.UUID) error
 	RetransmitResultBatches(ctx context.Context, batchIDs []uuid.UUID) error
 	ProcessStuckImagesToDEA(ctx context.Context)
@@ -81,7 +82,7 @@ func (as *analysisService) ProcessAnalysisRequests(ctx context.Context, analysis
 		}
 	}
 
-	_ = as.analysisRepository.MarkAsProcessedBatch(ctx, processedAnalysisRequestIDs)
+	_ = as.analysisRepository.MarkAnalysisRequestsAsProcessed(ctx, processedAnalysisRequestIDs)
 
 	log.Trace().Msgf("%d processed request(s) has results out from %d", completableRequestCount, len(analysisRequests))
 
@@ -131,6 +132,40 @@ func (as *analysisService) GetAnalysisBatches(ctx context.Context, instrumentID 
 	}
 
 	return analysisBatchList, totalCount, nil
+}
+
+func (as *analysisService) QueueAnalysisResults(ctx context.Context, results []AnalysisResult) error {
+	tx, err := as.analysisRepository.CreateTransaction()
+	if err != nil {
+		log.Error().Err(err).Msg("failed to create transaction")
+		return err
+	}
+
+	_, err = as.analysisRepository.WithTransaction(tx).CreateAnalysisResultQueueItem(ctx, results)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	analysisResultIDs := make([]uuid.UUID, 0)
+
+	for _, result := range results {
+		analysisResultIDs = append(analysisResultIDs, result.ID)
+	}
+
+	err = as.analysisRepository.WithTransaction(tx).MarkAnalysisResultsAsProcessed(ctx, analysisResultIDs)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	return nil
 }
 
 func (as *analysisService) RetransmitResult(ctx context.Context, resultID uuid.UUID) error {
