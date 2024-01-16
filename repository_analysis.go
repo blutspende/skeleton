@@ -878,6 +878,9 @@ func (r *analysisRepository) createAnalysisResultsBatch(ctx context.Context, ana
 			channelImagesMap[uuid.NullUUID{UUID: channelResultIDs[j], Valid: true}] = analysisResults[i].ChannelResults[j].Images
 		}
 		err = r.CreateChannelResultQuantitativeValues(ctx, quantitativeChannelResultsMap)
+		if err != nil {
+			return analysisResults, err
+		}
 	}
 
 	err = r.CreateWarnings(ctx, warningsMap)
