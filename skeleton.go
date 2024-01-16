@@ -423,6 +423,9 @@ func (s *skeleton) enqueueUnprocessedAnalysisResults(ctx context.Context) {
 				s.resultBatchesChan <- results[low:high]
 				return nil
 			})
+			if err != nil {
+				log.Error().Err(err).Msg("GetAnalysisResultsByIDs failed")
+			}
 
 			break
 		}

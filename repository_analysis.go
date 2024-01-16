@@ -878,6 +878,9 @@ func (r *analysisRepository) createAnalysisResultsBatch(ctx context.Context, ana
 			channelImagesMap[uuid.NullUUID{UUID: channelResultIDs[j], Valid: true}] = analysisResults[i].ChannelResults[j].Images
 		}
 		err = r.CreateChannelResultQuantitativeValues(ctx, quantitativeChannelResultsMap)
+		if err != nil {
+			return analysisResults, err
+		}
 	}
 
 	err = r.CreateWarnings(ctx, warningsMap)
@@ -998,7 +1001,7 @@ func (r *analysisRepository) GetAnalysisResultsBySampleCodeAndAnalyteID(ctx cont
 				if !image.ChannelResultID.Valid || (image.ChannelResultID.Valid && image.ChannelResultID.UUID != channelResult.ID) {
 					continue
 				}
-				channelResult.Images = append(channelResult.Images)
+				channelResult.Images = append(channelResult.Images, image)
 			}
 
 			channelResult.QuantitativeResults = channelResultQuantitativeValuesMap[channelResult.ID]
@@ -1362,7 +1365,7 @@ func (r *analysisRepository) GetAnalysisResultsByBatchIDs(ctx context.Context, b
 				if !image.ChannelResultID.Valid || (image.ChannelResultID.Valid && image.ChannelResultID.UUID != channelResult.ID) {
 					continue
 				}
-				channelResult.Images = append(channelResult.Images)
+				channelResult.Images = append(channelResult.Images, image)
 			}
 
 			channelResult.QuantitativeResults = channelResultQuantitativeValuesMap[channelResult.ID]
