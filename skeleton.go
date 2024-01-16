@@ -327,6 +327,7 @@ func (s *skeleton) Start() error {
 	go s.processStuckImagesToDEA(s.ctx)
 	go s.processStuckImagesToCerberus(s.ctx)
 	go s.enqueueUnprocessedAnalysisRequests(s.ctx)
+	go s.enqueueUnprocessedAnalysisResults(s.ctx)
 
 	// Todo - use cancellable context what is passed to the routines above too
 	err := s.api.Run()
@@ -404,6 +405,32 @@ func (s *skeleton) enqueueUnprocessedAnalysisRequests(ctx context.Context) {
 	}
 }
 
+func (s *skeleton) enqueueUnprocessedAnalysisResults(ctx context.Context) {
+	for {
+		resultIDs, err := s.analysisRepository.GetUnprocessedAnalysisResultIDs(ctx)
+		if err != nil {
+			time.Sleep(5 * time.Minute)
+			continue
+		}
+
+		for {
+			err = utils.Partition(len(resultIDs), 500, func(low int, high int) error {
+				results, err := s.analysisRepository.GetAnalysisResultsByIDs(ctx, resultIDs[low:high])
+				if err != nil {
+					return err
+				}
+
+				s.resultBatchesChan <- results[low:high]
+				return nil
+			})
+
+			break
+		}
+
+		break
+	}
+}
+
 func (s *skeleton) processAnalysisRequests(ctx context.Context) {
 	log.Trace().Msg("Starting to process analysis requests")
 
@@ -469,7 +496,7 @@ func (s *skeleton) processAnalysisResultBatches(ctx context.Context) {
 			continue
 		}
 
-		_, err := s.analysisRepository.CreateAnalysisResultQueueItem(ctx, resultsBatch)
+		err := s.analysisService.QueueAnalysisResults(ctx, resultsBatch)
 		if err != nil {
 			time.AfterFunc(30*time.Second, func() {
 				s.resultBatchesChan <- resultsBatch
