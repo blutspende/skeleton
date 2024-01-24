@@ -507,6 +507,80 @@ func TestRegisterProtocol(t *testing.T) {
 	// try register instrument with random protocolID -> expect to fail
 }
 
+func TestAnalysisResultsReprocessing(t *testing.T) {
+	sqlConn, _ := sqlx.Connect("pgx", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
+
+	schemaName := "testSubmitAnalysisResultsWithoutRequests"
+	_, _ = sqlConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
+	_, _ = sqlConn.Exec(fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schemaName))
+	_, _ = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
+
+	configuration := config.Configuration{
+		APIPort:                          5678,
+		Authorization:                    false,
+		PermittedOrigin:                  "*",
+		ApplicationName:                  "Submit Analysis Request Parallel Test",
+		TCPListenerPort:                  5401,
+		InstrumentTransferRetryDelayInMs: 100,
+		ResultTransferFlushTimeout:       5,
+		ImageRetrySeconds:                60,
+	}
+	dbConn := db.CreateDbConnector(sqlConn)
+
+	analysisRepositoryMock := &analysisRepositoryMock{}
+	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
+	consoleLogRepository := repository.NewConsoleLogRepository(500)
+
+	authManager := authManagerMock{
+		getJWKSFunc: func() (*keyfunc.JWKS, error) {
+			return &keyfunc.JWKS{}, nil
+		},
+		getClientCredentialFunc: func() (string, error) {
+			return "authtoken", nil
+		},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	defer cancel()
+
+	skeletonManager := NewSkeletonManager(ctx)
+	skeletonManager.SetCallbackHandler(&skeletonCallbackHandlerV1Mock{
+		handleAnalysisRequestsFunc: func(request []AnalysisRequest) error {
+			time.Sleep(2 * time.Second)
+			return nil
+		},
+	})
+	cerberusClientMock := &cerberusClientMock{
+		registerInstrumentFunc: func(instrument Instrument) error {
+			return nil
+		},
+		sendAnalysisResultBatchFunc: func(analysisResults []AnalysisResultTO) (AnalysisResultBatchResponse, error) {
+			return AnalysisResultBatchResponse{}, nil
+		},
+	}
+	deaClientMock := &deaClientMock{}
+
+	analysisServiceMock := &analysisServiceMock{}
+
+	instrumentService := NewInstrumentService(&configuration, instrumentRepository, skeletonManager, NewInstrumentCache(), cerberusClientMock)
+	consoleLogService := service.NewConsoleLogService(consoleLogRepository, nil)
+
+	ginEngine := gin.New()
+
+	ginEngine.Use(timeout.Timeout(timeout.WithTimeout(5*time.Second), timeout.WithErrorHttpCode(http.StatusRequestTimeout)))
+
+	api := newAPI(ginEngine, &configuration, &authManager, analysisServiceMock, instrumentService, consoleLogService, nil)
+
+	skeletonInstance, _ := NewSkeleton(ctx, sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepositoryMock, analysisServiceMock, instrumentService, consoleLogService, skeletonManager, cerberusClientMock, deaClientMock, configuration)
+
+	go func() {
+		_ = skeletonInstance.Start()
+	}()
+
+	time.Sleep(1 * time.Second)
+}
+
 type skeletonCallbackHandlerV1Mock struct {
 	handleAnalysisRequestsFunc func(request []AnalysisRequest) error
 	getManufacturerTestFunc    func(instrumentId uuid.UUID, protocolId uuid.UUID) ([]SupportedManufacturerTests, error)
@@ -632,6 +706,168 @@ func generateAnalysisRequestsJson(count int) string {
 	json += `]`
 
 	return json
+}
+
+type analysisServiceMock struct {
+}
+
+func (m *analysisServiceMock) CreateAnalysisRequests(ctx context.Context, analysisRequests []AnalysisRequest) ([]AnalysisRequestStatus, error) {
+	return nil, nil
+}
+func (m *analysisServiceMock) ProcessAnalysisRequests(ctx context.Context, analysisRequests []AnalysisRequest) error {
+	return nil
+}
+func (m *analysisServiceMock) RevokeAnalysisRequests(ctx context.Context, workItemIDs []uuid.UUID) error {
+	return nil
+}
+func (m *analysisServiceMock) ReexamineAnalysisRequestsBatch(ctx context.Context, workItemIDs []uuid.UUID) error {
+	return nil
+}
+func (m *analysisServiceMock) GetAnalysisRequestsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisRequestInfo, int, error) {
+	return nil, 0, nil
+}
+func (m *analysisServiceMock) GetAnalysisResultsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisResultInfo, int, error) {
+	return nil, 0, nil
+}
+func (m *analysisServiceMock) GetAnalysisBatches(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisBatch, int, error) {
+	return nil, 0, nil
+}
+func (m *analysisServiceMock) QueueAnalysisResults(ctx context.Context, results []AnalysisResult) error {
+	return nil
+}
+func (m *analysisServiceMock) RetransmitResult(ctx context.Context, resultID uuid.UUID) error {
+	return nil
+}
+func (m *analysisServiceMock) RetransmitResultBatches(ctx context.Context, batchIDs []uuid.UUID) error {
+	return nil
+}
+func (m *analysisServiceMock) ProcessStuckImagesToDEA(ctx context.Context) {
+}
+func (m *analysisServiceMock) ProcessStuckImagesToCerberus(ctx context.Context) {
+}
+
+type analysisRepositoryMock struct {
+	callCount int
+}
+
+func (m *analysisRepositoryMock) GetUnprocessedAnalysisResultIDs(ctx context.Context) ([]uuid.UUID, error) {
+	return make([]uuid.UUID, 660), nil
+}
+
+func (m *analysisRepositoryMock) GetAnalysisResultsByIDs(ctx context.Context, ids []uuid.UUID) ([]AnalysisResult, error) {
+	var results []AnalysisResult
+
+	if m.callCount > 0 {
+		results = make([]AnalysisResult, 160)
+	} else {
+		results = make([]AnalysisResult, 500)
+	}
+
+	m.callCount++
+	return results, nil
+}
+
+func (m *analysisRepositoryMock) CreateAnalysisRequestsBatch(ctx context.Context, analysisRequests []AnalysisRequest) ([]uuid.UUID, []uuid.UUID, error) {
+	return nil, nil, nil
+}
+func (m *analysisRepositoryMock) GetAnalysisRequestsBySampleCodeAndAnalyteID(ctx context.Context, sampleCodes string, analyteID uuid.UUID) ([]AnalysisRequest, error) {
+	return nil, nil
+}
+func (m *analysisRepositoryMock) GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string, allowResending bool) (map[string][]AnalysisRequest, error) {
+	return nil, nil
+}
+func (m *analysisRepositoryMock) GetAnalysisRequestsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisRequestInfo, int, error) {
+	return nil, 0, nil
+}
+func (m *analysisRepositoryMock) GetAnalysisResultsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisResultInfo, int, error) {
+	return nil, 0, nil
+}
+func (m *analysisRepositoryMock) GetAnalysisBatches(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisBatch, int, error) {
+	return nil, 0, nil
+}
+func (m *analysisRepositoryMock) CreateSubjectsBatch(ctx context.Context, subjectInfosByAnalysisRequestID map[uuid.UUID]SubjectInfo) (map[uuid.UUID]uuid.UUID, error) {
+	return nil, nil
+}
+func (m *analysisRepositoryMock) GetSubjectsByAnalysisRequestIDs(ctx context.Context, analysisRequestIDs []uuid.UUID) (map[uuid.UUID]SubjectInfo, error) {
+	return nil, nil
+}
+func (m *analysisRepositoryMock) GetAnalysisRequestsByWorkItemIDs(ctx context.Context, workItemIds []uuid.UUID) ([]AnalysisRequest, error) {
+	return nil, nil
+}
+func (m *analysisRepositoryMock) RevokeAnalysisRequests(ctx context.Context, workItemIds []uuid.UUID) error {
+	return nil
+}
+func (m *analysisRepositoryMock) IncreaseReexaminationRequestedCount(ctx context.Context, workItemIDs []uuid.UUID) error {
+	return nil
+}
+func (m *analysisRepositoryMock) IncreaseSentToInstrumentCounter(ctx context.Context, analysisRequestIDs []uuid.UUID) error {
+	return nil
+}
+func (m *analysisRepositoryMock) SaveAnalysisRequestsInstrumentTransmissions(ctx context.Context, analysisRequestIDs []uuid.UUID, instrumentID uuid.UUID) error {
+	return nil
+}
+func (m *analysisRepositoryMock) CreateAnalysisResultsBatch(ctx context.Context, analysisResults []AnalysisResult) ([]AnalysisResult, error) {
+	return nil, nil
+}
+func (m *analysisRepositoryMock) GetAnalysisResultsBySampleCodeAndAnalyteID(ctx context.Context, sampleCode string, analyteID uuid.UUID) ([]AnalysisResult, error) {
+	return nil, nil
+}
+func (m *analysisRepositoryMock) GetAnalysisResultByID(ctx context.Context, id uuid.UUID, allowDeletedAnalyteMapping bool) (AnalysisResult, error) {
+	return AnalysisResult{}, nil
+}
+func (m *analysisRepositoryMock) GetAnalysisResultsByBatchIDs(ctx context.Context, batchIDs []uuid.UUID) ([]AnalysisResult, error) {
+	return nil, nil
+}
+func (m *analysisRepositoryMock) GetAnalysisResultsByBatchIDsMapped(ctx context.Context, batchIDs []uuid.UUID) (map[uuid.UUID][]AnalysisResultInfo, error) {
+	return nil, nil
+}
+func (m *analysisRepositoryMock) GetAnalysisResultQueueItems(ctx context.Context) ([]CerberusQueueItem, error) {
+	return nil, nil
+}
+func (m *analysisRepositoryMock) UpdateAnalysisResultQueueItemStatus(ctx context.Context, queueItem CerberusQueueItem) error {
+	return nil
+}
+func (m *analysisRepositoryMock) CreateAnalysisResultQueueItem(ctx context.Context, analysisResults []AnalysisResult) (uuid.UUID, error) {
+	return uuid.New(), nil
+}
+func (m *analysisRepositoryMock) SaveImages(ctx context.Context, images []imageDAO) ([]uuid.UUID, error) {
+	return nil, nil
+}
+func (m *analysisRepositoryMock) GetStuckImageIDsForDEA(ctx context.Context) ([]uuid.UUID, error) {
+	return nil, nil
+}
+func (m *analysisRepositoryMock) GetStuckImageIDsForCerberus(ctx context.Context) ([]uuid.UUID, error) {
+	return nil, nil
+}
+func (m *analysisRepositoryMock) GetImagesForDEAUploadByIDs(ctx context.Context, ids []uuid.UUID) ([]imageDAO, error) {
+	return nil, nil
+}
+func (m *analysisRepositoryMock) GetImagesForCerberusSyncByIDs(ctx context.Context, ids []uuid.UUID) ([]cerberusImageDAO, error) {
+	return nil, nil
+}
+func (m *analysisRepositoryMock) SaveDEAImageID(ctx context.Context, imageID, deaImageID uuid.UUID) error {
+	return nil
+}
+func (m *analysisRepositoryMock) IncreaseImageUploadRetryCount(ctx context.Context, imageID uuid.UUID, error string) error {
+	return nil
+}
+func (m *analysisRepositoryMock) MarkImagesAsSyncedToCerberus(ctx context.Context, ids []uuid.UUID) error {
+	return nil
+}
+func (m *analysisRepositoryMock) GetUnprocessedAnalysisRequests(ctx context.Context) ([]AnalysisRequest, error) {
+	return nil, nil
+}
+func (m *analysisRepositoryMock) MarkAnalysisRequestsAsProcessed(ctx context.Context, analysisRequestIDs []uuid.UUID) error {
+	return nil
+}
+func (m *analysisRepositoryMock) MarkAnalysisResultsAsProcessed(ctx context.Context, analysisRequestIDs []uuid.UUID) error {
+	return nil
+}
+func (m *analysisRepositoryMock) CreateTransaction() (db.DbConnector, error) {
+	return nil, nil
+}
+func (m *analysisRepositoryMock) WithTransaction(tx db.DbConnector) AnalysisRepository {
+	return nil
 }
 
 var analysisResultsWithoutAnalysisRequestsTest_analysisResults = []AnalysisResult{
