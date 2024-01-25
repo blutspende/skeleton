@@ -420,7 +420,10 @@ func (s *skeleton) enqueueUnprocessedAnalysisResults(ctx context.Context) {
 					return err
 				}
 
-				s.resultBatchesChan <- results[low:high]
+				for _, result := range results {
+					s.manager.SendResultForProcessing(result)
+				}
+
 				return nil
 			})
 			if err != nil {
