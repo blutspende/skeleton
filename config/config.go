@@ -28,7 +28,7 @@ type Configuration struct {
 	Development                       bool          `envconfig:"DEVELOPMENT" default:"false"`
 	PermittedOrigin                   string        `envconfig:"PERMITTED_ORIGIN_URL" default:"*"`
 	OIDCBaseURL                       string        `envconfig:"OIDC_BASE_URL" default:"https://iam.bloodlab.org/realms/test.bloodlab.org"`
-	LogLevel                          zerolog.Level `envconfig:"LOG_LEVEL" default:"-1"`
+	LogLevel                          zerolog.Level `envconfig:"LOG_LEVEL" default:"1"`
 	ApplicationName                   string        `envconfig:"APPLICATION_NAME" default:"astm"`
 	TCPListenerPort                   int           `envconfig:"TCP_LISTENER_PORT" required:"true" default:"5000"`
 	LocalEnvironment                  bool          `envconfig:"LOCAL_ENVIRONMENT" default:"false"`
