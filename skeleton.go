@@ -6,10 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/blutspende/skeleton/config"
-	"github.com/blutspende/skeleton/utils"
 	"strings"
 	"time"
+
+	"github.com/blutspende/skeleton/config"
+	"github.com/blutspende/skeleton/utils"
 
 	"github.com/blutspende/skeleton/consolelog/service"
 
@@ -381,7 +382,7 @@ func (s *skeleton) enqueueUnprocessedAnalysisRequests(ctx context.Context) {
 					return err
 				}
 
-				for i, _ := range partition {
+				for i := range partition {
 					if subject, ok := subjects[partition[i].ID]; ok {
 						partition[i].SubjectInfo = &subject
 					}
@@ -529,6 +530,9 @@ func (s *skeleton) submitAnalysisResultsToCerberus(ctx context.Context) {
 			ticker.Stop()
 			return
 		case queueItems := <-continuousTrigger:
+			if len(queueItems) == 0 {
+				continue
+			}
 			executionStarted := time.Now()
 			log.Trace().Msgf("Triggered result sending to cerberus. Sending %d batches", len(queueItems))
 			ticker.Stop()
@@ -589,7 +593,6 @@ func (s *skeleton) submitAnalysisResultsToCerberus(ctx context.Context) {
 				continuousTrigger <- queueItems
 			}()
 		case <-ticker.C:
-			log.Trace().Msg("Scheduled result sending to cerberus")
 			queueItems, err := s.analysisRepository.GetAnalysisResultQueueItems(ctx)
 			if err != nil {
 				log.Error().Err(err).Msg("Failed to get cerberus queue items")

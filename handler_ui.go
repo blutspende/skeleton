@@ -561,7 +561,7 @@ func convertInstrumentTOToInstrument(instrumentTO instrumentTO) Instrument {
 	}
 
 	if instrumentTO.Status == "" {
-		model.Status = string(InstrumentOffline)
+		model.Status = string(InstrumentReady)
 	}
 
 	for i, analyteMapping := range instrumentTO.AnalyteMappings {
