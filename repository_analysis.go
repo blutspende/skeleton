@@ -1551,7 +1551,7 @@ func (r *analysisRepository) createExtraValues(ctx context.Context, extraValues 
 
 func (r *analysisRepository) getChannelResults(ctx context.Context, analysisResultIDs []uuid.UUID) (map[uuid.UUID][]channelResultDAO, error) {
 	query := fmt.Sprintf(`SELECT scr.id, scr.analysis_result_id, scr.channel_id, scr.qualitative_result, scr.qualitative_result_edited
-		FROM %s.sk_channel_results scr WHERE scr.analysis_result_id = $1;`, r.dbSchema)
+		FROM %s.sk_channel_results scr WHERE scr.analysis_result_id IN (?);`, r.dbSchema)
 	query, args, _ := sqlx.In(query, analysisResultIDs)
 	query = r.db.Rebind(query)
 	channelResultsMap := make(map[uuid.UUID][]channelResultDAO)
