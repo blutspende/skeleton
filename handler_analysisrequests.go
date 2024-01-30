@@ -136,8 +136,8 @@ func (api *api) CreateAnalysisRequestBatch(c *gin.Context) {
 	}
 
 	analysisRequestStatus, err := api.analysisService.CreateAnalysisRequests(c, analysisRequests)
-	if err != nil {
-		log.Error().Err(err).Msg("")
+	if err != nil && err != ErrAnalysisRequestWithMatchingWorkItemIdFound {
+		log.Error().Err(err).Msg("CreateAnalysisRequestBatch failed")
 		c.JSON(http.StatusInternalServerError, ErrInternalServerError)
 		return
 	}
@@ -153,6 +153,10 @@ func (api *api) CreateAnalysisRequestBatch(c *gin.Context) {
 	log.Trace().
 		Int64("Execution-time (ms)", time.Now().Sub(requestStart).Milliseconds()).
 		Msg("createAnalysisRequestBatch")
+
+	if err == ErrAnalysisRequestWithMatchingWorkItemIdFound {
+		c.JSON(http.StatusAccepted, analysisRequestStatusTO)
+	}
 
 	c.JSON(http.StatusOK, analysisRequestStatusTO)
 }

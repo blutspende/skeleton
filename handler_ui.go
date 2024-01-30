@@ -199,6 +199,7 @@ func (api *api) CreateInstrument(c *gin.Context) {
 
 	savedInstrumentID, err := api.instrumentService.CreateInstrument(c, instrument)
 	if err != nil {
+		log.Error().Err(err).Interface("instrument", instrumentTO).Msg("CreateInstrument failed")
 		c.AbortWithStatusJSON(http.StatusInternalServerError, "CreateInstrument Error")
 		return
 	}

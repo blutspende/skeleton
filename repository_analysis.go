@@ -24,6 +24,7 @@ const (
 	msgConvertAnalysisResultsFailed                        = "convert analysis results"
 	msgMarshalAnalysisResultsFailed                        = "marshal analysis results failed"
 	msgInvalidReagentType                                  = "invalid reagent type"
+	msgCreateAnalysisRequestsBatchFailed                   = "create analysis requests batch failed"
 	msgCreateSubjectsFailed                                = "create subject failed"
 	msgCreateReagentInfoFailed                             = "create analysis result reagent infos failed"
 	msgCreateWarningsFailed                                = "create warnings failed"
@@ -45,6 +46,7 @@ var (
 	ErrInvalidResultStatus                                 = errors.New(msgInvalidResultStatus)
 	ErrConvertAnalysisResultsFailed                        = errors.New(msgConvertAnalysisResultsFailed)
 	ErrMarshalAnalysisResultsFailed                        = errors.New(msgMarshalAnalysisResultsFailed)
+	ErrCreateAnalysisRequestsBatchFailed                   = errors.New(msgCreateAnalysisRequestsBatchFailed)
 	ErrCreateSubjectsFailed                                = errors.New(msgCreateSubjectsFailed)
 	ErrCreateReagentInfoFailed                             = errors.New(msgCreateReagentInfoFailed)
 	ErrCreateWarningsFailed                                = errors.New(msgCreateWarningsFailed)
@@ -308,26 +310,33 @@ func (r *analysisRepository) createAnalysisRequestsBatch(ctx context.Context, an
 		return []uuid.UUID{}, []uuid.UUID{}, nil
 	}
 	ids := make([]uuid.UUID, len(analysisRequests))
-	workItemIDs := make([]uuid.UUID, len(analysisRequests))
 	for i := range analysisRequests {
 		if (analysisRequests[i].ID == uuid.UUID{}) || (analysisRequests[i].ID == uuid.Nil) {
 			analysisRequests[i].ID = uuid.New()
 		}
 		ids[i] = analysisRequests[i].ID
-		workItemIDs[i] = analysisRequests[i].WorkItemID
 	}
-
 	query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_requests(id, work_item_id, analyte_id, sample_code, material_id, laboratory_id, valid_until_time)
 				VALUES(:id, :work_item_id, :analyte_id, :sample_code, :material_id, :laboratory_id, :valid_until_time) 
-				ON CONFLICT (work_item_id) DO 
-				UPDATE SET analyte_id = excluded.analyte_id, sample_code = excluded.sample_code, material_id = excluded.material_id, laboratory_id = excluded.laboratory_id, valid_until_time = excluded.valid_until_time;`, r.dbSchema)
-	_, err := r.db.NamedExecContext(ctx, query, convertAnalysisRequestsToDAOs(analysisRequests))
+				ON CONFLICT (work_item_id) DO NOTHING RETURNING work_item_id;`, r.dbSchema)
+	rows, err := r.db.NamedQueryContext(ctx, query, convertAnalysisRequestsToDAOs(analysisRequests))
 	if err != nil {
-		log.Error().Err(err).Msg("Can not create RequestData")
-		return []uuid.UUID{}, []uuid.UUID{}, nil
+		log.Error().Err(err).Msg(msgCreateAnalysisRequestsBatchFailed)
+		return []uuid.UUID{}, []uuid.UUID{}, ErrCreateAnalysisRequestsBatchFailed
+	}
+	defer rows.Close()
+	savedWorkItemIDs := make([]uuid.UUID, len(analysisRequests))
+	for rows.Next() {
+		var workItemID uuid.UUID
+		err = rows.Scan(&workItemID)
+		if err != nil {
+			log.Error().Err(err).Msg(msgCreateAnalysisRequestsBatchFailed)
+			return []uuid.UUID{}, []uuid.UUID{}, ErrCreateAnalysisRequestsBatchFailed
+		}
+		savedWorkItemIDs = append(savedWorkItemIDs, workItemID)
 	}
 
-	return ids, workItemIDs, nil
+	return ids, savedWorkItemIDs, nil
 }
 
 const subjectBatchSize = 6000

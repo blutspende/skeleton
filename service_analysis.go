@@ -2,10 +2,13 @@ package skeleton
 
 import (
 	"context"
+	"errors"
 	"github.com/blutspende/skeleton/utils"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 )
+
+var ErrAnalysisRequestWithMatchingWorkItemIdFound = errors.New("analysis request with matching workitem id found")
 
 type AnalysisService interface {
 	CreateAnalysisRequests(ctx context.Context, analysisRequests []AnalysisRequest) ([]AnalysisRequestStatus, error)
@@ -46,15 +49,21 @@ func (as *analysisService) CreateAnalysisRequests(ctx context.Context, analysisR
 
 	as.manager.SendAnalysisRequestsForProcessing(analysisRequests)
 
-	analysisRequestStatuses := make([]AnalysisRequestStatus, len(savedAnalysisRequestWorkItemIDs))
-	for i := range savedAnalysisRequestWorkItemIDs {
+	savedWorkItemIDsMap := ConvertUUIDsToMap(savedAnalysisRequestWorkItemIDs)
+
+	analysisRequestStatuses := make([]AnalysisRequestStatus, len(analysisRequests))
+	for i := range analysisRequests {
 		analysisRequestStatuses[i] = AnalysisRequestStatus{
 			WorkItemID: savedAnalysisRequestWorkItemIDs[i],
 			Error:      nil,
 		}
+		if _, ok := savedWorkItemIDsMap[analysisRequests[i].WorkItemID]; !ok {
+			err = ErrAnalysisRequestWithMatchingWorkItemIdFound
+			analysisRequestStatuses[i].Error = err
+		}
 	}
 
-	return analysisRequestStatuses, nil
+	return analysisRequestStatuses, err
 }
 
 func (as *analysisService) ProcessAnalysisRequests(ctx context.Context, analysisRequests []AnalysisRequest) error {
