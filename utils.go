@@ -120,3 +120,11 @@ func applyPagination(pageable Pageable, tableAlias, defaultSort string) string {
 	}
 	return paginationQueryPart
 }
+
+func ConvertUUIDsToMap(ids []uuid.UUID) map[uuid.UUID]any {
+	idsMap := make(map[uuid.UUID]any)
+	for _, id := range ids {
+		idsMap[id] = nil
+	}
+	return idsMap
+}
