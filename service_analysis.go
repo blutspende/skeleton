@@ -54,7 +54,7 @@ func (as *analysisService) CreateAnalysisRequests(ctx context.Context, analysisR
 	analysisRequestStatuses := make([]AnalysisRequestStatus, len(analysisRequests))
 	for i := range analysisRequests {
 		analysisRequestStatuses[i] = AnalysisRequestStatus{
-			WorkItemID: savedAnalysisRequestWorkItemIDs[i],
+			WorkItemID: analysisRequests[i].WorkItemID,
 			Error:      nil,
 		}
 		if _, ok := savedWorkItemIDsMap[analysisRequests[i].WorkItemID]; !ok {
@@ -71,6 +71,7 @@ func (as *analysisService) ProcessAnalysisRequests(ctx context.Context, analysis
 	processedAnalysisRequestIDs := make([]uuid.UUID, 0)
 
 	for _, request := range analysisRequests {
+
 		analysisResults, err := as.analysisRepository.GetAnalysisResultsBySampleCodeAndAnalyteID(ctx, request.SampleCode, request.AnalyteID)
 		if err != nil {
 			log.Debug().Err(err).Str("requestID", request.ID.String()).Msg("Failed to load analysis results for the request")

@@ -51,7 +51,7 @@ type analysisRequestTO struct {
 }
 
 type analysisRequestStatusTO struct {
-	WorkItemID uuid.UUID `json:"workitemId"`
+	WorkItemID uuid.UUID `json:"workItemId"`
 	Error      string    `json:"error,omitempty"`
 }
 
@@ -156,6 +156,7 @@ func (api *api) CreateAnalysisRequestBatch(c *gin.Context) {
 
 	if err == ErrAnalysisRequestWithMatchingWorkItemIdFound {
 		c.JSON(http.StatusAccepted, analysisRequestStatusTO)
+		return
 	}
 
 	c.JSON(http.StatusOK, analysisRequestStatusTO)
