@@ -21,6 +21,7 @@ type AnalysisService interface {
 	QueueAnalysisResults(ctx context.Context, results []AnalysisResult) error
 	RetransmitResult(ctx context.Context, resultID uuid.UUID) error
 	RetransmitResultBatches(ctx context.Context, batchIDs []uuid.UUID) error
+	RetriggerExamination(ctx context.Context, batchID uuid.UUID)
 	ProcessStuckImagesToDEA(ctx context.Context)
 	ProcessStuckImagesToCerberus(ctx context.Context)
 }
@@ -204,6 +205,10 @@ func (as *analysisService) RetransmitResultBatches(ctx context.Context, batchIDs
 	}
 
 	return nil
+}
+
+func (as *analysisService) RetriggerExamination(ctx context.Context, batchID uuid.UUID) {
+	as.manager.GetCallbackHandler().RetriggerExamination(batchID)
 }
 
 const stuckImageBatchSize = 500

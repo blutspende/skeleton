@@ -120,6 +120,11 @@ func newAPI(engine *gin.Engine, config *config.Configuration, authManager AuthMa
 		analysisRequests.POST("/batch/reexamine", api.ReexamineAnalysisRequestBatch)
 	}
 
+	examination := v1Group.Group("examination")
+	{
+		examination.GET("/retrigger", api.RetriggerExamination)
+	}
+
 	v1Group.POST("/analytes/usage", api.CheckAnalytesUsage)
 
 	// Development-option enables debugger, this can have side-effects

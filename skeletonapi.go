@@ -35,6 +35,8 @@ type SkeletonCallbackHandlerV1 interface {
 	GetEncodingList(protocolId uuid.UUID) ([]string, error)
 
 	RevokeAnalysisRequests(request []AnalysisRequest)
+
+	RetriggerExamination(batchID uuid.UUID)
 }
 
 // SkeletonAPI is the interface for accessing the skeleton driver capabilities
