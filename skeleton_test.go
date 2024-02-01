@@ -263,6 +263,8 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 		_ = skeletonInstance.Start()
 	}()
 
+	time.Sleep(1 * time.Second)
+
 	for _, analysisResult := range analysisResultsWithoutAnalysisRequestsTest_analysisResults {
 		err := skeletonInstance.SubmitAnalysisResult(context.TODO(), analysisResult)
 		assert.Nil(t, err)
@@ -586,6 +588,7 @@ type skeletonCallbackHandlerV1Mock struct {
 	getManufacturerTestFunc    func(instrumentId uuid.UUID, protocolId uuid.UUID) ([]SupportedManufacturerTests, error)
 	getEncodingList            func(protocolId uuid.UUID) ([]string, error)
 	revokeAnalysisRequests     func(request []AnalysisRequest)
+	reprocessInstrumentData    func(batchID uuid.UUID)
 }
 
 func (m *skeletonCallbackHandlerV1Mock) HandleAnalysisRequests(request []AnalysisRequest) error {
@@ -614,6 +617,13 @@ func (m *skeletonCallbackHandlerV1Mock) RevokeAnalysisRequests(request []Analysi
 		return
 	}
 	m.revokeAnalysisRequests(request)
+}
+
+func (m *skeletonCallbackHandlerV1Mock) ReprocessInstrumentData(batchID uuid.UUID) {
+	if m.reprocessInstrumentData == nil {
+		return
+	}
+	m.reprocessInstrumentData(batchID)
 }
 
 type authManagerMock struct {
@@ -740,6 +750,8 @@ func (m *analysisServiceMock) RetransmitResult(ctx context.Context, resultID uui
 }
 func (m *analysisServiceMock) RetransmitResultBatches(ctx context.Context, batchIDs []uuid.UUID) error {
 	return nil
+}
+func (m *analysisServiceMock) ReprocessInstrumentData(ctx context.Context, batchID uuid.UUID) {
 }
 func (m *analysisServiceMock) ProcessStuckImagesToDEA(ctx context.Context) {
 }
