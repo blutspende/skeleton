@@ -134,6 +134,7 @@ func (s *skeleton) SubmitAnalysisResult(ctx context.Context, resultData Analysis
 		return err
 	}
 	if err = tx.Commit(); err != nil {
+		_ = tx.Rollback()
 		return err
 	}
 	savedResultData := savedResultDataList[0]
@@ -154,6 +155,55 @@ func (s *skeleton) SubmitAnalysisResult(ctx context.Context, resultData Analysis
 			s.manager.SendResultForProcessing(savedResultData)
 		}
 	}(savedResultData)
+
+	return nil
+}
+
+func (s *skeleton) SubmitAnalysisResultBatch(ctx context.Context, resultBatch []AnalysisResult, submitTypes ...SubmitType) error {
+	for i := range resultBatch {
+		if resultBatch[i].AnalyteMapping.ID == uuid.Nil {
+			return errors.New(fmt.Sprintf("analyte mapping ID is missing at index: %d", i))
+		}
+		if resultBatch[i].Instrument.ID == uuid.Nil {
+			return errors.New(fmt.Sprintf("instrument ID is missing at index: %d", i))
+		}
+		if resultBatch[i].ResultMode == "" {
+			resultBatch[i].ResultMode = resultBatch[i].Instrument.ResultMode
+		}
+	}
+
+	tx, err := s.analysisRepository.CreateTransaction()
+	if err != nil {
+		return err
+	}
+	savedAnalysisResults, err := s.analysisRepository.WithTransaction(tx).CreateAnalysisResultsBatch(ctx, resultBatch)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	if err = tx.Commit(); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	go func(analysisResults []AnalysisResult) {
+		for i := range analysisResults {
+			err := s.saveImages(ctx, &analysisResults[i])
+			if err != nil {
+				log.Error().Err(err).Str("analysisResultID", analysisResults[i].ID.String()).Msg("save images of analysis result failed")
+			}
+			analyteRequests, err := s.analysisRepository.GetAnalysisRequestsBySampleCodeAndAnalyteID(ctx, analysisResults[i].SampleCode, analysisResults[i].AnalyteMapping.AnalyteID)
+			if err != nil {
+				log.Error().Err(err).Msg("get analysis requests by sample code and analyteID failed after saving results")
+				return
+			}
+
+			for j := range analyteRequests {
+				analysisResults[i].AnalysisRequest = analyteRequests[j]
+				s.manager.SendResultForProcessing(analysisResults[i])
+			}
+		}
+	}(savedAnalysisResults)
 
 	return nil
 }
