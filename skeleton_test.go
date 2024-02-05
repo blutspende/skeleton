@@ -588,7 +588,7 @@ type skeletonCallbackHandlerV1Mock struct {
 	getManufacturerTestFunc    func(instrumentId uuid.UUID, protocolId uuid.UUID) ([]SupportedManufacturerTests, error)
 	getEncodingList            func(protocolId uuid.UUID) ([]string, error)
 	revokeAnalysisRequests     func(request []AnalysisRequest)
-	reprocessInstrumentData    func(batchID uuid.UUID)
+	reprocessInstrumentData    func(batchIDs []uuid.UUID)
 }
 
 func (m *skeletonCallbackHandlerV1Mock) HandleAnalysisRequests(request []AnalysisRequest) error {
@@ -619,11 +619,11 @@ func (m *skeletonCallbackHandlerV1Mock) RevokeAnalysisRequests(request []Analysi
 	m.revokeAnalysisRequests(request)
 }
 
-func (m *skeletonCallbackHandlerV1Mock) ReprocessInstrumentData(batchID uuid.UUID) {
+func (m *skeletonCallbackHandlerV1Mock) ReprocessInstrumentData(batchIDs []uuid.UUID) {
 	if m.reprocessInstrumentData == nil {
 		return
 	}
-	m.reprocessInstrumentData(batchID)
+	m.reprocessInstrumentData(batchIDs)
 }
 
 type authManagerMock struct {
@@ -751,7 +751,7 @@ func (m *analysisServiceMock) RetransmitResult(ctx context.Context, resultID uui
 func (m *analysisServiceMock) RetransmitResultBatches(ctx context.Context, batchIDs []uuid.UUID) error {
 	return nil
 }
-func (m *analysisServiceMock) ReprocessInstrumentData(ctx context.Context, batchID uuid.UUID) {
+func (m *analysisServiceMock) ReprocessInstrumentData(ctx context.Context, batchIDs []uuid.UUID) {
 }
 func (m *analysisServiceMock) ProcessStuckImagesToDEA(ctx context.Context) {
 }
@@ -767,16 +767,7 @@ func (m *analysisRepositoryMock) GetUnprocessedAnalysisResultIDs(ctx context.Con
 }
 
 func (m *analysisRepositoryMock) GetAnalysisResultsByIDs(ctx context.Context, ids []uuid.UUID) ([]AnalysisResult, error) {
-	var results []AnalysisResult
-
-	if m.callCount > 0 {
-		results = make([]AnalysisResult, 160)
-	} else {
-		results = make([]AnalysisResult, 500)
-	}
-
-	m.callCount++
-	return results, nil
+	return make([]AnalysisResult, len(ids)), nil
 }
 
 func (m *analysisRepositoryMock) CreateAnalysisRequestsBatch(ctx context.Context, analysisRequests []AnalysisRequest) ([]uuid.UUID, []uuid.UUID, error) {
