@@ -141,6 +141,15 @@ type batchRetransmitTO struct {
 	BatchIDs []uuid.UUID `json:"batchIds"`
 }
 
+type reprocessTO struct {
+	SampleCode string `json:"sampleCode"`
+}
+
+const (
+	MsgFailedToReprocessInstrumentData = "failed to reprocess instrument data"
+	keyFailedToReprocessInstrumentData = "failedToReprocessInstrumentData"
+)
+
 func (api *api) GetInstruments(c *gin.Context) {
 	instruments, err := api.instrumentService.GetInstruments(c)
 	if err != nil {
@@ -401,6 +410,56 @@ func (api *api) RetransmitResultBatches(c *gin.Context) {
 	err = api.analysisService.RetransmitResultBatches(c, to.BatchIDs)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+func (api *api) ReprocessInstrumentData(c *gin.Context) {
+	var batchIDs []uuid.UUID
+	err := c.ShouldBindJSON(&batchIDs)
+	if err != nil {
+		log.Error().Err(err).Msg(MsgCanNotBindRequestBody)
+		c.AbortWithStatusJSON(http.StatusBadRequest, clientError{
+			Message:    MsgCanNotBindRequestBody,
+			MessageKey: keyBadRequest,
+		})
+		return
+	}
+
+	if len(batchIDs) > 0 {
+		err = api.instrumentService.ReprocessInstrumentData(c, batchIDs)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, clientError{
+				Message:    MsgFailedToReprocessInstrumentData,
+				MessageKey: keyFailedToReprocessInstrumentData,
+			})
+			return
+		}
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+func (api *api) ReprocessInstrumentDataBySampleCode(c *gin.Context) {
+	var to reprocessTO
+	err := c.ShouldBindJSON(&to)
+	if err != nil {
+		log.Error().Err(err).Msg(MsgCanNotBindRequestBody)
+		c.AbortWithStatusJSON(http.StatusBadRequest, clientError{
+			Message:    MsgCanNotBindRequestBody,
+			MessageKey: keyBadRequest,
+		})
+		return
+	}
+
+	err = api.instrumentService.ReprocessInstrumentDataBySampleCode(c, to.SampleCode)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, clientError{
+			Message:    MsgFailedToReprocessInstrumentData,
+			MessageKey: keyFailedToReprocessInstrumentData,
+		})
 		return
 	}
 

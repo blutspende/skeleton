@@ -27,7 +27,8 @@ type InstrumentService interface {
 	EnqueueUnsentInstrumentsToCerberus(ctx context.Context)
 	CheckAnalytesUsage(ctx context.Context, analyteIDs []uuid.UUID) (map[uuid.UUID][]Instrument, error)
 	HidePassword(ctx context.Context, instrument *Instrument) error
-	ReprocessInstrumentData(ctx context.Context, batchIDs []uuid.UUID)
+	ReprocessInstrumentData(ctx context.Context, batchIDs []uuid.UUID) error
+	ReprocessInstrumentDataBySampleCode(ctx context.Context, sampleCode string) error
 }
 
 type instrumentService struct {
@@ -855,6 +856,10 @@ func (s *instrumentService) HidePassword(ctx context.Context, instrument *Instru
 	return nil
 }
 
-func (s *instrumentService) ReprocessInstrumentData(ctx context.Context, batchIDs []uuid.UUID) {
-	s.manager.GetCallbackHandler().ReprocessInstrumentData(batchIDs)
+func (s *instrumentService) ReprocessInstrumentData(ctx context.Context, batchIDs []uuid.UUID) error {
+	return s.manager.GetCallbackHandler().ReprocessInstrumentData(batchIDs)
+}
+
+func (s *instrumentService) ReprocessInstrumentDataBySampleCode(ctx context.Context, sampleCode string) error {
+	return s.manager.GetCallbackHandler().ReprocessInstrumentDataBySampleCode(sampleCode)
 }
