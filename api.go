@@ -98,6 +98,7 @@ func newAPI(engine *gin.Engine, config *config.Configuration, authManager AuthMa
 		instrumentsGroup.POST("/result/:resultID/retransmit", api.RetransmitResult)
 		instrumentsGroup.POST("/result/retransmit/batches", api.RetransmitResultBatches)
 		instrumentsGroup.POST("/reprocess", api.ReprocessInstrumentData)
+		instrumentsGroup.POST("/reprocess/sample-code", api.ReprocessInstrumentDataBySampleCode)
 		instrumentsGroup.GET("/protocol/:protocolId/encodings", api.GetEncodings)
 		instrumentsGroup.GET("/:instrumentId/console/handshake", middleware.SSEHeadersMiddleware(), api.consoleLogSSEServer.ServeHTTP())
 

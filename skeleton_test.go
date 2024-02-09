@@ -587,8 +587,8 @@ type skeletonCallbackHandlerV1Mock struct {
 	handleAnalysisRequestsFunc func(request []AnalysisRequest) error
 	getManufacturerTestFunc    func(instrumentId uuid.UUID, protocolId uuid.UUID) ([]SupportedManufacturerTests, error)
 	getEncodingList            func(protocolId uuid.UUID) ([]string, error)
-	revokeAnalysisRequests     func(request []AnalysisRequest)
-	reprocessInstrumentData    func(batchIDs []uuid.UUID)
+	revokeAnalysisRequests     func(request []AnalysisRequest) error
+	reprocessInstrumentData    func(batchIDs []uuid.UUID) error
 }
 
 func (m *skeletonCallbackHandlerV1Mock) HandleAnalysisRequests(request []AnalysisRequest) error {
@@ -619,11 +619,18 @@ func (m *skeletonCallbackHandlerV1Mock) RevokeAnalysisRequests(request []Analysi
 	m.revokeAnalysisRequests(request)
 }
 
-func (m *skeletonCallbackHandlerV1Mock) ReprocessInstrumentData(batchIDs []uuid.UUID) {
+func (m *skeletonCallbackHandlerV1Mock) ReprocessInstrumentData(batchIDs []uuid.UUID) error {
 	if m.reprocessInstrumentData == nil {
-		return
+		return nil
 	}
-	m.reprocessInstrumentData(batchIDs)
+	return m.reprocessInstrumentData(batchIDs)
+}
+
+func (m *skeletonCallbackHandlerV1Mock) ReprocessInstrumentDataBySampleCode(sampleCode string) error {
+	if m.reprocessInstrumentData == nil {
+		return nil
+	}
+	return m.ReprocessInstrumentDataBySampleCode(sampleCode)
 }
 
 type authManagerMock struct {
