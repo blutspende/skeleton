@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/blutspende/skeleton/utils"
 	"strings"
 	"time"
 
@@ -418,37 +419,41 @@ func (r *analysisRepository) GetAnalysisRequestsBySampleCodes(ctx context.Contex
 	if len(sampleCodes) == 0 {
 		return analysisRequestsBySampleCodes, nil
 	}
-	query := fmt.Sprintf(`SELECT * FROM %s.sk_analysis_requests 
+	err := utils.Partition(len(sampleCodes), maxParams, func(low int, high int) error {
+		query := fmt.Sprintf(`SELECT * FROM %s.sk_analysis_requests 
 					WHERE sample_code in (?)
 					AND valid_until_time >= timezone('utc',now())`, r.dbSchema)
-	if !allowResending {
-		query += " AND reexamination_requested_count >= sent_to_instrument_count"
-	}
-	query += ";"
+		if !allowResending {
+			query += " AND reexamination_requested_count >= sent_to_instrument_count"
+		}
+		query += ";"
 
-	query, args, _ := sqlx.In(query, sampleCodes)
-	query = r.db.Rebind(query)
+		query, args, _ := sqlx.In(query, sampleCodes[low:high])
+		query = r.db.Rebind(query)
 
-	rows, err := r.db.QueryxContext(ctx, query, args...)
-	if err != nil {
-		log.Error().Err(err).Msg("Can not search for AnalysisRequests")
-		return analysisRequestsBySampleCodes, err
-	}
-
-	defer rows.Close()
-
-	for rows.Next() {
-		request := analysisRequestDAO{}
-		err := rows.StructScan(&request)
+		rows, err := r.db.QueryxContext(ctx, query, args...)
 		if err != nil {
-			log.Error().Err(err).Msg("Can not scan data")
-			return analysisRequestsBySampleCodes, err
+			log.Error().Err(err).Msg("Can not search for AnalysisRequests")
+			return err
 		}
-		if _, ok := analysisRequestsBySampleCodes[request.SampleCode]; !ok {
-			analysisRequestsBySampleCodes[request.SampleCode] = make([]AnalysisRequest, 0)
+
+		defer rows.Close()
+
+		for rows.Next() {
+			request := analysisRequestDAO{}
+			err := rows.StructScan(&request)
+			if err != nil {
+				log.Error().Err(err).Msg("Can not scan data")
+				return err
+			}
+			if _, ok := analysisRequestsBySampleCodes[request.SampleCode]; !ok {
+				analysisRequestsBySampleCodes[request.SampleCode] = make([]AnalysisRequest, 0)
+			}
+			analysisRequestsBySampleCodes[request.SampleCode] = append(analysisRequestsBySampleCodes[request.SampleCode], convertAnalysisRequestDAOToAnalysisRequest(request))
 		}
-		analysisRequestsBySampleCodes[request.SampleCode] = append(analysisRequestsBySampleCodes[request.SampleCode], convertAnalysisRequestDAOToAnalysisRequest(request))
-	}
+
+		return nil
+	})
 
 	return analysisRequestsBySampleCodes, err
 }
@@ -694,25 +699,29 @@ func (r *analysisRepository) GetSubjectsByAnalysisRequestIDs(ctx context.Context
 	if len(analysisRequestIDs) == 0 {
 		return subjectsMap, nil
 	}
-	query := fmt.Sprintf(`SELECT * FROM %s.sk_subject_infos WHERE analysis_request_id IN (?);`, r.dbSchema)
-	query, args, _ := sqlx.In(query, analysisRequestIDs)
-	query = r.db.Rebind(query)
-	rows, err := r.db.QueryxContext(ctx, query, args...)
-	if err != nil {
-		log.Error().Err(err).Msg("get subjects by analysis request ids failed")
-		return subjectsMap, err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var subjectDao subjectInfoDAO
-		err = rows.StructScan(&subjectDao)
+	err := utils.Partition(len(analysisRequestIDs), maxParams, func(low int, high int) error {
+		query := fmt.Sprintf(`SELECT * FROM %s.sk_subject_infos WHERE analysis_request_id IN (?);`, r.dbSchema)
+		query, args, _ := sqlx.In(query, analysisRequestIDs[low:high])
+		query = r.db.Rebind(query)
+		rows, err := r.db.QueryxContext(ctx, query, args...)
 		if err != nil {
-			log.Error().Err(err).Msg("scan subject info failed")
-			return map[uuid.UUID]SubjectInfo{}, err
+			log.Error().Err(err).Msg("get subjects by analysis request ids failed")
+			return err
 		}
-		subjectsMap[subjectDao.AnalysisRequestID] = convertSubjectDAOToSubjectInfo(subjectDao)
-	}
-	return subjectsMap, nil
+		defer rows.Close()
+		for rows.Next() {
+			var subjectDao subjectInfoDAO
+			err = rows.StructScan(&subjectDao)
+			if err != nil {
+				log.Error().Err(err).Msg("scan subject info failed")
+				return err
+			}
+			subjectsMap[subjectDao.AnalysisRequestID] = convertSubjectDAOToSubjectInfo(subjectDao)
+		}
+		return nil
+	})
+
+	return subjectsMap, err
 }
 
 func (r *analysisRepository) GetAnalysisRequestsByWorkItemIDs(ctx context.Context, workItemIds []uuid.UUID) ([]AnalysisRequest, error) {
@@ -720,28 +729,31 @@ func (r *analysisRepository) GetAnalysisRequestsByWorkItemIDs(ctx context.Contex
 	if len(workItemIds) == 0 {
 		return analysisRequests, nil
 	}
-	query := fmt.Sprintf(`SELECT * FROM %s.sk_analysis_requests WHERE work_item_id in (?);`, r.dbSchema)
+	err := utils.Partition(len(workItemIds), maxParams, func(low int, high int) error {
+		query := fmt.Sprintf(`SELECT * FROM %s.sk_analysis_requests WHERE work_item_id in (?);`, r.dbSchema)
+		query, args, _ := sqlx.In(query, workItemIds[low:high])
+		query = r.db.Rebind(query)
 
-	query, args, _ := sqlx.In(query, workItemIds)
-	query = r.db.Rebind(query)
-
-	rows, err := r.db.QueryxContext(ctx, query, args...)
-	if err != nil {
-		log.Error().Err(err).Msg("Can not search for AnalysisRequests")
-		return analysisRequests, err
-	}
-
-	defer rows.Close()
-
-	for rows.Next() {
-		request := analysisRequestDAO{}
-		err := rows.StructScan(&request)
+		rows, err := r.db.QueryxContext(ctx, query, args...)
 		if err != nil {
-			log.Error().Err(err).Msg("Can not scan data")
-			return analysisRequests, err
+			log.Error().Err(err).Msg("Can not search for AnalysisRequests")
+			return err
 		}
-		analysisRequests = append(analysisRequests, convertAnalysisRequestDAOToAnalysisRequest(request))
-	}
+
+		defer rows.Close()
+
+		for rows.Next() {
+			request := analysisRequestDAO{}
+			err := rows.StructScan(&request)
+			if err != nil {
+				log.Error().Err(err).Msg("Can not scan data")
+				return err
+			}
+			analysisRequests = append(analysisRequests, convertAnalysisRequestDAOToAnalysisRequest(request))
+		}
+
+		return nil
+	})
 
 	return analysisRequests, err
 }
@@ -750,13 +762,15 @@ func (r *analysisRepository) RevokeAnalysisRequests(ctx context.Context, workIte
 	if len(workItemIds) == 0 {
 		return nil
 	}
-	query := fmt.Sprintf(`DELETE FROM %s.sk_analysis_requests WHERE work_item_id IN (?);`, r.dbSchema)
+	err := utils.Partition(len(workItemIds), maxParams, func(low int, high int) error {
+		query := fmt.Sprintf(`DELETE FROM %s.sk_analysis_requests WHERE work_item_id IN (?);`, r.dbSchema)
 
-	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
-	query, args, _ := sqlx.In(query, workItemIds)
-	query = r.db.Rebind(query)
-
-	_, err := r.db.ExecContext(ctx, query, args...)
+		query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
+		query, args, _ := sqlx.In(query, workItemIds[low:high])
+		query = r.db.Rebind(query)
+		_, err := r.db.ExecContext(ctx, query, args...)
+		return err
+	})
 	if err != nil {
 		log.Error().Err(err).Msg(msgFailedToRevokeAnalysisRequests)
 		return ErrFailedToRevokeAnalysisRequests
@@ -769,13 +783,16 @@ func (r *analysisRepository) IncreaseReexaminationRequestedCount(ctx context.Con
 	if len(workItemIDs) == 0 {
 		return nil
 	}
-	query := fmt.Sprintf(`UPDATE %s.sk_analysis_requests SET reexamination_requested_count = reexamination_requested_count + 1 WHERE work_item_id IN (?);`, r.dbSchema)
+	err := utils.Partition(len(workItemIDs), maxParams, func(low int, high int) error {
+		query := fmt.Sprintf(`UPDATE %s.sk_analysis_requests SET reexamination_requested_count = reexamination_requested_count + 1 WHERE work_item_id IN (?);`, r.dbSchema)
 
-	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
-	query, args, _ := sqlx.In(query, workItemIDs)
-	query = r.db.Rebind(query)
+		query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
+		query, args, _ := sqlx.In(query, workItemIDs[low:high])
+		query = r.db.Rebind(query)
 
-	_, err := r.db.ExecContext(ctx, query, args...)
+		_, err := r.db.ExecContext(ctx, query, args...)
+		return err
+	})
 	if err != nil {
 		log.Error().Err(err).Msg(msgFailedToRevokeAnalysisRequests)
 		return ErrFailedToRevokeAnalysisRequests
@@ -788,13 +805,16 @@ func (r *analysisRepository) IncreaseSentToInstrumentCounter(ctx context.Context
 	if len(analysisRequestIDs) == 0 {
 		return nil
 	}
-	query := fmt.Sprintf(`UPDATE %s.sk_analysis_requests SET sent_to_instrument_count = sent_to_instrument_count + 1 WHERE id IN (?);`, r.dbSchema)
+	err := utils.Partition(len(analysisRequestIDs), maxParams, func(low int, high int) error {
+		query := fmt.Sprintf(`UPDATE %s.sk_analysis_requests SET sent_to_instrument_count = sent_to_instrument_count + 1 WHERE id IN (?);`, r.dbSchema)
 
-	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
-	query, args, _ := sqlx.In(query, analysisRequestIDs)
-	query = r.db.Rebind(query)
+		query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
+		query, args, _ := sqlx.In(query, analysisRequestIDs[low:high])
+		query = r.db.Rebind(query)
 
-	_, err := r.db.ExecContext(ctx, query, args...)
+		_, err := r.db.ExecContext(ctx, query, args...)
+		return err
+	})
 	if err != nil {
 		log.Error().Err(err).Msg(msgIncreaseAnalysisRequestsSentToInstrumentCountFailed)
 		return ErrIncreaseAnalysisRequestsSentToInstrumentCountFailed
@@ -1265,43 +1285,51 @@ func (r *analysisRepository) GetAnalysisResultsByBatchIDs(ctx context.Context, b
 	if len(batchIDs) == 0 {
 		return []AnalysisResult{}, nil
 	}
-	query := `SELECT sar.id, sar.analyte_mapping_id, sar.instrument_id, sar.sample_code, sar.instrument_run_id, sar.result_record_id, sar.batch_id, sar."result", sar.status, sar.result_mode, sar.yielded_at, sar.valid_until, sar.operator, sar.edited, sar.edit_reason,
+	analysisResultDAOs := make([]analysisResultDAO, 0)
+	analysisResultIDs := make([]uuid.UUID, 0)
+	analyteMappingIDsMap := make(map[uuid.UUID]any)
+
+	err := utils.Partition(len(batchIDs), maxParams, func(low int, high int) error {
+		query := `SELECT sar.id, sar.analyte_mapping_id, sar.instrument_id, sar.sample_code, sar.instrument_run_id, sar.result_record_id, sar.batch_id, sar."result", sar.status, sar.result_mode, sar.yielded_at, sar.valid_until, sar.operator, sar.edited, sar.edit_reason,
 					sam.id AS "analyte_mapping.id", sam.instrument_id AS "analyte_mapping.instrument_id", sam.instrument_analyte AS "analyte_mapping.instrument_analyte", sam.analyte_id AS "analyte_mapping.analyte_id", sam.result_type AS "analyte_mapping.result_type", sam.created_at AS "analyte_mapping.created_at", sam.modified_at AS "analyte_mapping.modified_at"
 			FROM %schema_name%.sk_analysis_results sar
 			INNER JOIN %schema_name%.sk_analyte_mappings sam ON sar.analyte_mapping_id = sam.id AND sam.deleted_at IS NULL
 			WHERE sar.batch_id IN (?);`
 
-	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
-	query, args, _ := sqlx.In(query, batchIDs)
-	query = r.db.Rebind(query)
+		query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
+		query, args, _ := sqlx.In(query, batchIDs[low:high])
+		query = r.db.Rebind(query)
 
-	rows, err := r.db.QueryxContext(ctx, query, args...)
+		rows, err := r.db.QueryxContext(ctx, query, args...)
 
-	if err != nil {
-		if err == sql.ErrNoRows {
-			log.Trace().Msg("No analysis results")
-			return []AnalysisResult{}, nil
-		}
-		log.Error().Err(err).Msg("Can not search for AnalysisResults")
-		return []AnalysisResult{}, err
-	}
-	defer rows.Close()
-
-	analysisResultDAOs := make([]analysisResultDAO, 0)
-	analysisResultIDs := make([]uuid.UUID, 0)
-	analyteMappingIDsMap := make(map[uuid.UUID]any)
-	for rows.Next() {
-		result := analysisResultDAO{}
-		err := rows.StructScan(&result)
 		if err != nil {
-			log.Error().Err(err).Msg("Can not scan data")
-			return []AnalysisResult{}, err
+			if err == sql.ErrNoRows {
+				log.Trace().Msg("No analysis results")
+				return nil
+			}
+			log.Error().Err(err).Msg("Can not search for AnalysisResults")
+			return err
 		}
+		defer rows.Close()
 
-		analysisResultDAOs = append(analysisResultDAOs, result)
-		analysisResultIDs = append(analysisResultIDs, result.ID)
-		analyteMappingIDsMap[result.AnalyteMappingID] = nil
+		for rows.Next() {
+			result := analysisResultDAO{}
+			err := rows.StructScan(&result)
+			if err != nil {
+				log.Error().Err(err).Msg("Can not scan data")
+				return err
+			}
+
+			analysisResultDAOs = append(analysisResultDAOs, result)
+			analysisResultIDs = append(analysisResultIDs, result.ID)
+			analyteMappingIDsMap[result.AnalyteMappingID] = nil
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
+
 	analyteMappingIDs := make([]uuid.UUID, len(analyteMappingIDsMap))
 	for analyteMappingID := range analyteMappingIDsMap {
 		analyteMappingIDs = append(analyteMappingIDs, analyteMappingID)
@@ -1398,7 +1426,8 @@ func (r *analysisRepository) GetAnalysisResultsByBatchIDsMapped(ctx context.Cont
 		return resultMap, nil
 	}
 
-	query := `SELECT res.id AS result_id,
+	err := utils.Partition(len(batchIDs), maxParams, func(low int, high int) error {
+		query := `SELECT res.id AS result_id,
        res.batch_id AS batch_id,
 	   res.sample_code AS sample_code,
 	   am.analyte_id AS analyte_id,
@@ -1413,107 +1442,121 @@ LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = res.instrum
 LEFT JOIN %schema_name%.sk_analysis_requests req ON req.sample_code = res.sample_code AND req.analyte_id = am.analyte_id
 WHERE res.batch_id IN (?)`
 
-	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
-	query, args, _ := sqlx.In(query, batchIDs)
-	query = r.db.Rebind(query)
+		query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
+		query, args, _ := sqlx.In(query, batchIDs[low:high])
+		query = r.db.Rebind(query)
 
-	rows, err := r.db.QueryxContext(ctx, query, args...)
-	if err != nil {
-		log.Error().Err(err).Msg("Can not get analysis request list")
-		return nil, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		result := analysisResultInfoDAO{}
-		err = rows.StructScan(&result)
+		rows, err := r.db.QueryxContext(ctx, query, args...)
 		if err != nil {
-			log.Error().Err(err).Msg("Failed to struct scan request")
-			return nil, err
+			log.Error().Err(err).Msg("Can not get analysis request list")
+			return err
 		}
+		defer rows.Close()
 
-		if result.BatchID.Valid {
-			resultMap[result.BatchID.UUID] = append(resultMap[result.BatchID.UUID], convertResultInfoDAOToResultInfo(result))
+		for rows.Next() {
+			result := analysisResultInfoDAO{}
+			err = rows.StructScan(&result)
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to struct scan request")
+				return err
+			}
+
+			if result.BatchID.Valid {
+				resultMap[result.BatchID.UUID] = append(resultMap[result.BatchID.UUID], convertResultInfoDAOToResultInfo(result))
+			}
 		}
-	}
+		return nil
+	})
 
-	return resultMap, nil
+	return resultMap, err
 }
 
 func (r *analysisRepository) getChannelMappings(ctx context.Context, analyteMappingIDs []uuid.UUID) (map[uuid.UUID][]ChannelMapping, error) {
-	query := fmt.Sprintf(`SELECT * FROM %s.sk_channel_mappings WHERE analyte_mapping_id IN (?) AND deleted_at IS NULL;`, r.dbSchema)
-	query, args, _ := sqlx.In(query, analyteMappingIDs)
-	query = r.db.Rebind(query)
-	rows, err := r.db.QueryxContext(ctx, query, args...)
-	if err != nil {
-		log.Error().Err(err).Msg(msgGetChannelMappingsFailed)
-		return nil, ErrGetChannelMappingsFailed
-	}
-	defer rows.Close()
 	channelMappingsMap := make(map[uuid.UUID][]ChannelMapping)
-	for rows.Next() {
-		var dao channelMappingDAO
-		err = rows.StructScan(&dao)
+	err := utils.Partition(len(analyteMappingIDs), maxParams, func(low int, high int) error {
+		query := fmt.Sprintf(`SELECT * FROM %s.sk_channel_mappings WHERE analyte_mapping_id IN (?) AND deleted_at IS NULL;`, r.dbSchema)
+		query, args, _ := sqlx.In(query, analyteMappingIDs[low:high])
+		query = r.db.Rebind(query)
+		rows, err := r.db.QueryxContext(ctx, query, args...)
 		if err != nil {
 			log.Error().Err(err).Msg(msgGetChannelMappingsFailed)
-			return nil, ErrGetChannelMappingsFailed
+			return err
 		}
-		channelMappingsMap[dao.AnalyteMappingID] = append(channelMappingsMap[dao.AnalyteMappingID], convertChannelMappingDaoToChannelMapping(dao))
-	}
-	return channelMappingsMap, nil
+		defer rows.Close()
+		for rows.Next() {
+			var dao channelMappingDAO
+			err = rows.StructScan(&dao)
+			if err != nil {
+				log.Error().Err(err).Msg(msgGetChannelMappingsFailed)
+				return err
+			}
+			channelMappingsMap[dao.AnalyteMappingID] = append(channelMappingsMap[dao.AnalyteMappingID], convertChannelMappingDaoToChannelMapping(dao))
+		}
+		return nil
+	})
+
+	return channelMappingsMap, err
 }
 
 func (r *analysisRepository) getResultMappings(ctx context.Context, analyteMappingIDs []uuid.UUID) (map[uuid.UUID][]ResultMapping, error) {
-	query := fmt.Sprintf(`SELECT * FROM %s.sk_result_mappings WHERE analyte_mapping_id IN (?) AND deleted_at IS NULL;`, r.dbSchema)
-	query, args, _ := sqlx.In(query, analyteMappingIDs)
-	query = r.db.Rebind(query)
-	rows, err := r.db.QueryxContext(ctx, query, args...)
-	if err != nil {
-		log.Error().Err(err).Msg(msgGetResultMappingsFailed)
-		return nil, ErrGetResultMappingsFailed
-	}
-	defer rows.Close()
 	resultMappingsMap := make(map[uuid.UUID][]ResultMapping)
-	for rows.Next() {
-		var dao resultMappingDAO
-		err = rows.StructScan(&dao)
+	err := utils.Partition(len(analyteMappingIDs), maxParams, func(low int, high int) error {
+		query := fmt.Sprintf(`SELECT * FROM %s.sk_result_mappings WHERE analyte_mapping_id IN (?) AND deleted_at IS NULL;`, r.dbSchema)
+		query, args, _ := sqlx.In(query, analyteMappingIDs[low:high])
+		query = r.db.Rebind(query)
+		rows, err := r.db.QueryxContext(ctx, query, args...)
 		if err != nil {
 			log.Error().Err(err).Msg(msgGetResultMappingsFailed)
-			return nil, ErrGetResultMappingsFailed
+			return ErrGetResultMappingsFailed
 		}
-		resultMappingsMap[dao.AnalyteMappingID] = append(resultMappingsMap[dao.AnalyteMappingID], convertResultMappingDaoToChannelMapping(dao))
-	}
-	return resultMappingsMap, nil
+		defer rows.Close()
+		for rows.Next() {
+			var dao resultMappingDAO
+			err = rows.StructScan(&dao)
+			if err != nil {
+				log.Error().Err(err).Msg(msgGetResultMappingsFailed)
+				return ErrGetResultMappingsFailed
+			}
+			resultMappingsMap[dao.AnalyteMappingID] = append(resultMappingsMap[dao.AnalyteMappingID], convertResultMappingDaoToChannelMapping(dao))
+		}
+		return nil
+	})
+
+	return resultMappingsMap, err
 }
 
+const maxParams = 65000
+
 func (r *analysisRepository) getExtraValues(ctx context.Context, analysisResultIDs []uuid.UUID) (map[uuid.UUID][]extraValueDAO, error) {
-	query := fmt.Sprintf(`SELECT sare.id, sare.analysis_result_id, sare."key", sare."value"
-		FROM %s.sk_analysis_result_extravalues sare WHERE sare.analysis_result_id IN (?);`, r.dbSchema)
-	query, args, _ := sqlx.In(query, analysisResultIDs)
-	query = r.db.Rebind(query)
-
 	extraValuesMap := make(map[uuid.UUID][]extraValueDAO)
-	rows, err := r.db.QueryxContext(ctx, query, args...)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			log.Trace().Msg("No extra value")
-			return extraValuesMap, nil
-		}
-		log.Error().Err(err).Msg("Can not search for extra values")
-		return nil, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		extraValue := extraValueDAO{}
-		err = rows.StructScan(&extraValue)
+	err := utils.Partition(len(analysisResultIDs), maxParams, func(low int, high int) error {
+		query := fmt.Sprintf(`SELECT sare.id, sare.analysis_result_id, sare."key", sare."value"
+		FROM %s.sk_analysis_result_extravalues sare WHERE sare.analysis_result_id IN (?);`, r.dbSchema)
+		query, args, _ := sqlx.In(query, analysisResultIDs[low:high])
+		query = r.db.Rebind(query)
+		rows, err := r.db.QueryxContext(ctx, query, args...)
 		if err != nil {
-			log.Error().Err(err).Msg("Can not scan data")
-			return nil, err
+			if err == sql.ErrNoRows {
+				log.Trace().Msg("No extra value")
+				return nil
+			}
+			log.Error().Err(err).Msg("Can not search for extra values")
+			return err
 		}
+		defer rows.Close()
 
-		extraValuesMap[extraValue.AnalysisResultID] = append(extraValuesMap[extraValue.AnalysisResultID], extraValue)
-	}
+		for rows.Next() {
+			extraValue := extraValueDAO{}
+			err = rows.StructScan(&extraValue)
+			if err != nil {
+				log.Error().Err(err).Msg("Can not scan data")
+				return err
+			}
+
+			extraValuesMap[extraValue.AnalysisResultID] = append(extraValuesMap[extraValue.AnalysisResultID], extraValue)
+		}
+		return nil
+	})
 
 	return extraValuesMap, err
 }
@@ -1558,32 +1601,35 @@ func (r *analysisRepository) createExtraValues(ctx context.Context, extraValues 
 }
 
 func (r *analysisRepository) getChannelResults(ctx context.Context, analysisResultIDs []uuid.UUID) (map[uuid.UUID][]channelResultDAO, error) {
-	query := fmt.Sprintf(`SELECT scr.id, scr.analysis_result_id, scr.channel_id, scr.qualitative_result, scr.qualitative_result_edited
-		FROM %s.sk_channel_results scr WHERE scr.analysis_result_id IN (?);`, r.dbSchema)
-	query, args, _ := sqlx.In(query, analysisResultIDs)
-	query = r.db.Rebind(query)
 	channelResultsMap := make(map[uuid.UUID][]channelResultDAO)
-	rows, err := r.db.QueryxContext(ctx, query, args...)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			log.Trace().Msg("No channel result")
-			return channelResultsMap, nil
-		}
-		log.Error().Err(err).Msg("Can not search for channel results")
-		return nil, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		channelResult := channelResultDAO{}
-		err := rows.StructScan(&channelResult)
+	err := utils.Partition(len(analysisResultIDs), maxParams, func(low int, high int) error {
+		query := fmt.Sprintf(`SELECT scr.id, scr.analysis_result_id, scr.channel_id, scr.qualitative_result, scr.qualitative_result_edited
+		FROM %s.sk_channel_results scr WHERE scr.analysis_result_id IN (?);`, r.dbSchema)
+		query, args, _ := sqlx.In(query, analysisResultIDs[low:high])
+		query = r.db.Rebind(query)
+		rows, err := r.db.QueryxContext(ctx, query, args...)
 		if err != nil {
-			log.Error().Err(err).Msg("Can not scan data")
-			return nil, err
+			if err == sql.ErrNoRows {
+				log.Trace().Msg("No channel result")
+				return nil
+			}
+			log.Error().Err(err).Msg("Can not search for channel results")
+			return err
 		}
 
-		channelResultsMap[channelResult.AnalysisResultID] = append(channelResultsMap[channelResult.AnalysisResultID], channelResult)
-	}
+		defer rows.Close()
+		for rows.Next() {
+			channelResult := channelResultDAO{}
+			err = rows.StructScan(&channelResult)
+			if err != nil {
+				log.Error().Err(err).Msg("Can not scan data")
+				return err
+			}
+
+			channelResultsMap[channelResult.AnalysisResultID] = append(channelResultsMap[channelResult.AnalysisResultID], channelResult)
+		}
+		return nil
+	})
 
 	return channelResultsMap, err
 }
@@ -1631,33 +1677,37 @@ func (r *analysisRepository) createChannelResults(ctx context.Context, channelRe
 }
 
 func (r *analysisRepository) getChannelResultQuantitativeValues(ctx context.Context, channelResultIDs []uuid.UUID) (map[uuid.UUID][]quantitativeChannelResultDAO, error) {
-	query := fmt.Sprintf(`SELECT scrqv.id, scrqv.channel_result_id, scrqv.metric, scrqv."value"
-		FROM %s.sk_channel_result_quantitative_values scrqv WHERE scrqv.channel_result_id IN (?);`, r.dbSchema)
-	query, args, _ := sqlx.In(query, channelResultIDs)
-	query = r.db.Rebind(query)
-
 	valuesByChannelResultID := make(map[uuid.UUID][]quantitativeChannelResultDAO)
 
-	rows, err := r.db.QueryxContext(ctx, query, args...)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			log.Trace().Msg("No quantitative channel result")
-			return valuesByChannelResultID, nil
-		}
-		log.Error().Err(err).Msg("Can not search for quantitative channel results")
-		return nil, err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		quantitativeChannelResult := quantitativeChannelResultDAO{}
-		err := rows.StructScan(&quantitativeChannelResult)
+	err := utils.Partition(len(channelResultIDs), maxParams, func(low int, high int) error {
+		query := fmt.Sprintf(`SELECT scrqv.id, scrqv.channel_result_id, scrqv.metric, scrqv."value"
+		FROM %s.sk_channel_result_quantitative_values scrqv WHERE scrqv.channel_result_id IN (?);`, r.dbSchema)
+		query, args, _ := sqlx.In(query, channelResultIDs[low:high])
+		query = r.db.Rebind(query)
+
+		rows, err := r.db.QueryxContext(ctx, query, args...)
 		if err != nil {
-			log.Error().Err(err).Msg("Can not scan data")
-			return nil, err
+			if err == sql.ErrNoRows {
+				log.Trace().Msg("No quantitative channel result")
+				return nil
+			}
+			log.Error().Err(err).Msg("Can not search for quantitative channel results")
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			quantitativeChannelResult := quantitativeChannelResultDAO{}
+			err = rows.StructScan(&quantitativeChannelResult)
+			if err != nil {
+				log.Error().Err(err).Msg("Can not scan data")
+				return err
+			}
+
+			valuesByChannelResultID[quantitativeChannelResult.ChannelResultID] = append(valuesByChannelResultID[quantitativeChannelResult.ChannelResultID], quantitativeChannelResult)
 		}
 
-		valuesByChannelResultID[quantitativeChannelResult.ChannelResultID] = append(valuesByChannelResultID[quantitativeChannelResult.ChannelResultID], quantitativeChannelResult)
-	}
+		return nil
+	})
 
 	return valuesByChannelResultID, err
 }
@@ -1702,32 +1752,35 @@ func (r *analysisRepository) createChannelResultQuantitativeValues(ctx context.C
 }
 
 func (r *analysisRepository) getReagentInfoMap(ctx context.Context, analysisResultIDs []uuid.UUID) (map[uuid.UUID][]reagentInfoDAO, error) {
-	query := fmt.Sprintf(`SELECT sarri.id, sarri.analysis_result_id, sarri.serial, sarri."name", sarri.code, sarri.shelf_life, sarri.lot_no, sarri.manufacturer_name, sarri.reagent_manufacturer_date,
+	reagentInfosMap := make(map[uuid.UUID][]reagentInfoDAO)
+	err := utils.Partition(len(analysisResultIDs), maxParams, func(low int, high int) error {
+		query := fmt.Sprintf(`SELECT sarri.id, sarri.analysis_result_id, sarri.serial, sarri."name", sarri.code, sarri.shelf_life, sarri.lot_no, sarri.manufacturer_name, sarri.reagent_manufacturer_date,
         sarri.reagent_type, sarri.use_until, sarri.date_created
 		FROM %s.sk_analysis_result_reagent_infos sarri WHERE sarri.analysis_result_id IN (?);`, r.dbSchema)
-	query, args, _ := sqlx.In(query, analysisResultIDs)
-	query = r.db.Rebind(query)
-	reagentInfosMap := make(map[uuid.UUID][]reagentInfoDAO)
-	rows, err := r.db.QueryxContext(ctx, query, args...)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			log.Trace().Msg("No reagent info")
-			return reagentInfosMap, nil
-		}
-		log.Error().Err(err).Msg("Can not search for reagent info")
-		return nil, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		reagentInfo := reagentInfoDAO{}
-		err := rows.StructScan(&reagentInfo)
+		query, args, _ := sqlx.In(query, analysisResultIDs[low:high])
+		query = r.db.Rebind(query)
+		rows, err := r.db.QueryxContext(ctx, query, args...)
 		if err != nil {
-			log.Error().Err(err).Msg("Can not scan data")
-			return nil, err
+			if err == sql.ErrNoRows {
+				log.Trace().Msg("No reagent info")
+				return nil
+			}
+			log.Error().Err(err).Msg("Can not search for reagent info")
+			return err
 		}
-		reagentInfosMap[reagentInfo.AnalysisResultID] = append(reagentInfosMap[reagentInfo.AnalysisResultID], reagentInfo)
-	}
+		defer rows.Close()
+
+		for rows.Next() {
+			reagentInfo := reagentInfoDAO{}
+			err = rows.StructScan(&reagentInfo)
+			if err != nil {
+				log.Error().Err(err).Msg("Can not scan data")
+				return err
+			}
+			reagentInfosMap[reagentInfo.AnalysisResultID] = append(reagentInfosMap[reagentInfo.AnalysisResultID], reagentInfo)
+		}
+		return nil
+	})
 
 	return reagentInfosMap, err
 }
@@ -1772,31 +1825,35 @@ func (r *analysisRepository) createReagentInfos(ctx context.Context, reagentInfo
 }
 
 func (r *analysisRepository) getImages(ctx context.Context, analysisResultIDs []uuid.UUID) (map[uuid.UUID][]imageDAO, error) {
-	query := fmt.Sprintf(`SELECT sari.id, sari.analysis_result_id, sari.channel_result_id, sari.name, sari.description, sari.dea_image_id FROM %s.sk_analysis_result_images sari WHERE sari.analysis_result_id IN (?);`, r.dbSchema)
-	query, args, _ := sqlx.In(query, analysisResultIDs)
-	query = r.db.Rebind(query)
 	imagesMap := make(map[uuid.UUID][]imageDAO)
-	rows, err := r.db.QueryxContext(ctx, query, args...)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			log.Trace().Msg("No images")
-			return imagesMap, nil
-		}
-		log.Error().Err(err).Msg("Can not search for Images")
-		return nil, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		image := imageDAO{}
-		err := rows.StructScan(&image)
+	err := utils.Partition(len(analysisResultIDs), maxParams, func(low int, high int) error {
+		query := fmt.Sprintf(`SELECT sari.id, sari.analysis_result_id, sari.channel_result_id, sari.name, sari.description, sari.dea_image_id FROM %s.sk_analysis_result_images sari WHERE sari.analysis_result_id IN (?);`, r.dbSchema)
+		query, args, _ := sqlx.In(query, analysisResultIDs[low:high])
+		query = r.db.Rebind(query)
+		rows, err := r.db.QueryxContext(ctx, query, args...)
 		if err != nil {
-			log.Error().Err(err).Msg("Can not scan data")
-			return nil, err
+			if err == sql.ErrNoRows {
+				log.Trace().Msg("No images")
+				return nil
+			}
+			log.Error().Err(err).Msg("Can not search for Images")
+			return err
 		}
 
-		imagesMap[image.AnalysisResultID] = append(imagesMap[image.AnalysisResultID], image)
-	}
+		defer rows.Close()
+		for rows.Next() {
+			image := imageDAO{}
+			err := rows.StructScan(&image)
+			if err != nil {
+				log.Error().Err(err).Msg("Can not scan data")
+				return err
+			}
+
+			imagesMap[image.AnalysisResultID] = append(imagesMap[image.AnalysisResultID], image)
+		}
+
+		return nil
+	})
 
 	return imagesMap, err
 }
@@ -1842,31 +1899,34 @@ func (r *analysisRepository) saveImages(ctx context.Context, images []imageDAO) 
 }
 
 func (r *analysisRepository) getWarnings(ctx context.Context, analysisResultIDs []uuid.UUID) (map[uuid.UUID][]warningDAO, error) {
-	query := fmt.Sprintf(`SELECT sarw.id, sarw.analysis_result_id, sarw.warning FROM %s.sk_analysis_result_warnings sarw WHERE sarw.analysis_result_id IN (?);`, r.dbSchema)
-	query, args, _ := sqlx.In(query, analysisResultIDs)
-	query = r.db.Rebind(query)
 	warningsMap := make(map[uuid.UUID][]warningDAO)
-	rows, err := r.db.QueryxContext(ctx, query, args...)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			log.Trace().Msg("No analysis result warnings")
-			return warningsMap, nil
-		}
-		log.Error().Err(err).Msg("Can not search for AnalysisResultWarnings")
-		return nil, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		warning := warningDAO{}
-		err := rows.StructScan(&warning)
+	err := utils.Partition(len(analysisResultIDs), maxParams, func(low int, high int) error {
+		query := fmt.Sprintf(`SELECT sarw.id, sarw.analysis_result_id, sarw.warning FROM %s.sk_analysis_result_warnings sarw WHERE sarw.analysis_result_id IN (?);`, r.dbSchema)
+		query, args, _ := sqlx.In(query, analysisResultIDs[low:high])
+		query = r.db.Rebind(query)
+		rows, err := r.db.QueryxContext(ctx, query, args...)
 		if err != nil {
-			log.Error().Err(err).Msg("Can not scan data")
-			return nil, err
+			if err == sql.ErrNoRows {
+				log.Trace().Msg("No analysis result warnings")
+				return nil
+			}
+			log.Error().Err(err).Msg("Can not search for AnalysisResultWarnings")
+			return err
 		}
+		defer rows.Close()
 
-		warningsMap[warning.AnalysisResultID] = append(warningsMap[warning.AnalysisResultID], warning)
-	}
+		for rows.Next() {
+			warning := warningDAO{}
+			err := rows.StructScan(&warning)
+			if err != nil {
+				log.Error().Err(err).Msg("Can not scan data")
+				return err
+			}
+
+			warningsMap[warning.AnalysisResultID] = append(warningsMap[warning.AnalysisResultID], warning)
+		}
+		return nil
+	})
 
 	return warningsMap, err
 }
@@ -2329,33 +2389,40 @@ func (r *analysisRepository) GetUnprocessedAnalysisResultIDs(ctx context.Context
 }
 
 func (r *analysisRepository) MarkAnalysisRequestsAsProcessed(ctx context.Context, analysisRequestIDs []uuid.UUID) error {
-	query := fmt.Sprintf(`UPDATE %s.sk_analysis_requests SET is_processed = true WHERE id IN (?);`, r.dbSchema)
+	err := utils.Partition(len(analysisRequestIDs), maxParams, func(low int, high int) error {
+		query := fmt.Sprintf(`UPDATE %s.sk_analysis_requests SET is_processed = true WHERE id IN (?);`, r.dbSchema)
 
-	query, args, _ := sqlx.In(query, analysisRequestIDs)
-	query = r.db.Rebind(query)
+		query, args, _ := sqlx.In(query, analysisRequestIDs)
+		query = r.db.Rebind(query)
 
-	_, err := r.db.ExecContext(ctx, query, args...)
-	if err != nil {
-		log.Error().Err(err).Msg(msgFailedToMarkAnalysisRequestsAsProcessed)
-		return ErrFailedToMarkAnalysisRequestsAsProcessed
-	}
+		_, err := r.db.ExecContext(ctx, query, args...)
+		if err != nil {
+			log.Error().Err(err).Msg(msgFailedToMarkAnalysisRequestsAsProcessed)
+			return ErrFailedToMarkAnalysisRequestsAsProcessed
+		}
 
-	return nil
+		return nil
+	})
+
+	return err
 }
 
 func (r *analysisRepository) MarkAnalysisResultsAsProcessed(ctx context.Context, analysisRequestIDs []uuid.UUID) error {
-	query := fmt.Sprintf(`UPDATE %s.sk_analysis_results SET is_processed = true WHERE id IN (?);`, r.dbSchema)
+	err := utils.Partition(len(analysisRequestIDs), maxParams, func(low int, high int) error {
+		query := fmt.Sprintf(`UPDATE %s.sk_analysis_results SET is_processed = true WHERE id IN (?);`, r.dbSchema)
 
-	query, args, _ := sqlx.In(query, analysisRequestIDs)
-	query = r.db.Rebind(query)
+		query, args, _ := sqlx.In(query, analysisRequestIDs)
+		query = r.db.Rebind(query)
 
-	_, err := r.db.ExecContext(ctx, query, args...)
-	if err != nil {
-		log.Error().Err(err).Msg(msgFailedToMarkAnalysisResultsAsProcessed)
-		return ErrFailedToMarkAnalysisResultsAsProcessed
-	}
+		_, err := r.db.ExecContext(ctx, query, args...)
+		if err != nil {
+			log.Error().Err(err).Msg(msgFailedToMarkAnalysisResultsAsProcessed)
+			return ErrFailedToMarkAnalysisResultsAsProcessed
+		}
+		return nil
+	})
 
-	return nil
+	return err
 }
 
 func (r *analysisRepository) CreateTransaction() (db.DbConnector, error) {
