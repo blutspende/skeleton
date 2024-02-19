@@ -1111,7 +1111,7 @@ func (r *analysisRepository) GetAnalysisResultByID(ctx context.Context, id uuid.
 		return AnalysisResult{}, err
 	}
 
-	channelResultIDs := make([]uuid.UUID, len(channelResultsMap))
+	channelResultIDs := make([]uuid.UUID, len(channelResultsMap[result.ID]))
 	for i := range channelResultsMap[result.ID] {
 		channelResultIDs[i] = channelResultsMap[result.ID][i].ID
 	}
