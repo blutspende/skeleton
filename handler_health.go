@@ -11,6 +11,9 @@ import (
 // BuildVersion - will be filled at build process in pipeline
 var BuildVersion string
 
+// ServiceName - will be filled at build process in pipeline
+var ServiceName string
+
 type healthCheck struct {
 	Service      string   `json:"service"`
 	Status       string   `json:"status"`
@@ -20,17 +23,18 @@ type healthCheck struct {
 }
 
 type memStats struct {
-	Alloc      string `json:"alloc"`
-	TotalAlloc string `json:"totalAlloc"`
-	Sys        string `json:"sys"`
-	HeapInUse  string `json:"heapInUse"`
-	HeapAlloc  string `json:"headAlloc"`
-	StackInUse string `json:"stackInUse"`
+	Alloc              string `json:"alloc"`
+	TotalAlloc         string `json:"totalAlloc"`
+	Sys                string `json:"sys"`
+	HeapInUse          string `json:"heapInUse"`
+	HeapAlloc          string `json:"headAlloc"`
+	StackInUse         string `json:"stackInUse"`
+	NumberOfGoRoutines int    `json:"numberOfGoRoutines"`
 }
 
 func (api *api) GetHealth(c *gin.Context) {
 	defaultInfo := healthCheck{
-		Service:      "astm",
+		Service:      ServiceName,
 		Status:       "running",
 		ApiVersion:   []string{"v1"},
 		BuildVersion: BuildVersion,
@@ -45,6 +49,7 @@ func (api *api) GetHealth(c *gin.Context) {
 	defaultInfo.MemStats.HeapInUse = fmt.Sprintf("%v MiB", memStat.HeapInuse/1024/1024)
 	defaultInfo.MemStats.HeapAlloc = fmt.Sprintf("%v MiB", memStat.HeapAlloc/1024/1024)
 	defaultInfo.MemStats.StackInUse = fmt.Sprintf("%v MiB", memStat.StackInuse/1024/1024)
+	defaultInfo.MemStats.NumberOfGoRoutines = runtime.NumGoroutine()
 
 	c.JSON(http.StatusOK, defaultInfo)
 }
