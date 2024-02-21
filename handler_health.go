@@ -27,7 +27,7 @@ type memStats struct {
 	TotalAlloc         string `json:"totalAlloc"`
 	Sys                string `json:"sys"`
 	HeapInUse          string `json:"heapInUse"`
-	HeapAlloc          string `json:"headAlloc"`
+	HeapAlloc          string `json:"heapAlloc"`
 	StackInUse         string `json:"stackInUse"`
 	NumberOfGoRoutines int    `json:"numberOfGoRoutines"`
 }
