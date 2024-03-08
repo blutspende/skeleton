@@ -31,4 +31,26 @@ func TestSubmitResultCanBeQueried(t *testing.T) {
 	assert.Equal(t, 1, len(rig.StoredAnalysisResults))
 	assert.Equal(t, ar.ID, rig.StoredAnalysisResults[0].ID)
 	assert.Equal(t, ar.Result, rig.StoredAnalysisResults[0].Result)
+
+	rig.ClearStoredAnalysisResults()
+}
+
+func TestCreateAnalysisRequest(t *testing.T) {
+
+	rig := NewTestRig()
+
+	const samplecode = "samplecode123"
+	anAnalyteId1 := uuid.New()
+	anAnalyteId2 := uuid.New()
+	arq1 := rig.CreateAnalysisRequest(samplecode, anAnalyteId1)
+	arq2 := rig.CreateAnalysisRequest(samplecode, anAnalyteId2)
+
+	assert.NotNil(t, arq1)
+	assert.NotNil(t, arq2)
+
+	// Testing the Simple search
+	queriedRequests, err := rig.GetAnalysisRequestsBySampleCode(context.Background(), samplecode, false)
+	assert.Nil(t, err)
+	assert.Equal(t, 2, len(queriedRequests))
+
 }
