@@ -76,7 +76,14 @@ func (sr *SkeletonTestRig) GetAnalysisRequestsBySampleCode(ctx context.Context, 
 }
 
 func (sr *SkeletonTestRig) GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string, allowResending bool) (map[string][]AnalysisRequest, error) {
-	return map[string][]AnalysisRequest{}, nil
+	analysisRequestsBySampleCodes := make(map[string][]AnalysisRequest)
+	for i := range sampleCodes {
+		requests, _ := sr.GetAnalysisRequestsBySampleCode(ctx, sampleCodes[i], false)
+		if len(requests) > 0 {
+			analysisRequestsBySampleCodes[sampleCodes[i]] = requests
+		}
+	}
+	return analysisRequestsBySampleCodes, nil
 }
 
 func (sr *SkeletonTestRig) GetRequestMappingsByInstrumentID(ctx context.Context, instrumentID uuid.UUID) ([]RequestMapping, error) {
