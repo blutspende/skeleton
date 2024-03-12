@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/google/uuid"
@@ -111,15 +112,46 @@ type WorkItemResultImageTO struct {
 	Image               ImageTO    `json:"image"`
 }
 
+type StartupMessageTO struct {
+	Hostname string `json:"hostname"`
+}
+
 func NewCerberusClient(cerberusUrl string, restyClient *resty.Client) (Cerberus, error) {
 	if cerberusUrl == "" {
 		return nil, fmt.Errorf("basepath for cerberus must be set. check your configurationf or CerberusURL")
 	}
 
-	return &cerberus{
+	cerb := &cerberus{
 		client:      restyClient,
 		cerberusUrl: cerberusUrl,
-	}, nil
+	}
+
+	if err := cerb.StartupMessage(); err != nil {
+		// Sending the startup message to cerberus is important
+		// since the activation of the driver will depend on it
+		return cerb, fmt.Errorf("failed to send Startupmessage to cerberus")
+	}
+
+	return cerb, nil
+}
+
+func (c *cerberus) StartupMessage() error {
+
+	startupMessageTO := StartupMessageTO{
+		Hostname: os.Getenv("HOSTNAME"),
+	}
+
+	resp, err := c.client.R().
+		SetHeader("Content-Type", "application/json").
+		SetBody(startupMessageTO).
+		Post(c.cerberusUrl + "/v1/instruments/startup")
+
+	if err != nil && resp == nil {
+		log.Error().Err(err).Msg("Failed to call Cerberus API")
+		return err
+	}
+
+	return nil
 }
 
 // RegisterInstrument Update cerberus with changed instrument-information
