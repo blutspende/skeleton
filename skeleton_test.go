@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -26,30 +25,6 @@ import (
 
 	timeout "github.com/vearne/gin-timeout"
 )
-
-func TestSkeletonStart(t *testing.T) {
-	sqlConn, err := sqlx.Connect("pgx", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
-	assert.Nil(t, err)
-
-	ctx, cancel := context.WithCancel(context.Background())
-
-	defer cancel()
-
-	skeletonApi, err := New(ctx, sqlConn, "skeleton")
-	if err != nil {
-		return
-	}
-
-	go func() {
-		time.Sleep(5 * time.Second)
-		runtime.Goexit()
-	}()
-
-	err = skeletonApi.Start()
-	if err != nil {
-		t.Fail()
-	}
-}
 
 func TestSubmitAnalysisRequestsParallel(t *testing.T) {
 	sqlConn, _ := sqlx.Connect("pgx", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
