@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/google/uuid"
@@ -39,8 +40,9 @@ type errorResponseTO struct {
 }
 
 type ciaInstrumentTO struct {
-	ID   uuid.UUID `json:"id"`
-	Name string    `json:"name"`
+	ID       uuid.UUID `json:"id"`
+	Name     string    `json:"name"`
+	Hostname string    `json:"hostname"`
 }
 
 type ExtraValueTO struct {
@@ -125,8 +127,9 @@ func NewCerberusClient(cerberusUrl string, restyClient *resty.Client) (Cerberus,
 // RegisterInstrument Update cerberus with changed instrument-information
 func (c *cerberus) RegisterInstrument(instrument Instrument) error {
 	ciaInstrumentTO := ciaInstrumentTO{
-		ID:   instrument.ID,
-		Name: instrument.Name,
+		ID:       instrument.ID,
+		Name:     instrument.Name,
+		Hostname: os.Getenv("HOSTNAME"),
 	}
 
 	resp, err := c.client.R().
