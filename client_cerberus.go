@@ -40,9 +40,8 @@ type errorResponseTO struct {
 }
 
 type ciaInstrumentTO struct {
-	ID       uuid.UUID `json:"id"`
-	Name     string    `json:"name"`
-	Hostname string    `json:"hostname"`
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
 }
 
 type ExtraValueTO struct {
@@ -113,23 +112,50 @@ type WorkItemResultImageTO struct {
 	Image               ImageTO    `json:"image"`
 }
 
+type StartupMessageTO struct {
+	Hostname string `json:"hostname"`
+}
+
 func NewCerberusClient(cerberusUrl string, restyClient *resty.Client) (Cerberus, error) {
 	if cerberusUrl == "" {
 		return nil, fmt.Errorf("basepath for cerberus must be set. check your configurationf or CerberusURL")
 	}
 
-	return &cerberus{
+	cerb := &cerberus{
 		client:      restyClient,
 		cerberusUrl: cerberusUrl,
-	}, nil
+	}
+
+	// Update Cerberus that we are online
+	cerb.StartupMessage()
+
+	return cerb, nil
+}
+
+func (c *cerberus) StartupMessage() error {
+
+	startupMessageTO := StartupMessageTO{
+		Hostname: os.Getenv("HOSTNAME"),
+	}
+
+	resp, err := c.client.R().
+		SetHeader("Content-Type", "application/json").
+		SetBody(startupMessageTO).
+		Post(c.cerberusUrl + "/v1/instruments/startup")
+
+	if err != nil && resp == nil {
+		log.Error().Err(err).Msg("Failed to call Cerberus API")
+		return err
+	}
+
+	return nil
 }
 
 // RegisterInstrument Update cerberus with changed instrument-information
 func (c *cerberus) RegisterInstrument(instrument Instrument) error {
 	ciaInstrumentTO := ciaInstrumentTO{
-		ID:       instrument.ID,
-		Name:     instrument.Name,
-		Hostname: os.Getenv("HOSTNAME"),
+		ID:   instrument.ID,
+		Name: instrument.Name,
 	}
 
 	resp, err := c.client.R().
