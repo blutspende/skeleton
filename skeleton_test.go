@@ -27,6 +27,8 @@ import (
 	timeout "github.com/vearne/gin-timeout"
 )
 
+const serviceName = "testInstrumentDriver"
+
 func TestSkeletonStart(t *testing.T) {
 	sqlConn, err := sqlx.Connect("pgx", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
 	assert.Nil(t, err)
@@ -35,7 +37,7 @@ func TestSkeletonStart(t *testing.T) {
 
 	defer cancel()
 
-	skeletonApi, err := New(ctx, sqlConn, "skeleton")
+	skeletonApi, err := New(ctx, serviceName, []string{}, sqlConn, "skeleton")
 	if err != nil {
 		return
 	}
@@ -133,7 +135,7 @@ func TestSubmitAnalysisRequestsParallel(t *testing.T) {
 
 	api := newAPI(ginEngine, &configuration, &authManager, analysisService, instrumentService, consoleLogService, nil)
 
-	skeletonInstance, _ := NewSkeleton(ctx, sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, skeletonManager, cerberusClientMock, deaClientMock, configuration)
+	skeletonInstance, _ := NewSkeleton(ctx, serviceName, []string{}, sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, skeletonManager, cerberusClientMock, deaClientMock, configuration)
 
 	go func() {
 		_ = skeletonInstance.Start()
@@ -243,7 +245,7 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 
 	api := newAPI(ginEngine, &configuration, &authManager, analysisService, instrumentService, consoleLogService, nil)
 
-	skeletonInstance, _ := NewSkeleton(ctx, sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, skeletonManager, cerberusClientMock, deaClientMock, configuration)
+	skeletonInstance, _ := NewSkeleton(ctx, serviceName, []string{}, sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, skeletonManager, cerberusClientMock, deaClientMock, configuration)
 
 	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description)
 		VALUES ('abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
@@ -354,7 +356,7 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 
 	api := NewAPI(&configuration, &authManager, analysisService, instrumentService, consoleLogService, nil)
 
-	skeletonInstance, _ := NewSkeleton(ctx, sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, skeletonManager, cerberusClientMock, deaClientMock, configuration)
+	skeletonInstance, _ := NewSkeleton(ctx, serviceName, []string{}, sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, skeletonManager, cerberusClientMock, deaClientMock, configuration)
 
 	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('9bec3063-435d-490f-bec0-88a6633ef4c2', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
 
@@ -574,7 +576,7 @@ func TestAnalysisResultsReprocessing(t *testing.T) {
 
 	api := newAPI(ginEngine, &configuration, &authManager, analysisServiceMock, instrumentService, consoleLogService, nil)
 
-	skeletonInstance, _ := NewSkeleton(ctx, sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepositoryMock, analysisServiceMock, instrumentService, consoleLogService, skeletonManager, cerberusClientMock, deaClientMock, configuration)
+	skeletonInstance, _ := NewSkeleton(ctx, serviceName, []string{}, sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepositoryMock, analysisServiceMock, instrumentService, consoleLogService, skeletonManager, cerberusClientMock, deaClientMock, configuration)
 
 	go func() {
 		_ = skeletonInstance.Start()
@@ -669,6 +671,7 @@ func (m *deaClientMock) UploadImage(fileData []byte, name string) (uuid.UUID, er
 
 type cerberusClientMock struct {
 	registerInstrumentFunc           func(instrument Instrument) error
+	registerInstrumentDriverFunc     func(serviceName string, apiVersion string, apiPort uint16, tlsEnabled bool, extraValueKeys []string) error
 	sendAnalysisResultBatchFunc      func(analysisResults []AnalysisResultTO) (AnalysisResultBatchResponse, error)
 	sendAnalysisResultImageBatchFunc func(images []WorkItemResultImageTO) error
 
@@ -681,6 +684,13 @@ func (m *cerberusClientMock) RegisterInstrument(instrument Instrument) error {
 		return errors.New("not implemented")
 	}
 	return m.registerInstrumentFunc(instrument)
+}
+
+func (m *cerberusClientMock) RegisterInstrumentDriver(serviceName string, apiVersion string, apiPort uint16, tlsEnabled bool, extraValueKeys []string) error {
+	if m.registerInstrumentDriverFunc == nil {
+		return nil
+	}
+	return m.registerInstrumentDriverFunc(serviceName, apiVersion, apiPort, tlsEnabled, extraValueKeys)
 }
 
 func (m *cerberusClientMock) SendAnalysisResultBatch(analysisResults []AnalysisResultTO) (AnalysisResultBatchResponse, error) {
@@ -829,6 +839,9 @@ func (m *analysisRepositoryMock) GetAnalysisResultsByBatchIDs(ctx context.Contex
 	return nil, nil
 }
 func (m *analysisRepositoryMock) GetAnalysisResultsByBatchIDsMapped(ctx context.Context, batchIDs []uuid.UUID) (map[uuid.UUID][]AnalysisResultInfo, error) {
+	return nil, nil
+}
+func (r *analysisRepositoryMock) GetAnalysisRequestExtraValuesByAnalysisRequestID(ctx context.Context, analysisRequestID uuid.UUID) (map[string]string, error) {
 	return nil, nil
 }
 func (m *analysisRepositoryMock) GetAnalysisResultQueueItems(ctx context.Context) ([]CerberusQueueItem, error) {

@@ -21,26 +21,29 @@ var (
 	ErrSendResultBatchFailed = errors.New(MsgSendResultBatchFailed)
 )
 
-type Cerberus interface {
+type CerberusClient interface {
 	RegisterInstrument(instrument Instrument) error
+	RegisterInstrumentDriver(name, apiVersion string, apiPort uint16, tlsEnabled bool, extraValueKeys []string) error
 	SendAnalysisResultBatch(analysisResults []AnalysisResultTO) (AnalysisResultBatchResponse, error)
 	SendAnalysisResultImageBatch(images []WorkItemResultImageTO) error
 }
 
-type cerberus struct {
+type cerberusClient struct {
 	client      *resty.Client
 	cerberusUrl string
-}
-
-type errorResponseTO struct {
-	Code    string   `json:"code"`
-	Message string   `json:"message"`
-	Errors  []string `json:"errors"`
 }
 
 type ciaInstrumentTO struct {
 	ID   uuid.UUID `json:"id"`
 	Name string    `json:"name"`
+}
+
+type registerInstrumentDriverTO struct {
+	Name           string   `json:"name" binding:"required"`
+	APIVersion     string   `json:"apiVersion" binding:"required"`
+	APIPort        uint16   `json:"apiPort" binding:"required"`
+	TLSEnabled     bool     `json:"tlsEnabled" default:"false"`
+	ExtraValueKeys []string `json:"extraValueKeys,omitempty"`
 }
 
 type ExtraValueTO struct {
@@ -111,19 +114,19 @@ type WorkItemResultImageTO struct {
 	Image               ImageTO    `json:"image"`
 }
 
-func NewCerberusClient(cerberusUrl string, restyClient *resty.Client) (Cerberus, error) {
+func NewCerberusClient(cerberusUrl string, restyClient *resty.Client) (CerberusClient, error) {
 	if cerberusUrl == "" {
 		return nil, fmt.Errorf("basepath for cerberus must be set. check your configurationf or CerberusURL")
 	}
 
-	return &cerberus{
+	return &cerberusClient{
 		client:      restyClient,
 		cerberusUrl: cerberusUrl,
 	}, nil
 }
 
 // RegisterInstrument Update cerberus with changed instrument-information
-func (c *cerberus) RegisterInstrument(instrument Instrument) error {
+func (c *cerberusClient) RegisterInstrument(instrument Instrument) error {
 	ciaInstrumentTO := ciaInstrumentTO{
 		ID:   instrument.ID,
 		Name: instrument.Name,
@@ -134,26 +137,56 @@ func (c *cerberus) RegisterInstrument(instrument Instrument) error {
 		SetBody(ciaInstrumentTO).
 		Post(c.cerberusUrl + "/v1/instruments")
 
-	if err != nil && resp == nil {
+	if err != nil {
 		log.Error().Err(err).Msg("Failed to call Cerberus API")
 		return err
 	}
 
 	if resp.StatusCode() != http.StatusNoContent {
-		errReps := errorResponseTO{}
+		errReps := clientError{}
 		err = json.Unmarshal(resp.Body(), &errReps)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to unmarshal error of response")
 			return err
 		}
-		return errors.New(errReps.Message + "(" + errReps.Code + ")")
+		return errors.New(errReps.Message)
+	}
+
+	return nil
+}
+
+func (c *cerberusClient) RegisterInstrumentDriver(name, apiVersion string, apiPort uint16, tlsEnabled bool, extraValueKeys []string) error {
+	resp, err := c.client.R().
+		SetHeader("Content-Type", "application/json").
+		SetBody(registerInstrumentDriverTO{
+			Name:           name,
+			APIVersion:     apiVersion,
+			APIPort:        apiPort,
+			TLSEnabled:     tlsEnabled,
+			ExtraValueKeys: extraValueKeys,
+		}).
+		Post(c.cerberusUrl + "/v1/instrument-drivers")
+
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to call Cerberus API")
+		return err
+	}
+
+	if resp.IsError() {
+		errReps := clientError{}
+		err = json.Unmarshal(resp.Body(), &errReps)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to unmarshal error of response")
+			return err
+		}
+		return errors.New(errReps.Message)
 	}
 
 	return nil
 }
 
 // SendAnalysisResultBatch Submit a list of AnalysisResults to Cerberus
-func (cia *cerberus) SendAnalysisResultBatch(analysisResults []AnalysisResultTO) (AnalysisResultBatchResponse, error) {
+func (c *cerberusClient) SendAnalysisResultBatch(analysisResults []AnalysisResultTO) (AnalysisResultBatchResponse, error) {
 	if len(analysisResults) < 1 {
 		log.Warn().Msg("Send analysis results batch called with empty array")
 		return AnalysisResultBatchResponse{}, nil
@@ -176,10 +209,10 @@ func (cia *cerberus) SendAnalysisResultBatch(analysisResults []AnalysisResultTO)
 		return response, nil
 	}
 
-	resp, err := cia.client.R().
+	resp, err := c.client.R().
 		SetHeader("Content-Type", "application/json").
 		SetBody(analysisResults).
-		Post(cia.cerberusUrl + "/v1/analysis-results/batch")
+		Post(c.cerberusUrl + "/v1/analysis-results/batch")
 
 	if err != nil {
 		response := AnalysisResultBatchResponse{
@@ -190,7 +223,7 @@ func (cia *cerberus) SendAnalysisResultBatch(analysisResults []AnalysisResultTO)
 		return response, fmt.Errorf("%s (%w)", ErrSendResultBatchFailed, err)
 		// log.Error().Err(err).Msg(i18n.MsgSendResultBatchFailed)
 		//requestBody, _ := json.Marshal(analysisResultsTOs)
-		//TODO:Better soltion for request-logging cia.ciaHistoryService.Create(model.TYPE_AnalysisResultBatch, err.Error(), string(requestBody), 0, nil, analysisResultIDs)
+		//TODO:Better soltion for request-logging c.ciaHistoryService.Create(model.TYPE_AnalysisResultBatch, err.Error(), string(requestBody), 0, nil, analysisResultIDs)
 	}
 
 	switch {
@@ -221,7 +254,7 @@ func (cia *cerberus) SendAnalysisResultBatch(analysisResults []AnalysisResultTO)
 
 		return response, nil
 	case resp.StatusCode() == http.StatusInternalServerError:
-		errReps := errorResponseTO{}
+		errReps := clientError{}
 		err = json.Unmarshal(resp.Body(), &errReps)
 		if err != nil {
 			err = fmt.Errorf("can not unmarshal error of response (%w)", err)
@@ -253,11 +286,11 @@ func (cia *cerberus) SendAnalysisResultBatch(analysisResults []AnalysisResultTO)
 	}
 }
 
-func (cia *cerberus) SendAnalysisResultImageBatch(images []WorkItemResultImageTO) error {
-	_, err := cia.client.R().
+func (c *cerberusClient) SendAnalysisResultImageBatch(images []WorkItemResultImageTO) error {
+	_, err := c.client.R().
 		SetHeader("Content-Type", "application/json").
 		SetBody(images).
-		Post(cia.cerberusUrl + "/v1/analysis-results/image/batch")
+		Post(c.cerberusUrl + "/v1/analysis-results/image/batch")
 
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to call Cerberus API (/v1/analysis-results/image/batch)")
