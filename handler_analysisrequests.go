@@ -40,14 +40,34 @@ type subjectTO struct {
 	Pseudonym    *string     `json:"pseudonym"`
 }
 
+type extraValueTO struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+func convertExtraValueTOsToExtraValues(extraValueTOs []extraValueTO) []ExtraValue {
+	extraValues := make([]ExtraValue, len(extraValueTOs))
+	for i := range extraValueTOs {
+		extraValues[i] = convertExtraValueTOToExtraValues(extraValueTOs[i])
+	}
+	return extraValues
+}
+func convertExtraValueTOToExtraValues(to extraValueTO) ExtraValue {
+	return ExtraValue{
+		Key:   to.Key,
+		Value: to.Value,
+	}
+}
+
 type analysisRequestTO struct {
-	WorkItemID     uuid.UUID  `json:"workItemId"`
-	AnalyteID      uuid.UUID  `json:"analyteId"`
-	SampleCode     string     `json:"sampleCode"`
-	MaterialID     uuid.UUID  `json:"materialId"`
-	LaboratoryID   uuid.UUID  `json:"laboratoryId"`
-	ValidUntilTime time.Time  `json:"validUntilTime"`
-	Subject        *subjectTO `json:"subject"`
+	WorkItemID     uuid.UUID      `json:"workItemId"`
+	AnalyteID      uuid.UUID      `json:"analyteId"`
+	SampleCode     string         `json:"sampleCode"`
+	MaterialID     uuid.UUID      `json:"materialId"`
+	LaboratoryID   uuid.UUID      `json:"laboratoryId"`
+	ValidUntilTime time.Time      `json:"validUntilTime"`
+	Subject        *subjectTO     `json:"subject"`
+	ExtraValues    []extraValueTO `json:"extraValues"`
 }
 
 type analysisRequestStatusTO struct {
@@ -102,6 +122,7 @@ func (api *api) CreateAnalysisRequestBatch(c *gin.Context) {
 			MaterialID:     analysisRequestTOs[i].MaterialID,
 			LaboratoryID:   analysisRequestTOs[i].LaboratoryID,
 			ValidUntilTime: analysisRequestTOs[i].ValidUntilTime,
+			ExtraValues:    convertExtraValueTOsToExtraValues(analysisRequestTOs[i].ExtraValues),
 			CreatedAt:      time.Time{},
 		}
 		if analysisRequestTOs[i].Subject != nil {

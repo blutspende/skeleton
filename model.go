@@ -33,6 +33,7 @@ type AnalysisRequest struct {
 	ValidUntilTime time.Time
 	CreatedAt      time.Time
 	SubjectInfo    *SubjectInfo
+	ExtraValues    []ExtraValue
 }
 
 type CerberusQueueItem struct {

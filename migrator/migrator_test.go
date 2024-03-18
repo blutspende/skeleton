@@ -43,5 +43,5 @@ func TestSkeletonMigrations(t *testing.T) {
 	assert.Nil(t, err)
 
 	//MODIFY THE EXPECTED VERSION AFTER ADDING NEW SKELETON MIGRATION!!!
-	assert.Equal(t, 15, version)
+	assert.Equal(t, 16, version)
 }
