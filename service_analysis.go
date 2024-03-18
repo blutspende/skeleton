@@ -28,11 +28,11 @@ type AnalysisService interface {
 type analysisService struct {
 	analysisRepository AnalysisRepository
 	deaClient          DeaClientV1
-	cerberusClient     Cerberus
+	cerberusClient     CerberusClient
 	manager            Manager
 }
 
-func NewAnalysisService(analysisRepository AnalysisRepository, deaClient DeaClientV1, cerberusClient Cerberus, manager Manager) AnalysisService {
+func NewAnalysisService(analysisRepository AnalysisRepository, deaClient DeaClientV1, cerberusClient CerberusClient, manager Manager) AnalysisService {
 	return &analysisService{
 		analysisRepository: analysisRepository,
 		deaClient:          deaClient,

@@ -36,10 +36,10 @@ type instrumentService struct {
 	instrumentRepository InstrumentRepository
 	manager              Manager
 	instrumentCache      InstrumentCache
-	cerberusClient       Cerberus
+	cerberusClient       CerberusClient
 }
 
-func NewInstrumentService(config *config.Configuration, instrumentRepository InstrumentRepository, manager Manager, instrumentCache InstrumentCache, cerberusClient Cerberus) InstrumentService {
+func NewInstrumentService(config *config.Configuration, instrumentRepository InstrumentRepository, manager Manager, instrumentCache InstrumentCache, cerberusClient CerberusClient) InstrumentService {
 	service := &instrumentService{
 		config:               config,
 		instrumentRepository: instrumentRepository,
