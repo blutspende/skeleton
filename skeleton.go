@@ -85,6 +85,10 @@ func (s *skeleton) GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleC
 	return analysisRequests, nil
 }
 
+func (s *skeleton) GetAnalysisRequestExtraValues(ctx context.Context, analysisRequestID uuid.UUID) (map[string]string, error) {
+	return s.analysisRepository.GetAnalysisRequestExtraValuesByAnalysisRequestID(ctx, analysisRequestID)
+}
+
 func (s *skeleton) SaveAnalysisRequestsInstrumentTransmissions(ctx context.Context, analysisRequestIDs []uuid.UUID, instrumentID uuid.UUID) error {
 	tx, err := s.analysisRepository.CreateTransaction()
 	if err != nil {

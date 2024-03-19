@@ -62,6 +62,7 @@ type SkeletonAPI interface {
 	// Empty List if nothing is found. Error occurs only on Database-error
 	// if allowResending is true, returns all analysis requests for the sample code, without checking if they were already sent to the instrument
 	GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string, allowResending bool) (map[string][]AnalysisRequest, error)
+	GetAnalysisRequestExtraValues(ctx context.Context, analysisRequestID uuid.UUID) (map[string]string, error)
 	GetRequestMappingsByInstrumentID(ctx context.Context, instrumentID uuid.UUID) ([]RequestMapping, error)
 
 	SaveAnalysisRequestsInstrumentTransmissions(ctx context.Context, analysisRequestIDs []uuid.UUID, instrumentID uuid.UUID) error

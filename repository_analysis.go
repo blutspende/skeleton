@@ -37,6 +37,7 @@ const (
 	msgFailedToMarkImagesAsSyncedToCerberus                = "failed to mark images as synced to cerberus"
 	msgFailedToMarkAnalysisRequestsAsProcessed             = "failed to mark analysis requests as processed"
 	msgFailedToMarkAnalysisResultsAsProcessed              = "failed to mark analysis results as processed"
+	msgGetAnalysisRequestExtraValuesFailed                 = "get analysis request extra values failed"
 )
 
 var (
@@ -59,6 +60,7 @@ var (
 	ErrFailedToMarkImagesAsSyncedToCerberus                = errors.New(msgFailedToMarkImagesAsSyncedToCerberus)
 	ErrFailedToMarkAnalysisRequestsAsProcessed             = errors.New(msgFailedToMarkAnalysisRequestsAsProcessed)
 	ErrFailedToMarkAnalysisResultsAsProcessed              = errors.New(msgFailedToMarkAnalysisResultsAsProcessed)
+	ErrGetAnalysisRequestExtraValuesFailed                 = errors.New(msgGetAnalysisRequestExtraValuesFailed)
 )
 
 type analysisRequestDAO struct {
@@ -236,6 +238,7 @@ type AnalysisRepository interface {
 	GetAnalysisRequestsBySampleCodeAndAnalyteID(ctx context.Context, sampleCodes string, analyteID uuid.UUID) ([]AnalysisRequest, error)
 	GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string, allowResending bool) (map[string][]AnalysisRequest, error)
 	GetAnalysisRequestsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisRequestInfo, int, error)
+	GetAnalysisRequestExtraValuesByAnalysisRequestID(ctx context.Context, analysisRequestID uuid.UUID) (map[string]string, error)
 	GetAnalysisResultsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisResultInfo, int, error)
 	GetAnalysisBatches(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisBatch, int, error)
 	//GetAnalysisRequestsForVisualization(ctx context.Context) (map[string][]AnalysisRequest, error)
@@ -564,6 +567,30 @@ WHERE res2 IS NULL`
 	return convertRequestInfoDAOsToRequestInfos(requestInfoList), count, nil
 }
 
+func (r *analysisRepository) GetAnalysisRequestExtraValuesByAnalysisRequestID(ctx context.Context, analysisRequestID uuid.UUID) (map[string]string, error) {
+	query := fmt.Sprintf(`SELECT * FROM %s.sk_analysis_request_extra_values
+					WHERE analysis_request_id = $1;`, r.dbSchema)
+	rows, err := r.db.QueryxContext(ctx, query, analysisRequestID)
+	if err != nil {
+		log.Error().Err(err).Msg(msgGetAnalysisRequestExtraValuesFailed)
+		return nil, ErrGetAnalysisRequestExtraValuesFailed
+	}
+
+	defer rows.Close()
+
+	extraValueMap := make(map[string]string)
+	for rows.Next() {
+		var extraValue requestExtraValueDAO
+		err := rows.StructScan(&extraValue)
+		if err != nil {
+			log.Error().Err(err).Msg(msgGetAnalysisRequestExtraValuesFailed)
+			return nil, ErrGetAnalysisRequestExtraValuesFailed
+		}
+		extraValueMap[extraValue.Key] = extraValue.Value
+	}
+
+	return extraValueMap, nil
+}
 func (r *analysisRepository) GetAnalysisResultsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisResultInfo, int, error) {
 	preparedValues := map[string]interface{}{
 		"instrument_id": instrumentID,
