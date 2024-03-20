@@ -40,6 +40,10 @@ func (sr *SkeletonTestRig) LogDebug(instrumentID uuid.UUID, msg string) {
 
 }
 
+func (sr *SkeletonTestRig) GetAnalysisRequestExtraValues(ctx context.Context, analysisRequestID uuid.UUID) (map[string]string, error) {
+	return nil, nil
+}
+
 // This function is not very good as it doesnt fit. TODO: This function implicitly tires to provide a
 // pagination without a concept -> REMOVE !!!! If its required provide an iterator implementation that
 // then is consequently used in the library itself (currentPage, itemsPerPage gone!)
