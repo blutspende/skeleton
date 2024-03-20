@@ -292,6 +292,7 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 	assert.Equal(t, uuid.MustParse("660d1095-c8f6-4899-946e-935bfddfaa69"), cerberusClientMock.AnalysisResults[0].WorkingItemID)
 	assert.Equal(t, analysisResultsWithoutAnalysisRequestsTest_instrument.ID, cerberusClientMock.AnalysisResults[0].InstrumentID)
 	assert.Equal(t, analysisResultsWithoutAnalysisRequestsTest_analysisResults[0].Result, cerberusClientMock.AnalysisResults[0].Result)
+	assert.Equal(t, true, cerberusClientMock.AnalysisResults[0].IsInvalid)
 	assert.Equal(t, uuid.MustParse("55abb455-5c35-464a-aa9b-26ea5690c6ca"), cerberusClientMock.AnalysisResults[1].WorkingItemID)
 	assert.Equal(t, analysisResultsWithoutAnalysisRequestsTest_instrument.ID, cerberusClientMock.AnalysisResults[1].InstrumentID)
 	assert.Equal(t, analysisResultsWithoutAnalysisRequestsTest_analysisResults[1].Result, cerberusClientMock.AnalysisResults[1].Result)
@@ -910,6 +911,7 @@ var analysisResultsWithoutAnalysisRequestsTest_analysisResults = []AnalysisResul
 		TechnicalReleaseDateTime: nil,
 		InstrumentRunID:          uuid.Nil,
 		Edited:                   false,
+		IsInvalid:                true,
 		EditReason:               "",
 		WarnFlag:                 false,
 		Warnings:                 []string{"test warning"},

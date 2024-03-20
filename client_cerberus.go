@@ -79,6 +79,7 @@ type AnalysisResultTO struct {
 	InstrumentRunID          uuid.UUID         `json:"instrumentRunId"`
 	Edited                   bool              `json:"resultEdit"`
 	EditReason               string            `json:"editReason"`
+	IsInvalid                bool              `json:"isInvalid"`
 	ChannelResults           []ChannelResultTO `json:"channelResults"`
 	ExtraValues              []ExtraValueTO    `json:"extraValues"`
 	ReagentInfos             []ReagentInfoTO   `json:"reagentInfos"`

@@ -107,6 +107,7 @@ type analysisResultDAO struct {
 	TechnicalReleaseDateTime sql.NullTime      `db:"technical_release_datetime"`
 	Edited                   bool              `db:"edited"`
 	EditReason               sql.NullString    `db:"edit_reason"`
+	IsInvalid                bool              `db:"is_invalid"`
 	AnalyteMapping           analyteMappingDAO `db:"analyte_mapping"`
 	ChannelResults           []channelResultDAO
 	ExtraValues              []resultExtraValueDAO
@@ -911,8 +912,8 @@ func (r *analysisRepository) createAnalysisResultsBatch(ctx context.Context, ana
 			analysisResults[i].ID = uuid.New()
 		}
 	}
-	query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_results(id, analyte_mapping_id, instrument_id, sample_code, instrument_run_id, result_record_id, batch_id, "result", status, result_mode, yielded_at, valid_until, operator, technical_release_datetime, edited, edit_reason)
-		VALUES(:id, :analyte_mapping_id, :instrument_id, :sample_code, :instrument_run_id, :result_record_id, :batch_id, :result, :status, :result_mode, :yielded_at, :valid_until, :operator, :technical_release_datetime, :edited, :edit_reason);`, r.dbSchema)
+	query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_results(id, analyte_mapping_id, instrument_id, sample_code, instrument_run_id, result_record_id, batch_id, "result", status, result_mode, yielded_at, valid_until, operator, technical_release_datetime, edited, edit_reason, is_invalid)
+		VALUES(:id, :analyte_mapping_id, :instrument_id, :sample_code, :instrument_run_id, :result_record_id, :batch_id, :result, :status, :result_mode, :yielded_at, :valid_until, :operator, :technical_release_datetime, :edited, :edit_reason, :is_invalid);`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, convertAnalysisResultsToDAOs(analysisResults))
 	if err != nil {
 		log.Error().Err(err).Msg("create analysis result batch failed")
@@ -963,7 +964,7 @@ func (r *analysisRepository) createAnalysisResultsBatch(ctx context.Context, ana
 }
 
 func (r *analysisRepository) GetAnalysisResultsBySampleCodeAndAnalyteID(ctx context.Context, sampleCode string, analyteID uuid.UUID) ([]AnalysisResult, error) {
-	query := `SELECT sar.id, sar.analyte_mapping_id, sar.instrument_id, sar.sample_code, sar.instrument_run_id,
+	query := `SELECT sar.id, sar.analyte_mapping_id, sar.instrument_id, sar.sample_code, sar.instrument_run_id, sar.is_invalid,
        				sar.result_record_id, sar.batch_id, sar."result", sar.status, sar.result_mode, sar.yielded_at,
        				sar.valid_until, sar.operator, sar.edited, sar.edit_reason, sam.id AS "analyte_mapping.id",
        				sam.instrument_id AS "analyte_mapping.instrument_id", sam.instrument_analyte AS "analyte_mapping.instrument_analyte",
@@ -1089,7 +1090,7 @@ func (r *analysisRepository) GetAnalysisResultsBySampleCodeAndAnalyteID(ctx cont
 }
 
 func (r *analysisRepository) GetAnalysisResultByID(ctx context.Context, id uuid.UUID, allowDeletedAnalyteMapping bool) (AnalysisResult, error) {
-	query := `SELECT sar.id, sar.analyte_mapping_id, sar.instrument_id, sar.sample_code, sar.instrument_run_id, sar.result_record_id, sar.batch_id, sar."result", sar.status, sar.result_mode, sar.yielded_at, sar.valid_until, sar.operator, sar.edited, sar.edit_reason,
+	query := `SELECT sar.id, sar.analyte_mapping_id, sar.instrument_id, sar.sample_code, sar.instrument_run_id, sar.result_record_id, sar.batch_id, sar."result", sar.status, sar.result_mode, sar.yielded_at, sar.valid_until, sar.operator, sar.edited, sar.edit_reason, sar.is_invalid,
 					sam.id AS "analyte_mapping.id", sam.instrument_id AS "analyte_mapping.instrument_id", sam.instrument_analyte AS "analyte_mapping.instrument_analyte", sam.analyte_id AS "analyte_mapping.analyte_id", sam.result_type AS "analyte_mapping.result_type", sam.created_at AS "analyte_mapping.created_at", sam.modified_at AS "analyte_mapping.modified_at"
 			FROM %schema_name%.sk_analysis_results sar
 			INNER JOIN %schema_name%.sk_analyte_mappings sam ON sar.analyte_mapping_id = sam.id`
@@ -1198,7 +1199,7 @@ func (r *analysisRepository) GetAnalysisResultsByIDs(ctx context.Context, ids []
 		return []AnalysisResult{}, nil
 	}
 
-	query := `SELECT sar.id, sar.analyte_mapping_id, sar.instrument_id, sar.sample_code, sar.instrument_run_id, sar.result_record_id, sar.batch_id, sar."result", sar.status, sar.result_mode, sar.yielded_at, sar.valid_until, sar.operator, sar.edited, sar.edit_reason,
+	query := `SELECT sar.id, sar.analyte_mapping_id, sar.instrument_id, sar.sample_code, sar.instrument_run_id, sar.result_record_id, sar.batch_id, sar."result", sar.status, sar.result_mode, sar.yielded_at, sar.valid_until, sar.operator, sar.edited, sar.edit_reason, sar.is_invalid,
 					sam.id AS "analyte_mapping.id", sam.instrument_id AS "analyte_mapping.instrument_id", sam.instrument_analyte AS "analyte_mapping.instrument_analyte", sam.analyte_id AS "analyte_mapping.analyte_id", sam.result_type AS "analyte_mapping.result_type", sam.created_at AS "analyte_mapping.created_at", sam.modified_at AS "analyte_mapping.modified_at"
 			FROM %schema_name%.sk_analysis_results sar
 			INNER JOIN %schema_name%.sk_analyte_mappings sam ON sar.analyte_mapping_id = sam.id
@@ -1332,7 +1333,7 @@ func (r *analysisRepository) GetAnalysisResultsByBatchIDs(ctx context.Context, b
 	analyteMappingIDsMap := make(map[uuid.UUID]any)
 
 	err := utils.Partition(len(batchIDs), maxParams, func(low int, high int) error {
-		query := `SELECT sar.id, sar.analyte_mapping_id, sar.instrument_id, sar.sample_code, sar.instrument_run_id, sar.result_record_id, sar.batch_id, sar."result", sar.status, sar.result_mode, sar.yielded_at, sar.valid_until, sar.operator, sar.edited, sar.edit_reason,
+		query := `SELECT sar.id, sar.analyte_mapping_id, sar.instrument_id, sar.sample_code, sar.instrument_run_id, sar.result_record_id, sar.batch_id, sar."result", sar.status, sar.result_mode, sar.yielded_at, sar.valid_until, sar.operator, sar.edited, sar.edit_reason, sar.is_invalid,
 					sam.id AS "analyte_mapping.id", sam.instrument_id AS "analyte_mapping.instrument_id", sam.instrument_analyte AS "analyte_mapping.instrument_analyte", sam.analyte_id AS "analyte_mapping.analyte_id", sam.result_type AS "analyte_mapping.result_type", sam.created_at AS "analyte_mapping.created_at", sam.modified_at AS "analyte_mapping.modified_at"
 			FROM %schema_name%.sk_analysis_results sar
 			INNER JOIN %schema_name%.sk_analyte_mappings sam ON sar.analyte_mapping_id = sam.id AND sam.deleted_at IS NULL
@@ -2109,6 +2110,7 @@ func convertAnalysisResultToTO(ar AnalysisResult) (AnalysisResultTO, error) {
 		InstrumentRunID:          ar.InstrumentRunID,
 		Edited:                   ar.Edited,
 		EditReason:               ar.EditReason,
+		IsInvalid:                ar.IsInvalid,
 		ChannelResults:           make([]ChannelResultTO, 0),
 		ExtraValues:              make([]ExtraValueTO, 0),
 		ReagentInfos:             make([]ReagentInfoTO, 0),
@@ -2562,6 +2564,7 @@ func convertAnalysisResultToDAO(analysisResult AnalysisResult) analysisResultDAO
 			String: analysisResult.EditReason,
 			Valid:  true,
 		},
+		IsInvalid: analysisResult.IsInvalid,
 	}
 
 	if analysisResult.ResultYieldDateTime != nil {
@@ -2607,6 +2610,7 @@ func convertAnalysisResultDAOToAnalysisResult(analysisResultDAO analysisResultDA
 		InstrumentRunID: analysisResultDAO.InstrumentRunID,
 		Edited:          analysisResultDAO.Edited,
 		EditReason:      nullStringToString(analysisResultDAO.EditReason),
+		IsInvalid:       analysisResultDAO.IsInvalid,
 		Warnings:        convertAnalysisWarningDAOsToWarnings(analysisResultDAO.Warnings),
 		ChannelResults:  convertChannelResultDAOsToChannelResults(analysisResultDAO.ChannelResults),
 		ExtraValues:     convertExtraValueDAOsToExtraValues(analysisResultDAO.ExtraValues),

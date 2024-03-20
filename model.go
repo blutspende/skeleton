@@ -232,6 +232,7 @@ type AnalysisResult struct {
 	InstrumentRunID          uuid.UUID
 	Edited                   bool
 	EditReason               string
+	IsInvalid                bool
 	WarnFlag                 bool // Todo use it
 	Warnings                 []string
 	ChannelResults           []ChannelResult
