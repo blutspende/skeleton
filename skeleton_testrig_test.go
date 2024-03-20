@@ -54,3 +54,19 @@ func TestCreateAnalysisRequest(t *testing.T) {
 	assert.Equal(t, 2, len(queriedRequests))
 
 }
+
+func TestAddAnalysisRequestExtraValue(t *testing.T) {
+	rig := NewTestRig()
+	rig.AddAnalysisRequestExtraValue("DonationType", "M")
+	rig.AddAnalysisRequestExtraValue("DonorNumber", "123456")
+	extraValuesMap, _ := rig.GetAnalysisRequestExtraValues(context.TODO(), uuid.Nil)
+	assert.Equal(t, 2, len(extraValuesMap))
+
+	donationType, ok := extraValuesMap["DonationType"]
+	assert.True(t, ok)
+	assert.Equal(t, "M", donationType)
+
+	donorNumber, ok := extraValuesMap["DonorNumber"]
+	assert.True(t, ok)
+	assert.Equal(t, "123456", donorNumber)
+}

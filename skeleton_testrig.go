@@ -12,14 +12,16 @@ import (
 type SkeletonTestRig struct {
 	eventHandler SkeletonCallbackHandlerV1
 
-	StoredAnalysisResults []AnalysisResult
-	AnalysisRequests      []*AnalysisRequest
+	StoredAnalysisResults      []AnalysisResult
+	AnalysisRequests           []*AnalysisRequest
+	AnalysisRequestExtraValues map[string]string
 }
 
 func NewTestRig() *SkeletonTestRig {
 	return &SkeletonTestRig{
-		StoredAnalysisResults: []AnalysisResult{},
-		AnalysisRequests:      []*AnalysisRequest{},
+		StoredAnalysisResults:      []AnalysisResult{},
+		AnalysisRequests:           []*AnalysisRequest{},
+		AnalysisRequestExtraValues: make(map[string]string),
 	}
 }
 
@@ -41,7 +43,7 @@ func (sr *SkeletonTestRig) LogDebug(instrumentID uuid.UUID, msg string) {
 }
 
 func (sr *SkeletonTestRig) GetAnalysisRequestExtraValues(ctx context.Context, analysisRequestID uuid.UUID) (map[string]string, error) {
-	return nil, nil
+	return sr.AnalysisRequestExtraValues, nil
 }
 
 // This function is not very good as it doesnt fit. TODO: This function implicitly tires to provide a
@@ -166,4 +168,8 @@ func (sr *SkeletonTestRig) CreateAnalysisRequest(samplecode string, analyteID uu
 	}
 	sr.AnalysisRequests = append(sr.AnalysisRequests, arq)
 	return arq
+}
+
+func (sr *SkeletonTestRig) AddAnalysisRequestExtraValue(key string, value string) {
+	sr.AnalysisRequestExtraValues[key] = value
 }
