@@ -37,6 +37,7 @@ const (
 	msgFailedToMarkImagesAsSyncedToCerberus                = "failed to mark images as synced to cerberus"
 	msgFailedToMarkAnalysisRequestsAsProcessed             = "failed to mark analysis requests as processed"
 	msgFailedToMarkAnalysisResultsAsProcessed              = "failed to mark analysis results as processed"
+	msgGetAnalysisRequestExtraValuesFailed                 = "get analysis request extra values failed"
 )
 
 var (
@@ -59,6 +60,7 @@ var (
 	ErrFailedToMarkImagesAsSyncedToCerberus                = errors.New(msgFailedToMarkImagesAsSyncedToCerberus)
 	ErrFailedToMarkAnalysisRequestsAsProcessed             = errors.New(msgFailedToMarkAnalysisRequestsAsProcessed)
 	ErrFailedToMarkAnalysisResultsAsProcessed              = errors.New(msgFailedToMarkAnalysisResultsAsProcessed)
+	ErrGetAnalysisRequestExtraValuesFailed                 = errors.New(msgGetAnalysisRequestExtraValuesFailed)
 )
 
 type analysisRequestDAO struct {
@@ -107,7 +109,7 @@ type analysisResultDAO struct {
 	EditReason               sql.NullString    `db:"edit_reason"`
 	AnalyteMapping           analyteMappingDAO `db:"analyte_mapping"`
 	ChannelResults           []channelResultDAO
-	ExtraValues              []extraValueDAO
+	ExtraValues              []resultExtraValueDAO
 	ReagentInfos             []reagentInfoDAO
 	Images                   []imageDAO
 	Warnings                 []warningDAO
@@ -130,11 +132,18 @@ type quantitativeChannelResultDAO struct {
 	Value           string    `db:"value"`
 }
 
-type extraValueDAO struct {
+type resultExtraValueDAO struct {
 	ID               uuid.UUID `db:"id"`
 	AnalysisResultID uuid.UUID `db:"analysis_result_id"`
 	Key              string    `db:"key"`
 	Value            string    `db:"value"`
+}
+
+type requestExtraValueDAO struct {
+	ID                uuid.UUID `db:"id"`
+	AnalysisRequestID uuid.UUID `db:"analysis_request_id"`
+	Key               string    `db:"key"`
+	Value             string    `db:"value"`
 }
 
 type reagentInfoDAO struct {
@@ -229,6 +238,7 @@ type AnalysisRepository interface {
 	GetAnalysisRequestsBySampleCodeAndAnalyteID(ctx context.Context, sampleCodes string, analyteID uuid.UUID) ([]AnalysisRequest, error)
 	GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string, allowResending bool) (map[string][]AnalysisRequest, error)
 	GetAnalysisRequestsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisRequestInfo, int, error)
+	GetAnalysisRequestExtraValuesByAnalysisRequestID(ctx context.Context, analysisRequestID uuid.UUID) (map[string]string, error)
 	GetAnalysisResultsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisResultInfo, int, error)
 	GetAnalysisBatches(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisBatch, int, error)
 	//GetAnalysisRequestsForVisualization(ctx context.Context) (map[string][]AnalysisRequest, error)
@@ -311,12 +321,15 @@ func (r *analysisRepository) createAnalysisRequestsBatch(ctx context.Context, an
 		return []uuid.UUID{}, []uuid.UUID{}, nil
 	}
 	ids := make([]uuid.UUID, len(analysisRequests))
+	extraValuesMap := make(map[uuid.UUID][]ExtraValue)
 	for i := range analysisRequests {
 		if (analysisRequests[i].ID == uuid.UUID{}) || (analysisRequests[i].ID == uuid.Nil) {
 			analysisRequests[i].ID = uuid.New()
 		}
 		ids[i] = analysisRequests[i].ID
+		extraValuesMap[analysisRequests[i].ID] = analysisRequests[i].ExtraValues
 	}
+
 	query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_requests(id, work_item_id, analyte_id, sample_code, material_id, laboratory_id, valid_until_time)
 				VALUES(:id, :work_item_id, :analyte_id, :sample_code, :material_id, :laboratory_id, :valid_until_time) 
 				ON CONFLICT (work_item_id) DO NOTHING RETURNING work_item_id;`, r.dbSchema)
@@ -326,6 +339,11 @@ func (r *analysisRepository) createAnalysisRequestsBatch(ctx context.Context, an
 		return []uuid.UUID{}, []uuid.UUID{}, ErrCreateAnalysisRequestsBatchFailed
 	}
 	defer rows.Close()
+	err = r.CreateAnalysisRequestExtraValues(ctx, extraValuesMap)
+	if err != nil {
+		return []uuid.UUID{}, []uuid.UUID{}, ErrCreateAnalysisRequestsBatchFailed
+	}
+
 	savedWorkItemIDs := make([]uuid.UUID, len(analysisRequests))
 	for rows.Next() {
 		var workItemID uuid.UUID
@@ -549,6 +567,30 @@ WHERE res2 IS NULL`
 	return convertRequestInfoDAOsToRequestInfos(requestInfoList), count, nil
 }
 
+func (r *analysisRepository) GetAnalysisRequestExtraValuesByAnalysisRequestID(ctx context.Context, analysisRequestID uuid.UUID) (map[string]string, error) {
+	query := fmt.Sprintf(`SELECT * FROM %s.sk_analysis_request_extra_values
+					WHERE analysis_request_id = $1;`, r.dbSchema)
+	rows, err := r.db.QueryxContext(ctx, query, analysisRequestID)
+	if err != nil {
+		log.Error().Err(err).Msg(msgGetAnalysisRequestExtraValuesFailed)
+		return nil, ErrGetAnalysisRequestExtraValuesFailed
+	}
+
+	defer rows.Close()
+
+	extraValueMap := make(map[string]string)
+	for rows.Next() {
+		var extraValue requestExtraValueDAO
+		err := rows.StructScan(&extraValue)
+		if err != nil {
+			log.Error().Err(err).Msg(msgGetAnalysisRequestExtraValuesFailed)
+			return nil, ErrGetAnalysisRequestExtraValuesFailed
+		}
+		extraValueMap[extraValue.Key] = extraValue.Value
+	}
+
+	return extraValueMap, nil
+}
 func (r *analysisRepository) GetAnalysisResultsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisResultInfo, int, error) {
 	preparedValues := map[string]interface{}{
 		"instrument_id": instrumentID,
@@ -887,7 +929,7 @@ func (r *analysisRepository) createAnalysisResultsBatch(ctx context.Context, ana
 		reagentInfosMap[analysisResults[i].ID] = analysisResults[i].ReagentInfos
 	}
 
-	err = r.CreateExtraValues(ctx, extraValuesMap)
+	err = r.CreateAnalysisResultExtraValues(ctx, extraValuesMap)
 	if err != nil {
 		return analysisResults, err
 	}
@@ -965,7 +1007,7 @@ func (r *analysisRepository) GetAnalysisResultsBySampleCodeAndAnalyteID(ctx cont
 		analyteMappingIDs = append(analyteMappingIDs, analyteMappingID)
 	}
 
-	extraValuesMap, err := r.getExtraValues(ctx, analysisResultIDs)
+	extraValuesMap, err := r.getAnalysisResultExtraValues(ctx, analysisResultIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -1077,7 +1119,7 @@ func (r *analysisRepository) GetAnalysisResultByID(ctx context.Context, id uuid.
 		return AnalysisResult{}, err
 	}
 
-	extraValues, err := r.getExtraValues(ctx, []uuid.UUID{result.ID})
+	extraValues, err := r.getAnalysisResultExtraValues(ctx, []uuid.UUID{result.ID})
 	if err != nil {
 		return AnalysisResult{}, err
 	}
@@ -1190,7 +1232,7 @@ func (r *analysisRepository) GetAnalysisResultsByIDs(ctx context.Context, ids []
 		analysisResultDAOs = append(analysisResultDAOs, result)
 	}
 
-	extraValues, err := r.getExtraValues(ctx, ids)
+	extraValues, err := r.getAnalysisResultExtraValues(ctx, ids)
 	if err != nil {
 		return []AnalysisResult{}, err
 	}
@@ -1335,7 +1377,7 @@ func (r *analysisRepository) GetAnalysisResultsByBatchIDs(ctx context.Context, b
 		analyteMappingIDs = append(analyteMappingIDs, analyteMappingID)
 	}
 
-	extraValuesMap, err := r.getExtraValues(ctx, analysisResultIDs)
+	extraValuesMap, err := r.getAnalysisResultExtraValues(ctx, analysisResultIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -1527,8 +1569,8 @@ func (r *analysisRepository) getResultMappings(ctx context.Context, analyteMappi
 
 const maxParams = 65000
 
-func (r *analysisRepository) getExtraValues(ctx context.Context, analysisResultIDs []uuid.UUID) (map[uuid.UUID][]extraValueDAO, error) {
-	extraValuesMap := make(map[uuid.UUID][]extraValueDAO)
+func (r *analysisRepository) getAnalysisResultExtraValues(ctx context.Context, analysisResultIDs []uuid.UUID) (map[uuid.UUID][]resultExtraValueDAO, error) {
+	extraValuesMap := make(map[uuid.UUID][]resultExtraValueDAO)
 	err := utils.Partition(len(analysisResultIDs), maxParams, func(low int, high int) error {
 		query := fmt.Sprintf(`SELECT sare.id, sare.analysis_result_id, sare."key", sare."value"
 		FROM %s.sk_analysis_result_extravalues sare WHERE sare.analysis_result_id IN (?);`, r.dbSchema)
@@ -1546,7 +1588,7 @@ func (r *analysisRepository) getExtraValues(ctx context.Context, analysisResultI
 		defer rows.Close()
 
 		for rows.Next() {
-			extraValue := extraValueDAO{}
+			extraValue := resultExtraValueDAO{}
 			err = rows.StructScan(&extraValue)
 			if err != nil {
 				log.Error().Err(err).Msg("Can not scan data")
@@ -1563,10 +1605,10 @@ func (r *analysisRepository) getExtraValues(ctx context.Context, analysisResultI
 
 const extraValueBatchSize = 15000
 
-func (r *analysisRepository) CreateExtraValues(ctx context.Context, extraValuesByAnalysisRequestIDs map[uuid.UUID][]ExtraValue) error {
-	extraValuesDAOs := make([]extraValueDAO, 0)
+func (r *analysisRepository) CreateAnalysisResultExtraValues(ctx context.Context, extraValuesByAnalysisRequestIDs map[uuid.UUID][]ExtraValue) error {
+	extraValuesDAOs := make([]resultExtraValueDAO, 0)
 	for analysisResultID, extraValues := range extraValuesByAnalysisRequestIDs {
-		evs := convertExtraValuesToDAOs(extraValues, analysisResultID)
+		evs := convertExtraValuesToResultExtraValueDAOs(extraValues, analysisResultID)
 		for i := range evs {
 			evs[i].ID = uuid.New()
 		}
@@ -1578,9 +1620,9 @@ func (r *analysisRepository) CreateExtraValues(ctx context.Context, extraValuesB
 	var err error
 	for i := 0; i < len(extraValuesDAOs); i += extraValueBatchSize {
 		if len(extraValuesDAOs) >= i+extraValueBatchSize {
-			err = r.createExtraValues(ctx, extraValuesDAOs[i:i+extraValueBatchSize])
+			err = r.createAnalysisResultExtraValues(ctx, extraValuesDAOs[i:i+extraValueBatchSize])
 		} else {
-			err = r.createExtraValues(ctx, extraValuesDAOs[i:])
+			err = r.createAnalysisResultExtraValues(ctx, extraValuesDAOs[i:])
 		}
 		if err != nil {
 			return err
@@ -1589,12 +1631,49 @@ func (r *analysisRepository) CreateExtraValues(ctx context.Context, extraValuesB
 	return nil
 }
 
-func (r *analysisRepository) createExtraValues(ctx context.Context, extraValues []extraValueDAO) error {
+func (r *analysisRepository) CreateAnalysisRequestExtraValues(ctx context.Context, extraValuesByAnalysisRequestIDs map[uuid.UUID][]ExtraValue) error {
+	extraValuesDAOs := make([]requestExtraValueDAO, 0)
+	for analysisRequestID, extraValues := range extraValuesByAnalysisRequestIDs {
+		evs := convertExtraValuesToRequestExtraValueDAOs(extraValues, analysisRequestID)
+		for i := range evs {
+			evs[i].ID = uuid.New()
+		}
+		extraValuesDAOs = append(extraValuesDAOs, evs...)
+	}
+	if len(extraValuesDAOs) == 0 {
+		return nil
+	}
+	var err error
+	for i := 0; i < len(extraValuesDAOs); i += extraValueBatchSize {
+		if len(extraValuesDAOs) >= i+extraValueBatchSize {
+			err = r.createAnalysisRequestExtraValues(ctx, extraValuesDAOs[i:i+extraValueBatchSize])
+		} else {
+			err = r.createAnalysisRequestExtraValues(ctx, extraValuesDAOs[i:])
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *analysisRepository) createAnalysisResultExtraValues(ctx context.Context, extraValues []resultExtraValueDAO) error {
 	query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_result_extravalues(id, analysis_result_id, "key", "value")
 		VALUES(:id, :analysis_result_id, :key, :value)`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, extraValues)
 	if err != nil {
 		log.Error().Err(err).Msg("create analysis result batch failed")
+		return err
+	}
+	return nil
+}
+
+func (r *analysisRepository) createAnalysisRequestExtraValues(ctx context.Context, extraValues []requestExtraValueDAO) error {
+	query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_request_extra_values(id, analysis_request_id, "key", "value")
+		VALUES(:id, :analysis_request_id, :key, :value)`, r.dbSchema)
+	_, err := r.db.NamedExecContext(ctx, query, extraValues)
+	if err != nil {
+		log.Error().Err(err).Msg("create analysis request extra values failed")
 		return err
 	}
 	return nil
@@ -2572,18 +2651,34 @@ func convertChannelResultsToDAOs(channelResults []ChannelResult, analysisResultI
 	return channelResultDAOs
 }
 
-func convertExtraValueToDAO(extraValue ExtraValue, analysisResultID uuid.UUID) extraValueDAO {
-	return extraValueDAO{
+func convertExtraValueToResultExtraValueDAO(extraValue ExtraValue, analysisResultID uuid.UUID) resultExtraValueDAO {
+	return resultExtraValueDAO{
 		AnalysisResultID: analysisResultID,
 		Key:              extraValue.Key,
 		Value:            extraValue.Value,
 	}
 }
 
-func convertExtraValuesToDAOs(extraValues []ExtraValue, analysisResultID uuid.UUID) []extraValueDAO {
-	extraValueDAOs := make([]extraValueDAO, len(extraValues))
+func convertExtraValuesToResultExtraValueDAOs(extraValues []ExtraValue, analysisResultID uuid.UUID) []resultExtraValueDAO {
+	extraValueDAOs := make([]resultExtraValueDAO, len(extraValues))
 	for i := range extraValues {
-		extraValueDAOs[i] = convertExtraValueToDAO(extraValues[i], analysisResultID)
+		extraValueDAOs[i] = convertExtraValueToResultExtraValueDAO(extraValues[i], analysisResultID)
+	}
+	return extraValueDAOs
+}
+
+func convertExtraValueToRequestExtraValueDAO(extraValue ExtraValue, analysisRequestID uuid.UUID) requestExtraValueDAO {
+	return requestExtraValueDAO{
+		AnalysisRequestID: analysisRequestID,
+		Key:               extraValue.Key,
+		Value:             extraValue.Value,
+	}
+}
+
+func convertExtraValuesToRequestExtraValueDAOs(extraValues []ExtraValue, analysisRequestID uuid.UUID) []requestExtraValueDAO {
+	extraValueDAOs := make([]requestExtraValueDAO, len(extraValues))
+	for i := range extraValues {
+		extraValueDAOs[i] = convertExtraValueToRequestExtraValueDAO(extraValues[i], analysisRequestID)
 	}
 	return extraValueDAOs
 }
@@ -2850,7 +2945,7 @@ func convertAnalysisWarningDAOsToWarnings(warningDAOs []warningDAO) []string {
 	return warnings
 }
 
-func convertExtraValueDAOsToExtraValues(extraValueDAOs []extraValueDAO) []ExtraValue {
+func convertExtraValueDAOsToExtraValues(extraValueDAOs []resultExtraValueDAO) []ExtraValue {
 	extraValues := make([]ExtraValue, len(extraValueDAOs))
 	for i, extraValueDAO := range extraValueDAOs {
 		extraValues[i] = ExtraValue{

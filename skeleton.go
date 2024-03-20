@@ -33,11 +33,13 @@ type skeleton struct {
 	consoleLogService          service.ConsoleLogService
 	resultsBuffer              []AnalysisResult
 	resultBatchesChan          chan []AnalysisResult
-	cerberusClient             Cerberus
+	cerberusClient             CerberusClient
 	deaClient                  DeaClientV1
 	manager                    Manager
 	resultTransferFlushTimeout int
 	imageRetrySeconds          int
+	serviceName                string
+	extraValueKeys             []string
 }
 
 func (s *skeleton) SetCallbackHandler(eventHandler SkeletonCallbackHandlerV1) {
@@ -83,6 +85,10 @@ func (s *skeleton) GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleC
 	}
 
 	return analysisRequests, nil
+}
+
+func (s *skeleton) GetAnalysisRequestExtraValues(ctx context.Context, analysisRequestID uuid.UUID) (map[string]string, error) {
+	return s.analysisRepository.GetAnalysisRequestExtraValuesByAnalysisRequestID(ctx, analysisRequestID)
 }
 
 func (s *skeleton) SaveAnalysisRequestsInstrumentTransmissions(ctx context.Context, analysisRequestIDs []uuid.UUID, instrumentID uuid.UUID) error {
@@ -366,7 +372,14 @@ func (s *skeleton) migrateUp(ctx context.Context, db *sqlx.DB, schemaName string
 	return s.migrator.Run(ctx, db, schemaName)
 }
 
+const apiVersion = "v1"
+
 func (s *skeleton) Start() error {
+	err := s.registerDriverToCerberus(s.ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("starting skeleton failed due to failed registration of instrument driver to cerberus")
+		return err
+	}
 	go s.cleanUpCerberusQueueItems(s.ctx)
 	go s.sendUnsentInstrumentsToCerberus(s.ctx)
 	for i := 0; i < s.config.AnalysisRequestWorkerPoolSize; i++ {
@@ -381,13 +394,31 @@ func (s *skeleton) Start() error {
 	go s.enqueueUnprocessedAnalysisResults(s.ctx)
 
 	// Todo - use cancellable context what is passed to the routines above too
-	err := s.api.Run()
+	err = s.api.Run()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to start API")
 		return err
 	}
 
 	return nil
+}
+
+func (s *skeleton) registerDriverToCerberus(ctx context.Context) error {
+	retryCount := 0
+	for {
+		err := s.cerberusClient.RegisterInstrumentDriver(s.serviceName, apiVersion, s.config.APIPort, s.config.EnableTLS, s.extraValueKeys)
+		if err != nil {
+			log.Warn().Err(err).Int("retryCount", retryCount).Msg("register instrument driver to cerberus failed")
+			retryCount++
+			if retryCount >= s.config.InstrumentDriverRegistrationMaxRetry {
+				break
+			}
+			time.Sleep(time.Duration(s.config.InstrumentDriverRegistrationTimeoutSeconds) * time.Second)
+			continue
+		}
+		return nil
+	}
+	return errors.New("register instrument driver to cerberus failed too many times")
 }
 
 func (s *skeleton) sendUnsentInstrumentsToCerberus(ctx context.Context) {
@@ -694,9 +725,11 @@ func (s *skeleton) processStuckImagesToCerberus(ctx context.Context) {
 	}
 }
 
-func NewSkeleton(ctx context.Context, sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api GinApi, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService service.ConsoleLogService, manager Manager, cerberusClient Cerberus, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
+func NewSkeleton(ctx context.Context, serviceName string, requestedExtraValueKeys []string, sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api GinApi, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService service.ConsoleLogService, manager Manager, cerberusClient CerberusClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
 	skeleton := &skeleton{
 		ctx:                        ctx,
+		serviceName:                serviceName,
+		extraValueKeys:             requestedExtraValueKeys,
 		config:                     config,
 		sqlConn:                    sqlConn,
 		dbSchema:                   dbSchema,
