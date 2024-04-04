@@ -12,6 +12,7 @@ import (
 type SkeletonTestRig struct {
 	eventHandler SkeletonCallbackHandlerV1
 
+	storedInstrumentsMap       map[string]Instrument
 	StoredAnalysisResults      []AnalysisResult
 	AnalysisRequests           []*AnalysisRequest
 	AnalysisRequestExtraValues map[string]string
@@ -19,6 +20,7 @@ type SkeletonTestRig struct {
 
 func NewTestRig() *SkeletonTestRig {
 	return &SkeletonTestRig{
+		storedInstrumentsMap:       make(map[string]Instrument),
 		StoredAnalysisResults:      []AnalysisResult{},
 		AnalysisRequests:           []*AnalysisRequest{},
 		AnalysisRequestExtraValues: make(map[string]string),
@@ -111,15 +113,27 @@ func (sr *SkeletonTestRig) SubmitAnalysisResultBatch(ctx context.Context, result
 }
 
 func (sr *SkeletonTestRig) GetInstrument(ctx context.Context, instrumentID uuid.UUID) (Instrument, error) {
-	return Instrument{}, nil
+	instrument := sr.storedInstrumentsMap[instrumentID.String()]
+	return instrument, nil
 }
 
 func (sr *SkeletonTestRig) GetInstrumentByIP(ctx context.Context, ip string) (Instrument, error) {
-	return Instrument{}, nil
+	instrument := sr.storedInstrumentsMap[ip]
+	return instrument, nil
 }
 
 func (sr *SkeletonTestRig) GetInstruments(ctx context.Context) ([]Instrument, error) {
-	return []Instrument{}, nil
+	instruments := make([]Instrument, 0)
+	idMap := make(map[uuid.UUID]any)
+	for _, instrument := range sr.storedInstrumentsMap {
+		if _, ok := idMap[instrument.ID]; ok {
+			continue
+		}
+		instruments = append(instruments, instrument)
+		idMap[instrument.ID] = nil
+	}
+
+	return instruments, nil
 }
 
 func (sr *SkeletonTestRig) FindAnalyteByManufacturerTestCode(instrument Instrument, testCode string) AnalyteMapping {
@@ -172,4 +186,9 @@ func (sr *SkeletonTestRig) CreateAnalysisRequest(samplecode string, analyteID uu
 
 func (sr *SkeletonTestRig) AddAnalysisRequestExtraValue(key string, value string) {
 	sr.AnalysisRequestExtraValues[key] = value
+}
+
+func (sr *SkeletonTestRig) AddInstrument(instrument Instrument) {
+	sr.storedInstrumentsMap[instrument.ID.String()] = instrument
+	sr.storedInstrumentsMap[instrument.Hostname] = instrument
 }
