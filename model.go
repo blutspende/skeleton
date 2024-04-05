@@ -140,6 +140,7 @@ const (
 
 type Instrument struct {
 	ID                 uuid.UUID
+	Type               InstrumentType
 	Name               string
 	ProtocolID         uuid.UUID
 	ProtocolName       Protocol
@@ -407,4 +408,11 @@ const (
 	Int      ProtocolSettingType = "int"
 	Bool     ProtocolSettingType = "bool"
 	Password ProtocolSettingType = "password"
+)
+
+type InstrumentType string
+
+const (
+	Analyzer InstrumentType = "ANALYZER"
+	Sorter   InstrumentType = "SORTER"
 )
