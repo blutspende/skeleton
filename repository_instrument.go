@@ -18,6 +18,7 @@ import (
 const (
 	msgInvalidConnectionMode              = "invalid connection mode"
 	msgInvalidResultMode                  = "invalid result mode"
+	msgInvalidInstrumentType              = "invalid instrument type"
 	msgCreateInstrumentFailed             = "create instrument failed"
 	msgGetInstrumentsFailed               = "get instruments failed"
 	msgGetInstrumentChangesFailed         = "get changed instruments failed"
@@ -60,6 +61,7 @@ const (
 var (
 	ErrInvalidConnectionMode              = errors.New(msgInvalidConnectionMode)
 	ErrInvalidResultMode                  = errors.New(msgInvalidResultMode)
+	ErrInvalidInstrumentType              = errors.New(msgInvalidInstrumentType)
 	ErrCreateInstrumentFailed             = errors.New(msgCreateInstrumentFailed)
 	ErrGetInstrumentsFailed               = errors.New(msgGetInstrumentsFailed)
 	ErrGetInstrumentChangesFailed         = errors.New(msgGetInstrumentChangesFailed)
@@ -100,24 +102,25 @@ var (
 )
 
 type instrumentDAO struct {
-	ID                 uuid.UUID     `db:"id"`
-	ProtocolID         uuid.UUID     `db:"protocol_id"`
-	Name               string        `db:"name"`
-	HostName           string        `db:"hostname"`
-	ClientPort         sql.NullInt32 `db:"client_port"`
-	Enabled            bool          `db:"enabled"`
-	ConnectionMode     string        `db:"connection_mode"`
-	RunningMode        ResultMode    `db:"running_mode"`
-	CaptureResults     bool          `db:"captureresults"`
-	CaptureDiagnostics bool          `db:"capturediagnostics"`
-	ReplyToQuery       bool          `db:"replytoquery"`
-	Status             string        `db:"status"`
-	SentToCerberus     bool          `db:"sent_to_cerberus"`
-	Timezone           string        `db:"timezone"`
-	FileEncoding       string        `db:"file_encoding"`
-	CreatedAt          time.Time     `db:"created_at"`
-	ModifiedAt         sql.NullTime  `db:"modified_at"`
-	DeletedAt          sql.NullTime  `db:"deleted_at"`
+	ID                 uuid.UUID      `db:"id"`
+	Type               InstrumentType `db:"type"`
+	ProtocolID         uuid.UUID      `db:"protocol_id"`
+	Name               string         `db:"name"`
+	HostName           string         `db:"hostname"`
+	ClientPort         sql.NullInt32  `db:"client_port"`
+	Enabled            bool           `db:"enabled"`
+	ConnectionMode     string         `db:"connection_mode"`
+	RunningMode        ResultMode     `db:"running_mode"`
+	CaptureResults     bool           `db:"captureresults"`
+	CaptureDiagnostics bool           `db:"capturediagnostics"`
+	ReplyToQuery       bool           `db:"replytoquery"`
+	Status             string         `db:"status"`
+	SentToCerberus     bool           `db:"sent_to_cerberus"`
+	Timezone           string         `db:"timezone"`
+	FileEncoding       string         `db:"file_encoding"`
+	CreatedAt          time.Time      `db:"created_at"`
+	ModifiedAt         sql.NullTime   `db:"modified_at"`
+	DeletedAt          sql.NullTime   `db:"deleted_at"`
 }
 
 type analyteMappingDAO struct {
@@ -264,8 +267,8 @@ type InstrumentRepository interface {
 }
 
 func (r *instrumentRepository) CreateInstrument(ctx context.Context, instrument Instrument) (uuid.UUID, error) {
-	query := fmt.Sprintf(`INSERT INTO %s.sk_instruments(id, protocol_id, "name", hostname, client_port, enabled, connection_mode, running_mode, captureresults, capturediagnostics, replytoquery, status, sent_to_cerberus, timezone, file_encoding) 
-		VALUES(:id, :protocol_id, :name, :hostname, :client_port, :enabled, :connection_mode, :running_mode, :captureresults, :capturediagnostics, :replytoquery, :status, :sent_to_cerberus, :timezone, :file_encoding);`, r.dbSchema)
+	query := fmt.Sprintf(`INSERT INTO %s.sk_instruments(id, protocol_id, "type", "name", hostname, client_port, enabled, connection_mode, running_mode, captureresults, capturediagnostics, replytoquery, status, sent_to_cerberus, timezone, file_encoding)
+		VALUES(:id, :protocol_id, :type, :name, :hostname, :client_port, :enabled, :connection_mode, :running_mode, :captureresults, :capturediagnostics, :replytoquery, :status, :sent_to_cerberus, :timezone, :file_encoding);`, r.dbSchema)
 	instrument.ID = uuid.New()
 
 	dao, err := convertInstrumentToDAO(instrument)
@@ -1102,6 +1105,12 @@ func convertInstrumentToDAO(instrument Instrument) (instrumentDAO, error) {
 		Timezone:           instrument.Timezone,
 		FileEncoding:       instrument.FileEncoding,
 	}
+	switch instrument.Type {
+	case Analyzer, Sorter:
+		dao.Type = instrument.Type
+	default:
+		return dao, ErrInvalidInstrumentType
+	}
 	switch instrument.ConnectionMode {
 	case TCPClientMode, TCPServerMode, FTP, HTTP, TCPMixed:
 		dao.ConnectionMode = string(instrument.ConnectionMode)
@@ -1137,6 +1146,12 @@ func convertInstrumentDaoToInstrument(dao instrumentDAO) (Instrument, error) {
 		Timezone:           dao.Timezone,
 		FileEncoding:       dao.FileEncoding,
 		CreatedAt:          dao.CreatedAt,
+	}
+	switch dao.Type {
+	case Analyzer, Sorter:
+		instrument.Type = dao.Type
+	default:
+		return instrument, ErrInvalidInstrumentType
 	}
 	switch dao.ConnectionMode {
 	case "TCP_CLIENT_ONLY":

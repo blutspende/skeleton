@@ -12,6 +12,7 @@ import (
 
 type instrumentTO struct {
 	ID                 uuid.UUID             `json:"id"`
+	Type               InstrumentType        `json:"instrumentType"`
 	Name               string                `json:"name"`
 	ProtocolID         uuid.UUID             `json:"protocolId"`
 	ProtocolName       Protocol              `json:"type"`
@@ -602,6 +603,7 @@ func convertInstrumentToListInstrumentTO(instrument Instrument) listInstrumentTO
 func convertInstrumentTOToInstrument(instrumentTO instrumentTO) Instrument {
 	model := Instrument{
 		ID:                 instrumentTO.ID,
+		Type:               instrumentTO.Type,
 		Name:               instrumentTO.Name,
 		ProtocolID:         instrumentTO.ProtocolID,
 		ProtocolName:       instrumentTO.ProtocolName,
@@ -638,6 +640,7 @@ func convertInstrumentTOToInstrument(instrumentTO instrumentTO) Instrument {
 func convertInstrumentToInstrumentTO(instrument Instrument) instrumentTO {
 	model := instrumentTO{
 		ID:                 instrument.ID,
+		Type:               instrument.Type,
 		Name:               instrument.Name,
 		ProtocolID:         instrument.ProtocolID,
 		ProtocolName:       instrument.ProtocolName,
