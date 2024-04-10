@@ -493,7 +493,7 @@ func (r *analysisRepository) GetAnalysisRequestsInfo(ctx context.Context, instru
        am.instrument_analyte as test_name,
 	   res.id AS result_id,
 	   res."result" AS test_result,
-       res.created_at AS result_created_at,
+       COALESCE(res.yielded_at, res.created_at) AS result_created_at,
 	   i.hostname as source_ip,
 	   i.id as instrument_id
 FROM %schema_name%.sk_analysis_requests req
@@ -600,7 +600,7 @@ func (r *analysisRepository) GetAnalysisResultsInfo(ctx context.Context, instrum
 	query := `SELECT res.id AS result_id,
 	   res.sample_code AS sample_code,
 	   am.analyte_id AS analyte_id,
-	   res.created_at as result_created_at,
+	   COALESCE(res.yielded_at, res.created_at) AS result_created_at,
        am.instrument_analyte as test_name,
 	   res.result AS test_result,
        res.status AS status,
@@ -1474,7 +1474,7 @@ func (r *analysisRepository) GetAnalysisResultsByBatchIDsMapped(ctx context.Cont
        res.batch_id AS batch_id,
 	   res.sample_code AS sample_code,
 	   am.analyte_id AS analyte_id,
-	   res.created_at as result_created_at,
+	   COALESCE(res.yielded_at, res.created_at) AS result_created_at,
        am.instrument_analyte as test_name,
 	   res.result AS test_result,
        res.status AS status,
