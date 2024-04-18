@@ -270,9 +270,8 @@ func (r AnalysisResultBatchResponse) IsSuccess() bool {
 type AnalysisRequestSentStatus string
 
 const (
-	AnalysisRequestStatusSent    = "SENT"
-	AnalysisRequestStatusNotSent = "NOT_SENT"
-	AnalysisRequestStatusOpen    = "OPEN"
+	AnalysisRequestStatusOpen      = "OPEN"
+	AnalysisRequestStatusProcessed = "PROCESSED"
 )
 
 type AnalysisRequestInfo struct {
@@ -288,7 +287,6 @@ type AnalysisRequestInfo struct {
 	TestResult        *string
 	BatchCreatedAt    *time.Time
 	Status            string
-	SentToCerberusAt  *time.Time
 	SourceIP          string
 	InstrumentID      *uuid.UUID
 	MappingError      bool
