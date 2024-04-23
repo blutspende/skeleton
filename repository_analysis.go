@@ -203,7 +203,6 @@ type analysisRequestInfoDAO struct {
 	TestName          sql.NullString `db:"test_name"`
 	TestResult        sql.NullString `db:"test_result"`
 	BatchCreatedAt    sql.NullTime   `db:"batch_created_at"`
-	SentToCerberusAt  sql.NullTime   `db:"sent_to_cerberus_at"`
 	SourceIP          sql.NullString `db:"source_ip"`
 	InstrumentID      uuid.NullUUID  `db:"instrument_id"`
 }
@@ -2840,14 +2839,13 @@ func convertRequestInfoDAOToRequestInfo(analysisRequestInfoDAO analysisRequestIn
 		TestResult:        nullStringToStringPointer(analysisRequestInfoDAO.TestResult),
 		BatchCreatedAt:    nullTimeToTimePointer(analysisRequestInfoDAO.BatchCreatedAt),
 		Status:            AnalysisRequestStatusOpen,
-		SentToCerberusAt:  nullTimeToTimePointer(analysisRequestInfoDAO.SentToCerberusAt),
 		SourceIP:          nullStringToString(analysisRequestInfoDAO.SourceIP),
 		InstrumentID:      nullUUIDToUUIDPointer(analysisRequestInfoDAO.InstrumentID),
 	}
 
 	// Todo - Check conditions
-	if analysisRequestInfoDAO.SentToCerberusAt.Valid && !analysisRequestInfoDAO.SentToCerberusAt.Time.IsZero() {
-		analysisRequestInfo.Status = AnalysisRequestStatusSent
+	if analysisRequestInfo.ResultID != nil && *analysisRequestInfo.ResultID != uuid.Nil {
+		analysisRequestInfo.Status = AnalysisRequestStatusProcessed
 	}
 
 	if !analysisRequestInfoDAO.AnalyteMappingsID.Valid {
