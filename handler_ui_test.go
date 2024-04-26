@@ -47,7 +47,7 @@ func TestCreateInstrument(t *testing.T) {
 	c.Request, _ = http.NewRequest(http.MethodPost, "/v1/instruments", bytes.NewBuffer([]byte(`{
   "id": "85fd0a74-e45a-4f9f-a862-89469050023d",
   "protocolId": "abb539a3-286f-4c15-a7b7-2e9adf6eab91",
-  "type": "IH-1000 v5.2",
+  "type": "ANALYZER",
   "name": "Asdmen",
   "hostname": "192.168.1.10",
   "clientPort": null,

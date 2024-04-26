@@ -191,7 +191,9 @@ func (api *api) GetInstrumentByID(c *gin.Context) {
 }
 
 func (api *api) CreateInstrument(c *gin.Context) {
-	instrumentTO := instrumentTO{}
+	instrumentTO := instrumentTO{
+		Type: Analyzer,
+	}
 	err := c.ShouldBindJSON(&instrumentTO)
 	if err != nil {
 		log.Error().Err(err).Msg("Create instrument failed! Can't parse request body!")
