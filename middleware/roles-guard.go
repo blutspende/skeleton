@@ -11,7 +11,7 @@ import (
 // RoleProtection - Checks if user has roles
 //
 // @var strict bool - if strict is true, the user must have all the roles
-func RoleProtection(roles []string, strict, authMode bool) gin.HandlerFunc {
+func RoleProtection(roles []UserRole, strict, authMode bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// For development, you can turn of the roleProtection
 		if !authMode {
@@ -35,7 +35,7 @@ func RoleProtection(roles []string, strict, authMode bool) gin.HandlerFunc {
 
 		if !strict {
 			for _, role := range roles {
-				if contains(user.Roles, role) {
+				if contains(user.RealmAccess.Roles, role) {
 					c.Next()
 					return
 				}
@@ -45,7 +45,7 @@ func RoleProtection(roles []string, strict, authMode bool) gin.HandlerFunc {
 			return
 		}
 
-		if !containsAll(user.Roles, roles) {
+		if !containsAll(user.RealmAccess.Roles, roles) {
 			log.Error().Str("user", user.Email).Msg(fmt.Sprintf("%s. roles=%v", ErrNoPrivileges.Message, roles))
 			c.AbortWithStatusJSON(http.StatusUnauthorized, ErrNoPrivileges)
 			return
@@ -56,7 +56,7 @@ func RoleProtection(roles []string, strict, authMode bool) gin.HandlerFunc {
 }
 
 // Contains - String Slice contains a string. Return true of false
-func contains(set []string, target string) bool {
+func contains[T comparable](set []T, target T) bool {
 	for i := 0; i < len(set); i++ {
 		if set[i] == target {
 			return true
@@ -66,7 +66,7 @@ func contains(set []string, target string) bool {
 }
 
 // ContainsAll - Check if all targets are contains in the Array/Slice
-func containsAll(set []string, targets []string) bool {
+func containsAll[T comparable](set []T, targets []T) bool {
 	allFound := true
 	for i := 0; i < len(targets); i++ {
 		if !contains(set, targets[i]) {

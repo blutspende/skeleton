@@ -7,7 +7,7 @@ import (
 
 type UserToken struct {
 	RealmAccess RealmAccess `json:"realm_access"`
-	Roles       []string    `json:"role"`
+	Roles       []UserRole  `json:"role"`
 	Email       string      `json:"email"`
 	ClientID    string      `json:"azp"`
 	UserID      uuid.UUID   `json:"sub"`
@@ -16,7 +16,7 @@ type UserToken struct {
 }
 
 type RealmAccess struct {
-	Roles []string `json:"roles"`
+	Roles []UserRole `json:"roles"`
 }
 
 type UserRole string

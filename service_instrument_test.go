@@ -57,6 +57,7 @@ func TestRegisterCreatedInstrument(t *testing.T) {
 	_, _ = instrumentService.CreateInstrument(context.Background(), Instrument{
 		ID:             uuid.MustParse("68f34e1d-1faa-4101-9e79-a743b420ab4e"),
 		Name:           "test",
+		Type:           Analyzer,
 		ProtocolID:     uuid.MustParse("abb539a3-286f-4c15-a7b7-2e9adf6eab91"),
 		ProtocolName:   "Test Protocol",
 		Enabled:        true,
@@ -91,6 +92,8 @@ func TestUpdateInstrument(t *testing.T) {
 		ApplicationName:                  "Register instrument retry test",
 		TCPListenerPort:                  5401,
 		InstrumentTransferRetryDelayInMs: 50,
+		ClientID:                         "clientID",
+		ClientSecret:                     "clientSecret",
 	}
 	dbConn := db.CreateDbConnector(sqlConn)
 	cerberusClientMock := &cerberusClientMock{
@@ -117,6 +120,7 @@ func TestUpdateInstrument(t *testing.T) {
 
 	instrumentID, err := instrumentService.CreateInstrument(ctx, Instrument{
 		Name:               "TestInstrument",
+		Type:               Analyzer,
 		ProtocolID:         protocolID,
 		ProtocolName:       "TestProtocol",
 		Enabled:            true,
@@ -144,6 +148,7 @@ func TestUpdateInstrument(t *testing.T) {
 	err = instrumentService.UpdateInstrument(ctx, Instrument{
 		ID:                 instrumentID,
 		Name:               "TestInstrumentUpdated",
+		Type:               Analyzer,
 		ProtocolID:         protocolID,
 		ProtocolName:       "TestProtocol",
 		Enabled:            true,
@@ -229,6 +234,7 @@ func TestUpdateInstrument(t *testing.T) {
 	err = instrumentService.UpdateInstrument(ctx, Instrument{
 		ID:                 instrumentID,
 		Name:               "TestInstrumentUpdated2",
+		Type:               Analyzer,
 		ProtocolID:         protocolID,
 		ProtocolName:       "TestProtocol",
 		Enabled:            true,
