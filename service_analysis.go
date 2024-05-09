@@ -108,7 +108,10 @@ func (as *analysisService) RevokeAnalysisRequests(ctx context.Context, workItemI
 	}
 
 	as.manager.GetCallbackHandler().RevokeAnalysisRequests(analysisRequests)
-
+	err = as.analysisRepository.DeleteAnalysisRequestExtraValues(ctx, workItemIDs)
+	if err != nil {
+		return ErrFailedToRevokeAnalysisRequests
+	}
 	return as.analysisRepository.RevokeAnalysisRequests(ctx, workItemIDs)
 }
 

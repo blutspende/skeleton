@@ -38,6 +38,7 @@ const (
 	msgFailedToMarkAnalysisRequestsAsProcessed             = "failed to mark analysis requests as processed"
 	msgFailedToMarkAnalysisResultsAsProcessed              = "failed to mark analysis results as processed"
 	msgGetAnalysisRequestExtraValuesFailed                 = "get analysis request extra values failed"
+	msgDeleteAnalysisRequestExtraValuesFailed              = "delete analysis request extra values failed"
 )
 
 var (
@@ -61,6 +62,7 @@ var (
 	ErrFailedToMarkAnalysisRequestsAsProcessed             = errors.New(msgFailedToMarkAnalysisRequestsAsProcessed)
 	ErrFailedToMarkAnalysisResultsAsProcessed              = errors.New(msgFailedToMarkAnalysisResultsAsProcessed)
 	ErrGetAnalysisRequestExtraValuesFailed                 = errors.New(msgGetAnalysisRequestExtraValuesFailed)
+	ErrDeleteAnalysisRequestExtraValuesFailed              = errors.New(msgDeleteAnalysisRequestExtraValuesFailed)
 )
 
 type analysisRequestDAO struct {
@@ -246,6 +248,7 @@ type AnalysisRepository interface {
 	GetSubjectsByAnalysisRequestIDs(ctx context.Context, analysisRequestIDs []uuid.UUID) (map[uuid.UUID]SubjectInfo, error)
 	GetAnalysisRequestsByWorkItemIDs(ctx context.Context, workItemIds []uuid.UUID) ([]AnalysisRequest, error)
 	RevokeAnalysisRequests(ctx context.Context, workItemIds []uuid.UUID) error
+	DeleteAnalysisRequestExtraValues(ctx context.Context, workItemIDs []uuid.UUID) error
 	IncreaseReexaminationRequestedCount(ctx context.Context, workItemIDs []uuid.UUID) error
 	IncreaseSentToInstrumentCounter(ctx context.Context, analysisRequestIDs []uuid.UUID) error
 
@@ -816,6 +819,27 @@ func (r *analysisRepository) RevokeAnalysisRequests(ctx context.Context, workIte
 	if err != nil {
 		log.Error().Err(err).Msg(msgFailedToRevokeAnalysisRequests)
 		return ErrFailedToRevokeAnalysisRequests
+	}
+
+	return nil
+}
+
+func (r *analysisRepository) DeleteAnalysisRequestExtraValues(ctx context.Context, workItemIDs []uuid.UUID) error {
+	if len(workItemIDs) == 0 {
+		return nil
+	}
+	err := utils.Partition(len(workItemIDs), maxParams, func(low int, high int) error {
+		query := fmt.Sprintf(`DELETE FROM %s.sk_analysis_request_extra_values WHERE analysis_request_id IN
+ 			(SELECT id FROM %s.sk_analysis_requests WHERE work_item_id IN (?));`, r.dbSchema, r.dbSchema)
+
+		query, args, _ := sqlx.In(query, workItemIDs[low:high])
+		query = r.db.Rebind(query)
+		_, err := r.db.ExecContext(ctx, query, args...)
+		return err
+	})
+	if err != nil {
+		log.Error().Err(err).Msg(msgDeleteAnalysisRequestExtraValuesFailed)
+		return ErrDeleteAnalysisRequestExtraValuesFailed
 	}
 
 	return nil
