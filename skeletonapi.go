@@ -36,6 +36,8 @@ type SkeletonCallbackHandlerV1 interface {
 
 	RevokeAnalysisRequests(request []AnalysisRequest)
 
+	ReexamineAnalysisRequests(request []AnalysisRequest)
+
 	ReprocessInstrumentData(batchIDs []uuid.UUID) error
 
 	ReprocessInstrumentDataBySampleCode(sampleCode string) error
