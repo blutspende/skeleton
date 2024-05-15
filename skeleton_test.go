@@ -615,6 +615,13 @@ func (m *skeletonCallbackHandlerV1Mock) GetEncodingList(protocolId uuid.UUID) ([
 	return m.getEncodingList(protocolId)
 }
 
+func (m *skeletonCallbackHandlerV1Mock) ReexamineAnalysisRequests(request []AnalysisRequest) {
+	if m.revokeAnalysisRequests == nil {
+		return
+	}
+	m.revokeAnalysisRequests(request)
+}
+
 func (m *skeletonCallbackHandlerV1Mock) RevokeAnalysisRequests(request []AnalysisRequest) {
 	if m.revokeAnalysisRequests == nil {
 		return
@@ -816,6 +823,9 @@ func (m *analysisRepositoryMock) GetAnalysisRequestsByWorkItemIDs(ctx context.Co
 	return nil, nil
 }
 func (m *analysisRepositoryMock) RevokeAnalysisRequests(ctx context.Context, workItemIds []uuid.UUID) error {
+	return nil
+}
+func (m *analysisRepositoryMock) DeleteAnalysisRequestExtraValues(ctx context.Context, workItemIds []uuid.UUID) error {
 	return nil
 }
 func (m *analysisRepositoryMock) IncreaseReexaminationRequestedCount(ctx context.Context, workItemIDs []uuid.UUID) error {

@@ -117,7 +117,17 @@ func (as *analysisService) RevokeAnalysisRequests(ctx context.Context, workItemI
 
 func (as *analysisService) ReexamineAnalysisRequestsBatch(ctx context.Context, workItemIDs []uuid.UUID) error {
 	log.Trace().Msgf("Reexamine %d work-item(s) by IDs", len(workItemIDs))
-	return as.analysisRepository.IncreaseReexaminationRequestedCount(ctx, workItemIDs)
+	err := as.analysisRepository.IncreaseReexaminationRequestedCount(ctx, workItemIDs)
+	if err != nil {
+		return err
+	}
+	analysisRequests, err := as.analysisRepository.GetAnalysisRequestsByWorkItemIDs(ctx, workItemIDs)
+	if err != nil {
+		return err
+	}
+	as.manager.GetCallbackHandler().ReexamineAnalysisRequests(analysisRequests)
+
+	return nil
 }
 
 func (as *analysisService) GetAnalysisRequestsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisRequestInfo, int, error) {
