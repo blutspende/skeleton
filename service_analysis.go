@@ -6,6 +6,7 @@ import (
 	"github.com/blutspende/skeleton/utils"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
+	"time"
 )
 
 var ErrAnalysisRequestWithMatchingWorkItemIdFound = errors.New("analysis request with matching workitem id found")
@@ -42,6 +43,10 @@ func NewAnalysisService(analysisRepository AnalysisRepository, deaClient DeaClie
 }
 
 func (as *analysisService) CreateAnalysisRequests(ctx context.Context, analysisRequests []AnalysisRequest) ([]AnalysisRequestStatus, error) {
+	ts := time.Now().UTC()
+	for i := range analysisRequests {
+		analysisRequests[i].CreatedAt = ts
+	}
 	_, savedAnalysisRequestWorkItemIDs, err := as.analysisRepository.CreateAnalysisRequestsBatch(ctx, analysisRequests)
 	if err != nil {
 		return nil, err

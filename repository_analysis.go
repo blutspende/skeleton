@@ -334,8 +334,8 @@ func (r *analysisRepository) createAnalysisRequestsBatch(ctx context.Context, an
 		extraValuesMap[analysisRequests[i].ID] = analysisRequests[i].ExtraValues
 	}
 
-	query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_requests(id, work_item_id, analyte_id, sample_code, material_id, laboratory_id, valid_until_time)
-				VALUES(:id, :work_item_id, :analyte_id, :sample_code, :material_id, :laboratory_id, :valid_until_time) 
+	query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_requests(id, work_item_id, analyte_id, sample_code, material_id, laboratory_id, valid_until_time, created_at)
+				VALUES(:id, :work_item_id, :analyte_id, :sample_code, :material_id, :laboratory_id, :valid_until_time, :created_at)
 				ON CONFLICT (work_item_id) DO NOTHING RETURNING work_item_id;`, r.dbSchema)
 	rows, err := r.db.NamedQueryContext(ctx, query, convertAnalysisRequestsToDAOs(analysisRequests))
 	if err != nil {
