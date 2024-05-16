@@ -403,7 +403,7 @@ func (r *analysisRepository) createSubjects(ctx context.Context, subjectDAOs []s
 }
 
 func (r *analysisRepository) GetAnalysisRequestsBySampleCodeAndAnalyteID(ctx context.Context, sampleCode string, analyteID uuid.UUID) ([]AnalysisRequest, error) {
-	query := fmt.Sprintf(`SELECT sar.id, sar.work_item_id, sar.analyte_id, sar.sample_code, sar.material_id, sar.laboratory_id, sar.valid_until_time, sar.created_at
+	query := fmt.Sprintf(`SELECT *
 					FROM %s.sk_analysis_requests sar
 					WHERE sar.sample_code = $1
 					AND sar.analyte_id = $2
@@ -2433,7 +2433,7 @@ func (r *analysisRepository) MarkImagesAsSyncedToCerberus(ctx context.Context, i
 }
 
 func (r *analysisRepository) GetUnprocessedAnalysisRequests(ctx context.Context) ([]AnalysisRequest, error) {
-	query := fmt.Sprintf(`SELECT sar.id, sar.work_item_id, sar.analyte_id, sar.sample_code, sar.material_id, sar.laboratory_id, sar.valid_until_time, sar.created_at
+	query := fmt.Sprintf(`SELECT *
 					FROM %s.sk_analysis_requests sar
 					WHERE sar.is_processed IS FALSE;`, r.dbSchema)
 
@@ -2549,14 +2549,15 @@ func convertAnalysisRequestsToDAOs(analysisRequests []AnalysisRequest) []analysi
 
 func convertAnalysisRequestToDAO(analysisRequest AnalysisRequest) analysisRequestDAO {
 	return analysisRequestDAO{
-		ID:             analysisRequest.ID,
-		WorkItemID:     analysisRequest.WorkItemID,
-		AnalyteID:      analysisRequest.AnalyteID,
-		SampleCode:     analysisRequest.SampleCode,
-		MaterialID:     analysisRequest.MaterialID,
-		LaboratoryID:   analysisRequest.LaboratoryID,
-		ValidUntilTime: analysisRequest.ValidUntilTime,
-		CreatedAt:      analysisRequest.CreatedAt,
+		ID:                          analysisRequest.ID,
+		WorkItemID:                  analysisRequest.WorkItemID,
+		AnalyteID:                   analysisRequest.AnalyteID,
+		SampleCode:                  analysisRequest.SampleCode,
+		MaterialID:                  analysisRequest.MaterialID,
+		LaboratoryID:                analysisRequest.LaboratoryID,
+		ValidUntilTime:              analysisRequest.ValidUntilTime,
+		CreatedAt:                   analysisRequest.CreatedAt,
+		ReexaminationRequestedCount: analysisRequest.ReexaminationRequestedCount,
 	}
 }
 
@@ -2782,14 +2783,15 @@ func convertImagesToDAOs(images []Image, analysisResultID uuid.UUID, channelResu
 
 func convertAnalysisRequestDAOToAnalysisRequest(analysisRequest analysisRequestDAO) AnalysisRequest {
 	return AnalysisRequest{
-		ID:             analysisRequest.ID,
-		WorkItemID:     analysisRequest.WorkItemID,
-		AnalyteID:      analysisRequest.AnalyteID,
-		SampleCode:     analysisRequest.SampleCode,
-		MaterialID:     analysisRequest.MaterialID,
-		LaboratoryID:   analysisRequest.LaboratoryID,
-		ValidUntilTime: analysisRequest.ValidUntilTime,
-		CreatedAt:      analysisRequest.CreatedAt,
+		ID:                          analysisRequest.ID,
+		WorkItemID:                  analysisRequest.WorkItemID,
+		AnalyteID:                   analysisRequest.AnalyteID,
+		SampleCode:                  analysisRequest.SampleCode,
+		MaterialID:                  analysisRequest.MaterialID,
+		LaboratoryID:                analysisRequest.LaboratoryID,
+		ValidUntilTime:              analysisRequest.ValidUntilTime,
+		CreatedAt:                   analysisRequest.CreatedAt,
+		ReexaminationRequestedCount: analysisRequest.ReexaminationRequestedCount,
 	}
 }
 
