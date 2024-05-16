@@ -66,17 +66,18 @@ var (
 )
 
 type analysisRequestDAO struct {
-	ID                          uuid.UUID `db:"id"`
-	WorkItemID                  uuid.UUID `db:"work_item_id"`
-	AnalyteID                   uuid.UUID `db:"analyte_id"`
-	SampleCode                  string    `db:"sample_code"`
-	MaterialID                  uuid.UUID `db:"material_id"`
-	LaboratoryID                uuid.UUID `db:"laboratory_id"`
-	ValidUntilTime              time.Time `db:"valid_until_time"`
-	ReexaminationRequestedCount int       `db:"reexamination_requested_count"`
-	SentToInstrumentCount       int       `db:"sent_to_instrument_count"`
-	CreatedAt                   time.Time `db:"created_at"`
-	IsProcessed                 bool      `db:"is_processed"`
+	ID                          uuid.UUID    `db:"id"`
+	WorkItemID                  uuid.UUID    `db:"work_item_id"`
+	AnalyteID                   uuid.UUID    `db:"analyte_id"`
+	SampleCode                  string       `db:"sample_code"`
+	MaterialID                  uuid.UUID    `db:"material_id"`
+	LaboratoryID                uuid.UUID    `db:"laboratory_id"`
+	ValidUntilTime              time.Time    `db:"valid_until_time"`
+	ReexaminationRequestedCount int          `db:"reexamination_requested_count"`
+	SentToInstrumentCount       int          `db:"sent_to_instrument_count"`
+	CreatedAt                   time.Time    `db:"created_at"`
+	ModifiedAt                  sql.NullTime `db:"modified_at"`
+	IsProcessed                 bool         `db:"is_processed"`
 }
 
 type subjectInfoDAO struct {
@@ -850,7 +851,7 @@ func (r *analysisRepository) IncreaseReexaminationRequestedCount(ctx context.Con
 		return nil
 	}
 	err := utils.Partition(len(workItemIDs), maxParams, func(low int, high int) error {
-		query := fmt.Sprintf(`UPDATE %s.sk_analysis_requests SET reexamination_requested_count = reexamination_requested_count + 1 WHERE work_item_id IN (?);`, r.dbSchema)
+		query := fmt.Sprintf(`UPDATE %s.sk_analysis_requests SET reexamination_requested_count = reexamination_requested_count + 1, modified_at = timezone('utc', now()) WHERE work_item_id IN (?);`, r.dbSchema)
 
 		query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
 		query, args, _ := sqlx.In(query, workItemIDs[low:high])
@@ -2548,7 +2549,7 @@ func convertAnalysisRequestsToDAOs(analysisRequests []AnalysisRequest) []analysi
 }
 
 func convertAnalysisRequestToDAO(analysisRequest AnalysisRequest) analysisRequestDAO {
-	return analysisRequestDAO{
+	dao := analysisRequestDAO{
 		ID:                          analysisRequest.ID,
 		WorkItemID:                  analysisRequest.WorkItemID,
 		AnalyteID:                   analysisRequest.AnalyteID,
@@ -2559,6 +2560,15 @@ func convertAnalysisRequestToDAO(analysisRequest AnalysisRequest) analysisReques
 		CreatedAt:                   analysisRequest.CreatedAt,
 		ReexaminationRequestedCount: analysisRequest.ReexaminationRequestedCount,
 	}
+
+	if analysisRequest.ModifiedAt != nil {
+		dao.ModifiedAt = sql.NullTime{
+			Time:  *analysisRequest.ModifiedAt,
+			Valid: true,
+		}
+	}
+
+	return dao
 }
 
 func convertAnalysisRequestDAOsToAnalysisRequests(analysisRequestDAOs []analysisRequestDAO) []AnalysisRequest {
@@ -2782,7 +2792,7 @@ func convertImagesToDAOs(images []Image, analysisResultID uuid.UUID, channelResu
 }
 
 func convertAnalysisRequestDAOToAnalysisRequest(analysisRequest analysisRequestDAO) AnalysisRequest {
-	return AnalysisRequest{
+	req := AnalysisRequest{
 		ID:                          analysisRequest.ID,
 		WorkItemID:                  analysisRequest.WorkItemID,
 		AnalyteID:                   analysisRequest.AnalyteID,
@@ -2793,6 +2803,12 @@ func convertAnalysisRequestDAOToAnalysisRequest(analysisRequest analysisRequestD
 		CreatedAt:                   analysisRequest.CreatedAt,
 		ReexaminationRequestedCount: analysisRequest.ReexaminationRequestedCount,
 	}
+
+	if analysisRequest.ModifiedAt.Valid {
+		req.ModifiedAt = &analysisRequest.ModifiedAt.Time
+	}
+
+	return req
 }
 
 func convertSubjectToDAO(subject SubjectInfo, analysisRequestID uuid.UUID) subjectInfoDAO {

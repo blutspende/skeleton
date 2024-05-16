@@ -32,6 +32,7 @@ type AnalysisRequest struct {
 	LaboratoryID                uuid.UUID
 	ValidUntilTime              time.Time
 	CreatedAt                   time.Time
+	ModifiedAt                  *time.Time
 	SubjectInfo                 *SubjectInfo
 	ExtraValues                 []ExtraValue
 	ReexaminationRequestedCount int
