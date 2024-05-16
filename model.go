@@ -24,16 +24,17 @@ type AnalysisRequestStatus struct {
 // AnalysisRequest - Analysis Request as processed by our AnalysisService
 // Do not use in implementation directly
 type AnalysisRequest struct {
-	ID             uuid.UUID
-	WorkItemID     uuid.UUID
-	AnalyteID      uuid.UUID
-	SampleCode     string
-	MaterialID     uuid.UUID
-	LaboratoryID   uuid.UUID
-	ValidUntilTime time.Time
-	CreatedAt      time.Time
-	SubjectInfo    *SubjectInfo
-	ExtraValues    []ExtraValue
+	ID                          uuid.UUID
+	WorkItemID                  uuid.UUID
+	AnalyteID                   uuid.UUID
+	SampleCode                  string
+	MaterialID                  uuid.UUID
+	LaboratoryID                uuid.UUID
+	ValidUntilTime              time.Time
+	CreatedAt                   time.Time
+	SubjectInfo                 *SubjectInfo
+	ExtraValues                 []ExtraValue
+	ReexaminationRequestedCount int
 }
 
 type CerberusQueueItem struct {
