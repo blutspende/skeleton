@@ -27,6 +27,7 @@ const (
 	msgMarshalAnalysisResultsFailed                        = "marshal analysis results failed"
 	msgInvalidReagentType                                  = "invalid reagent type"
 	msgCreateAnalysisRequestsBatchFailed                   = "create analysis requests batch failed"
+	msgGetSampleCodesByOrderIDFailed                       = "get sample codes by order ID failed"
 	msgCreateSubjectsFailed                                = "create subject failed"
 	msgCreateReagentInfoFailed                             = "create analysis result reagent infos failed"
 	msgCreateWarningsFailed                                = "create warnings failed"
@@ -51,6 +52,7 @@ var (
 	ErrConvertAnalysisResultsFailed                        = errors.New(msgConvertAnalysisResultsFailed)
 	ErrMarshalAnalysisResultsFailed                        = errors.New(msgMarshalAnalysisResultsFailed)
 	ErrCreateAnalysisRequestsBatchFailed                   = errors.New(msgCreateAnalysisRequestsBatchFailed)
+	ErrGetSampleCodesByOrderIDFailed                       = errors.New(msgGetSampleCodesByOrderIDFailed)
 	ErrCreateSubjectsFailed                                = errors.New(msgCreateSubjectsFailed)
 	ErrCreateReagentInfoFailed                             = errors.New(msgCreateReagentInfoFailed)
 	ErrCreateWarningsFailed                                = errors.New(msgCreateWarningsFailed)
@@ -244,6 +246,7 @@ type AnalysisRepository interface {
 	GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string, allowResending bool) (map[string][]AnalysisRequest, error)
 	GetAnalysisRequestsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisRequestInfo, int, error)
 	GetAnalysisRequestExtraValuesByAnalysisRequestID(ctx context.Context, analysisRequestID uuid.UUID) (map[string]string, error)
+	GetSampleCodesByOrderID(ctx context.Context, orderID uuid.UUID) ([]string, error)
 	GetAnalysisResultsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisResultInfo, int, error)
 	GetAnalysisBatches(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisBatch, int, error)
 	//GetAnalysisRequestsForVisualization(ctx context.Context) (map[string][]AnalysisRequest, error)
@@ -596,6 +599,33 @@ func (r *analysisRepository) GetAnalysisRequestExtraValuesByAnalysisRequestID(ct
 
 	return extraValueMap, nil
 }
+
+func (r *analysisRepository) GetSampleCodesByOrderID(ctx context.Context, orderID uuid.UUID) ([]string, error) {
+	query := fmt.Sprintf(`SELECT DISTINCT sample_code from %s.sk_analysis_requests sar
+									INNER JOIN %s.sk_analysis_request_extra_values sarev ON sar.id = sarev.analysis_request_id
+										WHERE valid_until_time >= timezone('utc', now()) AND sarev.key = 'OrderID' and sarev.value = $1;`, r.dbSchema, r.dbSchema)
+	rows, err := r.db.QueryxContext(ctx, query, orderID)
+	if err != nil {
+		log.Error().Err(err).Msg(msgGetSampleCodesByOrderIDFailed)
+		return nil, ErrGetSampleCodesByOrderIDFailed
+	}
+	defer rows.Close()
+
+	sampleCodes := make([]string, 0)
+	for rows.Next() {
+		var sampleCode string
+		err := rows.Scan(&sampleCode)
+		if err != nil {
+			log.Error().Err(err).Msg(msgGetSampleCodesByOrderIDFailed)
+			return nil, ErrGetSampleCodesByOrderIDFailed
+		}
+
+		sampleCodes = append(sampleCodes, sampleCode)
+	}
+
+	return sampleCodes, nil
+}
+
 func (r *analysisRepository) GetAnalysisResultsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisResultInfo, int, error) {
 	preparedValues := map[string]interface{}{
 		"instrument_id": instrumentID,
@@ -2132,7 +2162,7 @@ func (r *analysisRepository) DeleteOldAnalysisRequests(ctx context.Context, clea
 
 	txR := *r
 	txR.db = tx
-	query := fmt.Sprintf(`SELECT id FROM %s.sk_analysis_requests WHERE valid_until_time < (current_date - ($1 ||' DAY')::INTERVAL) AND is_processed LIMIT $2;`, r.dbSchema)
+	query := fmt.Sprintf(`SELECT id, sample_code FROM %s.sk_analysis_requests WHERE valid_until_time < (current_date - ($1 ||' DAY')::INTERVAL) AND is_processed LIMIT $2;`, r.dbSchema)
 	rows, err := txR.db.QueryxContext(ctx, query, cleanupDays, limit)
 	if err != nil {
 		if !r.isExternalTx {
@@ -2142,11 +2172,12 @@ func (r *analysisRepository) DeleteOldAnalysisRequests(ctx context.Context, clea
 		return 0, err
 	}
 	defer rows.Close()
-
+	sampleCodes := make([]string, 0)
 	analysisRequestIDs := make([]uuid.UUID, 0)
 	for rows.Next() {
 		var id uuid.UUID
-		err = rows.Scan(&id)
+		var sampleCode string
+		err = rows.Scan(&id, &sampleCode)
 		if err != nil {
 			if !r.isExternalTx {
 				_ = tx.Rollback()
@@ -2155,6 +2186,7 @@ func (r *analysisRepository) DeleteOldAnalysisRequests(ctx context.Context, clea
 			return 0, err
 		}
 		analysisRequestIDs = append(analysisRequestIDs, id)
+		sampleCodes = append(sampleCodes, sampleCode)
 	}
 	if len(analysisRequestIDs) == 0 {
 		return 0, err
@@ -2169,12 +2201,24 @@ func (r *analysisRepository) DeleteOldAnalysisRequests(ctx context.Context, clea
 	}
 	err = txR.deleteSubjectInfosByAnalysisRequestIDs(ctx, analysisRequestIDs)
 	if err != nil {
-		_ = tx.Rollback()
+		if !r.isExternalTx {
+			_ = tx.Rollback()
+		}
 		return 0, err
 	}
 	err = txR.deleteAnalysisRequestInstrumentTransmissionsByAnalysisRequestIDs(ctx, analysisRequestIDs)
 	if err != nil {
-		_ = tx.Rollback()
+		if !r.isExternalTx {
+			_ = tx.Rollback()
+		}
+		return 0, err
+	}
+
+	err = txR.deleteAppliedSortingRuleTargetsBySampleCodes(ctx, sampleCodes)
+	if err != nil {
+		if !r.isExternalTx {
+			_ = tx.Rollback()
+		}
 		return 0, err
 	}
 
@@ -2251,6 +2295,26 @@ func (r *analysisRepository) deleteAnalysisRequestInstrumentTransmissionsByAnaly
 		_, err := r.db.ExecContext(ctx, query, args...)
 		if err != nil {
 			log.Error().Err(err).Msg("delete analysis request instrument transmissions by analysis request IDs failed")
+			return err
+		}
+
+		return nil
+	})
+
+	return err
+}
+
+func (r *analysisRepository) deleteAppliedSortingRuleTargetsBySampleCodes(ctx context.Context, sampleCodes []string) error {
+	if len(sampleCodes) == 0 {
+		return nil
+	}
+	err := utils.Partition(len(sampleCodes), maxParams, func(low int, high int) error {
+		query := fmt.Sprintf("DELETE FROM %s.sk_applied_sorting_rule_targets WHERE sample_code IN (?);", r.dbSchema)
+		query, args, _ := sqlx.In(query, sampleCodes[low:high])
+		query = r.db.Rebind(query)
+		_, err := r.db.ExecContext(ctx, query, args...)
+		if err != nil {
+			log.Error().Err(err).Msg("delete applied sorting rule targets by sample codes failed")
 			return err
 		}
 

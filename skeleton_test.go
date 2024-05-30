@@ -126,7 +126,11 @@ func TestSubmitAnalysisRequestsParallel(t *testing.T) {
 	deaClientMock := &deaClientMock{}
 
 	analysisService := NewAnalysisService(analysisRepository, deaClientMock, cerberusClientMock, skeletonManager)
-	instrumentService := NewInstrumentService(&configuration, instrumentRepository, skeletonManager, NewInstrumentCache(), cerberusClientMock)
+	conditionRepository := NewConditionRepository(dbConn, schemaName)
+	conditionService := NewConditionService(conditionRepository)
+	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
+	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
+	instrumentService := NewInstrumentService(&configuration, sortingRuleService, instrumentRepository, skeletonManager, NewInstrumentCache(), cerberusClientMock)
 	consoleLogService := service.NewConsoleLogService(consoleLogRepository, nil)
 
 	ginEngine := gin.New()
@@ -135,7 +139,7 @@ func TestSubmitAnalysisRequestsParallel(t *testing.T) {
 
 	api := newAPI(ginEngine, &configuration, &authManager, analysisService, instrumentService, consoleLogService, nil)
 
-	skeletonInstance, _ := NewSkeleton(ctx, serviceName, []string{}, sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, skeletonManager, cerberusClientMock, deaClientMock, configuration)
+	skeletonInstance, _ := NewSkeleton(ctx, serviceName, []string{}, sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, sortingRuleService, skeletonManager, cerberusClientMock, deaClientMock, configuration)
 
 	go func() {
 		_ = skeletonInstance.Start()
@@ -237,7 +241,11 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 	deaClientMock := &deaClientMock{}
 
 	analysisService := NewAnalysisService(analysisRepository, deaClientMock, cerberusClientMock, skeletonManager)
-	instrumentService := NewInstrumentService(&configuration, instrumentRepository, skeletonManager, NewInstrumentCache(), cerberusClientMock)
+	conditionRepository := NewConditionRepository(dbConn, schemaName)
+	conditionService := NewConditionService(conditionRepository)
+	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
+	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
+	instrumentService := NewInstrumentService(&configuration, sortingRuleService, instrumentRepository, skeletonManager, NewInstrumentCache(), cerberusClientMock)
 	consoleLogService := service.NewConsoleLogService(consoleLogRepository, nil)
 
 	responseRecorder := &httptest.ResponseRecorder{}
@@ -245,7 +253,7 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 
 	api := newAPI(ginEngine, &configuration, &authManager, analysisService, instrumentService, consoleLogService, nil)
 
-	skeletonInstance, _ := NewSkeleton(ctx, serviceName, []string{}, sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, skeletonManager, cerberusClientMock, deaClientMock, configuration)
+	skeletonInstance, _ := NewSkeleton(ctx, serviceName, []string{}, sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, sortingRuleService, skeletonManager, cerberusClientMock, deaClientMock, configuration)
 
 	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description)
 		VALUES ('abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
@@ -352,12 +360,16 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 	deaClientMock := &deaClientMock{}
 
 	analysisService := NewAnalysisService(analysisRepository, deaClientMock, cerberusClientMock, skeletonManager)
-	instrumentService := NewInstrumentService(&configuration, instrumentRepository, skeletonManager, NewInstrumentCache(), cerberusClientMock)
+	conditionRepository := NewConditionRepository(dbConn, schemaName)
+	conditionService := NewConditionService(conditionRepository)
+	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
+	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
+	instrumentService := NewInstrumentService(&configuration, sortingRuleService, instrumentRepository, skeletonManager, NewInstrumentCache(), cerberusClientMock)
 	consoleLogService := service.NewConsoleLogService(consoleLogRepository, nil)
 
 	api := NewAPI(&configuration, &authManager, analysisService, instrumentService, consoleLogService, nil)
 
-	skeletonInstance, _ := NewSkeleton(ctx, serviceName, []string{}, sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, skeletonManager, cerberusClientMock, deaClientMock, configuration)
+	skeletonInstance, _ := NewSkeleton(ctx, serviceName, []string{}, sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, sortingRuleService, skeletonManager, cerberusClientMock, deaClientMock, configuration)
 
 	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('9bec3063-435d-490f-bec0-88a6633ef4c2', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
 
@@ -567,17 +579,20 @@ func TestAnalysisResultsReprocessing(t *testing.T) {
 	deaClientMock := &deaClientMock{}
 
 	analysisServiceMock := &analysisServiceMock{}
-
-	instrumentService := NewInstrumentService(&configuration, instrumentRepository, skeletonManager, NewInstrumentCache(), cerberusClientMock)
+	conditionRepository := NewConditionRepository(dbConn, schemaName)
+	conditionService := NewConditionService(conditionRepository)
+	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
+	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
+	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
+	instrumentService := NewInstrumentService(&configuration, sortingRuleService, instrumentRepository, skeletonManager, NewInstrumentCache(), cerberusClientMock)
 	consoleLogService := service.NewConsoleLogService(consoleLogRepository, nil)
-
 	ginEngine := gin.New()
 
 	ginEngine.Use(timeout.Timeout(timeout.WithTimeout(5*time.Second), timeout.WithErrorHttpCode(http.StatusRequestTimeout)))
 
 	api := newAPI(ginEngine, &configuration, &authManager, analysisServiceMock, instrumentService, consoleLogService, nil)
 
-	skeletonInstance, _ := NewSkeleton(ctx, serviceName, []string{}, sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepositoryMock, analysisServiceMock, instrumentService, consoleLogService, skeletonManager, cerberusClientMock, deaClientMock, configuration)
+	skeletonInstance, _ := NewSkeleton(ctx, serviceName, []string{}, sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepositoryMock, analysisServiceMock, instrumentService, consoleLogService, sortingRuleService, skeletonManager, cerberusClientMock, deaClientMock, configuration)
 
 	go func() {
 		_ = skeletonInstance.Start()
@@ -791,16 +806,20 @@ func (m *analysisRepositoryMock) DeleteOldCerberusQueueItems(ctx context.Context
 	return 0, nil
 }
 
-func (m *analysisRepositoryMock) DeleteOldAnalysisRequests(ctx context.Context, limit int) (int64, error) {
+func (m *analysisRepositoryMock) DeleteOldAnalysisRequests(ctx context.Context, cleanupDays, limit int) (int64, error) {
 	return 0, nil
 }
 
-func (m *analysisRepositoryMock) DeleteOldAnalysisResults(ctx context.Context, limit int) (int64, error) {
+func (m *analysisRepositoryMock) DeleteOldAnalysisResults(ctx context.Context, cleanupDays, limit int) (int64, error) {
 	return 0, nil
 }
 
 func (m *analysisRepositoryMock) CreateAnalysisRequestExtraValues(ctx context.Context, extraValuesByAnalysisRequestIDs map[uuid.UUID][]ExtraValue) error {
 	return nil
+}
+
+func (m *analysisRepositoryMock) GetSampleCodesByOrderID(ctx context.Context, orderID uuid.UUID) ([]string, error) {
+	return nil, nil
 }
 
 func (m *analysisRepositoryMock) GetUnprocessedAnalysisResultIDs(ctx context.Context) ([]uuid.UUID, error) {
