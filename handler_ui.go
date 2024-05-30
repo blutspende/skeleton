@@ -1059,9 +1059,13 @@ func convertConditionToTO(condition Condition) conditionTO {
 		to.Operand2 = &operand2TO
 	}
 	if condition.SubCondition1 != nil {
+		subCondition1 := convertConditionToTO(*condition.SubCondition1)
+		to.SubCondition1 = &subCondition1
 		to.SubCondition1ID = &condition.SubCondition1.ID
 	}
 	if condition.SubCondition2 != nil {
+		subCondition2 := convertConditionToTO(*condition.SubCondition2)
+		to.SubCondition2 = &subCondition2
 		to.SubCondition2ID = &condition.SubCondition2.ID
 	}
 
