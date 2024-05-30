@@ -211,8 +211,7 @@ func (r *conditionRepository) GetConditionOperandsMap(ctx context.Context) (map[
 
 func (r *conditionRepository) Update(ctx context.Context, conditionOperand ConditionOperand) error {
 	query := fmt.Sprintf(`UPDATE %s.sk_condition_operands SET
-				name = :name, type = :type, constant_value =:constant_value, extra_value_key = :extra_value_key,
-				analyte_id = :analyte_id, modified_at = timezone('utc', now()) WHERE id = :id;`, r.dbSchema)
+				name = :name, type = :type, constant_value =:constant_value, extra_value_key = :extra_value_key, modified_at = timezone('utc', now()) WHERE id = :id;`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, convertConditionOperandToDAO(conditionOperand))
 	if err != nil {
 		log.Error().Err(err).Msg(msgUpdateConditionOperandFailed)
