@@ -51,8 +51,12 @@ func TestRegisterCreatedInstrument(t *testing.T) {
 	ctx, cancelSkeleton := context.WithCancel(context.Background())
 
 	defer cancelSkeleton()
-
-	instrumentService := NewInstrumentService(&config, instrumentRepository, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
+	conditionRepository := NewConditionRepository(dbConn, schemaName)
+	conditionService := NewConditionService(conditionRepository)
+	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
+	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
+	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
+	instrumentService := NewInstrumentService(&config, sortingRuleService, instrumentRepository, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
 
 	_, _ = instrumentService.CreateInstrument(context.Background(), Instrument{
 		ID:             uuid.MustParse("68f34e1d-1faa-4101-9e79-a743b420ab4e"),
@@ -107,7 +111,12 @@ func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
 
 	defer cancel()
 
-	instrumentService := NewInstrumentService(&configuration, instrumentRepository, NewSkeletonManager(ctxWithCancel), NewInstrumentCache(), cerberusClientMock)
+	conditionRepository := NewConditionRepository(dbConn, schemaName)
+	conditionService := NewConditionService(conditionRepository)
+	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
+	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
+	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
+	instrumentService := NewInstrumentService(&configuration, sortingRuleService, instrumentRepository, NewSkeletonManager(ctxWithCancel), NewInstrumentCache(), cerberusClientMock)
 
 	clientPort := 22
 	instrumentWithFtp := Instrument{
@@ -241,8 +250,12 @@ func TestFtpConfigConnectionModeChange(t *testing.T) {
 	ctxWithCancel, cancel := context.WithCancel(context.Background())
 
 	defer cancel()
-
-	instrumentService := NewInstrumentService(&configuration, instrumentRepository, NewSkeletonManager(ctxWithCancel), NewInstrumentCache(), cerberusClientMock)
+	conditionRepository := NewConditionRepository(dbConn, schemaName)
+	conditionService := NewConditionService(conditionRepository)
+	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
+	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
+	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
+	instrumentService := NewInstrumentService(&configuration, sortingRuleService, instrumentRepository, NewSkeletonManager(ctxWithCancel), NewInstrumentCache(), cerberusClientMock)
 
 	clientPort := 22
 	ctx := context.Background()
@@ -369,8 +382,12 @@ func TestUpdateInstrument(t *testing.T) {
 	ctxWithCancel, cancel := context.WithCancel(context.Background())
 
 	defer cancel()
-
-	instrumentService := NewInstrumentService(&configuration, instrumentRepository, NewSkeletonManager(ctxWithCancel), NewInstrumentCache(), cerberusClientMock)
+	conditionRepository := NewConditionRepository(dbConn, schemaName)
+	conditionService := NewConditionService(conditionRepository)
+	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
+	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
+	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
+	instrumentService := NewInstrumentService(&configuration, sortingRuleService, instrumentRepository, NewSkeletonManager(ctxWithCancel), NewInstrumentCache(), cerberusClientMock)
 
 	var protocolID uuid.UUID
 	err := dbConn.QueryRowx(`INSERT INTO instrument_test.sk_supported_protocols (name, description) VALUES('Test Protocol', 'Test Protocol Description') RETURNING id;`).Scan(&protocolID)
@@ -641,14 +658,56 @@ func TestHidePassword(t *testing.T) {
 			return nil
 		},
 	}
-	mockInstrumentRepo := &instrumentRepositoryMock{db.CreateDbConnector(&sqlx.DB{})}
+	sqlConn, _ := sqlx.Connect("postgres", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
+	schemaName := "instrument_test"
+	_, _ = sqlConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
+	_, _ = sqlConn.Exec(fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schemaName))
+	_, _ = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
+	skeletonMigrator := migrator.NewSkeletonMigrator()
+	_ = skeletonMigrator.Run(context.Background(), sqlConn, schemaName)
+	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
+	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_protocol_settings (id, protocol_id, key, description, type) VALUES ('1f663361-3f2d-4c43-8cf6-65cec3fc88ab', 'abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'key1', '', 'string');`, schemaName))
+	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_protocol_settings (id, protocol_id, key, description, type) VALUES ('c81c77cf-f17a-402d-a44b-a0194eb00a29', 'abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'key2', '', 'password');`, schemaName))
 
 	ctx, cancel := context.WithCancel(context.Background())
 
 	defer cancel()
-
-	instrumentService := NewInstrumentService(&configuration, mockInstrumentRepo, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
-	instrument, err := instrumentService.GetInstrumentByID(context.TODO(), mockInstrumentRepo.db, uuid.MustParse("68f34e1d-1faa-4101-9e79-a743b420ab4e"), false)
+	dbConn := db.CreateDbConnector(sqlConn)
+	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
+	conditionRepository := NewConditionRepository(dbConn, schemaName)
+	conditionService := NewConditionService(conditionRepository)
+	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
+	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
+	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
+	instrumentService := NewInstrumentService(&configuration, sortingRuleService, instrumentRepository, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
+	instr := Instrument{
+		Name:           "test",
+		ProtocolID:     uuid.MustParse("abb539a3-286f-4c15-a7b7-2e9adf6eab91"),
+		ProtocolName:   "Test Protocol",
+		Enabled:        true,
+		ConnectionMode: "TCP_MIXED",
+		ResultMode:     "SIMULATION",
+		Status:         "ONLINE",
+		Type:           Analyzer,
+		FileEncoding:   "UTF8",
+		Timezone:       "Europe/Budapest",
+		Hostname:       "192.168.1.20",
+	}
+	instr.ID, _ = instrumentService.CreateInstrument(ctx, instr)
+	instr.Settings = []InstrumentSetting{
+		{
+			ID:                uuid.Nil,
+			ProtocolSettingID: uuid.MustParse("1f663361-3f2d-4c43-8cf6-65cec3fc88ab"),
+			Value:             "SomeSetting",
+		},
+		{
+			ID:                uuid.Nil,
+			ProtocolSettingID: uuid.MustParse("c81c77cf-f17a-402d-a44b-a0194eb00a29"),
+			Value:             "ThisIsMyPassword",
+		},
+	}
+	_ = instrumentService.UpdateInstrument(ctx, instr)
+	instrument, err := instrumentService.GetInstrumentByID(context.TODO(), dbConn, instr.ID, false)
 	assert.Nil(t, err)
 	assert.Equal(t, 2, len(instrument.Settings))
 	assert.Equal(t, "ThisIsMyPassword", instrument.Settings[1].Value)

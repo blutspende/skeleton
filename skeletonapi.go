@@ -2,13 +2,12 @@ package skeleton
 
 import (
 	"context"
-	"net/http"
-
 	"github.com/blutspende/logcom-api/logcom"
 	"github.com/blutspende/skeleton/consolelog/repository"
 	"github.com/blutspende/skeleton/consolelog/service"
 	"github.com/blutspende/skeleton/server"
 	"github.com/gin-gonic/gin"
+	"net/http"
 
 	config2 "github.com/blutspende/skeleton/config"
 	"github.com/blutspende/skeleton/db"
@@ -68,7 +67,11 @@ type SkeletonAPI interface {
 	// SaveAnalysisRequestsInstrumentTransmissions - persists in the database that an outgoing transmission was sent
 	// related to the provided analysis request IDs for the instrument with the provided ID
 	SaveAnalysisRequestsInstrumentTransmissions(ctx context.Context, analysisRequestIDs []uuid.UUID, instrumentID uuid.UUID) error
-
+	// GetSortingTarget - returns where a sample should be sorted by a sorter instrument, based on sample code and the current
+	// programme running on the instrument. Error occurs if no suitable sorting target is found
+	GetSortingTarget(ctx context.Context, instrumentIP string, sampleCode string, programme string) (string, error)
+	// MarkSortingTargetAsApplied - should be called after sorting instructions were successfully passed from driver to instrument
+	MarkSortingTargetAsApplied(ctx context.Context, instrumentIP, sampleCode, programme, target string) error
 	// SubmitAnalysisResult - Submit result to Skeleton and Cerberus,
 	// By default this function batches the transmissions by collecting them and
 	// use the batch-endpoint of cerberus for performance reasons
@@ -133,7 +136,11 @@ func New(ctx context.Context, serviceName string, requestedExtraValueKeys []stri
 	instrumentRepository := NewInstrumentRepository(dbConn, dbSchema)
 	consoleLogRepository := repository.NewConsoleLogRepository(500)
 	analysisService := NewAnalysisService(analysisRepository, deaClient, cerberusClient, manager)
-	instrumentService := NewInstrumentService(&config, instrumentRepository, manager, instrumentCache, cerberusClient)
+	conditionRepository := NewConditionRepository(dbConn, dbSchema)
+	conditionService := NewConditionService(conditionRepository)
+	sortingRuleRepository := NewSortingRuleRepository(dbConn, dbSchema)
+	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
+	instrumentService := NewInstrumentService(&config, sortingRuleService, instrumentRepository, manager, instrumentCache, cerberusClient)
 	consoleLogSSEServer := server.NewConsoleLogSSEServer(service.NewConsoleLogSSEClientListener())
 	consoleLogService := service.NewConsoleLogService(consoleLogRepository, consoleLogSSEServer)
 	api := NewAPI(&config, authManager, analysisService, instrumentService, consoleLogService, consoleLogSSEServer)
@@ -149,5 +156,5 @@ func New(ctx context.Context, serviceName string, requestedExtraValueKeys []stri
 		},
 	})
 
-	return NewSkeleton(ctx, serviceName, requestedExtraValueKeys, sqlConn, dbSchema, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, manager, cerberusClient, deaClient, config)
+	return NewSkeleton(ctx, serviceName, requestedExtraValueKeys, sqlConn, dbSchema, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, sortingRuleService, manager, cerberusClient, deaClient, config)
 }
