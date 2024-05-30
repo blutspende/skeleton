@@ -159,6 +159,7 @@ type Instrument struct {
 	ClientPort         *int
 	AnalyteMappings    []AnalyteMapping
 	RequestMappings    []RequestMapping
+	SortingRules       []SortingRule
 	Settings           []InstrumentSetting
 	CreatedAt          time.Time
 	ModifiedAt         *time.Time
