@@ -20,6 +20,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/proullon/ramsql v0.0.0-20220719091513-bf3c20043516
 	github.com/rs/zerolog v1.32.0
+	github.com/shopspring/decimal v1.2.0
 	github.com/stretchr/testify v1.9.0
 	github.com/vearne/gin-timeout v0.1.7
 )
