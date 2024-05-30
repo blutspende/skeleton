@@ -417,6 +417,18 @@ const (
 	Sorter   InstrumentType = "SORTER"
 )
 
+type SortingRule struct {
+	ID           uuid.UUID
+	InstrumentID uuid.UUID
+	Condition    *Condition
+	Target       string
+	Programme    *string
+	Priority     int
+	CreatedAt    time.Time
+	ModifiedAt   *time.Time
+	DeletedAt    *time.Time
+}
+
 type ConditionError struct {
 	ConditionNodeIndex int
 	Error              error
