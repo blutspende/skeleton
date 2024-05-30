@@ -66,6 +66,7 @@ type SkeletonAPI interface {
 	GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string, allowResending bool) (map[string][]AnalysisRequest, error)
 	GetAnalysisRequestExtraValues(ctx context.Context, analysisRequestID uuid.UUID) (map[string]string, error)
 	GetRequestMappingsByInstrumentID(ctx context.Context, instrumentID uuid.UUID) ([]RequestMapping, error)
+	GetSortingTarget(ctx context.Context, instrumentIP string, sampleCode string, programme string) (string, error)
 
 	SaveAnalysisRequestsInstrumentTransmissions(ctx context.Context, analysisRequestIDs []uuid.UUID, instrumentID uuid.UUID) error
 
@@ -149,6 +150,10 @@ func New(ctx context.Context, serviceName string, requestedExtraValueKeys []stri
 	instrumentRepository := NewInstrumentRepository(dbConn, dbSchema)
 	consoleLogRepository := repository.NewConsoleLogRepository(500)
 	analysisService := NewAnalysisService(analysisRepository, deaClient, cerberusClient, manager)
+	conditionRepository := NewConditionRepository(dbConn, dbSchema)
+	conditionService := NewConditionService(conditionRepository)
+	sortingRuleRepository := NewSortingRuleRepository(dbConn, dbSchema)
+	sortingRuleService := NewSortingRuleService(conditionService, sortingRuleRepository)
 	instrumentService := NewInstrumentService(&config, instrumentRepository, manager, instrumentCache, cerberusClient)
 	consoleLogSSEServer := server.NewConsoleLogSSEServer(service.NewConsoleLogSSEClientListener())
 	consoleLogService := service.NewConsoleLogService(consoleLogRepository, consoleLogSSEServer)
@@ -165,5 +170,5 @@ func New(ctx context.Context, serviceName string, requestedExtraValueKeys []stri
 		},
 	})
 
-	return NewSkeleton(ctx, serviceName, requestedExtraValueKeys, sqlConn, dbSchema, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, manager, cerberusClient, deaClient, config)
+	return NewSkeleton(ctx, serviceName, requestedExtraValueKeys, sqlConn, dbSchema, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, sortingRuleService, manager, cerberusClient, deaClient, config)
 }
