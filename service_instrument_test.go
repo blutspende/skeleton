@@ -51,8 +51,11 @@ func TestRegisterCreatedInstrument(t *testing.T) {
 	ctx, cancelSkeleton := context.WithCancel(context.Background())
 
 	defer cancelSkeleton()
-
-	instrumentService := NewInstrumentService(&config, instrumentRepository, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
+	conditionRepository := NewConditionRepository(dbConn, schemaName)
+	conditionService := NewConditionService(conditionRepository)
+	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
+	sortingRuleService := NewSortingRuleService(conditionService, sortingRuleRepository)
+	instrumentService := NewInstrumentService(&config, sortingRuleService, instrumentRepository, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
 
 	_, _ = instrumentService.CreateInstrument(context.Background(), Instrument{
 		ID:             uuid.MustParse("68f34e1d-1faa-4101-9e79-a743b420ab4e"),
@@ -106,8 +109,11 @@ func TestUpdateInstrument(t *testing.T) {
 	ctxWithCancel, cancel := context.WithCancel(context.Background())
 
 	defer cancel()
-
-	instrumentService := NewInstrumentService(&configuration, instrumentRepository, NewSkeletonManager(ctxWithCancel), NewInstrumentCache(), cerberusClientMock)
+	conditionRepository := NewConditionRepository(dbConn, schemaName)
+	conditionService := NewConditionService(conditionRepository)
+	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
+	sortingRuleService := NewSortingRuleService(conditionService, sortingRuleRepository)
+	instrumentService := NewInstrumentService(&configuration, sortingRuleService, instrumentRepository, NewSkeletonManager(ctxWithCancel), NewInstrumentCache(), cerberusClientMock)
 
 	var protocolID uuid.UUID
 	err := dbConn.QueryRowx(`INSERT INTO instrument_test.sk_supported_protocols (name, description) VALUES('Test Protocol', 'Test Protocol Description') RETURNING id;`).Scan(&protocolID)
@@ -365,6 +371,7 @@ func TestUpdateInstrument(t *testing.T) {
 }
 
 func TestHidePassword(t *testing.T) {
+
 	configuration := config.Configuration{
 		APIPort:                          5000,
 		Authorization:                    false,
@@ -378,14 +385,55 @@ func TestHidePassword(t *testing.T) {
 			return nil
 		},
 	}
-	mockInstrumentRepo := &instrumentRepositoryMock{db.CreateDbConnector(&sqlx.DB{})}
+	sqlConn, _ := sqlx.Connect("postgres", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
+	schemaName := "instrument_test"
+	_, _ = sqlConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
+	_, _ = sqlConn.Exec(fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schemaName))
+	_, _ = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
+	skeletonMigrator := migrator.NewSkeletonMigrator()
+	_ = skeletonMigrator.Run(context.Background(), sqlConn, schemaName)
+	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
+	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_protocol_settings (id, protocol_id, key, description, type) VALUES ('1f663361-3f2d-4c43-8cf6-65cec3fc88ab', 'abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'key1', '', 'string');`, schemaName))
+	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_protocol_settings (id, protocol_id, key, description, type) VALUES ('c81c77cf-f17a-402d-a44b-a0194eb00a29', 'abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'key2', '', 'password');`, schemaName))
 
 	ctx, cancel := context.WithCancel(context.Background())
 
 	defer cancel()
-
-	instrumentService := NewInstrumentService(&configuration, mockInstrumentRepo, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
-	instrument, err := instrumentService.GetInstrumentByID(context.TODO(), mockInstrumentRepo.db, uuid.MustParse("68f34e1d-1faa-4101-9e79-a743b420ab4e"), false)
+	dbConn := db.CreateDbConnector(sqlConn)
+	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
+	conditionRepository := NewConditionRepository(dbConn, schemaName)
+	conditionService := NewConditionService(conditionRepository)
+	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
+	sortingRuleService := NewSortingRuleService(conditionService, sortingRuleRepository)
+	instrumentService := NewInstrumentService(&configuration, sortingRuleService, instrumentRepository, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
+	instr := Instrument{
+		Name:           "test",
+		ProtocolID:     uuid.MustParse("abb539a3-286f-4c15-a7b7-2e9adf6eab91"),
+		ProtocolName:   "Test Protocol",
+		Enabled:        true,
+		ConnectionMode: "TCP_MIXED",
+		ResultMode:     "SIMULATION",
+		Status:         "ONLINE",
+		Type:           Analyzer,
+		FileEncoding:   "UTF8",
+		Timezone:       "Europe/Budapest",
+		Hostname:       "192.168.1.20",
+	}
+	instr.ID, _ = instrumentService.CreateInstrument(ctx, instr)
+	instr.Settings = []InstrumentSetting{
+		{
+			ID:                uuid.Nil,
+			ProtocolSettingID: uuid.MustParse("1f663361-3f2d-4c43-8cf6-65cec3fc88ab"),
+			Value:             "SomeSetting",
+		},
+		{
+			ID:                uuid.Nil,
+			ProtocolSettingID: uuid.MustParse("c81c77cf-f17a-402d-a44b-a0194eb00a29"),
+			Value:             "ThisIsMyPassword",
+		},
+	}
+	_ = instrumentService.UpdateInstrument(ctx, instr)
+	instrument, err := instrumentService.GetInstrumentByID(context.TODO(), dbConn, instr.ID, false)
 	assert.Nil(t, err)
 	assert.Equal(t, 2, len(instrument.Settings))
 	assert.Equal(t, "ThisIsMyPassword", instrument.Settings[1].Value)
@@ -394,200 +442,4 @@ func TestHidePassword(t *testing.T) {
 	assert.Equal(t, "SomeSetting", instrument.Settings[0].Value)
 	assert.Equal(t, uuid.MustParse("1f663361-3f2d-4c43-8cf6-65cec3fc88ab"), instrument.Settings[0].ProtocolSettingID)
 	assert.Equal(t, "", instrument.Settings[1].Value)
-}
-
-type instrumentRepositoryMock struct {
-	db db.DbConnector
-}
-
-func (r *instrumentRepositoryMock) CreateInstrument(ctx context.Context, instrument Instrument) (uuid.UUID, error) {
-	return uuid.Nil, nil
-}
-func (r *instrumentRepositoryMock) GetInstruments(ctx context.Context) ([]Instrument, error) {
-	return make([]Instrument, 0), nil
-}
-func (r *instrumentRepositoryMock) GetInstrumentChanges(ctx context.Context, timeFrom time.Time) ([]Instrument, error) {
-	return make([]Instrument, 0), nil
-}
-func (r *instrumentRepositoryMock) GetInstrumentByID(ctx context.Context, id uuid.UUID) (Instrument, error) {
-	return Instrument{
-		ID:             uuid.MustParse("68f34e1d-1faa-4101-9e79-a743b420ab4e"),
-		Name:           "test",
-		ProtocolID:     uuid.MustParse("abb539a3-286f-4c15-a7b7-2e9adf6eab91"),
-		ProtocolName:   "Test Protocol",
-		Enabled:        true,
-		ConnectionMode: "TCP_MIXED",
-		ResultMode:     "SIMULATION",
-		Status:         "ONLINE",
-		FileEncoding:   "UTF8",
-		Timezone:       "Europe/Budapest",
-		Hostname:       "192.168.1.20",
-		Settings: []InstrumentSetting{
-			{
-				ID:                uuid.Nil,
-				ProtocolSettingID: uuid.MustParse("1f663361-3f2d-4c43-8cf6-65cec3fc88ab"),
-				Value:             "SomeSetting",
-			},
-			{
-				ID:                uuid.Nil,
-				ProtocolSettingID: uuid.MustParse("c81c77cf-f17a-402d-a44b-a0194eb00a29"),
-				Value:             "ThisIsMyPassword",
-			},
-		},
-	}, nil
-}
-func (r *instrumentRepositoryMock) GetInstrumentByIP(ctx context.Context, ip string) (Instrument, error) {
-	return Instrument{
-		ID:             uuid.MustParse("68f34e1d-1faa-4101-9e79-a743b420ab4e"),
-		Name:           "test",
-		ProtocolID:     uuid.MustParse("abb539a3-286f-4c15-a7b7-2e9adf6eab91"),
-		ProtocolName:   "Test Protocol",
-		Enabled:        true,
-		ConnectionMode: "TCP_MIXED",
-		ResultMode:     "SIMULATION",
-		Status:         "ONLINE",
-		FileEncoding:   "UTF8",
-		Timezone:       "Europe/Budapest",
-		Hostname:       "192.168.1.20",
-		Settings: []InstrumentSetting{
-			{
-				ID:                uuid.Nil,
-				ProtocolSettingID: uuid.MustParse("1f663361-3f2d-4c43-8cf6-65cec3fc88ab"),
-				Value:             "SomeSetting",
-			},
-			{
-				ID:                uuid.Nil,
-				ProtocolSettingID: uuid.MustParse("c81c77cf-f17a-402d-a44b-a0194eb00a29"),
-				Value:             "ThisIsMyPassword",
-			},
-		},
-	}, nil
-}
-func (r *instrumentRepositoryMock) UpdateInstrument(ctx context.Context, instrument Instrument) error {
-	return nil
-}
-func (r *instrumentRepositoryMock) DeleteInstrument(ctx context.Context, id uuid.UUID) error {
-	return nil
-}
-func (r *instrumentRepositoryMock) MarkAsSentToCerberus(ctx context.Context, id uuid.UUID) error {
-	return nil
-}
-func (r *instrumentRepositoryMock) GetUnsentToCerberus(ctx context.Context) ([]uuid.UUID, error) {
-	return make([]uuid.UUID, 0), nil
-}
-func (r *instrumentRepositoryMock) GetProtocolByID(ctx context.Context, id uuid.UUID) (SupportedProtocol, error) {
-	return SupportedProtocol{}, nil
-}
-func (r *instrumentRepositoryMock) GetSupportedProtocols(ctx context.Context) ([]SupportedProtocol, error) {
-	return make([]SupportedProtocol, 0), nil
-}
-func (r *instrumentRepositoryMock) UpsertSupportedProtocol(ctx context.Context, id uuid.UUID, name string, description string) error {
-	return nil
-}
-func (r *instrumentRepositoryMock) GetProtocolAbilities(ctx context.Context, protocolID uuid.UUID) ([]ProtocolAbility, error) {
-	return make([]ProtocolAbility, 0), nil
-}
-func (r *instrumentRepositoryMock) UpsertProtocolAbilities(ctx context.Context, protocolID uuid.UUID, protocolAbilities []ProtocolAbility) error {
-	return nil
-}
-func (r *instrumentRepositoryMock) GetProtocolSettings(ctx context.Context, protocolID uuid.UUID) ([]ProtocolSetting, error) {
-	return []ProtocolSetting{
-		{
-			ID:   uuid.MustParse("1f663361-3f2d-4c43-8cf6-65cec3fc88ab"),
-			Key:  "Some setting",
-			Type: String,
-		},
-		{
-			ID:   uuid.MustParse("c81c77cf-f17a-402d-a44b-a0194eb00a29"),
-			Key:  "Password",
-			Type: Password,
-		},
-	}, nil
-}
-func (r *instrumentRepositoryMock) UpsertProtocolSetting(ctx context.Context, protocolID uuid.UUID, protocolSetting ProtocolSetting) error {
-	return nil
-}
-func (r *instrumentRepositoryMock) DeleteProtocolSettings(ctx context.Context, protocolSettingIDs []uuid.UUID) error {
-	return nil
-}
-func (r *instrumentRepositoryMock) UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error {
-	return nil
-}
-func (r *instrumentRepositoryMock) CreateAnalyteMappings(ctx context.Context, analyteMappings []AnalyteMapping, instrumentID uuid.UUID) ([]uuid.UUID, error) {
-	return make([]uuid.UUID, 0), nil
-}
-func (r *instrumentRepositoryMock) GetAnalyteMappings(ctx context.Context, instrumentIDs []uuid.UUID) (map[uuid.UUID][]AnalyteMapping, error) {
-	return make(map[uuid.UUID][]AnalyteMapping), nil
-}
-func (r *instrumentRepositoryMock) UpdateAnalyteMapping(ctx context.Context, analyteMapping AnalyteMapping) error {
-	return nil
-}
-func (r *instrumentRepositoryMock) DeleteAnalyteMappings(ctx context.Context, ids []uuid.UUID) error {
-	return nil
-}
-func (r *instrumentRepositoryMock) CreateChannelMappings(ctx context.Context, channelMappings []ChannelMapping, analyteMappingID uuid.UUID) ([]uuid.UUID, error) {
-	return make([]uuid.UUID, 0), nil
-}
-func (r *instrumentRepositoryMock) GetChannelMappings(ctx context.Context, analyteMappingIDs []uuid.UUID) (map[uuid.UUID][]ChannelMapping, error) {
-	return make(map[uuid.UUID][]ChannelMapping), nil
-}
-func (r *instrumentRepositoryMock) UpdateChannelMapping(ctx context.Context, channelMapping ChannelMapping) error {
-	return nil
-}
-func (r *instrumentRepositoryMock) DeleteChannelMappings(ctx context.Context, ids []uuid.UUID) error {
-	return nil
-}
-func (r *instrumentRepositoryMock) CreateResultMappings(ctx context.Context, resultMappings []ResultMapping, analyteMappingID uuid.UUID) ([]uuid.UUID, error) {
-	return make([]uuid.UUID, 0), nil
-}
-func (r *instrumentRepositoryMock) GetResultMappings(ctx context.Context, analyteMappingIDs []uuid.UUID) (map[uuid.UUID][]ResultMapping, error) {
-	return make(map[uuid.UUID][]ResultMapping), nil
-}
-func (r *instrumentRepositoryMock) UpdateResultMapping(ctx context.Context, resultMapping ResultMapping) error {
-	return nil
-}
-func (r *instrumentRepositoryMock) DeleteResultMappings(ctx context.Context, ids []uuid.UUID) error {
-	return nil
-}
-func (r *instrumentRepositoryMock) CreateRequestMappings(ctx context.Context, requestMappings []RequestMapping, instrumentID uuid.UUID) ([]uuid.UUID, error) {
-	return make([]uuid.UUID, 0), nil
-}
-func (r *instrumentRepositoryMock) UpsertRequestMappingAnalytes(ctx context.Context, analyteIDsByRequestMappingID map[uuid.UUID][]uuid.UUID) error {
-	return nil
-}
-func (r *instrumentRepositoryMock) UpdateRequestMapping(ctx context.Context, requestMapping RequestMapping) error {
-	return nil
-}
-func (r *instrumentRepositoryMock) GetRequestMappings(ctx context.Context, instrumentIDs []uuid.UUID) (map[uuid.UUID][]RequestMapping, error) {
-	return make(map[uuid.UUID][]RequestMapping), nil
-}
-func (r *instrumentRepositoryMock) GetRequestMappingAnalytes(ctx context.Context, requestMappingIDs []uuid.UUID) (map[uuid.UUID][]uuid.UUID, error) {
-	return make(map[uuid.UUID][]uuid.UUID), nil
-}
-func (r *instrumentRepositoryMock) DeleteRequestMappings(ctx context.Context, requestMappingIDs []uuid.UUID) error {
-	return nil
-}
-func (r *instrumentRepositoryMock) DeleteRequestMappingAnalytes(ctx context.Context, requestMappingID uuid.UUID, analyteIDs []uuid.UUID) error {
-	return nil
-}
-func (r *instrumentRepositoryMock) GetEncodings(ctx context.Context) ([]string, error) {
-	return make([]string, 0), nil
-}
-func (r *instrumentRepositoryMock) GetInstrumentsSettings(ctx context.Context, instrumentIDs []uuid.UUID) (map[uuid.UUID][]InstrumentSetting, error) {
-	return make(map[uuid.UUID][]InstrumentSetting), nil
-}
-func (r *instrumentRepositoryMock) UpsertInstrumentSetting(ctx context.Context, instrumentID uuid.UUID, setting InstrumentSetting) error {
-	return nil
-}
-func (r *instrumentRepositoryMock) DeleteInstrumentSettings(ctx context.Context, ids []uuid.UUID) error {
-	return nil
-}
-func (r *instrumentRepositoryMock) CheckAnalytesUsage(ctx context.Context, analyteIDs []uuid.UUID) (map[uuid.UUID][]Instrument, error) {
-	return make(map[uuid.UUID][]Instrument), nil
-}
-func (r *instrumentRepositoryMock) CreateTransaction() (db.DbConnector, error) {
-	return r.db, nil
-}
-func (r *instrumentRepositoryMock) WithTransaction(tx db.DbConnector) InstrumentRepository {
-	return r
 }

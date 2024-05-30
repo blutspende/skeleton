@@ -154,7 +154,7 @@ func New(ctx context.Context, serviceName string, requestedExtraValueKeys []stri
 	conditionService := NewConditionService(conditionRepository)
 	sortingRuleRepository := NewSortingRuleRepository(dbConn, dbSchema)
 	sortingRuleService := NewSortingRuleService(conditionService, sortingRuleRepository)
-	instrumentService := NewInstrumentService(&config, instrumentRepository, manager, instrumentCache, cerberusClient)
+	instrumentService := NewInstrumentService(&config, sortingRuleService, instrumentRepository, manager, instrumentCache, cerberusClient)
 	consoleLogSSEServer := server.NewConsoleLogSSEServer(service.NewConsoleLogSSEClientListener())
 	consoleLogService := service.NewConsoleLogService(consoleLogRepository, consoleLogSSEServer)
 	api := NewAPI(&config, authManager, analysisService, instrumentService, consoleLogService, consoleLogSSEServer)
