@@ -184,6 +184,10 @@ func (sr *SkeletonTestRig) CreateAnalysisRequest(samplecode string, analyteID uu
 	return arq
 }
 
+func (sr *SkeletonTestRig) GetSortingTarget(ctx context.Context, instrumentIP string, sampleCode string, programme string) (string, error) {
+	return "", nil
+}
+
 func (sr *SkeletonTestRig) AddAnalysisRequestExtraValue(key string, value string) {
 	sr.AnalysisRequestExtraValues[key] = value
 }
