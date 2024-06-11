@@ -95,17 +95,14 @@ type ImageTO struct {
 }
 
 type ReagentInfoTO struct {
-	SerialNumber            string    `json:"serialNo"`
-	Name                    string    `json:"name"`
-	Code                    string    `json:"code"`
-	LotNo                   string    `json:"lotNo"`
-	ShelfLife               time.Time `json:"shelfLife"`
-	ExpiryDateTime          time.Time `json:"expiryDateTime"`
-	ManufacturerName        string    `json:"manufacturer"`
-	ReagentManufacturerDate time.Time `json:"reagentManufacturerDate"`
-	ReagentType             string    `json:"reagentType"`
-	UseUntil                time.Time `json:"useUntil"`
-	DateCreated             time.Time `json:"dateCreated"`
+	Manufacturer      string      `json:"manufacturer"`
+	SerialNumber      string      `json:"serialNo"`
+	LotNo             string      `json:"lotNo"`
+	ReagentType       ReagentType `json:"type"`
+	Name              *string     `json:"name"`
+	Code              *string     `json:"code"`
+	ExpirationDate    *time.Time  `json:"expirationDate"`
+	ManufacturingDate *time.Time  `json:"manufacturingDate"`
 }
 
 type WorkItemResultImageTO struct {

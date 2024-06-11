@@ -99,21 +99,21 @@ const (
 type ReagentType string
 
 const (
-	Reagent ReagentType = "Reagent"
-	Diluent ReagentType = "Diluent"
+	Reagent   ReagentType = "Reagent"
+	Diluent   ReagentType = "Diluent"
+	Composite ReagentType = "Composite"
 )
 
 type ReagentInfo struct {
-	SerialNumber            string      `json:"serialNo" db:"serial"`
-	Name                    string      `json:"name" db:"name"`
-	Code                    string      `json:"code" db:"code"`
-	ShelfLife               time.Time   `json:"shelfLife" db:"shelfLife"`
-	LotNo                   string      `json:"lotNo"`
-	ManufacturerName        string      `json:"manufacturer" db:"manufacturer_name"`
-	ReagentManufacturerDate time.Time   `json:"reagentManufacturerDate" db:"reagent_manufacturer_date"`
-	ReagentType             ReagentType `json:"reagentType" db:"reagent_type"`
-	UseUntil                time.Time   `json:"useUntil"`
-	DateCreated             time.Time   `json:"dateCreated" db:"date_created"`
+	Manufacturer      string      `json:"manufacturer"`
+	SerialNumber      string      `json:"serialNo"`
+	LotNo             string      `json:"lotNo"`
+	Type              ReagentType `json:"reagentType"`
+	Name              *string     `json:"name"`
+	Code              *string     `json:"code"`
+	ManufacturingDate *time.Time  `json:"manufacturingDate"`
+	ExpirationDate    *time.Time  `json:"expirationDate"`
+	CreatedAt         time.Time   `json:"createdAt"`
 }
 
 type ExtraValue struct {

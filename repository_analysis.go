@@ -151,18 +151,17 @@ type requestExtraValueDAO struct {
 }
 
 type reagentInfoDAO struct {
-	ID                      uuid.UUID   `db:"id"`
-	AnalysisResultID        uuid.UUID   `db:"analysis_result_id"`
-	SerialNumber            string      `db:"serial"`
-	Name                    string      `db:"name"`
-	Code                    string      `db:"code"`
-	ShelfLife               time.Time   `db:"shelfLife"`
-	LotNo                   string      `db:"lot_no"`
-	ManufacturerName        string      `db:"manufacturer_name"`
-	ReagentManufacturerDate time.Time   `db:"reagent_manufacturer_date"`
-	ReagentType             ReagentType `db:"reagent_type"`
-	UseUntil                time.Time   `db:"use_until"`
-	DateCreated             time.Time   `db:"date_created"`
+	ID                uuid.UUID      `db:"id"`
+	AnalysisResultID  uuid.UUID      `db:"analysis_result_id"`
+	Manufacturer      string         `db:"manufacturer"`
+	SerialNumber      string         `db:"serial"`
+	LotNo             string         `db:"lot_no"`
+	Type              ReagentType    `db:"type"`
+	Name              sql.NullString `db:"name"`
+	Code              sql.NullString `db:"code"`
+	ManufacturingDate sql.NullTime   `db:"manufacturing_date"`
+	ExpirationDate    sql.NullTime   `db:"expiration_date"`
+	CreatedAt         time.Time      `db:"created_at"`
 }
 
 type imageDAO struct {
@@ -975,6 +974,11 @@ func (r *analysisRepository) createAnalysisResultsBatch(ctx context.Context, ana
 	}
 
 	err = r.CreateWarnings(ctx, warningsMap)
+	if err != nil {
+		return analysisResults, err
+	}
+
+	err = r.CreateReagentInfos(ctx, reagentInfosMap)
 	if err != nil {
 		return analysisResults, err
 	}
@@ -2191,26 +2195,14 @@ func convertAnalysisResultToTO(ar AnalysisResult) (AnalysisResultTO, error) {
 
 	for _, ri := range ar.ReagentInfos {
 		reagentInfoTO := ReagentInfoTO{
-			SerialNumber:            ri.SerialNumber,
-			Name:                    ri.Name,
-			Code:                    ri.Code,
-			LotNo:                   ri.LotNo,
-			ReagentManufacturerDate: ri.ReagentManufacturerDate,
-			UseUntil:                ri.UseUntil,
-			ShelfLife:               ri.ShelfLife,
-			//TODO Add an expiry : ExpiryDateTime: (this has to be added to database as well)
-			ManufacturerName: ri.ManufacturerName,
-			DateCreated:      ri.DateCreated,
+			Manufacturer:   ri.Manufacturer,
+			SerialNumber:   ri.SerialNumber,
+			LotNo:          ri.LotNo,
+			Name:           ri.Name,
+			Code:           ri.Code,
+			ExpirationDate: ri.ExpirationDate,
 		}
 
-		switch ri.ReagentType {
-		case Reagent:
-			reagentInfoTO.ReagentType = "Reagent"
-		case Diluent:
-			reagentInfoTO.ReagentType = "Diluent"
-		default:
-			return analysisResultTO, ErrInvalidReagentType
-		}
 		analysisResultTO.ReagentInfos = append(analysisResultTO.ReagentInfos, reagentInfoTO)
 	}
 	return analysisResultTO, nil
@@ -2729,18 +2721,38 @@ func convertQuantitativeResultsToDAOs(quantitativeResults map[string]string, cha
 }
 
 func convertReagentInfoToDAO(reagentInfo ReagentInfo, analysisResultID uuid.UUID) reagentInfoDAO {
-	return reagentInfoDAO{
-		AnalysisResultID:        analysisResultID,
-		SerialNumber:            reagentInfo.SerialNumber,
-		Name:                    reagentInfo.Name,
-		Code:                    reagentInfo.Code,
-		ShelfLife:               reagentInfo.ShelfLife,
-		LotNo:                   reagentInfo.LotNo,
-		ManufacturerName:        reagentInfo.ManufacturerName,
-		ReagentManufacturerDate: reagentInfo.ReagentManufacturerDate,
-		ReagentType:             reagentInfo.ReagentType,
-		UseUntil:                reagentInfo.UseUntil,
+	dao := reagentInfoDAO{
+		Manufacturer:     reagentInfo.Manufacturer,
+		AnalysisResultID: analysisResultID,
+		SerialNumber:     reagentInfo.SerialNumber,
+		LotNo:            reagentInfo.LotNo,
+		Type:             reagentInfo.Type,
 	}
+	if reagentInfo.Name != nil {
+		dao.Name = sql.NullString{
+			String: *reagentInfo.Name,
+			Valid:  *reagentInfo.Name != "",
+		}
+	}
+	if reagentInfo.Code != nil {
+		dao.Code = sql.NullString{
+			String: *reagentInfo.Code,
+			Valid:  *reagentInfo.Code != "",
+		}
+	}
+	if reagentInfo.ExpirationDate != nil {
+		dao.ExpirationDate = sql.NullTime{
+			Time:  *reagentInfo.ExpirationDate,
+			Valid: true,
+		}
+	}
+	if reagentInfo.ManufacturingDate != nil {
+		dao.ManufacturingDate = sql.NullTime{
+			Time:  *reagentInfo.ManufacturingDate,
+			Valid: true,
+		}
+	}
+	return dao
 }
 
 func convertReagentInfosToDAOs(reagentInfos []ReagentInfo, analysisResultID uuid.UUID) []reagentInfoDAO {
@@ -2959,19 +2971,21 @@ func convertCerberusQueueItemDAOToCerberusQueueItem(cerberusQueueItemDAO cerberu
 
 func convertReagentInfoDAOsToReagentInfoList(reagentInfoDAOs []reagentInfoDAO) []ReagentInfo {
 	reagentInfoList := make([]ReagentInfo, len(reagentInfoDAOs))
-	for i, reagentInfoDAO := range reagentInfoDAOs {
+	for i := range reagentInfoDAOs {
 		reagentInfoList[i] = ReagentInfo{
-			SerialNumber:            reagentInfoDAO.SerialNumber,
-			Name:                    reagentInfoDAO.Name,
-			Code:                    reagentInfoDAO.Code,
-			ShelfLife:               reagentInfoDAO.ShelfLife,
-			LotNo:                   reagentInfoDAO.LotNo,
-			ManufacturerName:        reagentInfoDAO.ManufacturerName,
-			ReagentManufacturerDate: reagentInfoDAO.ReagentManufacturerDate,
-			ReagentType:             reagentInfoDAO.ReagentType,
-			UseUntil:                reagentInfoDAO.UseUntil,
-			DateCreated:             reagentInfoDAO.DateCreated,
+			Manufacturer: reagentInfoDAOs[i].Manufacturer,
+			SerialNumber: reagentInfoDAOs[i].SerialNumber,
+			LotNo:        reagentInfoDAOs[i].LotNo,
+			Type:         reagentInfoDAOs[i].Type,
+			CreatedAt:    reagentInfoDAOs[i].CreatedAt,
 		}
+		if reagentInfoDAOs[i].Name.Valid {
+			reagentInfoList[i].Name = &reagentInfoDAOs[i].Name.String
+		}
+		if reagentInfoDAOs[i].Code.Valid {
+			reagentInfoList[i].Code = &reagentInfoDAOs[i].Code.String
+		}
+
 	}
 	return reagentInfoList
 }
