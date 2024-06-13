@@ -787,6 +787,10 @@ type analysisRepositoryMock struct {
 	callCount int
 }
 
+func (m *analysisRepositoryMock) CreateAnalysisRequestExtraValues(ctx context.Context, extraValuesByAnalysisRequestIDs map[uuid.UUID][]ExtraValue) error {
+	return nil
+}
+
 func (m *analysisRepositoryMock) GetUnprocessedAnalysisResultIDs(ctx context.Context) ([]uuid.UUID, error) {
 	return make([]uuid.UUID, 660), nil
 }
@@ -898,10 +902,10 @@ func (m *analysisRepositoryMock) MarkAnalysisResultsAsProcessed(ctx context.Cont
 	return nil
 }
 func (m *analysisRepositoryMock) CreateTransaction() (db.DbConnector, error) {
-	return nil, nil
+	return db.CreateDbConnector(&sqlx.DB{}), nil
 }
 func (m *analysisRepositoryMock) WithTransaction(tx db.DbConnector) AnalysisRepository {
-	return nil
+	return m
 }
 
 var analysisResultsWithoutAnalysisRequestsTest_analysisResults = []AnalysisResult{
