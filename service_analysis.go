@@ -47,15 +47,20 @@ func (as *analysisService) CreateAnalysisRequests(ctx context.Context, analysisR
 	for i := range analysisRequests {
 		analysisRequests[i].CreatedAt = ts
 	}
-	_, savedAnalysisRequestWorkItemIDs, err := as.analysisRepository.CreateAnalysisRequestsBatch(ctx, analysisRequests)
+	tx, err := as.analysisRepository.CreateTransaction()
 	if err != nil {
+		return nil, err
+	}
+	_, savedAnalysisRequestWorkItemIDs, err := as.analysisRepository.WithTransaction(tx).CreateAnalysisRequestsBatch(ctx, analysisRequests)
+	if err != nil {
+		_ = tx.Rollback()
 		return nil, err
 	}
 
 	as.manager.SendAnalysisRequestsForProcessing(analysisRequests)
 
 	savedWorkItemIDsMap := ConvertUUIDsToMap(savedAnalysisRequestWorkItemIDs)
-
+	extraValuesMap := make(map[uuid.UUID][]ExtraValue)
 	analysisRequestStatuses := make([]AnalysisRequestStatus, len(analysisRequests))
 	for i := range analysisRequests {
 		analysisRequestStatuses[i] = AnalysisRequestStatus{
@@ -65,7 +70,22 @@ func (as *analysisService) CreateAnalysisRequests(ctx context.Context, analysisR
 		if _, ok := savedWorkItemIDsMap[analysisRequests[i].WorkItemID]; !ok {
 			err = ErrAnalysisRequestWithMatchingWorkItemIdFound
 			analysisRequestStatuses[i].Error = err
+			continue
 		}
+
+		extraValuesMap[analysisRequests[i].ID] = analysisRequests[i].ExtraValues
+	}
+
+	extraValuesErr := as.analysisRepository.WithTransaction(tx).CreateAnalysisRequestExtraValues(ctx, extraValuesMap)
+	if extraValuesErr != nil {
+		_ = tx.Rollback()
+		return nil, extraValuesErr
+	}
+
+	commitErr := tx.Commit()
+	if commitErr != nil {
+		_ = tx.Rollback()
+		return nil, commitErr
 	}
 
 	return analysisRequestStatuses, err
