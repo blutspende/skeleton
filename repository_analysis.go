@@ -238,6 +238,7 @@ type cerberusQueueItemDAO struct {
 
 type AnalysisRepository interface {
 	CreateAnalysisRequestsBatch(ctx context.Context, analysisRequests []AnalysisRequest) ([]uuid.UUID, []uuid.UUID, error)
+	CreateAnalysisRequestExtraValues(ctx context.Context, extraValuesByAnalysisRequestIDs map[uuid.UUID][]ExtraValue) error
 	GetAnalysisRequestsBySampleCodeAndAnalyteID(ctx context.Context, sampleCodes string, analyteID uuid.UUID) ([]AnalysisRequest, error)
 	GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string, allowResending bool) (map[string][]AnalysisRequest, error)
 	GetAnalysisRequestsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisRequestInfo, int, error)
@@ -325,13 +326,11 @@ func (r *analysisRepository) createAnalysisRequestsBatch(ctx context.Context, an
 		return []uuid.UUID{}, []uuid.UUID{}, nil
 	}
 	ids := make([]uuid.UUID, len(analysisRequests))
-	extraValuesMap := make(map[uuid.UUID][]ExtraValue)
 	for i := range analysisRequests {
 		if (analysisRequests[i].ID == uuid.UUID{}) || (analysisRequests[i].ID == uuid.Nil) {
 			analysisRequests[i].ID = uuid.New()
 		}
 		ids[i] = analysisRequests[i].ID
-		extraValuesMap[analysisRequests[i].ID] = analysisRequests[i].ExtraValues
 	}
 
 	query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_requests(id, work_item_id, analyte_id, sample_code, material_id, laboratory_id, valid_until_time, created_at)
@@ -343,10 +342,6 @@ func (r *analysisRepository) createAnalysisRequestsBatch(ctx context.Context, an
 		return []uuid.UUID{}, []uuid.UUID{}, ErrCreateAnalysisRequestsBatchFailed
 	}
 	defer rows.Close()
-	err = r.CreateAnalysisRequestExtraValues(ctx, extraValuesMap)
-	if err != nil {
-		return []uuid.UUID{}, []uuid.UUID{}, ErrCreateAnalysisRequestsBatchFailed
-	}
 
 	savedWorkItemIDs := make([]uuid.UUID, len(analysisRequests))
 	for rows.Next() {
