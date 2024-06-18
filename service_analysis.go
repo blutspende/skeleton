@@ -57,10 +57,9 @@ func (as *analysisService) CreateAnalysisRequests(ctx context.Context, analysisR
 		return nil, err
 	}
 
-	as.manager.SendAnalysisRequestsForProcessing(analysisRequests)
-
 	savedWorkItemIDsMap := ConvertUUIDsToMap(savedAnalysisRequestWorkItemIDs)
 	extraValuesMap := make(map[uuid.UUID][]ExtraValue)
+	analysisRequestsToProcess := make([]AnalysisRequest, 0)
 	analysisRequestStatuses := make([]AnalysisRequestStatus, len(analysisRequests))
 	for i := range analysisRequests {
 		analysisRequestStatuses[i] = AnalysisRequestStatus{
@@ -74,6 +73,7 @@ func (as *analysisService) CreateAnalysisRequests(ctx context.Context, analysisR
 		}
 
 		extraValuesMap[analysisRequests[i].ID] = analysisRequests[i].ExtraValues
+		analysisRequestsToProcess = append(analysisRequestsToProcess, analysisRequests[i])
 	}
 
 	extraValuesErr := as.analysisRepository.WithTransaction(tx).CreateAnalysisRequestExtraValues(ctx, extraValuesMap)
@@ -88,6 +88,7 @@ func (as *analysisService) CreateAnalysisRequests(ctx context.Context, analysisR
 		return nil, commitErr
 	}
 
+	as.manager.SendAnalysisRequestsForProcessing(analysisRequestsToProcess)
 	return analysisRequestStatuses, err
 }
 
