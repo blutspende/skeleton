@@ -6,11 +6,11 @@ import (
 	"testing"
 )
 
-func TestGetSortingTargetRun1FirstSecondTimeDonor(t *testing.T) {
+func TestGetSortingTargetProgramme1FirstSecondTimeDonor(t *testing.T) {
 	var target string
 	var err error
 	for i := range programme1SortingRules {
-		target, err = GetSortingTargetForAnalysisRequestAndCondition([]AnalysisRequest{firstTimeAnalysis}, programme1SortingRules[i])
+		target, err = GetSortingTargetForAnalysisRequestAndCondition([]AnalysisRequest{firstTimeAnalysis}, programme1SortingRules[i], nil)
 		if err == nil {
 			break
 		}
@@ -18,7 +18,7 @@ func TestGetSortingTargetRun1FirstSecondTimeDonor(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, "HAM_ESP", target)
 	for i := range programme1SortingRules {
-		target, err = GetSortingTargetForAnalysisRequestAndCondition([]AnalysisRequest{secondTimeAnalysis}, programme1SortingRules[i])
+		target, err = GetSortingTargetForAnalysisRequestAndCondition([]AnalysisRequest{secondTimeAnalysis}, programme1SortingRules[i], nil)
 		if err == nil {
 			break
 		}
@@ -27,11 +27,11 @@ func TestGetSortingTargetRun1FirstSecondTimeDonor(t *testing.T) {
 	assert.Equal(t, "HAM_ESP", target)
 }
 
-func TestGetSortingTargetRun1MultiTimeDonorWithCMV(t *testing.T) {
+func TestGetSortingTargetProgramme1MultiTimeDonorWithCMV(t *testing.T) {
 	var target string
 	var err error
 	for i := range programme1SortingRules {
-		target, err = GetSortingTargetForAnalysisRequestAndCondition([]AnalysisRequest{multiTimeAnalysis1, multiTimeAnalysis2, multiTimeCMV}, programme1SortingRules[i])
+		target, err = GetSortingTargetForAnalysisRequestAndCondition([]AnalysisRequest{multiTimeAnalysis1, multiTimeAnalysis2, multiTimeCMV}, programme1SortingRules[i], nil)
 		if err == nil {
 			break
 		}
@@ -40,11 +40,11 @@ func TestGetSortingTargetRun1MultiTimeDonorWithCMV(t *testing.T) {
 	assert.Equal(t, "HAM_CMV", target)
 }
 
-func TestGetSortingTargetRun1MultiTimeDonorWithoutCMV(t *testing.T) {
+func TestGetSortingTargetProgramme1MultiTimeDonorWithoutCMV(t *testing.T) {
 	var target string
 	var err error
 	for i := range programme1SortingRules {
-		target, err = GetSortingTargetForAnalysisRequestAndCondition([]AnalysisRequest{multiTimeAnalysis1, multiTimeAnalysis2}, programme1SortingRules[i])
+		target, err = GetSortingTargetForAnalysisRequestAndCondition([]AnalysisRequest{multiTimeAnalysis1, multiTimeAnalysis2}, programme1SortingRules[i], nil)
 		if err == nil {
 			break
 		}
@@ -53,7 +53,7 @@ func TestGetSortingTargetRun1MultiTimeDonorWithoutCMV(t *testing.T) {
 	assert.Equal(t, "HAM_OCMV", target)
 }
 
-func TestGetSortingTargetRun1Prefix(t *testing.T) {
+func TestGetSortingTargetProgramme1Prefix(t *testing.T) {
 	var target string
 	var err error
 	aaAnalysis := AnalysisRequest{
@@ -63,7 +63,7 @@ func TestGetSortingTargetRun1Prefix(t *testing.T) {
 		SampleCode: "CLSAMPLE",
 	}
 	for i := range programme1SortingRules {
-		target, err = GetSortingTargetForAnalysisRequestAndCondition([]AnalysisRequest{aaAnalysis}, programme1SortingRules[i])
+		target, err = GetSortingTargetForAnalysisRequestAndCondition([]AnalysisRequest{aaAnalysis}, programme1SortingRules[i], nil)
 		if err == nil {
 			break
 		}
@@ -72,7 +72,7 @@ func TestGetSortingTargetRun1Prefix(t *testing.T) {
 	assert.Equal(t, "HAM_CMV", target)
 
 	for i := range programme1SortingRules {
-		target, err = GetSortingTargetForAnalysisRequestAndCondition([]AnalysisRequest{clAnalysis}, programme1SortingRules[i])
+		target, err = GetSortingTargetForAnalysisRequestAndCondition([]AnalysisRequest{clAnalysis}, programme1SortingRules[i], nil)
 		if err == nil {
 			break
 		}
@@ -97,7 +97,7 @@ func TestSortingTargetPriority(t *testing.T) {
 	var target string
 	var err error
 	for i := range programme1SortingRules {
-		target, err = GetSortingTargetForAnalysisRequestAndCondition([]AnalysisRequest{analysisRequest}, programme1SortingRules[i])
+		target, err = GetSortingTargetForAnalysisRequestAndCondition([]AnalysisRequest{analysisRequest}, programme1SortingRules[i], nil)
 		if err == nil {
 			break
 		}
@@ -106,11 +106,11 @@ func TestSortingTargetPriority(t *testing.T) {
 	assert.Equal(t, "HAM_OCMV", target)
 }
 
-func TestGetSortingTargetRun2FirstSecondTimeDonor(t *testing.T) {
+func TestGetSortingTargetProgramme2FirstSecondTimeDonor(t *testing.T) {
 	var target string
 	var err error
 	for i := range programme1SortingRules {
-		target, err = GetSortingTargetForAnalysisRequestAndCondition([]AnalysisRequest{firstTimeAnalysis}, programme2SortingRules[i])
+		target, err = GetSortingTargetForAnalysisRequestAndCondition([]AnalysisRequest{firstTimeAnalysis}, programme2SortingRules[i], nil)
 		if err == nil {
 			break
 		}
@@ -119,7 +119,7 @@ func TestGetSortingTargetRun2FirstSecondTimeDonor(t *testing.T) {
 	assert.Equal(t, "PK7400_ES", target)
 
 	for i := range programme1SortingRules {
-		target, err = GetSortingTargetForAnalysisRequestAndCondition([]AnalysisRequest{secondTimeAnalysis}, programme2SortingRules[i])
+		target, err = GetSortingTargetForAnalysisRequestAndCondition([]AnalysisRequest{secondTimeAnalysis}, programme2SortingRules[i], nil)
 		if err == nil {
 			break
 		}
@@ -128,11 +128,11 @@ func TestGetSortingTargetRun2FirstSecondTimeDonor(t *testing.T) {
 	assert.Equal(t, "PK7400_ES", target)
 }
 
-func TestGetSortingTargetRun2MultiTimeDonor(t *testing.T) {
+func TestGetSortingTargetProgramme2MultiTimeDonor(t *testing.T) {
 	var target string
 	var err error
 	for i := range programme1SortingRules {
-		target, err = GetSortingTargetForAnalysisRequestAndCondition([]AnalysisRequest{multiTimeAnalysis1}, programme2SortingRules[i])
+		target, err = GetSortingTargetForAnalysisRequestAndCondition([]AnalysisRequest{multiTimeAnalysis1}, programme2SortingRules[i], nil)
 		if err == nil {
 			break
 		}
@@ -141,7 +141,7 @@ func TestGetSortingTargetRun2MultiTimeDonor(t *testing.T) {
 	assert.Equal(t, "PK7400_MF", target)
 }
 
-func TestGetSortingTargetRun2AACLPrefix(t *testing.T) {
+func TestGetSortingTargetProgramme2AACLPrefix(t *testing.T) {
 	var target string
 	var err error
 	aaAnalysis := AnalysisRequest{
@@ -151,7 +151,7 @@ func TestGetSortingTargetRun2AACLPrefix(t *testing.T) {
 		SampleCode: "CLSAMPLE",
 	}
 	for i := range programme1SortingRules {
-		target, err = GetSortingTargetForAnalysisRequestAndCondition([]AnalysisRequest{aaAnalysis}, programme2SortingRules[i])
+		target, err = GetSortingTargetForAnalysisRequestAndCondition([]AnalysisRequest{aaAnalysis}, programme2SortingRules[i], nil)
 		if err == nil {
 			break
 		}
@@ -160,7 +160,7 @@ func TestGetSortingTargetRun2AACLPrefix(t *testing.T) {
 	assert.Equal(t, "PK7400_MF", target)
 
 	for i := range programme1SortingRules {
-		target, err = GetSortingTargetForAnalysisRequestAndCondition([]AnalysisRequest{clAnalysis}, programme2SortingRules[i])
+		target, err = GetSortingTargetForAnalysisRequestAndCondition([]AnalysisRequest{clAnalysis}, programme2SortingRules[i], nil)
 		if err == nil {
 			break
 		}
@@ -169,14 +169,14 @@ func TestGetSortingTargetRun2AACLPrefix(t *testing.T) {
 	assert.Equal(t, "PK7400_ES", target)
 }
 
-func TestGetSortingTargetRun2PSuffix(t *testing.T) {
+func TestGetSortingTargetProgramme2PSuffix(t *testing.T) {
 	var target string
 	var err error
 	pSuffixAnalysis := AnalysisRequest{
 		SampleCode: "PSUFFIXSAMPLEP",
 	}
 	for i := range programme1SortingRules {
-		target, err = GetSortingTargetForAnalysisRequestAndCondition([]AnalysisRequest{pSuffixAnalysis}, programme2SortingRules[i])
+		target, err = GetSortingTargetForAnalysisRequestAndCondition([]AnalysisRequest{pSuffixAnalysis}, programme2SortingRules[i], nil)
 		if err == nil {
 			break
 		}
@@ -185,14 +185,14 @@ func TestGetSortingTargetRun2PSuffix(t *testing.T) {
 	assert.Equal(t, "PK7400_MF", target)
 }
 
-func TestGetSortingTargetRun2Default(t *testing.T) {
+func TestGetSortingTargetProgramme2Default(t *testing.T) {
 	var target string
 	var err error
 	analysis := AnalysisRequest{
 		SampleCode: "UNKNOWNSAMPLE",
 	}
 	for i := range programme1SortingRules {
-		target, err = GetSortingTargetForAnalysisRequestAndCondition([]AnalysisRequest{analysis}, programme2SortingRules[i])
+		target, err = GetSortingTargetForAnalysisRequestAndCondition([]AnalysisRequest{analysis}, programme2SortingRules[i], nil)
 		if err == nil {
 			break
 		}
@@ -201,12 +201,48 @@ func TestGetSortingTargetRun2Default(t *testing.T) {
 	assert.Equal(t, "ERROR", target)
 }
 
+func TestProgramme4(t *testing.T) {
+	var target string
+	var err error
+	analysis1 := AnalysisRequest{
+		SampleCode:  "SAMPLECODE1",
+		AnalyteID:   uuid.MustParse(iggAnalyteIDString),
+		ExtraValues: []ExtraValue{{Key: "OrderID", Value: "order1"}, {Key: CustomerFacilityKey, Value: programme4FacilityID}},
+	}
+	analysis2 := AnalysisRequest{
+		SampleCode:  "SAMPLECODE1",
+		AnalyteID:   uuid.MustParse(gewAnalyteIDString),
+		ExtraValues: []ExtraValue{{Key: "OrderID", Value: "order1"}, {Key: CustomerFacilityKey, Value: programme4FacilityID}},
+	}
+	appliedTargets := make([]string, 0)
+	for i := range programme4SortingRules {
+		target, err = GetSortingTargetForAnalysisRequestAndCondition([]AnalysisRequest{analysis1, analysis2}, programme4SortingRules[i], appliedTargets)
+		if err == nil {
+			appliedTargets = append(appliedTargets, target)
+			break
+		}
+	}
+	assert.Nil(t, err)
+	assert.Equal(t, "ROCHE", target)
+
+	for i := range programme4SortingRules {
+		target, err = GetSortingTargetForAnalysisRequestAndCondition([]AnalysisRequest{analysis1, analysis2}, programme4SortingRules[i], appliedTargets)
+		if err == nil {
+			break
+		}
+	}
+	assert.Nil(t, err)
+	assert.Equal(t, "???", target)
+}
+
 var (
 	aaPrefixRegex      = "^AA"
 	clPrefixRegex      = "^CL"
 	iSuffixRegex       = "I$"
 	pSuffixRegex       = "P$"
 	cmvAnalyteIDString = "91d5bf56-2bfd-470f-b8e0-92535391ee82"
+	iggAnalyteIDString = "15c984d8-f253-4f02-931c-4b197e184181"
+	gewAnalyteIDString = "1e590b57-b296-441b-9af6-a5ec58d2baf0"
 	analyte1IDString   = "79e7222a-dc73-44e0-9369-d9d890bda8ce"
 	analyte2IDString   = "155afc8a-12f9-475e-823a-a7fa501f7d58"
 	firstTimeAnalysis  = AnalysisRequest{
@@ -506,5 +542,125 @@ var programme2SortingRules = []SortingRule{
 	{
 		Priority: 5,
 		Target:   "ERROR",
+	},
+}
+var programme4FacilityID = "77d8d66c-d6e3-4dc9-96f2-305d9fdab0a7"
+var rocheTarget = "ROCHE"
+var programme4SortingRules = []SortingRule{
+	{
+		Target:   "ROCHE",
+		Priority: 1,
+		Condition: &Condition{
+			SubCondition1: &Condition{
+				Operand1: &ConditionOperand{
+					Type:          AnalysisRequestExtraValue,
+					ExtraValueKey: &CustomerFacilityKey,
+				},
+				Operator: Equals,
+				Operand2: &ConditionOperand{
+					Type:          Constant,
+					ConstantValue: &programme4FacilityID,
+				},
+			},
+			Operator: And,
+			SubCondition2: &Condition{
+				SubCondition1: &Condition{
+					SubCondition1: &Condition{
+						Operand1: &ConditionOperand{
+							Type: Order,
+						},
+						Operator: MatchAny,
+						SubCondition2: &Condition{
+							Operand1: &ConditionOperand{
+								Type: Analyte,
+							},
+							Operator: Equals,
+							Operand2: &ConditionOperand{
+								Type:          Constant,
+								ConstantValue: &iggAnalyteIDString,
+							},
+						},
+					},
+					Operator: And,
+					SubCondition2: &Condition{
+						Operand1: &ConditionOperand{
+							Type: Order,
+						},
+						Operator: MatchAny,
+						SubCondition2: &Condition{
+							Operand1: &ConditionOperand{
+								Type: Analyte,
+							},
+							Operator: Equals,
+							Operand2: &ConditionOperand{
+								Type:          Constant,
+								ConstantValue: &gewAnalyteIDString,
+							},
+						},
+					},
+				},
+				Operator: And,
+				SubCondition2: &Condition{
+					Operand1: &ConditionOperand{
+						Type:          Constant,
+						ConstantValue: &rocheTarget,
+					},
+					Operator: TargetNotApplied,
+				},
+			},
+		},
+	},
+	{
+		Target:   "???",
+		Priority: 2,
+		Condition: &Condition{
+			SubCondition1: &Condition{
+				Operand1: &ConditionOperand{
+					Type:          AnalysisRequestExtraValue,
+					ExtraValueKey: &CustomerFacilityKey,
+				},
+				Operator: Equals,
+				Operand2: &ConditionOperand{
+					Type:          Constant,
+					ConstantValue: &programme4FacilityID,
+				},
+			},
+			Operator: And,
+			SubCondition2: &Condition{
+				SubCondition1: &Condition{
+					Operand1: &ConditionOperand{
+						Type: Order,
+					},
+					Operator: MatchAny,
+					SubCondition2: &Condition{
+						Operand1: &ConditionOperand{
+							Type: Analyte,
+						},
+						Operator: Equals,
+						Operand2: &ConditionOperand{
+							Type:          Constant,
+							ConstantValue: &iggAnalyteIDString,
+						},
+					},
+				},
+				Operator: And,
+				SubCondition2: &Condition{
+					Operand1: &ConditionOperand{
+						Type: Order,
+					},
+					Operator: MatchAny,
+					SubCondition2: &Condition{
+						Operand1: &ConditionOperand{
+							Type: Analyte,
+						},
+						Operator: Equals,
+						Operand2: &ConditionOperand{
+							Type:          Constant,
+							ConstantValue: &gewAnalyteIDString,
+						},
+					},
+				},
+			},
+		},
 	},
 }

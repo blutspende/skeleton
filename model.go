@@ -473,19 +473,21 @@ type ConditionOperator string
 
 // Comparison operators
 const (
-	And            ConditionOperator = "and"
-	Or             ConditionOperator = "or"
-	Equals         ConditionOperator = "=="
-	NotEquals      ConditionOperator = "!="
-	Less           ConditionOperator = "<"
-	LessOrEqual    ConditionOperator = "<="
-	Greater        ConditionOperator = ">"
-	GreaterOrEqual ConditionOperator = ">="
-	Contains       ConditionOperator = "contains"
-	NotContains    ConditionOperator = "notContains"
-	MatchRegex     ConditionOperator = "regex"
-	Exists         ConditionOperator = "exists"
-	NotExists      ConditionOperator = "notExists"
+	And              ConditionOperator = "and"
+	Or               ConditionOperator = "or"
+	Equals           ConditionOperator = "=="
+	NotEquals        ConditionOperator = "!="
+	Less             ConditionOperator = "<"
+	LessOrEqual      ConditionOperator = "<="
+	Greater          ConditionOperator = ">"
+	GreaterOrEqual   ConditionOperator = ">="
+	Contains         ConditionOperator = "contains"
+	NotContains      ConditionOperator = "notContains"
+	MatchRegex       ConditionOperator = "regex"
+	Exists           ConditionOperator = "exists"
+	NotExists        ConditionOperator = "notExists"
+	TargetApplied    ConditionOperator = "targetApplied"
+	TargetNotApplied ConditionOperator = "targetNotApplied"
 )
 
 // Lambda operators

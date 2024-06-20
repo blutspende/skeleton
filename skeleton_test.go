@@ -801,6 +801,9 @@ type analysisRepositoryMock struct {
 	callCount int
 }
 
+func (m *analysisRepositoryMock) GetSampleCodesByOrderID(ctx context.Context, orderID uuid.UUID) ([]string, error) {
+	return nil, nil
+}
 func (m *analysisRepositoryMock) GetUnprocessedAnalysisResultIDs(ctx context.Context) ([]uuid.UUID, error) {
 	return make([]uuid.UUID, 660), nil
 }

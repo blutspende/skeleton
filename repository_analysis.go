@@ -26,6 +26,7 @@ const (
 	msgMarshalAnalysisResultsFailed                        = "marshal analysis results failed"
 	msgInvalidReagentType                                  = "invalid reagent type"
 	msgCreateAnalysisRequestsBatchFailed                   = "create analysis requests batch failed"
+	msgGetSampleCodesByOrderIDFailed                       = "get sample codes by order ID failed"
 	msgCreateSubjectsFailed                                = "create subject failed"
 	msgCreateReagentInfoFailed                             = "create analysis result reagent infos failed"
 	msgCreateWarningsFailed                                = "create warnings failed"
@@ -50,6 +51,7 @@ var (
 	ErrConvertAnalysisResultsFailed                        = errors.New(msgConvertAnalysisResultsFailed)
 	ErrMarshalAnalysisResultsFailed                        = errors.New(msgMarshalAnalysisResultsFailed)
 	ErrCreateAnalysisRequestsBatchFailed                   = errors.New(msgCreateAnalysisRequestsBatchFailed)
+	ErrGetSampleCodesByOrderIDFailed                       = errors.New(msgGetSampleCodesByOrderIDFailed)
 	ErrCreateSubjectsFailed                                = errors.New(msgCreateSubjectsFailed)
 	ErrCreateReagentInfoFailed                             = errors.New(msgCreateReagentInfoFailed)
 	ErrCreateWarningsFailed                                = errors.New(msgCreateWarningsFailed)
@@ -242,6 +244,7 @@ type AnalysisRepository interface {
 	GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string, allowResending bool) (map[string][]AnalysisRequest, error)
 	GetAnalysisRequestsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisRequestInfo, int, error)
 	GetAnalysisRequestExtraValuesByAnalysisRequestID(ctx context.Context, analysisRequestID uuid.UUID) (map[string]string, error)
+	GetSampleCodesByOrderID(ctx context.Context, orderID uuid.UUID) ([]string, error)
 	GetAnalysisResultsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisResultInfo, int, error)
 	GetAnalysisBatches(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisBatch, int, error)
 	//GetAnalysisRequestsForVisualization(ctx context.Context) (map[string][]AnalysisRequest, error)
@@ -595,6 +598,33 @@ func (r *analysisRepository) GetAnalysisRequestExtraValuesByAnalysisRequestID(ct
 
 	return extraValueMap, nil
 }
+
+func (r *analysisRepository) GetSampleCodesByOrderID(ctx context.Context, orderID uuid.UUID) ([]string, error) {
+	query := fmt.Sprintf(`SELECT DISTINCT sample_code from %s.sk_analysis_requests sar
+									INNER JOIN sarstedthost.sk_analysis_request_extra_values sarev ON sar.id = sarev.analysis_request_id 
+										WHERE valid_until >= timezone('utc', now()) AND sarev.key = 'OrderID' and sarev.value = $1;`, r.dbSchema)
+	rows, err := r.db.QueryxContext(ctx, query, orderID)
+	if err != nil {
+		log.Error().Err(err).Msg(msgGetSampleCodesByOrderIDFailed)
+		return nil, ErrGetSampleCodesByOrderIDFailed
+	}
+	defer rows.Close()
+
+	sampleCodes := make([]string, 0)
+	for rows.Next() {
+		var sampleCode string
+		err := rows.Scan(&sampleCode)
+		if err != nil {
+			log.Error().Err(err).Msg(msgGetSampleCodesByOrderIDFailed)
+			return nil, ErrGetSampleCodesByOrderIDFailed
+		}
+
+		sampleCodes = append(sampleCodes, sampleCode)
+	}
+
+	return sampleCodes, nil
+}
+
 func (r *analysisRepository) GetAnalysisResultsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisResultInfo, int, error) {
 	preparedValues := map[string]interface{}{
 		"instrument_id": instrumentID,

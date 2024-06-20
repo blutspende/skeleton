@@ -16,6 +16,8 @@ type SortingRuleRepository interface {
 	Create(ctx context.Context, sortingRule SortingRule) (uuid.UUID, error)
 	GetByInstrumentIDs(ctx context.Context, instrumentIDs []uuid.UUID) (map[uuid.UUID][]SortingRule, error)
 	GetByInstrumentIDAndProgramme(ctx context.Context, instrumentID uuid.UUID, programme string) ([]SortingRule, error)
+	GetAppliedSortingRuleTargets(ctx context.Context, instrumentID uuid.UUID, programme string, sampleCodes []string) ([]string, error)
+	ApplySortingRuleTarget(ctx context.Context, instrumentID uuid.UUID, programme, sampleCode, target string, validUntil time.Time) error
 	Update(ctx context.Context, rule SortingRule) error
 	Delete(ctx context.Context, sortingRuleIDs []uuid.UUID) error
 
@@ -63,7 +65,7 @@ func (r *sortingRuleRepository) GetByInstrumentIDs(ctx context.Context, instrume
 			log.Error().Err(err).Msg(msgGetSortingRuleByInstrumentIDFailed)
 			return nil, ErrGetSortingRuleByInstrumentIDFailed
 		}
-		if _, ok := sortingRulesMap[dao.ID]; !ok {
+		if _, ok := sortingRulesMap[dao.InstrumentID]; !ok {
 			sortingRulesMap[dao.InstrumentID] = make([]SortingRule, 0)
 		}
 		sortingRulesMap[dao.InstrumentID] = append(sortingRulesMap[dao.InstrumentID], convertDAOToSortingRule(dao))
@@ -104,6 +106,55 @@ func (r *sortingRuleRepository) GetByInstrumentIDAndProgramme(ctx context.Contex
 	return sortingRules, nil
 }
 
+func (r *sortingRuleRepository) ApplySortingRuleTarget(ctx context.Context, instrumentID uuid.UUID, programme, sampleCode, target string, validUntil time.Time) error {
+	preparedValues := map[string]any{
+		"instrument_id": instrumentID,
+		"programme":     programme,
+		"sample_code":   sampleCode,
+		"target":        target,
+		"valid_until":   validUntil,
+	}
+	query := fmt.Sprintf(`INSERT INTO %s.sk_applied_sorting_rule_targets (
+									instrument_id, sample_code, target, programme, valid_until) 
+									VALUES (:instrument_id, :sample_code, :target, :programme, :valid_until)`, r.dbSchema)
+	_, err := r.db.NamedExecContext(ctx, query, preparedValues)
+	if err != nil {
+		log.Error().Err(err).Msg(msgApplySortingRuleTargetFailed)
+		return ErrApplySortingRuleTargetFailed
+	}
+
+	return nil
+}
+
+func (r *sortingRuleRepository) GetAppliedSortingRuleTargets(ctx context.Context, instrumentID uuid.UUID, programme string, sampleCodes []string) ([]string, error) {
+	if len(sampleCodes) == 0 {
+		return nil, nil
+	}
+	query := fmt.Sprintf(`SELECT DISTINCT target FROM %s.sk_applied_sorting_rule_targets 
+				WHERE instrument_id = ? AND sample_code IN (?) AND programme = ? AND valid_until > timezone('utc', NOW())`, r.dbSchema)
+	query, args, _ := sqlx.In(query, instrumentID, sampleCodes, programme)
+	query = r.db.Rebind(query)
+	rows, err := r.db.QueryxContext(ctx, query, args...)
+	if err != nil {
+		log.Error().Err(err).Msg(msgGetAppliedSortingRuleTargetsFailed)
+		return nil, ErrGetAppliedSortingRuleTargetsFailed
+	}
+	defer rows.Close()
+
+	appliedSortingRuleTargets := make([]string, 0)
+	for rows.Next() {
+		var target string
+		err = rows.Scan(&target)
+		if err != nil {
+			log.Error().Err(err).Msg(msgGetAppliedSortingRuleTargetsFailed)
+			return nil, ErrGetAppliedSortingRuleTargetsFailed
+		}
+		appliedSortingRuleTargets = append(appliedSortingRuleTargets, target)
+	}
+
+	return appliedSortingRuleTargets, nil
+}
+
 func (r *sortingRuleRepository) Update(ctx context.Context, rule SortingRule) error {
 	query := fmt.Sprintf("UPDATE %s.sk_sorting_rules "+
 		"SET condition_id = :condition_id, target = :target, programme = :programme, modified_at = timezone('utc', now()) WHERE id = :id", r.dbSchema)
@@ -115,6 +166,20 @@ func (r *sortingRuleRepository) Update(ctx context.Context, rule SortingRule) er
 
 	return nil
 }
+
+/*
+	CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_applied_sorting_rule_targets (
+	id uuid NOT NULL DEFAULT uuid_generate_v4(),
+	instrument_id uuid NOT NULL,
+	sample_code VARCHAR NOT NULL,
+	target VARCHAR NOT NULL,
+	programme VARCHAR,
+	created_at TIMESTAMP NOT NULL DEFAULT timezone('utc', NOW()),
+	valid_until TIMESTAMP NOT NULL,
+	CONSTRAINT fk_sk_applied_sorting_rule_target_sk_instrument FOREIGN KEY (instrument_id) REFERENCES <SCHEMA_PLACEHOLDER>.sk_instruments (id),
+	PRIMARY KEY (id)
+);
+*/
 
 func (r *sortingRuleRepository) Delete(ctx context.Context, sortingRuleIDs []uuid.UUID) error {
 	if len(sortingRuleIDs) == 0 {
@@ -207,15 +272,19 @@ func convertDAOToSortingRule(dao sortingRuleDAO) SortingRule {
 }
 
 const (
+	msgApplySortingRuleTargetFailed       = "apply sorting rule target failed"
 	msgCreateSortingRuleFailed            = "create sorting rule failed"
 	msgGetSortingRuleByInstrumentIDFailed = "get sorting rule by instrument ID failed"
+	msgGetAppliedSortingRuleTargetsFailed = "get applied sorting rule targets failed"
 	msgUpdateSortingRuleFailed            = "update sorting rule failed"
 	msgDeleteSortingRulesFailed           = "delete sorting rules failed"
 )
 
 var (
+	ErrApplySortingRuleTargetFailed       = errors.New(msgApplySortingRuleTargetFailed)
 	ErrCreateSortingRuleFailed            = errors.New(msgCreateSortingRuleFailed)
 	ErrGetSortingRuleByInstrumentIDFailed = errors.New(msgGetSortingRuleByInstrumentIDFailed)
+	ErrGetAppliedSortingRuleTargetsFailed = errors.New(msgGetAppliedSortingRuleTargetsFailed)
 	ErrUpdateSortingRuleFailed            = errors.New(msgUpdateSortingRuleFailed)
 	ErrDeleteSortingRulesFailed           = errors.New(msgDeleteSortingRulesFailed)
 )
