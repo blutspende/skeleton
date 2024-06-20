@@ -805,6 +805,10 @@ func (m *analysisRepositoryMock) CreateAnalysisRequestExtraValues(ctx context.Co
 	return nil
 }
 
+func (m *analysisRepositoryMock) GetSampleCodesByOrderID(ctx context.Context, orderID uuid.UUID) ([]string, error) {
+	return nil, nil
+}
+
 func (m *analysisRepositoryMock) GetUnprocessedAnalysisResultIDs(ctx context.Context) ([]uuid.UUID, error) {
 	return make([]uuid.UUID, 660), nil
 }

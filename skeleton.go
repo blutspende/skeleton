@@ -356,8 +356,16 @@ func (s *skeleton) GetSortingTarget(ctx context.Context, instrumentIP string, sa
 			}
 		}
 	}
+	var appliedTargets []string
+	targetsLoaded := false
 	for i := range sortingRules {
-		target, err := GetSortingTargetForAnalysisRequestAndCondition(analysisRequests, sortingRules[i])
+		if ShouldLoadAppliedTargets(sortingRules[i].Condition) && !targetsLoaded {
+			appliedTargets, err = s.sortingRuleService.GetAppliedSortingRuleTargets(ctx, instrument.ID, programme, analysisRequests[0])
+			if err == nil {
+				targetsLoaded = true
+			}
+		}
+		target, err := GetSortingTargetForAnalysisRequestAndCondition(analysisRequests, sortingRules[i], appliedTargets)
 		if err != nil {
 			continue
 		}
@@ -365,6 +373,25 @@ func (s *skeleton) GetSortingTarget(ctx context.Context, instrumentIP string, sa
 	}
 
 	return "", fmt.Errorf("no target found")
+}
+
+func (s *skeleton) MarkSortingTargetAsApplied(ctx context.Context, instrumentIP, sampleCode, programme, target string) error {
+	instrument, err := s.GetInstrumentByIP(ctx, instrumentIP)
+	if err != nil {
+		return err
+	}
+	analysisRequestsBySampleCode, err := s.GetAnalysisRequestsBySampleCodes(ctx, []string{sampleCode}, true)
+	if err != nil {
+		return err
+	}
+	var validUntil time.Time
+	analysisRequests := analysisRequestsBySampleCode[sampleCode]
+	if len(analysisRequests) == 0 {
+		validUntil = time.Now().UTC().AddDate(0, 0, 14)
+	} else {
+		validUntil = analysisRequests[0].ValidUntilTime
+	}
+	return s.sortingRuleService.ApplySortingRuleTarget(ctx, instrument.ID, programme, sampleCode, target, validUntil)
 }
 
 func (s *skeleton) FindAnalyteByManufacturerTestCode(instrument Instrument, testCode string) AnalyteMapping {

@@ -6,10 +6,13 @@ import (
 	"github.com/blutspende/skeleton/db"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
+	"time"
 )
 
 type SortingRuleService interface {
+	ApplySortingRuleTarget(ctx context.Context, instrumentID uuid.UUID, programme, sampleCode, target string, validUntil time.Time) error
 	Create(ctx context.Context, sortingRule *SortingRule) error
+	GetAppliedSortingRuleTargets(ctx context.Context, instrumentID uuid.UUID, programme string, analysisRequest AnalysisRequest) ([]string, error)
 	GetByInstrumentIDAndProgramme(ctx context.Context, instrumentID uuid.UUID, programme string) ([]SortingRule, error)
 	GetByInstrumentIDs(ctx context.Context, instrumentIDs []uuid.UUID) (map[uuid.UUID][]SortingRule, error)
 	Update(ctx context.Context, rule *SortingRule) error
@@ -18,6 +21,7 @@ type SortingRuleService interface {
 }
 
 type sortingRuleService struct {
+	analysisRepository    AnalysisRepository
 	conditionService      ConditionService
 	sortingRuleRepository SortingRuleRepository
 	externalTx            db.DbConnector
@@ -29,6 +33,35 @@ func (s *sortingRuleService) getTransaction() (db.DbConnector, error) {
 	}
 
 	return s.sortingRuleRepository.CreateTransaction()
+}
+
+func (s *sortingRuleService) ApplySortingRuleTarget(ctx context.Context, instrumentID uuid.UUID, programme, sampleCode, target string, validUntil time.Time) error {
+	return s.sortingRuleRepository.ApplySortingRuleTarget(ctx, instrumentID, programme, sampleCode, target, validUntil)
+}
+
+func (s *sortingRuleService) GetAppliedSortingRuleTargets(ctx context.Context, instrumentID uuid.UUID, programme string, analysisRequest AnalysisRequest) ([]string, error) {
+	var orderID uuid.UUID
+	var err error
+	for _, extraValue := range analysisRequest.ExtraValues {
+		if extraValue.Value == "OrderID" {
+			orderID, err = uuid.Parse(extraValue.Key)
+			if err != nil {
+				log.Error().Err(err).Str("orderID", extraValue.Value).Msg("invalid order ID in extra values")
+				return nil, err
+			}
+			break
+		}
+	}
+
+	if orderID == uuid.Nil {
+		return nil, nil
+	}
+
+	sampleCodes, err := s.analysisRepository.GetSampleCodesByOrderID(ctx, orderID)
+	if err != nil {
+		return nil, err
+	}
+	return s.sortingRuleRepository.GetAppliedSortingRuleTargets(ctx, instrumentID, programme, sampleCodes)
 }
 
 func (s *sortingRuleService) Create(ctx context.Context, sortingRule *SortingRule) error {
@@ -74,14 +107,14 @@ func (s *sortingRuleService) Create(ctx context.Context, sortingRule *SortingRul
 	return nil
 }
 
-func GetSortingTargetForAnalysisRequestAndCondition(analysisRequests []AnalysisRequest, sortingRule SortingRule) (string, error) {
+func GetSortingTargetForAnalysisRequestAndCondition(analysisRequests []AnalysisRequest, sortingRule SortingRule, appliedTargets []string) (string, error) {
 	if sortingRule.Condition == nil {
 		return sortingRule.Target, nil
 	}
 	if len(analysisRequests) == 0 {
 		return "", fmt.Errorf("no analysis requests to evaluate")
 	}
-	evaluatorFunc, conditionErrors := NewConditionEvaluator(*sortingRule.Condition)
+	evaluatorFunc, conditionErrors := NewConditionEvaluator(*sortingRule.Condition, appliedTargets)
 	if len(conditionErrors) > 0 || evaluatorFunc == nil {
 		log.Error().Interface("sortingRuleID", sortingRule.ID).Interface("conditionID", sortingRule.Condition.ID).Msg("invalid condition")
 		return "", fmt.Errorf("invalid condition")

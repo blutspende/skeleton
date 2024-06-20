@@ -421,6 +421,23 @@ func (s *conditionService) updateCondition(ctx context.Context, tx db.DbConnecto
 	return nil
 }
 
+func ShouldLoadAppliedTargets(condition *Condition) bool {
+	if condition == nil {
+		return false
+	}
+	if condition.Operator == TargetNotApplied {
+		return true
+	}
+	if ShouldLoadAppliedTargets(condition.SubCondition1) {
+		return true
+	}
+	if ShouldLoadAppliedTargets(condition.SubCondition2) {
+		return true
+	}
+
+	return false
+}
+
 func (s *conditionService) DeleteCondition(ctx context.Context, id uuid.UUID) error {
 	tx, err := s.getTransaction()
 	if err != nil {
@@ -534,13 +551,13 @@ func NewConditionService(conditionRepository ConditionRepository) ConditionServi
 
 type ConditionEvaluatorFunc func(operand1AnalysisRequest AnalysisRequest, operand2AnalysisRequest AnalysisRequest, relatedAnalysisRequests []AnalysisRequest) (bool, error)
 
-func NewConditionEvaluator(condition Condition) (ConditionEvaluatorFunc, []ConditionError) {
+func NewConditionEvaluator(condition Condition, appliedTargets []string) (ConditionEvaluatorFunc, []ConditionError) {
 	index := 0
 	conditionErrors := make([]ConditionError, 0)
-	return createConditionEvaluator(condition, &index, &conditionErrors), conditionErrors
+	return createConditionEvaluator(condition, &index, &conditionErrors, appliedTargets), conditionErrors
 }
 
-func createConditionEvaluator(condition Condition, index *int, conditionErrors *[]ConditionError) ConditionEvaluatorFunc {
+func createConditionEvaluator(condition Condition, index *int, conditionErrors *[]ConditionError, appliedTargets []string) ConditionEvaluatorFunc {
 	var evalFunc ConditionEvaluatorFunc
 	switch condition.Operator {
 	case And, Or:
@@ -628,7 +645,7 @@ func createConditionEvaluator(condition Condition, index *int, conditionErrors *
 
 	switch condition.Operator {
 	case And, Or:
-		evalFunc = createLogicConditionEvaluator(condition, index, conditionErrors)
+		evalFunc = createLogicConditionEvaluator(condition, index, conditionErrors, appliedTargets)
 	case Contains:
 		evalFunc = createContainsConditionEvaluator(condition)
 	case NotContains:
@@ -648,20 +665,24 @@ func createConditionEvaluator(condition Condition, index *int, conditionErrors *
 		evalFunc = createExistsCondition(condition)
 	case NotExists:
 		evalFunc = createNotExistsCondition(condition)
+	case TargetApplied:
+		evalFunc = createTargetAppliedCondition(condition, appliedTargets)
+	case TargetNotApplied:
+		evalFunc = createTargetNotAppliedCondition(condition, appliedTargets)
 	case MatchAll:
-		evalFunc = createMatchAllCondition(condition, index, conditionErrors)
+		evalFunc = createMatchAllCondition(condition, index, conditionErrors, appliedTargets)
 	case MatchAny:
-		evalFunc = createMatchAnyCondition(condition, index, conditionErrors)
+		evalFunc = createMatchAnyCondition(condition, index, conditionErrors, appliedTargets)
 	}
 	return evalFunc
 }
 
-func createLogicConditionEvaluator(condition Condition, index *int, checkRuleConditionErrors *[]ConditionError) ConditionEvaluatorFunc {
+func createLogicConditionEvaluator(condition Condition, index *int, checkRuleConditionErrors *[]ConditionError, appliedTargets []string) ConditionEvaluatorFunc {
 	*index = *index + 1
-	subCondition1Evaluator := createConditionEvaluator(*condition.SubCondition1, index, checkRuleConditionErrors)
+	subCondition1Evaluator := createConditionEvaluator(*condition.SubCondition1, index, checkRuleConditionErrors, appliedTargets)
 
 	*index = *index + 1
-	subCondition2Evaluator := createConditionEvaluator(*condition.SubCondition2, index, checkRuleConditionErrors)
+	subCondition2Evaluator := createConditionEvaluator(*condition.SubCondition2, index, checkRuleConditionErrors, appliedTargets)
 
 	return func(operand1AnalysisRequest AnalysisRequest, operand2AnalysisRequest AnalysisRequest, relatedWorkItems []AnalysisRequest) (bool, error) {
 		subcondition1Evaluation, err := subCondition1Evaluator(operand1AnalysisRequest, operand2AnalysisRequest, relatedWorkItems)
@@ -859,6 +880,34 @@ func createExistsCondition(condition Condition) ConditionEvaluatorFunc {
 	}
 }
 
+func createTargetAppliedCondition(condition Condition, appliedTargets []string) ConditionEvaluatorFunc {
+	return func(operand1AnalysisRequest AnalysisRequest, operand2AnalysisRequest AnalysisRequest, relatedWorkItems []AnalysisRequest) (bool, error) {
+		var err error
+		var value string
+		if condition.Operand1 != nil {
+			value, err = getFieldValueByOperand(operand1AnalysisRequest, *condition.Operand1)
+			if err == ErrConditionOperandNotFound {
+				return false, ErrOperand1Missing
+			}
+			for _, appliedTarget := range appliedTargets {
+				if appliedTarget == value {
+					return true, nil
+				}
+			}
+			return false, nil
+		} else {
+			return false, ErrOperand1Missing
+		}
+	}
+}
+func createTargetNotAppliedCondition(condition Condition, appliedTargets []string) ConditionEvaluatorFunc {
+	return func(operand1AnalysisRequest AnalysisRequest, operand2AnalysisRequest AnalysisRequest, relatedWorkItems []AnalysisRequest) (bool, error) {
+		evalFunc := createTargetAppliedCondition(condition, appliedTargets)
+		res, err := evalFunc(operand1AnalysisRequest, operand2AnalysisRequest, relatedWorkItems)
+		return !res, err
+	}
+}
+
 func createNotExistsCondition(condition Condition) ConditionEvaluatorFunc {
 	return func(operand1AnalysisRequest AnalysisRequest, operand2AnalysisRequest AnalysisRequest, relatedWorkItems []AnalysisRequest) (bool, error) {
 		_, err := getFieldValueByOperand(operand1AnalysisRequest, *condition.Operand1)
@@ -866,8 +915,8 @@ func createNotExistsCondition(condition Condition) ConditionEvaluatorFunc {
 	}
 }
 
-func createMatchAnyCondition(condition Condition, index *int, checkRuleConditionErrors *[]ConditionError) ConditionEvaluatorFunc {
-	lambdaEvaluator := createConditionEvaluator(*condition.SubCondition2, index, checkRuleConditionErrors)
+func createMatchAnyCondition(condition Condition, index *int, checkRuleConditionErrors *[]ConditionError, appliedTargets []string) ConditionEvaluatorFunc {
+	lambdaEvaluator := createConditionEvaluator(*condition.SubCondition2, index, checkRuleConditionErrors, appliedTargets)
 	if lambdaEvaluator == nil {
 		return nil
 	}
@@ -893,8 +942,8 @@ func createMatchAnyCondition(condition Condition, index *int, checkRuleCondition
 	}
 }
 
-func createMatchAllCondition(condition Condition, index *int, checkRuleConditionErrors *[]ConditionError) ConditionEvaluatorFunc {
-	lambdaEvaluator := createConditionEvaluator(*condition.SubCondition2, index, checkRuleConditionErrors)
+func createMatchAllCondition(condition Condition, index *int, checkRuleConditionErrors *[]ConditionError, appliedTargets []string) ConditionEvaluatorFunc {
+	lambdaEvaluator := createConditionEvaluator(*condition.SubCondition2, index, checkRuleConditionErrors, appliedTargets)
 	if lambdaEvaluator == nil {
 		return nil
 	}

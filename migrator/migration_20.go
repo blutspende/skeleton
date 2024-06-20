@@ -59,6 +59,8 @@ VALUES
 	('matchAny'),
 	('matchAll'),
 	('compareAll'),
+	('targetApplied'),
+	('targetNotApplied'),
 	('notContains');
 
 CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_conditions
@@ -102,6 +104,18 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_sorting_rules (
 	deleted_at TIMESTAMP,
 	CONSTRAINT fk_sk_sorting_rule_sk_instrument FOREIGN KEY (instrument_id) REFERENCES <SCHEMA_PLACEHOLDER>.sk_instruments (id),
 	CONSTRAINT fk_sk_sorting_rule_sk_condition FOREIGN KEY (condition_id) REFERENCES <SCHEMA_PLACEHOLDER>.sk_conditions (id),
+	PRIMARY KEY (id)
+);
+
+	CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_applied_sorting_rule_targets (
+	id uuid NOT NULL DEFAULT uuid_generate_v4(),
+	instrument_id uuid NOT NULL,
+	sample_code VARCHAR NOT NULL,
+	target VARCHAR NOT NULL,
+	programme VARCHAR,
+	created_at TIMESTAMP NOT NULL DEFAULT timezone('utc', NOW()),
+	valid_until TIMESTAMP NOT NULL,
+	CONSTRAINT fk_sk_applied_sorting_rule_target_sk_instrument FOREIGN KEY (instrument_id) REFERENCES <SCHEMA_PLACEHOLDER>.sk_instruments (id),
 	PRIMARY KEY (id)
 );
 `
