@@ -52,11 +52,11 @@ func TestAndOperator(t *testing.T) {
 		SubCondition2: falseCondition,
 	}
 	analysisRequest := AnalysisRequest{}
-	evalFunc, _ := NewConditionEvaluator(conditionTrueAndTrue)
+	evalFunc, _ := NewConditionEvaluator(conditionTrueAndTrue, nil)
 	result, err := evalFunc(analysisRequest, analysisRequest, nil)
 	assert.Nil(t, err)
 	assert.True(t, result)
-	evalFunc, _ = NewConditionEvaluator(conditionTrueAndFalse)
+	evalFunc, _ = NewConditionEvaluator(conditionTrueAndFalse, nil)
 	result, err = evalFunc(analysisRequest, analysisRequest, nil)
 	assert.Nil(t, err)
 	assert.False(t, result)
@@ -79,15 +79,15 @@ func TestOrOperator(t *testing.T) {
 		SubCondition2: falseCondition,
 	}
 	analysisRequest := AnalysisRequest{}
-	evalFunc, _ := NewConditionEvaluator(conditionFalseOrTrue)
+	evalFunc, _ := NewConditionEvaluator(conditionFalseOrTrue, nil)
 	result, err := evalFunc(analysisRequest, analysisRequest, nil)
 	assert.Nil(t, err)
 	assert.True(t, result)
-	evalFunc, _ = NewConditionEvaluator(conditionTrueOrFalse)
+	evalFunc, _ = NewConditionEvaluator(conditionTrueOrFalse, nil)
 	result, err = evalFunc(analysisRequest, analysisRequest, nil)
 	assert.Nil(t, err)
 	assert.True(t, result)
-	evalFunc, _ = NewConditionEvaluator(conditionFalseOrFalse)
+	evalFunc, _ = NewConditionEvaluator(conditionFalseOrFalse, nil)
 	result, err = evalFunc(analysisRequest, analysisRequest, nil)
 	assert.Nil(t, err)
 	assert.False(t, result)
@@ -121,11 +121,11 @@ func TestContainsOperator(t *testing.T) {
 	var err error
 	var result bool
 	analysisRequest := AnalysisRequest{}
-	evalFunc, _ = NewConditionEvaluator(conditionContainsTrue)
+	evalFunc, _ = NewConditionEvaluator(conditionContainsTrue, nil)
 	result, err = evalFunc(analysisRequest, analysisRequest, nil)
 	assert.Nil(t, err)
 	assert.True(t, result)
-	evalFunc, _ = NewConditionEvaluator(conditionContainsFalse)
+	evalFunc, _ = NewConditionEvaluator(conditionContainsFalse, nil)
 	result, err = evalFunc(analysisRequest, analysisRequest, nil)
 	assert.Nil(t, err)
 	assert.False(t, result)
@@ -159,11 +159,11 @@ func TestNotContainsOperator(t *testing.T) {
 	var err error
 	var result bool
 	analysisRequest := AnalysisRequest{}
-	evalFunc, _ = NewConditionEvaluator(conditionNotContainsTrue)
+	evalFunc, _ = NewConditionEvaluator(conditionNotContainsTrue, nil)
 	result, err = evalFunc(analysisRequest, analysisRequest, nil)
 	assert.Nil(t, err)
 	assert.True(t, result)
-	evalFunc, _ = NewConditionEvaluator(conditionNotContainsFalse)
+	evalFunc, _ = NewConditionEvaluator(conditionNotContainsFalse, nil)
 	result, err = evalFunc(analysisRequest, analysisRequest, nil)
 	assert.Nil(t, err)
 	assert.False(t, result)
@@ -196,11 +196,11 @@ func TestEqualsOperator(t *testing.T) {
 	var err error
 	var result bool
 	analysisRequest := AnalysisRequest{}
-	evalFunc, _ = NewConditionEvaluator(conditionTrueEqualsTrue)
+	evalFunc, _ = NewConditionEvaluator(conditionTrueEqualsTrue, nil)
 	result, err = evalFunc(analysisRequest, analysisRequest, nil)
 	assert.Nil(t, err)
 	assert.True(t, result)
-	evalFunc, _ = NewConditionEvaluator(conditionTrueEqualsFalse)
+	evalFunc, _ = NewConditionEvaluator(conditionTrueEqualsFalse, nil)
 	result, err = evalFunc(analysisRequest, analysisRequest, nil)
 	assert.Nil(t, err)
 	assert.False(t, result)
@@ -233,11 +233,11 @@ func TestNotEqualsOperator(t *testing.T) {
 	var err error
 	var result bool
 	analysisRequest := AnalysisRequest{}
-	evalFunc, _ = NewConditionEvaluator(conditionTrueNotEqualsFalse)
+	evalFunc, _ = NewConditionEvaluator(conditionTrueNotEqualsFalse, nil)
 	result, err = evalFunc(analysisRequest, analysisRequest, nil)
 	assert.Nil(t, err)
 	assert.True(t, result)
-	evalFunc, _ = NewConditionEvaluator(conditionTrueNotEqualsTrue)
+	evalFunc, _ = NewConditionEvaluator(conditionTrueNotEqualsTrue, nil)
 	result, err = evalFunc(analysisRequest, analysisRequest, nil)
 	assert.Nil(t, err)
 	assert.False(t, result)
@@ -283,15 +283,15 @@ func TestGreaterOperator(t *testing.T) {
 	var err error
 	var result bool
 	analysisRequest := AnalysisRequest{}
-	evalFunc, _ = NewConditionEvaluator(condition2GT1)
+	evalFunc, _ = NewConditionEvaluator(condition2GT1, nil)
 	result, err = evalFunc(analysisRequest, analysisRequest, nil)
 	assert.Nil(t, err)
 	assert.True(t, result)
-	evalFunc, _ = NewConditionEvaluator(condition1GT2)
+	evalFunc, _ = NewConditionEvaluator(condition1GT2, nil)
 	result, err = evalFunc(analysisRequest, analysisRequest, nil)
 	assert.Nil(t, err)
 	assert.False(t, result)
-	evalFunc, _ = NewConditionEvaluator(condition1GT1)
+	evalFunc, _ = NewConditionEvaluator(condition1GT1, nil)
 	result, err = evalFunc(analysisRequest, analysisRequest, nil)
 	assert.Nil(t, err)
 	assert.False(t, result)
@@ -337,15 +337,15 @@ func TestGreaterOrEqualOperator(t *testing.T) {
 	var err error
 	var result bool
 	analysisRequest := AnalysisRequest{}
-	evalFunc, _ = NewConditionEvaluator(condition2GTE1)
+	evalFunc, _ = NewConditionEvaluator(condition2GTE1, nil)
 	result, err = evalFunc(analysisRequest, analysisRequest, nil)
 	assert.Nil(t, err)
 	assert.True(t, result)
-	evalFunc, _ = NewConditionEvaluator(condition1GTE1)
+	evalFunc, _ = NewConditionEvaluator(condition1GTE1, nil)
 	result, err = evalFunc(analysisRequest, analysisRequest, nil)
 	assert.Nil(t, err)
 	assert.True(t, result)
-	evalFunc, _ = NewConditionEvaluator(condition1GTE2)
+	evalFunc, _ = NewConditionEvaluator(condition1GTE2, nil)
 	result, err = evalFunc(analysisRequest, analysisRequest, nil)
 	assert.Nil(t, err)
 	assert.False(t, result)
@@ -392,15 +392,15 @@ func TestLessOperator(t *testing.T) {
 	var err error
 	var result bool
 	analysisRequest := AnalysisRequest{}
-	evalFunc, _ = NewConditionEvaluator(condition1LT2)
+	evalFunc, _ = NewConditionEvaluator(condition1LT2, nil)
 	result, err = evalFunc(analysisRequest, analysisRequest, nil)
 	assert.Nil(t, err)
 	assert.True(t, result)
-	evalFunc, _ = NewConditionEvaluator(condition2LT1)
+	evalFunc, _ = NewConditionEvaluator(condition2LT1, nil)
 	result, err = evalFunc(analysisRequest, analysisRequest, nil)
 	assert.Nil(t, err)
 	assert.False(t, result)
-	evalFunc, _ = NewConditionEvaluator(condition1LT1)
+	evalFunc, _ = NewConditionEvaluator(condition1LT1, nil)
 	result, err = evalFunc(analysisRequest, analysisRequest, nil)
 	assert.Nil(t, err)
 	assert.False(t, result)
@@ -446,15 +446,15 @@ func TestLessOrEqualOperator(t *testing.T) {
 	var err error
 	var result bool
 	analysisRequest := AnalysisRequest{}
-	evalFunc, _ = NewConditionEvaluator(condition1LTE2)
+	evalFunc, _ = NewConditionEvaluator(condition1LTE2, nil)
 	result, err = evalFunc(analysisRequest, analysisRequest, nil)
 	assert.Nil(t, err)
 	assert.True(t, result)
-	evalFunc, _ = NewConditionEvaluator(condition1LTE1)
+	evalFunc, _ = NewConditionEvaluator(condition1LTE1, nil)
 	result, err = evalFunc(analysisRequest, analysisRequest, nil)
 	assert.Nil(t, err)
 	assert.True(t, result)
-	evalFunc, _ = NewConditionEvaluator(condition2LTE1)
+	evalFunc, _ = NewConditionEvaluator(condition2LTE1, nil)
 	result, err = evalFunc(analysisRequest, analysisRequest, nil)
 	assert.Nil(t, err)
 	assert.False(t, result)
@@ -489,11 +489,11 @@ func TestMatchRegexOperator(t *testing.T) {
 	var err error
 	var result bool
 	analysisRequest := AnalysisRequest{}
-	evalFunc, _ = NewConditionEvaluator(conditionMatchRegexTrue)
+	evalFunc, _ = NewConditionEvaluator(conditionMatchRegexTrue, nil)
 	result, err = evalFunc(analysisRequest, analysisRequest, nil)
 	assert.Nil(t, err)
 	assert.True(t, result)
-	evalFunc, _ = NewConditionEvaluator(conditionMatchRegexFalse)
+	evalFunc, _ = NewConditionEvaluator(conditionMatchRegexFalse, nil)
 	result, err = evalFunc(analysisRequest, analysisRequest, nil)
 	assert.Nil(t, err)
 	assert.False(t, result)
@@ -522,7 +522,7 @@ func TestExistsOperator(t *testing.T) {
 			},
 		},
 	}
-	evalFunc, _ = NewConditionEvaluator(conditionExists)
+	evalFunc, _ = NewConditionEvaluator(conditionExists, nil)
 	result, err = evalFunc(analysisRequest, analysisRequest, nil)
 	assert.Nil(t, err)
 	assert.True(t, result)
@@ -551,7 +551,7 @@ func TestNotExistsOperator(t *testing.T) {
 			},
 		},
 	}
-	evalFunc, _ = NewConditionEvaluator(conditionNotExists)
+	evalFunc, _ = NewConditionEvaluator(conditionNotExists, nil)
 	result, err = evalFunc(analysisRequest, analysisRequest, nil)
 	assert.Nil(t, err)
 	assert.True(t, result)
@@ -587,7 +587,7 @@ func TestMatchAllOperator(t *testing.T) {
 	var evalFunc ConditionEvaluatorFunc
 	var err error
 	var result bool
-	evalFunc, _ = NewConditionEvaluator(conditionMatchAll)
+	evalFunc, _ = NewConditionEvaluator(conditionMatchAll, nil)
 	result, err = evalFunc(analysisRequests[0], analysisRequests[0], analysisRequests)
 	assert.Nil(t, err)
 	assert.False(t, result)
@@ -623,7 +623,7 @@ func TestMatchAnyOperator(t *testing.T) {
 	var evalFunc ConditionEvaluatorFunc
 	var err error
 	var result bool
-	evalFunc, _ = NewConditionEvaluator(conditionMatchAny)
+	evalFunc, _ = NewConditionEvaluator(conditionMatchAny, nil)
 	result, err = evalFunc(analysisRequests[0], analysisRequests[0], analysisRequests)
 	assert.Nil(t, err)
 	assert.False(t, result)
@@ -633,4 +633,50 @@ func TestMatchAnyOperator(t *testing.T) {
 	result, err = evalFunc(analysisRequests[0], analysisRequests[0], analysisRequests)
 	assert.Nil(t, err)
 	assert.True(t, result)
+}
+
+func TestTargetAppliedOperator(t *testing.T) {
+	target1 := "PK7400_MF"
+	conditionApplied := Condition{
+		Operand1: &ConditionOperand{
+			Type:          Constant,
+			ConstantValue: &target1,
+		},
+		Operator: TargetApplied,
+	}
+	var evalFunc ConditionEvaluatorFunc
+	var err error
+	var result bool
+	evalFunc, _ = NewConditionEvaluator(conditionApplied, []string{"PK7400_ES", "HAM_ESP"})
+	result, err = evalFunc(AnalysisRequest{}, AnalysisRequest{}, nil)
+	assert.Nil(t, err)
+	assert.False(t, result)
+
+	evalFunc, _ = NewConditionEvaluator(conditionApplied, []string{"PK7400_MF", "HAM_ESP"})
+	result, err = evalFunc(AnalysisRequest{}, AnalysisRequest{}, nil)
+	assert.Nil(t, err)
+	assert.True(t, result)
+}
+
+func TestTargetNotAppliedOperator(t *testing.T) {
+	target1 := "PK7400_MF"
+	conditionNotApplied := Condition{
+		Operand1: &ConditionOperand{
+			Type:          Constant,
+			ConstantValue: &target1,
+		},
+		Operator: TargetNotApplied,
+	}
+	var evalFunc ConditionEvaluatorFunc
+	var err error
+	var result bool
+	evalFunc, _ = NewConditionEvaluator(conditionNotApplied, []string{"PK7400_ES", "HAM_ESP"})
+	result, err = evalFunc(AnalysisRequest{}, AnalysisRequest{}, nil)
+	assert.Nil(t, err)
+	assert.True(t, result)
+
+	evalFunc, _ = NewConditionEvaluator(conditionNotApplied, []string{"PK7400_MF", "HAM_ESP"})
+	result, err = evalFunc(AnalysisRequest{}, AnalysisRequest{}, nil)
+	assert.Nil(t, err)
+	assert.False(t, result)
 }

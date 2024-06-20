@@ -2,13 +2,12 @@ package skeleton
 
 import (
 	"context"
-	"net/http"
-
 	"github.com/blutspende/logcom-api/logcom"
 	"github.com/blutspende/skeleton/consolelog/repository"
 	"github.com/blutspende/skeleton/consolelog/service"
 	"github.com/blutspende/skeleton/server"
 	"github.com/gin-gonic/gin"
+	"net/http"
 
 	config2 "github.com/blutspende/skeleton/config"
 	"github.com/blutspende/skeleton/db"
@@ -115,6 +114,9 @@ type SkeletonAPI interface {
 	// ResultMappings can be made via the ui to translate results
 	// e.g. "+" -> "pos" to be used in a pein datatype
 	FindResultMapping(searchValue string, mapping []ResultMapping) (string, error)
+
+	// MarkSortingTargetAsApplied - should be called after a sample was successfully sorter
+	MarkSortingTargetAsApplied(ctx context.Context, instrumentIP, sampleCode, programme, target string) error
 
 	// RegisterProtocol - Registers
 	RegisterProtocol(ctx context.Context, id uuid.UUID, name string, description string, abilities []ProtocolAbility, settings []ProtocolSetting) error
