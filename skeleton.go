@@ -214,6 +214,11 @@ func (s *skeleton) SubmitAnalysisResultBatch(ctx context.Context, resultBatch []
 	return nil
 }
 
+func (s *skeleton) SubmitAnalysisResultSet(ctx context.Context, resultSet []AnalysisResultSet) error {
+	//TODO implement later
+	return nil
+}
+
 func (s *skeleton) saveImages(ctx context.Context, resultData *AnalysisResult) error {
 	if resultData == nil {
 		return nil

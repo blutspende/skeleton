@@ -105,15 +105,16 @@ const (
 )
 
 type ReagentInfo struct {
-	Manufacturer      string      `json:"manufacturer"`
-	SerialNumber      string      `json:"serialNo"`
-	LotNo             string      `json:"lotNo"`
-	Type              ReagentType `json:"reagentType"`
-	Name              *string     `json:"name"`
-	Code              *string     `json:"code"`
-	ManufacturingDate *time.Time  `json:"manufacturingDate"`
-	ExpirationDate    *time.Time  `json:"expirationDate"`
-	CreatedAt         time.Time   `json:"createdAt"`
+	Manufacturer      string          `json:"manufacturer"`
+	SerialNumber      string          `json:"serialNo"`
+	LotNo             string          `json:"lotNo"`
+	Type              ReagentType     `json:"reagentType"`
+	Name              *string         `json:"name"`
+	Code              *string         `json:"code"`
+	ManufacturingDate *time.Time      `json:"manufacturingDate"`
+	ExpirationDate    *time.Time      `json:"expirationDate"`
+	CreatedAt         time.Time       `json:"createdAt"`
+	ControlResults    []ControlResult `json:"controlResults"`
 }
 
 type ExtraValue struct {
@@ -174,12 +175,18 @@ type AnalyteMapping struct {
 	ChannelMappings   []ChannelMapping
 	ResultMappings    []ResultMapping
 	ResultType        ResultType
+	ControlMappings   []ControlMapping
 }
 
 type ChannelMapping struct {
 	ID                uuid.UUID
 	InstrumentChannel string
 	ChannelID         uuid.UUID
+}
+
+type ControlMapping struct {
+	ControlAnalyteCode    string
+	ExpectedControlResult string
 }
 
 // ResultMapping - Maps a ManufacturerTestCode to an AnalyteId (cerberus)
@@ -214,6 +221,12 @@ const (
 	Pseudonym SubjectType = "PSEUDONYMIZED"
 )
 
+type AnalysisResultSet struct {
+	Results                 []AnalysisResult
+	ReagentInfos            []ReagentInfo
+	CompositeControlResults []ControlResult
+}
+
 // AnalysisResult - The final result on 'per-workitem' basis to return the result to cerberus.
 // Call v1.SubmitAnalysisResult for submission.
 type AnalysisResult struct {
@@ -242,6 +255,13 @@ type AnalysisResult struct {
 	ExtraValues              []ExtraValue
 	ReagentInfos             []ReagentInfo
 	Images                   []Image
+}
+
+type ControlResult struct {
+	SampleCode  *string
+	AnalyteCode *string
+	Result      string
+	ExaminedAt  time.Time
 }
 
 type AnalysisResultBatchItemInfo struct {
