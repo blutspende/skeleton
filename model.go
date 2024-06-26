@@ -159,6 +159,7 @@ type Instrument struct {
 	ClientPort         *int
 	AnalyteMappings    []AnalyteMapping
 	RequestMappings    []RequestMapping
+	SortingRules       []SortingRule
 	Settings           []InstrumentSetting
 	CreatedAt          time.Time
 	ModifiedAt         *time.Time
@@ -415,4 +416,82 @@ type InstrumentType string
 const (
 	Analyzer InstrumentType = "ANALYZER"
 	Sorter   InstrumentType = "SORTER"
+)
+
+type SortingRule struct {
+	ID           uuid.UUID
+	InstrumentID uuid.UUID
+	Condition    *Condition
+	Target       string
+	Programme    *string
+	Priority     int
+	CreatedAt    time.Time
+	ModifiedAt   *time.Time
+	DeletedAt    *time.Time
+}
+
+type ConditionError struct {
+	ConditionNodeIndex int
+	Error              error
+}
+
+type Condition struct {
+	ID                  uuid.UUID
+	Name                *string
+	Operator            ConditionOperator
+	SubCondition1       *Condition
+	SubCondition2       *Condition
+	NegateSubCondition1 bool
+	NegateSubCondition2 bool
+	Operand1            *ConditionOperand
+	Operand2            *ConditionOperand
+}
+
+type ConditionOperand struct {
+	ID            uuid.UUID
+	Name          *string
+	Type          ConditionOperandType
+	ConstantValue *string
+	ExtraValueKey *string
+}
+
+type ConditionOperandType string
+
+const (
+	Constant ConditionOperandType = "constant"
+	Order    ConditionOperandType = "order"
+)
+
+const (
+	Analyte                   ConditionOperandType = "analyte"
+	Laboratory                ConditionOperandType = "laboratory"
+	SampleCode                ConditionOperandType = "sampleCode"
+	AnalysisRequestExtraValue ConditionOperandType = "extraValue"
+)
+
+type ConditionOperator string
+
+// Comparison operators
+const (
+	And              ConditionOperator = "and"
+	Or               ConditionOperator = "or"
+	Equals           ConditionOperator = "=="
+	NotEquals        ConditionOperator = "!="
+	Less             ConditionOperator = "<"
+	LessOrEqual      ConditionOperator = "<="
+	Greater          ConditionOperator = ">"
+	GreaterOrEqual   ConditionOperator = ">="
+	Contains         ConditionOperator = "contains"
+	NotContains      ConditionOperator = "notContains"
+	MatchRegex       ConditionOperator = "regex"
+	Exists           ConditionOperator = "exists"
+	NotExists        ConditionOperator = "notExists"
+	TargetApplied    ConditionOperator = "targetApplied"
+	TargetNotApplied ConditionOperator = "targetNotApplied"
+)
+
+// Lambda operators
+const (
+	MatchAny ConditionOperator = "matchAny"
+	MatchAll ConditionOperator = "matchAll"
 )
