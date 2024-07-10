@@ -108,11 +108,6 @@ func (sr *SkeletonTestRig) SubmitAnalysisResult(ctx context.Context, resultData 
 	return nil
 }
 
-func (sr *SkeletonTestRig) SubmitAnalysisResultBatch(ctx context.Context, resultBatch []AnalysisResult, submitTypes ...SubmitType) error {
-	sr.StoredAnalysisResults = append(sr.StoredAnalysisResults, resultBatch...)
-	return nil
-}
-
 func (sr *SkeletonTestRig) SubmitAnalysisResultSet(ctx context.Context, resultSet []AnalysisResultSet) error {
 	sr.StoredAnalysisResultSets = append(sr.StoredAnalysisResultSets, resultSet...)
 	return nil

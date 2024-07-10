@@ -134,6 +134,24 @@ func (s *skeleton) SubmitAnalysisResult(ctx context.Context, resultData Analysis
 	if err != nil {
 		return err
 	}
+	existingReagentInfosMap, err := s.getExistingReagentInfosMapByReagentInfos(ctx, resultData.ReagentInfos)
+	reagentInfosToSave := make([]ReagentInfo, 0)
+	for i := range resultData.ReagentInfos {
+		uniqueIdentifier := GetUniqueIdentifierByReagentInfo(resultData.ReagentInfos[i])
+		existingReagentInfo, ok := existingReagentInfosMap[uniqueIdentifier]
+		if ok {
+			resultData.ReagentInfos[i].ID = existingReagentInfo.ID
+			continue
+		}
+		resultData.ReagentInfos[i].ID = uuid.New()
+		reagentInfosToSave = append(reagentInfosToSave, resultData.ReagentInfos[i])
+		existingReagentInfosMap[uniqueIdentifier] = resultData.ReagentInfos[i]
+	}
+	err = s.analysisRepository.WithTransaction(tx).CreateReagentInfos(ctx, reagentInfosToSave)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
 	savedResultDataList, err := s.analysisRepository.WithTransaction(tx).CreateAnalysisResultsBatch(ctx, []AnalysisResult{resultData})
 	if err != nil {
 		_ = tx.Rollback()
@@ -165,28 +183,126 @@ func (s *skeleton) SubmitAnalysisResult(ctx context.Context, resultData Analysis
 	return nil
 }
 
-func (s *skeleton) SubmitAnalysisResultBatch(ctx context.Context, resultBatch []AnalysisResult, submitTypes ...SubmitType) error {
-	for i := range resultBatch {
-		if resultBatch[i].AnalyteMapping.ID == uuid.Nil {
-			return errors.New(fmt.Sprintf("analyte mapping ID is missing at index: %d", i))
+func (s *skeleton) SubmitAnalysisResultSet(ctx context.Context, resultSets []AnalysisResultSet) error {
+	reagentInfos := make([]ReagentInfo, 0)
+	controlResults := make([]ControlResult, 0)
+	reagentInfoUniqueIdentifierMap := make(map[string]any)
+	reagentInfoIDControlResultIDsMap := make(map[uuid.UUID][]uuid.UUID)
+	for i := range resultSets {
+		compositeControlResultIDs := make([]uuid.UUID, len(resultSets[i].CompositeControlResults))
+		for j := range resultSets[i].CompositeControlResults {
+			controlResultID := uuid.New()
+			resultSets[i].CompositeControlResults[j].ID = controlResultID
+			controlResults = append(controlResults, resultSets[i].CompositeControlResults[j])
+			compositeControlResultIDs[j] = controlResultID
 		}
-		if resultBatch[i].Instrument.ID == uuid.Nil {
-			return errors.New(fmt.Sprintf("instrument ID is missing at index: %d", i))
+		for j := range resultSets[i].ReagentInfos {
+			uniqueIdentifier := GetUniqueIdentifierByReagentInfo(resultSets[i].ReagentInfos[j])
+			if _, ok := reagentInfoUniqueIdentifierMap[uniqueIdentifier]; ok {
+				continue
+			}
+			reagentInfoUniqueIdentifierMap[uniqueIdentifier] = nil
+			reagentInfos = append(reagentInfos, resultSets[i].ReagentInfos[j])
+			reagentInfoIDControlResultIDsMap[resultSets[i].ReagentInfos[j].ID] = compositeControlResultIDs
+			for k := range resultSets[i].ReagentInfos[j].ControlResults {
+				controlResultID := uuid.New()
+				resultSets[i].ReagentInfos[j].ControlResults[k].ID = controlResultID
+				reagentInfoIDControlResultIDsMap[resultSets[i].ReagentInfos[j].ID] = append(reagentInfoIDControlResultIDsMap[resultSets[i].ReagentInfos[j].ID], controlResultID)
+			}
+			resultSets[i].ReagentInfos[j].ControlResults = append(resultSets[i].ReagentInfos[j].ControlResults, resultSets[i].CompositeControlResults...)
+
 		}
-		if resultBatch[i].ResultMode == "" {
-			resultBatch[i].ResultMode = resultBatch[i].Instrument.ResultMode
+		for _, result := range resultSets[i].Results {
+			for j := range result.ReagentInfos {
+				uniqueIdentifier := GetUniqueIdentifierByReagentInfo(result.ReagentInfos[j])
+				if _, ok := reagentInfoUniqueIdentifierMap[uniqueIdentifier]; ok {
+					continue
+				}
+				reagentInfoUniqueIdentifierMap[uniqueIdentifier] = nil
+				reagentInfos = append(reagentInfos, result.ReagentInfos[j])
+			}
 		}
 	}
-
+	counter := 0
+	uniqueIdentifiers := make([]string, len(reagentInfoUniqueIdentifierMap))
+	for uniqueIdentifier := range reagentInfoUniqueIdentifierMap {
+		uniqueIdentifiers[counter] = uniqueIdentifier
+		counter++
+	}
+	existingReagentInfosMap, err := s.getReagentInfosByUniqueIdentifiers(ctx, uniqueIdentifiers)
+	if err != nil {
+		return err
+	}
+	newReagentInfos := make([]ReagentInfo, 0)
+	for i := range reagentInfos {
+		uniqueIdentifier := GetUniqueIdentifierByReagentInfo(reagentInfos[i])
+		if _, ok := existingReagentInfosMap[uniqueIdentifier]; ok {
+			continue
+		}
+		reagentInfos[i].ID = uuid.New()
+		newReagentInfos = append(newReagentInfos, reagentInfos[i])
+		existingReagentInfosMap[uniqueIdentifier] = reagentInfos[i]
+	}
 	tx, err := s.analysisRepository.CreateTransaction()
 	if err != nil {
 		return err
 	}
-	savedAnalysisResults, err := s.analysisRepository.WithTransaction(tx).CreateAnalysisResultsBatch(ctx, resultBatch)
+
+	err = s.analysisRepository.WithTransaction(tx).CreateReagentInfos(ctx, newReagentInfos)
 	if err != nil {
 		_ = tx.Rollback()
 		return err
 	}
+
+	err = s.analysisRepository.WithTransaction(tx).CreateControlResultsBatch(ctx, controlResults)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	for reagentInfoID, controlResultIDs := range reagentInfoIDControlResultIDsMap {
+		err := s.analysisRepository.WithTransaction(tx).CreateRelationBetweenReagentInfoAndControlResults(ctx, reagentInfoID, controlResultIDs)
+		if err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+	}
+
+	savedAnalysisResults := make([]AnalysisResult, 0)
+	for _, resultSet := range resultSets {
+		for i := range resultSet.Results {
+			for j := range resultSet.Results[i].ReagentInfos {
+				uniqueIdentifier := GetUniqueIdentifierByReagentInfo(resultSet.Results[i].ReagentInfos[j])
+				existingReagentInfo := existingReagentInfosMap[uniqueIdentifier]
+				resultSet.Results[i].ReagentInfos[j].ID = existingReagentInfo.ID
+			}
+		}
+
+		if len(resultSet.Results) == 0 {
+			continue
+		}
+		for i := range resultSet.Results {
+			if resultSet.Results[i].AnalyteMapping.ID == uuid.Nil {
+				_ = tx.Rollback()
+				return errors.New(fmt.Sprintf("analyte mapping ID is missing at index: %d", i))
+			}
+			if resultSet.Results[i].Instrument.ID == uuid.Nil {
+				_ = tx.Rollback()
+				return errors.New(fmt.Sprintf("instrument ID is missing at index: %d", i))
+			}
+			if resultSet.Results[i].ResultMode == "" {
+				resultSet.Results[i].ResultMode = resultSet.Results[i].Instrument.ResultMode
+			}
+		}
+
+		savedAnalysisResultBatch, err := s.analysisRepository.WithTransaction(tx).CreateAnalysisResultsBatch(ctx, resultSet.Results)
+		if err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+		savedAnalysisResults = append(savedAnalysisResults, savedAnalysisResultBatch...)
+	}
+
 	if err = tx.Commit(); err != nil {
 		_ = tx.Rollback()
 		return err
@@ -211,11 +327,6 @@ func (s *skeleton) SubmitAnalysisResultBatch(ctx context.Context, resultBatch []
 		}
 	}(savedAnalysisResults)
 
-	return nil
-}
-
-func (s *skeleton) SubmitAnalysisResultSet(ctx context.Context, resultSet []AnalysisResultSet) error {
-	//TODO implement later
 	return nil
 }
 
@@ -728,6 +839,39 @@ func (s *skeleton) processStuckImagesToCerberus(ctx context.Context) {
 			ticker.Reset(tickerTriggerDuration)
 		}
 	}
+}
+
+func (s *skeleton) getExistingReagentInfosMapByReagentInfos(ctx context.Context, reagentInfos []ReagentInfo) (map[string]ReagentInfo, error) {
+	reagentInfoUniqueIdentifierMap := make(map[string]any)
+	for i := range reagentInfos {
+		uniqueIdentifier := GetUniqueIdentifierByReagentInfo(reagentInfos[i])
+		reagentInfoUniqueIdentifierMap[uniqueIdentifier] = nil
+	}
+
+	reagentInfoUniqueIdentifiers := make([]string, len(reagentInfoUniqueIdentifierMap))
+	counter := 0
+	for uniqueIdentifier := range reagentInfoUniqueIdentifierMap {
+		reagentInfoUniqueIdentifiers[counter] = uniqueIdentifier
+		counter++
+	}
+
+	return s.getReagentInfosByUniqueIdentifiers(ctx, reagentInfoUniqueIdentifiers)
+}
+
+func (s *skeleton) getReagentInfosByUniqueIdentifiers(ctx context.Context, uniqueIdentifiers []string) (map[string]ReagentInfo, error) {
+	reagentInfosMap, err := s.analysisRepository.GetReagentInfosByUniqueIdentifiers(ctx, uniqueIdentifiers)
+	if err != nil {
+		return nil, err
+	}
+	reagentsToCheckInCerberus := make([]string, 0)
+	for _, uniqueIdentifier := range uniqueIdentifiers {
+		if _, ok := reagentInfosMap[uniqueIdentifier]; !ok {
+			reagentsToCheckInCerberus = append(reagentsToCheckInCerberus, uniqueIdentifier)
+		}
+	}
+	// cerberus_id nullable --> ha sajat kozott nincs, akkor mentse is cerberusba+vegye fel sajat db-be+tovabb lehet syncelni
+
+	return reagentInfosMap, nil
 }
 
 func NewSkeleton(ctx context.Context, serviceName string, requestedExtraValueKeys []string, sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api GinApi, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService service.ConsoleLogService, manager Manager, cerberusClient CerberusClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {

@@ -79,18 +79,7 @@ type SkeletonAPI interface {
 	// By default this function batches the transmissions by collecting them and
 	// use the batch-endpoint of cerberus for performance reasons
 	SubmitAnalysisResult(ctx context.Context, resultData AnalysisResult, submitTypes ...SubmitType) error
-
-	// SubmitAnalysisResultBatch - Submit result batch to Skeleton and/or Cerberus,
-	//
-	// SubmitTypes:
-	//  * <No Parameter given> = SubmitTypeBatchStoreAndSend (default)
-	//  * SubmitTypeBatchStoreAndSend = Batch request and send with a 3 seconds delay
-	//  * SubmitTypeInstantStoreAndSend = Instantly send the Result
-	//  * SubmitTypeStoreOnly = Store the results and do not send to cerberus
-	// By default this function batches the transmissions by collecting them and
-	// use the batch-endpoint of cerberus for performance reasons
-	SubmitAnalysisResultBatch(ctx context.Context, resultBatch []AnalysisResult, submitTypes ...SubmitType) error
-
+	
 	SubmitAnalysisResultSet(ctx context.Context, resultSet []AnalysisResultSet) error
 
 	// GetInstrument returns all the settings regarding an instrument

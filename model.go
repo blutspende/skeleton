@@ -105,6 +105,7 @@ const (
 )
 
 type ReagentInfo struct {
+	ID                uuid.UUID       `json:"id"`
 	Manufacturer      string          `json:"manufacturer"`
 	SerialNumber      string          `json:"serialNo"`
 	LotNo             string          `json:"lotNo"`
@@ -255,9 +256,11 @@ type AnalysisResult struct {
 	ExtraValues              []ExtraValue
 	ReagentInfos             []ReagentInfo
 	Images                   []Image
+	ControlResults           []ControlResult
 }
 
 type ControlResult struct {
+	ID          uuid.UUID
 	SampleCode  *string
 	AnalyteCode *string
 	Result      string

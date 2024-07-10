@@ -128,3 +128,12 @@ func ConvertUUIDsToMap(ids []uuid.UUID) map[uuid.UUID]any {
 	}
 	return idsMap
 }
+
+func GetUniqueIdentifierByReagentInfo(reagent ReagentInfo) string {
+	uniqueIdentifier := reagent.Manufacturer + reagent.LotNo + reagent.SerialNumber
+	if reagent.Name != nil {
+		uniqueIdentifier += *reagent.Name
+	}
+
+	return uniqueIdentifier
+}

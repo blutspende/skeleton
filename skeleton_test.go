@@ -787,6 +787,18 @@ type analysisRepositoryMock struct {
 	callCount int
 }
 
+func (m *analysisRepositoryMock) CreateReagentInfos(ctx context.Context, reagentInfos []ReagentInfo) error {
+	return nil
+}
+
+func (m *analysisRepositoryMock) GetReagentInfosByUniqueIdentifiers(ctx context.Context, uniqueIdentifiers []string) (map[string]ReagentInfo, error) {
+	return nil, nil
+}
+
+func (m *analysisRepositoryMock) CreateControlResultsBatch(ctx context.Context, controlResults []ControlResult) error {
+	return nil
+}
+
 func (m *analysisRepositoryMock) CreateAnalysisRequestExtraValues(ctx context.Context, extraValuesByAnalysisRequestIDs map[uuid.UUID][]ExtraValue) error {
 	return nil
 }
@@ -856,7 +868,7 @@ func (m *analysisRepositoryMock) GetAnalysisResultsByBatchIDs(ctx context.Contex
 func (m *analysisRepositoryMock) GetAnalysisResultsByBatchIDsMapped(ctx context.Context, batchIDs []uuid.UUID) (map[uuid.UUID][]AnalysisResultInfo, error) {
 	return nil, nil
 }
-func (r *analysisRepositoryMock) GetAnalysisRequestExtraValuesByAnalysisRequestID(ctx context.Context, analysisRequestID uuid.UUID) (map[string]string, error) {
+func (m *analysisRepositoryMock) GetAnalysisRequestExtraValuesByAnalysisRequestID(ctx context.Context, analysisRequestID uuid.UUID) (map[string]string, error) {
 	return nil, nil
 }
 func (m *analysisRepositoryMock) GetAnalysisResultQueueItems(ctx context.Context) ([]CerberusQueueItem, error) {

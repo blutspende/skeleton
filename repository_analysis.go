@@ -18,51 +18,59 @@ import (
 )
 
 const (
-	msgFailedToRevokeAnalysisRequests                      = "Failed to revoke analysis requests"
-	msgSaveAnalysisRequestsInstrumentTransmissions         = "save analysis requests' instrument transmissions"
-	msgIncreaseAnalysisRequestsSentToInstrumentCountFailed = "increase analysis requests sent to instrument count failed"
-	msgInvalidResultStatus                                 = "invalid result status"
-	msgConvertAnalysisResultsFailed                        = "convert analysis results"
-	msgMarshalAnalysisResultsFailed                        = "marshal analysis results failed"
-	msgInvalidReagentType                                  = "invalid reagent type"
-	msgCreateAnalysisRequestsBatchFailed                   = "create analysis requests batch failed"
-	msgCreateSubjectsFailed                                = "create subject failed"
-	msgCreateReagentInfoFailed                             = "create analysis result reagent infos failed"
-	msgCreateWarningsFailed                                = "create warnings failed"
-	msgFailedToSaveDEAImageID                              = "failed to save DEA image id"
-	msgFailedToIncreaseImageUploadRetryCount               = "failed to increase image upload retry count"
-	msgFailedToGetStuckImages                              = "failed to get stuck images"
-	msgFailedToScanStuckImageId                            = "failed to scan stuck image id"
-	msgFailedToScanStuckImageData                          = "failed to scan stuck image data"
-	msgFailedToMarkImagesAsSyncedToCerberus                = "failed to mark images as synced to cerberus"
-	msgFailedToMarkAnalysisRequestsAsProcessed             = "failed to mark analysis requests as processed"
-	msgFailedToMarkAnalysisResultsAsProcessed              = "failed to mark analysis results as processed"
-	msgGetAnalysisRequestExtraValuesFailed                 = "get analysis request extra values failed"
-	msgDeleteAnalysisRequestExtraValuesFailed              = "delete analysis request extra values failed"
+	msgFailedToRevokeAnalysisRequests                          = "Failed to revoke analysis requests"
+	msgSaveAnalysisRequestsInstrumentTransmissions             = "save analysis requests' instrument transmissions"
+	msgIncreaseAnalysisRequestsSentToInstrumentCountFailed     = "increase analysis requests sent to instrument count failed"
+	msgInvalidResultStatus                                     = "invalid result status"
+	msgConvertAnalysisResultsFailed                            = "convert analysis results"
+	msgMarshalAnalysisResultsFailed                            = "marshal analysis results failed"
+	msgInvalidReagentType                                      = "invalid reagent type"
+	msgCreateAnalysisRequestsBatchFailed                       = "create analysis requests batch failed"
+	msgCreateSubjectsFailed                                    = "create subject failed"
+	msgCreateReagentInfoFailed                                 = "create analysis result reagent infos failed"
+	msgCreateRelationBetweenReagentInfoAndAnalysisResultFailed = "create relation between reagent info and analysis result failed"
+	msgGetReagentInfosByUniqueIdentifiersFailed                = "get reagent infos by unique identifiers failed"
+	msgCreateControlResultsBatchFailed                         = "create control results batch failed"
+	msgCreateRelationBetweenReagentInfoAndControlResultsFailed = "create relation between reagent info and control results failed"
+	msgCreateWarningsFailed                                    = "create warnings failed"
+	msgFailedToSaveDEAImageID                                  = "failed to save DEA image id"
+	msgFailedToIncreaseImageUploadRetryCount                   = "failed to increase image upload retry count"
+	msgFailedToGetStuckImages                                  = "failed to get stuck images"
+	msgFailedToScanStuckImageId                                = "failed to scan stuck image id"
+	msgFailedToScanStuckImageData                              = "failed to scan stuck image data"
+	msgFailedToMarkImagesAsSyncedToCerberus                    = "failed to mark images as synced to cerberus"
+	msgFailedToMarkAnalysisRequestsAsProcessed                 = "failed to mark analysis requests as processed"
+	msgFailedToMarkAnalysisResultsAsProcessed                  = "failed to mark analysis results as processed"
+	msgGetAnalysisRequestExtraValuesFailed                     = "get analysis request extra values failed"
+	msgDeleteAnalysisRequestExtraValuesFailed                  = "delete analysis request extra values failed"
 )
 
 var (
-	ErrFailedToRevokeAnalysisRequests                      = errors.New(msgFailedToRevokeAnalysisRequests)
-	ErrSaveAnalysisRequestsInstrumentTransmissions         = errors.New(msgSaveAnalysisRequestsInstrumentTransmissions)
-	ErrIncreaseAnalysisRequestsSentToInstrumentCountFailed = errors.New(msgIncreaseAnalysisRequestsSentToInstrumentCountFailed)
-	ErrInvalidReagentType                                  = errors.New(msgInvalidReagentType)
-	ErrInvalidResultStatus                                 = errors.New(msgInvalidResultStatus)
-	ErrConvertAnalysisResultsFailed                        = errors.New(msgConvertAnalysisResultsFailed)
-	ErrMarshalAnalysisResultsFailed                        = errors.New(msgMarshalAnalysisResultsFailed)
-	ErrCreateAnalysisRequestsBatchFailed                   = errors.New(msgCreateAnalysisRequestsBatchFailed)
-	ErrCreateSubjectsFailed                                = errors.New(msgCreateSubjectsFailed)
-	ErrCreateReagentInfoFailed                             = errors.New(msgCreateReagentInfoFailed)
-	ErrCreateWarningsFailed                                = errors.New(msgCreateWarningsFailed)
-	ErrFailedToSaveDEAImageID                              = errors.New(msgFailedToSaveDEAImageID)
-	ErrFailedToIncreaseImageUploadRetryCount               = errors.New(msgFailedToSaveDEAImageID)
-	ErrFailedToGetStuckImages                              = errors.New(msgFailedToGetStuckImages)
-	ErrFailedToScanStuckImageId                            = errors.New(msgFailedToScanStuckImageId)
-	ErrFailedToScanStuckImageData                          = errors.New(msgFailedToScanStuckImageData)
-	ErrFailedToMarkImagesAsSyncedToCerberus                = errors.New(msgFailedToMarkImagesAsSyncedToCerberus)
-	ErrFailedToMarkAnalysisRequestsAsProcessed             = errors.New(msgFailedToMarkAnalysisRequestsAsProcessed)
-	ErrFailedToMarkAnalysisResultsAsProcessed              = errors.New(msgFailedToMarkAnalysisResultsAsProcessed)
-	ErrGetAnalysisRequestExtraValuesFailed                 = errors.New(msgGetAnalysisRequestExtraValuesFailed)
-	ErrDeleteAnalysisRequestExtraValuesFailed              = errors.New(msgDeleteAnalysisRequestExtraValuesFailed)
+	ErrFailedToRevokeAnalysisRequests                          = errors.New(msgFailedToRevokeAnalysisRequests)
+	ErrSaveAnalysisRequestsInstrumentTransmissions             = errors.New(msgSaveAnalysisRequestsInstrumentTransmissions)
+	ErrIncreaseAnalysisRequestsSentToInstrumentCountFailed     = errors.New(msgIncreaseAnalysisRequestsSentToInstrumentCountFailed)
+	ErrInvalidReagentType                                      = errors.New(msgInvalidReagentType)
+	ErrInvalidResultStatus                                     = errors.New(msgInvalidResultStatus)
+	ErrConvertAnalysisResultsFailed                            = errors.New(msgConvertAnalysisResultsFailed)
+	ErrMarshalAnalysisResultsFailed                            = errors.New(msgMarshalAnalysisResultsFailed)
+	ErrCreateAnalysisRequestsBatchFailed                       = errors.New(msgCreateAnalysisRequestsBatchFailed)
+	ErrCreateSubjectsFailed                                    = errors.New(msgCreateSubjectsFailed)
+	ErrCreateReagentInfoFailed                                 = errors.New(msgCreateReagentInfoFailed)
+	ErrCreateRelationBetweenReagentInfoAndAnalysisResultFailed = errors.New(msgCreateRelationBetweenReagentInfoAndAnalysisResultFailed)
+	ErrGetReagentInfosByUniqueIdentifiersFailed                = errors.New(msgGetReagentInfosByUniqueIdentifiersFailed)
+	ErrCreateControlResultsBatchFailed                         = errors.New(msgCreateControlResultsBatchFailed)
+	ErrCreateRelationBetweenReagentInfoAndControlResultsFailed = errors.New(msgCreateRelationBetweenReagentInfoAndControlResultsFailed)
+	ErrCreateWarningsFailed                                    = errors.New(msgCreateWarningsFailed)
+	ErrFailedToSaveDEAImageID                                  = errors.New(msgFailedToSaveDEAImageID)
+	ErrFailedToIncreaseImageUploadRetryCount                   = errors.New(msgFailedToSaveDEAImageID)
+	ErrFailedToGetStuckImages                                  = errors.New(msgFailedToGetStuckImages)
+	ErrFailedToScanStuckImageId                                = errors.New(msgFailedToScanStuckImageId)
+	ErrFailedToScanStuckImageData                              = errors.New(msgFailedToScanStuckImageData)
+	ErrFailedToMarkImagesAsSyncedToCerberus                    = errors.New(msgFailedToMarkImagesAsSyncedToCerberus)
+	ErrFailedToMarkAnalysisRequestsAsProcessed                 = errors.New(msgFailedToMarkAnalysisRequestsAsProcessed)
+	ErrFailedToMarkAnalysisResultsAsProcessed                  = errors.New(msgFailedToMarkAnalysisResultsAsProcessed)
+	ErrGetAnalysisRequestExtraValuesFailed                     = errors.New(msgGetAnalysisRequestExtraValuesFailed)
+	ErrDeleteAnalysisRequestExtraValuesFailed                  = errors.New(msgDeleteAnalysisRequestExtraValuesFailed)
 )
 
 type analysisRequestDAO struct {
@@ -152,16 +160,18 @@ type requestExtraValueDAO struct {
 
 type reagentInfoDAO struct {
 	ID                uuid.UUID      `db:"id"`
-	AnalysisResultID  uuid.UUID      `db:"analysis_result_id"`
 	Manufacturer      string         `db:"manufacturer"`
 	SerialNumber      string         `db:"serial"`
 	LotNo             string         `db:"lot_no"`
+	UniqueIdentifier  string         `db:"unique_identifier"`
 	Type              ReagentType    `db:"type"`
 	Name              sql.NullString `db:"name"`
 	Code              sql.NullString `db:"code"`
 	ManufacturingDate sql.NullTime   `db:"manufacturing_date"`
 	ExpirationDate    sql.NullTime   `db:"expiration_date"`
 	CreatedAt         time.Time      `db:"created_at"`
+
+	AnalysisResultID uuid.UUID `db:"analysis_result_id"`
 }
 
 type imageDAO struct {
@@ -235,6 +245,15 @@ type cerberusQueueItemDAO struct {
 	CreatedAt           time.Time    `db:"created_at"`
 }
 
+type controlResultDAO struct {
+	ID          uuid.UUID      `db:"id"`
+	SampleCode  sql.NullString `db:"sample_code"`
+	AnalyteCode sql.NullString `db:"analyte_code"`
+	Result      string         `db:"result"`
+	ExaminedAt  time.Time      `db:"examined_at"`
+	CreatedAt   time.Time      `db:"created_at"`
+}
+
 type AnalysisRepository interface {
 	CreateAnalysisRequestsBatch(ctx context.Context, analysisRequests []AnalysisRequest) ([]uuid.UUID, []uuid.UUID, error)
 	CreateAnalysisRequestExtraValues(ctx context.Context, extraValuesByAnalysisRequestIDs map[uuid.UUID][]ExtraValue) error
@@ -252,6 +271,7 @@ type AnalysisRepository interface {
 	DeleteAnalysisRequestExtraValues(ctx context.Context, workItemIDs []uuid.UUID) error
 	IncreaseReexaminationRequestedCount(ctx context.Context, workItemIDs []uuid.UUID) error
 	IncreaseSentToInstrumentCounter(ctx context.Context, analysisRequestIDs []uuid.UUID) error
+	CreateReagentInfos(ctx context.Context, reagentInfos []ReagentInfo) error
 
 	SaveAnalysisRequestsInstrumentTransmissions(ctx context.Context, analysisRequestIDs []uuid.UUID, instrumentID uuid.UUID) error
 
@@ -274,7 +294,10 @@ type AnalysisRepository interface {
 	SaveDEAImageID(ctx context.Context, imageID, deaImageID uuid.UUID) error
 	IncreaseImageUploadRetryCount(ctx context.Context, imageID uuid.UUID, error string) error
 	MarkImagesAsSyncedToCerberus(ctx context.Context, ids []uuid.UUID) error
+	GetReagentInfosByUniqueIdentifiers(ctx context.Context, uniqueIdentifiers []string) (map[string]ReagentInfo, error)
 
+	CreateControlResultsBatch(ctx context.Context, controlResults []ControlResult) error
+	CreateRelationBetweenReagentInfoAndControlResults(ctx context.Context, reagentInfoID uuid.UUID, controlResultIDs []uuid.UUID) error
 	GetUnprocessedAnalysisRequests(ctx context.Context) ([]AnalysisRequest, error)
 	GetUnprocessedAnalysisResultIDs(ctx context.Context) ([]uuid.UUID, error)
 	MarkAnalysisRequestsAsProcessed(ctx context.Context, analysisRequestIDs []uuid.UUID) error
@@ -971,6 +994,10 @@ func (r *analysisRepository) createAnalysisResultsBatch(ctx context.Context, ana
 		if err != nil {
 			return analysisResults, err
 		}
+		err = r.createRelationBetweenAnalysisResultAndReagentInfos(ctx, analysisResults[i])
+		if err != nil {
+			return analysisResults, err
+		}
 	}
 
 	err = r.CreateWarnings(ctx, warningsMap)
@@ -978,7 +1005,6 @@ func (r *analysisRepository) createAnalysisResultsBatch(ctx context.Context, ana
 		return analysisResults, err
 	}
 
-	err = r.CreateReagentInfos(ctx, reagentInfosMap)
 	if err != nil {
 		return analysisResults, err
 	}
@@ -1857,9 +1883,9 @@ func (r *analysisRepository) createChannelResultQuantitativeValues(ctx context.C
 func (r *analysisRepository) getReagentInfoMap(ctx context.Context, analysisResultIDs []uuid.UUID) (map[uuid.UUID][]reagentInfoDAO, error) {
 	reagentInfosMap := make(map[uuid.UUID][]reagentInfoDAO)
 	err := utils.Partition(len(analysisResultIDs), maxParams, func(low int, high int) error {
-		query := fmt.Sprintf(`SELECT sarri.id, sarri.analysis_result_id, sarri.serial, sarri."name", sarri.code, sarri.shelf_life, sarri.lot_no, sarri.manufacturer_name, sarri.reagent_manufacturer_date,
-        sarri.reagent_type, sarri.use_until, sarri.date_created
-		FROM %s.sk_analysis_result_reagent_infos sarri WHERE sarri.analysis_result_id IN (?);`, r.dbSchema)
+		query := fmt.Sprintf(`SELECT sri.*, sarri.analysis_result_id FROM %s.sk_reagent_infos sri
+ 										INNER JOIN %s.sk_analysis_result_reagent_infos sarri ON sri.id = sarri.reagent_info_id
+ 										WHERE sarri.analysis_result_id IN (?);`, r.dbSchema, r.dbSchema)
 		query, args, _ := sqlx.In(query, analysisResultIDs[low:high])
 		query = r.db.Rebind(query)
 		rows, err := r.db.QueryxContext(ctx, query, args...)
@@ -1890,15 +1916,11 @@ func (r *analysisRepository) getReagentInfoMap(ctx context.Context, analysisResu
 
 const reagentInfoBatchSize = 5000
 
-func (r *analysisRepository) CreateReagentInfos(ctx context.Context, reagentInfosByAnalysisResultID map[uuid.UUID][]ReagentInfo) error {
-	reagentInfoDAOs := make([]reagentInfoDAO, 0)
-	for analysisResultID, reagentInfos := range reagentInfosByAnalysisResultID {
-		ridaos := convertReagentInfosToDAOs(reagentInfos, analysisResultID)
-		for i := range ridaos {
-			ridaos[i].ID = uuid.New()
-		}
-		reagentInfoDAOs = append(reagentInfoDAOs, ridaos...)
+func (r *analysisRepository) CreateReagentInfos(ctx context.Context, reagentInfos []ReagentInfo) error {
+	if len(reagentInfos) == 0 {
+		return nil
 	}
+	reagentInfoDAOs := convertReagentInfosToDAOs(reagentInfos)
 	var err error
 	for i := 0; i < len(reagentInfoDAOs); i += reagentInfoBatchSize {
 		if len(reagentInfoDAOs) >= i+reagentInfoBatchSize {
@@ -1913,12 +1935,38 @@ func (r *analysisRepository) CreateReagentInfos(ctx context.Context, reagentInfo
 	return nil
 }
 
+func (r *analysisRepository) createRelationBetweenAnalysisResultAndReagentInfos(ctx context.Context, analysisResult AnalysisResult) error {
+	if len(analysisResult.ReagentInfos) == 0 {
+		return nil
+	}
+
+	preparedValues := make([]map[string]interface{}, 0)
+	for _, reagentInfo := range analysisResult.ReagentInfos {
+		preparedValues = append(preparedValues, map[string]interface{}{
+			"reagent_info_id":    reagentInfo.ID,
+			"analysis_result_id": analysisResult.ID,
+		})
+	}
+
+	err := utils.Partition(len(preparedValues), maxParams/2, func(low int, high int) error {
+		query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_result_reagent_infos (analysis_result_id, reagent_info_id) VALUES (:analysis_result_id, :reagent_info_id);`, r.dbSchema)
+		_, err := r.db.NamedExecContext(ctx, query, preparedValues[low:high])
+		if err != nil {
+			log.Error().Err(err).Msg(msgCreateRelationBetweenReagentInfoAndAnalysisResultFailed)
+			return ErrCreateRelationBetweenReagentInfoAndAnalysisResultFailed
+		}
+		return nil
+	})
+
+	return err
+}
+
 func (r *analysisRepository) createReagentInfos(ctx context.Context, reagentInfoDAOs []reagentInfoDAO) error {
 	if len(reagentInfoDAOs) == 0 {
 		return nil
 	}
-	query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_result_reagent_info(id, analysis_result_id, serial, name, code, shelfLife, lot_no, manufacturer_name, reagent_manufacturer_date, reagent_type, use_until, date_created)
-		VALUES(:id, :analysis_result_id, :serial, :name, :code, :shelfLife, :lot_no, :manufacturer_name, :reagent_manufacturer_date, :reagent_type, :use_until, :date_created)`, r.dbSchema)
+	query := fmt.Sprintf(`INSERT INTO %s.sk_reagent_infos(id, serial, name, code, lot_no, manufacturer, unique_identifier, manufacturing_date, type, expiration_date, created_at)
+		VALUES(:id, :serial, :name, :code, :lot_no, :manufacturer, :unique_identifier, :manufacturing_date, :type, :expiration_date, :created_at)`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, reagentInfoDAOs)
 	if err != nil {
 		log.Error().Err(err).Msg(msgCreateReagentInfoFailed)
@@ -2517,6 +2565,72 @@ func (r *analysisRepository) MarkAnalysisResultsAsProcessed(ctx context.Context,
 	return err
 }
 
+func (r *analysisRepository) GetReagentInfosByUniqueIdentifiers(ctx context.Context, uniqueIdentifiers []string) (map[string]ReagentInfo, error) {
+	reagentInfosByUniqueIdentifiersMap := make(map[string]ReagentInfo)
+	err := utils.Partition(len(uniqueIdentifiers), maxParams, func(low int, high int) error {
+		query := fmt.Sprintf(`SELECT * FROM %s.sk_reagent_infos WHERE unique_identifier IN (?);`, r.dbSchema)
+		query, args, _ := sqlx.In(query, uniqueIdentifiers)
+		query = r.db.Rebind(query)
+		rows, err := r.db.QueryxContext(ctx, query, args...)
+		if err != nil {
+			log.Error().Err(err).Msg(msgGetReagentInfosByUniqueIdentifiersFailed)
+			return ErrGetReagentInfosByUniqueIdentifiersFailed
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var dao reagentInfoDAO
+			err = rows.StructScan(&dao)
+			if err != nil {
+				log.Error().Err(err).Msg(msgGetReagentInfosByUniqueIdentifiersFailed)
+				return ErrGetReagentInfosByUniqueIdentifiersFailed
+			}
+
+			reagentInfosByUniqueIdentifiersMap[dao.UniqueIdentifier] = convertReagentInfoDAOToReagentInfo(dao)
+		}
+		return nil
+	})
+
+	return reagentInfosByUniqueIdentifiersMap, err
+}
+
+func (r *analysisRepository) CreateControlResultsBatch(ctx context.Context, controlResults []ControlResult) error {
+	err := utils.Partition(len(controlResults), maxParams, func(low int, high int) error {
+		query := fmt.Sprintf(`INSERT INTO %s.sk_control_results (id, sample_code, "result", examined_at) VALUES (:id, :sample_code, :result, :examined_at)`, r.dbSchema)
+		_, err := r.db.NamedExecContext(ctx, query, convertControlResultsToControlResultDAOs(controlResults))
+		if err != nil {
+			log.Error().Err(err).Msg(msgCreateControlResultsBatchFailed)
+			return ErrCreateControlResultsBatchFailed
+		}
+
+		return nil
+	})
+
+	return err
+}
+
+func (r *analysisRepository) CreateRelationBetweenReagentInfoAndControlResults(ctx context.Context, reagentInfoID uuid.UUID, controlResultIDs []uuid.UUID) error {
+	preparedValues := make([]map[string]interface{}, len(controlResultIDs))
+	for i := range controlResultIDs {
+		preparedValues[i] = map[string]interface{}{
+			"reagent_info_id":   reagentInfoID,
+			"control_result_id": controlResultIDs[i],
+		}
+	}
+	err := utils.Partition(len(preparedValues), maxParams/2, func(low int, high int) error {
+		query := fmt.Sprintf(`INSERT INTO %s.sk_reagent_info_control_results (reagent_info_id, control_result_id) (:reagent_info_id, :control_result_id)`, r.dbSchema)
+		_, err := r.db.NamedExecContext(ctx, query, preparedValues[low:high])
+		if err != nil {
+			log.Error().Err(err).Msg(msgCreateRelationBetweenReagentInfoAndControlResultsFailed)
+			return ErrCreateRelationBetweenReagentInfoAndControlResultsFailed
+		}
+
+		return nil
+	})
+
+	return err
+}
+
 func (r *analysisRepository) CreateTransaction() (db.DbConnector, error) {
 	return r.db.CreateTransactionConnector()
 }
@@ -2720,13 +2834,14 @@ func convertQuantitativeResultsToDAOs(quantitativeResults map[string]string, cha
 	return DAOs
 }
 
-func convertReagentInfoToDAO(reagentInfo ReagentInfo, analysisResultID uuid.UUID) reagentInfoDAO {
+func convertReagentInfoToDAO(reagentInfo ReagentInfo) reagentInfoDAO {
 	dao := reagentInfoDAO{
+		ID:               reagentInfo.ID,
 		Manufacturer:     reagentInfo.Manufacturer,
-		AnalysisResultID: analysisResultID,
 		SerialNumber:     reagentInfo.SerialNumber,
 		LotNo:            reagentInfo.LotNo,
 		Type:             reagentInfo.Type,
+		UniqueIdentifier: GetUniqueIdentifierByReagentInfo(reagentInfo),
 	}
 	if reagentInfo.Name != nil {
 		dao.Name = sql.NullString{
@@ -2755,10 +2870,10 @@ func convertReagentInfoToDAO(reagentInfo ReagentInfo, analysisResultID uuid.UUID
 	return dao
 }
 
-func convertReagentInfosToDAOs(reagentInfos []ReagentInfo, analysisResultID uuid.UUID) []reagentInfoDAO {
+func convertReagentInfosToDAOs(reagentInfos []ReagentInfo) []reagentInfoDAO {
 	reagentInfoDAOs := make([]reagentInfoDAO, len(reagentInfos))
 	for i := range reagentInfos {
-		reagentInfoDAOs[i] = convertReagentInfoToDAO(reagentInfos[i], analysisResultID)
+		reagentInfoDAOs[i] = convertReagentInfoToDAO(reagentInfos[i])
 	}
 	return reagentInfoDAOs
 }
@@ -2972,22 +3087,27 @@ func convertCerberusQueueItemDAOToCerberusQueueItem(cerberusQueueItemDAO cerberu
 func convertReagentInfoDAOsToReagentInfoList(reagentInfoDAOs []reagentInfoDAO) []ReagentInfo {
 	reagentInfoList := make([]ReagentInfo, len(reagentInfoDAOs))
 	for i := range reagentInfoDAOs {
-		reagentInfoList[i] = ReagentInfo{
-			Manufacturer: reagentInfoDAOs[i].Manufacturer,
-			SerialNumber: reagentInfoDAOs[i].SerialNumber,
-			LotNo:        reagentInfoDAOs[i].LotNo,
-			Type:         reagentInfoDAOs[i].Type,
-			CreatedAt:    reagentInfoDAOs[i].CreatedAt,
-		}
-		if reagentInfoDAOs[i].Name.Valid {
-			reagentInfoList[i].Name = &reagentInfoDAOs[i].Name.String
-		}
-		if reagentInfoDAOs[i].Code.Valid {
-			reagentInfoList[i].Code = &reagentInfoDAOs[i].Code.String
-		}
-
+		reagentInfoList[i] = convertReagentInfoDAOToReagentInfo(reagentInfoDAOs[i])
 	}
 	return reagentInfoList
+}
+
+func convertReagentInfoDAOToReagentInfo(dao reagentInfoDAO) ReagentInfo {
+	reagentInfo := ReagentInfo{
+		Manufacturer: dao.Manufacturer,
+		SerialNumber: dao.SerialNumber,
+		LotNo:        dao.LotNo,
+		Type:         dao.Type,
+		CreatedAt:    dao.CreatedAt,
+	}
+	if dao.Name.Valid {
+		reagentInfo.Name = &dao.Name.String
+	}
+	if dao.Code.Valid {
+		reagentInfo.Code = &dao.Code.String
+	}
+
+	return reagentInfo
 }
 
 func convertAnalysisWarningDAOsToWarnings(warningDAOs []warningDAO) []string {
@@ -3043,4 +3163,35 @@ func convertImageDAOsToImages(imageDAOs []imageDAO) []Image {
 		}
 	}
 	return images
+}
+
+func convertControlResultsToControlResultDAOs(controlResults []ControlResult) []controlResultDAO {
+	daos := make([]controlResultDAO, len(controlResults))
+	for i := range controlResults {
+		daos[i] = convertControlResultToControlResultDAO(controlResults[i])
+	}
+
+	return daos
+}
+
+func convertControlResultToControlResultDAO(controlResult ControlResult) controlResultDAO {
+	dao := controlResultDAO{
+		ID:         controlResult.ID,
+		Result:     controlResult.Result,
+		ExaminedAt: controlResult.ExaminedAt,
+	}
+	if controlResult.SampleCode != nil {
+		dao.SampleCode = sql.NullString{
+			String: *controlResult.SampleCode,
+			Valid:  len(*controlResult.SampleCode) > 0,
+		}
+	}
+	if controlResult.AnalyteCode != nil {
+		dao.AnalyteCode = sql.NullString{
+			String: *controlResult.AnalyteCode,
+			Valid:  len(*controlResult.AnalyteCode) > 0,
+		}
+	}
+
+	return dao
 }
