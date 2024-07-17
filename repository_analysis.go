@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/blutspende/skeleton/utils"
+	"strconv"
 	"strings"
 	"time"
 
@@ -281,13 +282,18 @@ type AnalysisRepository interface {
 	MarkAnalysisRequestsAsProcessed(ctx context.Context, analysisRequestIDs []uuid.UUID) error
 	MarkAnalysisResultsAsProcessed(ctx context.Context, analysisRequestIDs []uuid.UUID) error
 
+	DeleteOldCerberusQueueItems(ctx context.Context, cleanupDays, limit int) (int64, error)
+	DeleteOldAnalysisRequests(ctx context.Context, cleanupDays, limit int) (int64, error)
+	DeleteOldAnalysisResults(ctx context.Context, cleanupDays, limit int) (int64, error)
+
 	CreateTransaction() (db.DbConnector, error)
 	WithTransaction(tx db.DbConnector) AnalysisRepository
 }
 
 type analysisRepository struct {
-	db       db.DbConnector
-	dbSchema string
+	db           db.DbConnector
+	dbSchema     string
+	isExternalTx bool
 }
 
 func NewAnalysisRepository(db db.DbConnector, dbSchema string) AnalysisRepository {
@@ -2096,10 +2102,407 @@ func (r *analysisRepository) CreateAnalysisResultQueueItem(ctx context.Context, 
 	_, err = r.db.NamedExecContext(ctx, query, cerberusQueueItem)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to create cerberus queue item")
-		return uuid.Nil, nil
+		return uuid.Nil, err
 	}
 
 	return cerberusQueueItem.ID, nil
+}
+
+func (r *analysisRepository) DeleteOldCerberusQueueItems(ctx context.Context, cleanupDays, limit int) (int64, error) {
+	query := fmt.Sprintf(`DELETE FROM %s.sk_cerberus_queue_items WHERE queue_item_id IN
+				(SELECT queue_item_id FROM %s.sk_cerberus_queue_items scqi
+					WHERE last_http_status >= 200
+						AND last_http_status <= 299
+						AND created_at <= current_date - ($1 ||' DAY')::INTERVAL LIMIT $2);`, r.dbSchema, r.dbSchema)
+	result, err := r.db.ExecContext(ctx, query, strconv.Itoa(cleanupDays), limit)
+	if err != nil {
+		log.Error().Err(err).Msg("delete old cerberus queue items failed")
+		return 0, err
+	}
+
+	return result.RowsAffected()
+}
+
+func (r *analysisRepository) DeleteOldAnalysisRequests(ctx context.Context, cleanupDays, limit int) (int64, error) {
+	tx, err := r.getTransaction()
+	if err != nil {
+		log.Error().Err(err).Msg("delete old analysis requests failed")
+		return 0, err
+	}
+
+	txR := *r
+	txR.db = tx
+	query := fmt.Sprintf(`SELECT id FROM %s.sk_analysis_requests WHERE valid_until_time < (current_date - ($1 ||' DAY')::INTERVAL) AND is_processed LIMIT $2;`, r.dbSchema)
+	rows, err := txR.db.QueryxContext(ctx, query, cleanupDays, limit)
+	if err != nil {
+		if !r.isExternalTx {
+			_ = tx.Rollback()
+		}
+		log.Error().Err(err).Msg("delete old analysis requests failed")
+		return 0, err
+	}
+	defer rows.Close()
+
+	analysisRequestIDs := make([]uuid.UUID, 0)
+	for rows.Next() {
+		var id uuid.UUID
+		err = rows.Scan(&id)
+		if err != nil {
+			if !r.isExternalTx {
+				_ = tx.Rollback()
+			}
+			log.Error().Err(err).Msg("delete old analysis requests failed")
+			return 0, err
+		}
+		analysisRequestIDs = append(analysisRequestIDs, id)
+	}
+	if len(analysisRequestIDs) == 0 {
+		return 0, err
+	}
+
+	err = txR.deleteAnalysisRequestExtraValuesByAnalysisRequestIDs(ctx, analysisRequestIDs)
+	if err != nil {
+		if !r.isExternalTx {
+			_ = tx.Rollback()
+		}
+		return 0, err
+	}
+	err = txR.deleteSubjectInfosByAnalysisRequestIDs(ctx, analysisRequestIDs)
+	if err != nil {
+		_ = tx.Rollback()
+		return 0, err
+	}
+	err = txR.deleteAnalysisRequestInstrumentTransmissionsByAnalysisRequestIDs(ctx, analysisRequestIDs)
+	if err != nil {
+		_ = tx.Rollback()
+		return 0, err
+	}
+
+	query = fmt.Sprintf("DELETE FROM %s.sk_analysis_requests WHERE id IN (?);", r.dbSchema)
+	query, args, _ := sqlx.In(query, analysisRequestIDs)
+	query = txR.db.Rebind(query)
+	result, err := txR.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		if !r.isExternalTx {
+			_ = tx.Rollback()
+		}
+		log.Error().Err(err).Msg("delete old analysis requests failed")
+		return 0, err
+	}
+	if !r.isExternalTx {
+		err = tx.Commit()
+		if err != nil {
+			_ = tx.Rollback()
+			return 0, err
+		}
+	}
+
+	return result.RowsAffected()
+}
+
+func (r *analysisRepository) deleteAnalysisRequestExtraValuesByAnalysisRequestIDs(ctx context.Context, analysisRequestIDs []uuid.UUID) error {
+	if len(analysisRequestIDs) == 0 {
+		return nil
+	}
+	err := utils.Partition(len(analysisRequestIDs), maxParams, func(low int, high int) error {
+		query := fmt.Sprintf("DELETE FROM %s.sk_analysis_request_extra_values WHERE analysis_request_id IN (?);", r.dbSchema)
+		query, args, _ := sqlx.In(query, analysisRequestIDs[low:high])
+		query = r.db.Rebind(query)
+		_, err := r.db.ExecContext(ctx, query, args...)
+		if err != nil {
+			log.Error().Err(err).Msg("delete analysis request extra values by analysis request IDs failed")
+			return err
+		}
+
+		return nil
+	})
+
+	return err
+}
+
+func (r *analysisRepository) deleteSubjectInfosByAnalysisRequestIDs(ctx context.Context, analysisRequestIDs []uuid.UUID) error {
+	if len(analysisRequestIDs) == 0 {
+		return nil
+	}
+	err := utils.Partition(len(analysisRequestIDs), maxParams, func(low int, high int) error {
+		query := fmt.Sprintf("DELETE FROM %s.sk_subject_infos WHERE analysis_request_id IN (?);", r.dbSchema)
+		query, args, _ := sqlx.In(query, analysisRequestIDs[low:high])
+		query = r.db.Rebind(query)
+		_, err := r.db.ExecContext(ctx, query, args...)
+		if err != nil {
+			log.Error().Err(err).Msg("delete subject infos by analysis request IDs failed")
+			return err
+		}
+
+		return nil
+	})
+
+	return err
+}
+
+func (r *analysisRepository) deleteAnalysisRequestInstrumentTransmissionsByAnalysisRequestIDs(ctx context.Context, analysisRequestIDs []uuid.UUID) error {
+	if len(analysisRequestIDs) == 0 {
+		return nil
+	}
+	err := utils.Partition(len(analysisRequestIDs), maxParams, func(low int, high int) error {
+		query := fmt.Sprintf("DELETE FROM %s.sk_analysis_request_instrument_transmissions WHERE analysis_request_id IN (?);", r.dbSchema)
+		query, args, _ := sqlx.In(query, analysisRequestIDs[low:high])
+		query = r.db.Rebind(query)
+		_, err := r.db.ExecContext(ctx, query, args...)
+		if err != nil {
+			log.Error().Err(err).Msg("delete analysis request instrument transmissions by analysis request IDs failed")
+			return err
+		}
+
+		return nil
+	})
+
+	return err
+}
+
+func (r *analysisRepository) DeleteOldAnalysisResults(ctx context.Context, cleanupDays, limit int) (int64, error) {
+	tx, err := r.getTransaction()
+	if err != nil {
+		log.Error().Err(err).Msg("delete old analysis results failed")
+		return 0, err
+	}
+	txR := *r
+	txR.db = tx
+
+	query := fmt.Sprintf(`SELECT id FROM %s.sk_analysis_results WHERE GREATEST(valid_until, created_at + INTERVAL '14 DAYS') < (current_date - ($1 ||' DAY')::INTERVAL) AND is_processed LIMIT $2;`, r.dbSchema)
+	rows, err := txR.db.QueryxContext(ctx, query, cleanupDays, limit)
+	if err != nil {
+		if !r.isExternalTx {
+			_ = tx.Rollback()
+		}
+		log.Error().Err(err).Msg("delete old analysis results failed")
+		return 0, err
+	}
+	defer rows.Close()
+
+	analysisResultIDs := make([]uuid.UUID, 0)
+	for rows.Next() {
+		var id uuid.UUID
+		err = rows.Scan(&id)
+		if err != nil {
+			if !r.isExternalTx {
+				_ = tx.Rollback()
+			}
+			log.Error().Err(err).Msg("delete old analysis results failed")
+			return 0, err
+		}
+		analysisResultIDs = append(analysisResultIDs, id)
+	}
+	if len(analysisResultIDs) == 0 {
+		_ = tx.Rollback()
+		return 0, nil
+	}
+
+	err = txR.deleteImagesByAnalysisResultIDs(ctx, analysisResultIDs)
+	if err != nil {
+		if !r.isExternalTx {
+			_ = tx.Rollback()
+		}
+		return 0, err
+	}
+	err = txR.deleteChannelResultsByAnalysisResultIDs(ctx, analysisResultIDs)
+	if err != nil {
+		if !r.isExternalTx {
+			_ = tx.Rollback()
+		}
+		return 0, err
+	}
+	err = txR.deleteAnalysisResultWarningsByAnalysisResultIDs(ctx, analysisResultIDs)
+	if err != nil {
+		if !r.isExternalTx {
+			_ = tx.Rollback()
+		}
+		return 0, err
+	}
+	err = txR.deleteAnalysisResultExtraValuesByAnalysisResultIDs(ctx, analysisResultIDs)
+	if err != nil {
+		if !r.isExternalTx {
+			_ = tx.Rollback()
+		}
+		return 0, err
+	}
+	err = txR.deleteReagentInfosByAnalysisResultIDs(ctx, analysisResultIDs)
+	if err != nil {
+		if !r.isExternalTx {
+			_ = tx.Rollback()
+		}
+		return 0, err
+	}
+	query = fmt.Sprintf(`DELETE FROM %s.sk_analysis_results WHERE id IN (?);`, r.dbSchema)
+	query, args, _ := sqlx.In(query, analysisResultIDs)
+	query = txR.db.Rebind(query)
+	result, err := txR.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		if !r.isExternalTx {
+			_ = tx.Rollback()
+		}
+		log.Error().Err(err).Msg("delete old analysis results failed")
+		return 0, err
+	}
+
+	if !r.isExternalTx {
+		err = tx.Commit()
+		if err != nil {
+			_ = tx.Rollback()
+			return 0, err
+		}
+	}
+
+	return result.RowsAffected()
+}
+
+func (r *analysisRepository) deleteChannelResultsByAnalysisResultIDs(ctx context.Context, analysisResultIDs []uuid.UUID) error {
+	if len(analysisResultIDs) == 0 {
+		return nil
+	}
+
+	channelResultIDs := make([]uuid.UUID, 0)
+	err := utils.Partition(len(analysisResultIDs), maxParams, func(low int, high int) error {
+		query := fmt.Sprintf(`SELECT id from %s.sk_channel_results WHERE analysis_result_id IN (?);`, r.dbSchema)
+		query, args, _ := sqlx.In(query, analysisResultIDs[low:high])
+		query = r.db.Rebind(query)
+
+		rows, err := r.db.QueryxContext(ctx, query, args...)
+		if err != nil {
+			log.Error().Err(err).Msg("delete channel results by analysis result IDs failed")
+			return err
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var id uuid.UUID
+			err = rows.Scan(&id)
+			if err != nil {
+				log.Error().Err(err).Msg("delete channel results by analysis result IDs failed")
+				return err
+			}
+			channelResultIDs = append(channelResultIDs, id)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	err = utils.Partition(len(channelResultIDs), maxParams, func(low int, high int) error {
+		query := fmt.Sprintf(`DELETE FROM %s.sk_channel_result_quantitative_values WHERE channel_result_id IN (?);`, r.dbSchema)
+		query, args, _ := sqlx.In(query, channelResultIDs[low:high])
+		query = r.db.Rebind(query)
+		_, err := r.db.ExecContext(ctx, query, args...)
+		if err != nil {
+			log.Error().Err(err).Msg("delete channel results by analysis result IDs failed")
+			return err
+		}
+
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	err = utils.Partition(len(channelResultIDs), maxParams, func(low int, high int) error {
+		query := fmt.Sprintf(`DELETE FROM %s.sk_channel_results WHERE id IN (?);`, r.dbSchema)
+		query, args, _ := sqlx.In(query, channelResultIDs[low:high])
+		query = r.db.Rebind(query)
+		_, err := r.db.ExecContext(ctx, query, args...)
+		if err != nil {
+			log.Error().Err(err).Msg("delete channel results by analysis result IDs failed")
+			return err
+		}
+
+		return nil
+	})
+
+	return err
+}
+
+func (r *analysisRepository) deleteAnalysisResultWarningsByAnalysisResultIDs(ctx context.Context, analysisResultIDs []uuid.UUID) error {
+	if len(analysisResultIDs) == 0 {
+		return nil
+	}
+
+	err := utils.Partition(len(analysisResultIDs), maxParams, func(low int, high int) error {
+		query := fmt.Sprintf("DELETE FROM %s.sk_analysis_result_warnings WHERE analysis_result_id IN (?);", r.dbSchema)
+		query, args, _ := sqlx.In(query, analysisResultIDs[low:high])
+		query = r.db.Rebind(query)
+		_, err := r.db.ExecContext(ctx, query, args...)
+		if err != nil {
+			log.Error().Err(err).Msg("delete analysis result warnings failed")
+			return err
+		}
+
+		return nil
+	})
+
+	return err
+}
+
+func (r *analysisRepository) deleteImagesByAnalysisResultIDs(ctx context.Context, analysisResultIDs []uuid.UUID) error {
+	if len(analysisResultIDs) == 0 {
+		return nil
+	}
+
+	err := utils.Partition(len(analysisResultIDs), maxParams, func(low int, high int) error {
+		query := fmt.Sprintf("DELETE FROM %s.sk_analysis_result_images WHERE analysis_result_id IN (?);", r.dbSchema)
+		query, args, _ := sqlx.In(query, analysisResultIDs[low:high])
+		query = r.db.Rebind(query)
+		_, err := r.db.ExecContext(ctx, query, args...)
+		if err != nil {
+			log.Error().Err(err).Msg("delete images by analysis result IDs failed")
+			return err
+		}
+
+		return nil
+	})
+
+	return err
+}
+
+func (r *analysisRepository) deleteAnalysisResultExtraValuesByAnalysisResultIDs(ctx context.Context, analysisResultIDs []uuid.UUID) error {
+	if len(analysisResultIDs) == 0 {
+		return nil
+	}
+
+	err := utils.Partition(len(analysisResultIDs), maxParams, func(low int, high int) error {
+		query := fmt.Sprintf("DELETE FROM %s.sk_analysis_result_extravalues WHERE analysis_result_id IN (?);", r.dbSchema)
+		query, args, _ := sqlx.In(query, analysisResultIDs[low:high])
+		query = r.db.Rebind(query)
+		_, err := r.db.ExecContext(ctx, query, args...)
+		if err != nil {
+			log.Error().Err(err).Msg("delete analysis result extra values by analysis result IDs failed")
+			return err
+		}
+
+		return nil
+	})
+	return err
+}
+
+func (r *analysisRepository) deleteReagentInfosByAnalysisResultIDs(ctx context.Context, analysisResultIDs []uuid.UUID) error {
+	if len(analysisResultIDs) == 0 {
+		return nil
+	}
+
+	err := utils.Partition(len(analysisResultIDs), maxParams, func(low int, high int) error {
+		query := fmt.Sprintf("DELETE FROM %s.sk_analysis_result_reagent_infos WHERE analysis_result_id IN (?);", r.dbSchema)
+		query, args, _ := sqlx.In(query, analysisResultIDs[low:high])
+		query = r.db.Rebind(query)
+		_, err := r.db.ExecContext(ctx, query, args...)
+		if err != nil {
+			log.Error().Err(err).Msg("delete reagent infos by analysis result IDs failed")
+			return err
+		}
+
+		return nil
+	})
+
+	return err
 }
 
 func convertAnalysisResultsToTOs(analysisResults []AnalysisResult) ([]AnalysisResultTO, error) {
@@ -2532,7 +2935,16 @@ func (r *analysisRepository) CreateTransaction() (db.DbConnector, error) {
 func (r *analysisRepository) WithTransaction(tx db.DbConnector) AnalysisRepository {
 	txRepo := *r
 	txRepo.db = tx
+	txRepo.isExternalTx = true
 	return &txRepo
+}
+
+func (r *analysisRepository) getTransaction() (db.DbConnector, error) {
+	if r.isExternalTx {
+		return r.db, nil
+	}
+
+	return r.CreateTransaction()
 }
 
 func convertAnalysisRequestsToDAOs(analysisRequests []AnalysisRequest) []analysisRequestDAO {

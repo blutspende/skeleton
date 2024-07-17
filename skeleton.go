@@ -363,7 +363,17 @@ func (s *skeleton) Start() error {
 		log.Error().Err(err).Msg("starting skeleton failed due to failed registration of instrument driver to cerberus")
 		return err
 	}
-	go s.cleanUpCerberusQueueItems(s.ctx)
+	go func() {
+		s.runCleanupJobs()
+		for {
+			select {
+			case <-time.After(time.Hour * time.Duration(s.config.CleanupJobRunIntervalHours)):
+				s.runCleanupJobs()
+			case <-s.ctx.Done():
+				return
+			}
+		}
+	}()
 	go s.sendUnsentInstrumentsToCerberus(s.ctx)
 	for i := 0; i < s.config.AnalysisRequestWorkerPoolSize; i++ {
 		go s.processAnalysisRequests(s.ctx)
@@ -577,10 +587,51 @@ func (s *skeleton) processAnalysisResultBatches(ctx context.Context) {
 	}
 }
 
-func (s *skeleton) cleanUpCerberusQueueItems(ctx context.Context) {
-	// Todo
-	//-- clean up old stuff
-	//delete from astm.sk_cerberus_queue_items where created_at < now()-interval '14 days';
+const limit = 5000
+
+func (s *skeleton) runCleanupJobs() {
+	s.cleanupCerberusQueueItems()
+	s.cleanupAnalysisResults()
+	s.cleanupAnalysisRequests()
+}
+
+func (s *skeleton) cleanupCerberusQueueItems() {
+	for {
+		deletedRows, err := s.analysisRepository.DeleteOldCerberusQueueItems(s.ctx, s.config.CleanupDays, limit)
+		if err != nil {
+			log.Error().Err(err).Msg("cleanup old cerberus queue items failed")
+			return
+		}
+		if int(deletedRows) < limit {
+			return
+		}
+	}
+}
+
+func (s *skeleton) cleanupAnalysisRequests() {
+	for {
+		deletedRows, err := s.analysisRepository.DeleteOldAnalysisRequests(s.ctx, s.config.CleanupDays, limit)
+		if err != nil {
+			log.Error().Err(err).Msg("cleanup old analysis requests failed")
+			return
+		}
+		if int(deletedRows) < limit {
+			return
+		}
+	}
+}
+
+func (s *skeleton) cleanupAnalysisResults() {
+	for {
+		deletedRows, err := s.analysisRepository.DeleteOldAnalysisResults(s.ctx, s.config.CleanupDays, limit)
+		if err != nil {
+			log.Error().Err(err).Msg("cleanup old analysis results failed")
+			return
+		}
+		if int(deletedRows) < limit {
+			return
+		}
+	}
 }
 
 func (s *skeleton) submitAnalysisResultsToCerberus(ctx context.Context) {

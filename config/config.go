@@ -50,6 +50,8 @@ type Configuration struct {
 	AnalysisRequestWorkerPoolSize              int           `envconfig:"ANALYSIS_REQUEST_WORKER_POOL_SIZE" default:"3"`
 	InstrumentDriverRegistrationTimeoutSeconds int           `envconfig:"INSTRUMENT_DRIVER_REGISTRATION_RETRY_TIMEOUT" default:"10"`
 	InstrumentDriverRegistrationMaxRetry       int           `envconfig:"INSTRUMENT_DRIVER_REGISTRATION_MAX_RETRY" default:"20"`
+	CleanupDays                                int           `envconfig:"CLEANUP_DAYS" default:"90"`
+	CleanupJobRunIntervalHours                 int           `envconfig:"CLEANUP_JOB_RUN_INTERVAL_HOURS" default:"4"`
 
 	ClientCredentialAuthHeaderValue string
 }
