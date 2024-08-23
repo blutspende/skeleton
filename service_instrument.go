@@ -64,6 +64,16 @@ func (s *instrumentService) CreateInstrument(ctx context.Context, instrument Ins
 		_ = transaction.Rollback()
 		return uuid.Nil, err
 	}
+
+	if instrument.ConnectionMode == FTP {
+		instrument.FTPConfig.InstrumentId = id
+		err = s.instrumentRepository.WithTransaction(transaction).CreateFtpConfig(ctx, instrument.FTPConfig)
+		if err != nil {
+			_ = transaction.Rollback()
+			return uuid.Nil, err
+		}
+	}
+
 	analyteMappingIDs, err := s.instrumentRepository.WithTransaction(transaction).CreateAnalyteMappings(ctx, instrument.AnalyteMappings, id)
 	if err != nil {
 		_ = transaction.Rollback()
@@ -208,6 +218,15 @@ func (s *instrumentService) GetInstrumentByID(ctx context.Context, tx db.DbConne
 	if err != nil {
 		return instrument, err
 	}
+
+	if instrument.ConnectionMode == FTP {
+		ftpConf, err := s.instrumentRepository.WithTransaction(tx).GetFtpConfigByInstrumentId(ctx, instrument.ID)
+		if err != nil {
+			return instrument, err
+		}
+		instrument.FTPConfig = ftpConf
+	}
+
 	instrumentIDs := []uuid.UUID{instrument.ID}
 	analyteMappingsByInstrumentID, err := s.instrumentRepository.WithTransaction(tx).GetAnalyteMappings(ctx, instrumentIDs)
 	if err != nil {
@@ -286,6 +305,15 @@ func (s *instrumentService) GetInstrumentByIP(ctx context.Context, ip string) (I
 	if err != nil {
 		return instrument, err
 	}
+
+	if instrument.ConnectionMode == FTP {
+		ftpConf, err := s.instrumentRepository.GetFtpConfigByInstrumentId(ctx, instrument.ID)
+		if err != nil {
+			return instrument, err
+		}
+		instrument.FTPConfig = ftpConf
+	}
+
 	instrumentIDs := []uuid.UUID{instrument.ID}
 
 	protocol, err := s.instrumentRepository.GetProtocolByID(ctx, instrument.ProtocolID)
@@ -371,11 +399,32 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 		return err
 	}
 
+	if oldInstrument.ConnectionMode == FTP && instrument.ConnectionMode != FTP {
+		err = s.instrumentRepository.WithTransaction(tx).DeleteFtpConfig(ctx, instrument.ID)
+		if err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+	} else if oldInstrument.ConnectionMode != FTP && instrument.ConnectionMode == FTP {
+		err = s.instrumentRepository.WithTransaction(tx).CreateFtpConfig(ctx, instrument.FTPConfig)
+		if err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+	} else {
+		err = s.instrumentRepository.WithTransaction(tx).UpdateFtpConfig(ctx, instrument.FTPConfig)
+		if err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+	}
+
 	err = s.instrumentRepository.WithTransaction(tx).UpdateInstrument(ctx, instrument)
 	if err != nil {
 		_ = tx.Rollback()
 		return err
 	}
+
 	deletedAnalyteMappingIDs := make([]uuid.UUID, 0)
 	deletedChannelMappingIDs := make([]uuid.UUID, 0)
 	deletedResultMappingIDs := make([]uuid.UUID, 0)

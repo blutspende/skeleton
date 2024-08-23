@@ -469,6 +469,23 @@ func (r *instrumentRepositoryMock) UpdateInstrument(ctx context.Context, instrum
 func (r *instrumentRepositoryMock) DeleteInstrument(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
+
+func (r *instrumentRepositoryMock) CreateFtpConfig(ctx context.Context, ftpConfig FTPConfig) error {
+	return nil
+}
+
+func (r *instrumentRepositoryMock) GetFtpConfigByInstrumentId(ctx context.Context, instrumentId uuid.UUID) (FTPConfig, error) {
+	return FTPConfig{}, nil
+}
+
+func (r *instrumentRepositoryMock) UpdateFtpConfig(ctx context.Context, ftpConfig FTPConfig) error {
+	return nil
+}
+
+func (r *instrumentRepositoryMock) DeleteFtpConfig(ctx context.Context, instrumentId uuid.UUID) error {
+	return nil
+}
+
 func (r *instrumentRepositoryMock) MarkAsSentToCerberus(ctx context.Context, id uuid.UUID) error {
 	return nil
 }

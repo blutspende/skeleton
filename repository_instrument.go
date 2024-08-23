@@ -28,6 +28,11 @@ const (
 	msgUpdateInstrumentFailed             = "update instrument failed"
 	msgDeleteInstrumentFailed             = "delete instrument failed"
 	msgMarkInstrumentSentToCerberusFailed = "mark instrument as sent to cerberus failed"
+	msgCreateFtpConfigFailed              = "create FTP config failed"
+	msgUpdateFtpConfigFailed              = "update FTP config failed"
+	msgDeleteFtpConfigFailed              = "delete FTP config failed"
+	msgFtpConfigNotFound                  = "ftp config not found"
+	msgGetFtpConfigFailed                 = "get ftp config by instrument id failed"
 	msgGetProtocolByIDFailed              = "get protocol by ID failed"
 	msgUpsertSupportedProtocolFailed      = "upsert supported protocol failed"
 	msgUpsertProtocolAbilitiesFailed      = "upsert protocol abilities failed"
@@ -71,6 +76,11 @@ var (
 	ErrUpdateInstrumentFailed             = errors.New(msgUpdateInstrumentFailed)
 	ErrDeleteInstrumentFailed             = errors.New(msgDeleteInstrumentFailed)
 	ErrMarkInstrumentSentToCerberusFailed = errors.New(msgMarkInstrumentSentToCerberusFailed)
+	ErrCreateFtpConfigFailed              = errors.New(msgCreateFtpConfigFailed)
+	ErrUpdateFtpConfigFailed              = errors.New(msgUpdateFtpConfigFailed)
+	ErrDeleteFtpConfigFailed              = errors.New(msgDeleteFtpConfigFailed)
+	ErrFtpConfigNotFound                  = errors.New(msgFtpConfigNotFound)
+	ErrGetFtpConfigFailed                 = errors.New(msgGetFtpConfigFailed)
 	ErrGetProtocolByIDFailed              = errors.New(msgGetProtocolByIDFailed)
 	ErrUpsertSupportedProtocolFailed      = errors.New(msgUpsertSupportedProtocolFailed)
 	ErrUpsertProtocolAbilitiesFailed      = errors.New(msgUpsertProtocolAbilitiesFailed)
@@ -121,6 +131,20 @@ type instrumentDAO struct {
 	CreatedAt          time.Time      `db:"created_at"`
 	ModifiedAt         sql.NullTime   `db:"modified_at"`
 	DeletedAt          sql.NullTime   `db:"deleted_at"`
+}
+
+type ftpConfigDAO struct {
+	InstrumentId              uuid.UUID `db:"instrument_id"`
+	FtpServerBasePath         string    `db:"ftp_server_base_path"`
+	FtpServerFileMaskDownload string    `db:"ftp_server_file_mask_download"`
+	FtpServerFileMaskUpload   string    `db:"ftp_server_file_mask_upload"`
+	FtpServerHostKey          string    `db:"ftp_server_host_key"`
+	FtpServerHostname         string    `db:"ftp_server_hostname"`
+	FtpServerUsername         string    `db:"ftp_server_username"`
+	FtpServerPassword         string    `db:"ftp_server_password"`
+	FtpServerPort             int       `db:"ftp_server_port"`
+	FtpServerPublicKey        string    `db:"ftp_server_public_key"`
+	FtpServerType             string    `db:"ftp_server_type"`
 }
 
 type analyteMappingDAO struct {
@@ -227,6 +251,10 @@ type InstrumentRepository interface {
 	GetInstrumentByIP(ctx context.Context, ip string) (Instrument, error)
 	UpdateInstrument(ctx context.Context, instrument Instrument) error
 	DeleteInstrument(ctx context.Context, id uuid.UUID) error
+	CreateFtpConfig(ctx context.Context, ftpConfig FTPConfig) error
+	GetFtpConfigByInstrumentId(ctx context.Context, instrumentId uuid.UUID) (FTPConfig, error)
+	UpdateFtpConfig(ctx context.Context, ftpConfig FTPConfig) error
+	DeleteFtpConfig(ctx context.Context, instrumentId uuid.UUID) error
 	MarkAsSentToCerberus(ctx context.Context, id uuid.UUID) error
 	GetUnsentToCerberus(ctx context.Context) ([]uuid.UUID, error)
 	GetProtocolByID(ctx context.Context, id uuid.UUID) (SupportedProtocol, error)
@@ -399,6 +427,64 @@ func (r *instrumentRepository) DeleteInstrument(ctx context.Context, id uuid.UUI
 	if err != nil {
 		log.Error().Err(err).Msg(msgDeleteInstrumentFailed)
 		return ErrDeleteInstrumentFailed
+	}
+	return nil
+}
+
+func (r *instrumentRepository) CreateFtpConfig(ctx context.Context, ftpConfig FTPConfig) error {
+	query := fmt.Sprintf(`INSERT INTO %s.sk_instrument_ftp_config(instrument_id, ftp_server_base_path, ftp_server_file_mask_download, ftp_server_file_mask_upload, ftp_server_host_key, ftp_server_hostname, ftp_server_username, ftp_server_password, ftp_server_port, ftp_server_public_key, ftp_server_type)
+		VALUES(:instrument_id, :ftp_server_base_path, :ftp_server_file_mask_download, :ftp_server_file_mask_upload, :ftp_server_host_key, :ftp_server_hostname, :ftp_server_username, :ftp_server_password, :ftp_server_port, :ftp_server_public_key, :ftp_server_type)`, r.dbSchema)
+
+	dao := convertFtpConfigToDao(ftpConfig)
+	_, err := r.db.NamedExecContext(ctx, query, dao)
+	if err != nil {
+		log.Error().Err(err).Msg(msgCreateFtpConfigFailed)
+		return ErrCreateFtpConfigFailed
+	}
+	return nil
+}
+
+func (r *instrumentRepository) GetFtpConfigByInstrumentId(ctx context.Context, instrumentId uuid.UUID) (FTPConfig, error) {
+	query := fmt.Sprintf(`SELECT * FROM %s.sk_instrument_ftp_config WHERE instrument_id = $1`, r.dbSchema)
+
+	var ftpConfig FTPConfig
+	var dao ftpConfigDAO
+	err := r.db.QueryRowxContext(ctx, query, instrumentId).StructScan(&dao)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return ftpConfig, ErrFtpConfigNotFound
+		}
+		log.Error().Err(err).Msg(msgGetFtpConfigFailed)
+		return ftpConfig, ErrGetFtpConfigFailed
+	}
+
+	ftpConfig = convertFtpConfigDaoToFtpConfig(dao)
+	return ftpConfig, nil
+}
+
+func (r *instrumentRepository) UpdateFtpConfig(ctx context.Context, ftpConfig FTPConfig) error {
+	query := fmt.Sprintf(`UPDATE %s.sk_instrument_ftp_config SET ftp_server_base_path = :ftp_server_base_path,
+        ftp_server_file_mask_download = :ftp_server_file_mask_download, ftp_server_file_mask_upload = :ftp_server_file_mask_upload,
+        ftp_server_host_key = :ftp_server_host_key, ftp_server_hostname = :ftp_server_hostname, ftp_server_username = :ftp_server_username,
+        ftp_server_password = :ftp_server_password, ftp_server_port = :ftp_server_port, ftp_server_public_key = :ftp_server_public_key,
+        ftp_server_type = :ftp_server_type WHERE instrument_id = :instrument_id`, r.dbSchema)
+
+	dao := convertFtpConfigToDao(ftpConfig)
+	_, err := r.db.NamedExecContext(ctx, query, dao)
+	if err != nil {
+		log.Error().Err(err).Msg(msgUpdateFtpConfigFailed)
+		return ErrUpdateFtpConfigFailed
+	}
+	return nil
+}
+
+func (r *instrumentRepository) DeleteFtpConfig(ctx context.Context, instrumentId uuid.UUID) error {
+	query := fmt.Sprintf(`DELETE FROM %s.sk_instrument_ftp_config WHERE instrument_id = $1;`, r.dbSchema)
+
+	_, err := r.db.ExecContext(ctx, query, instrumentId)
+	if err != nil {
+		log.Error().Err(err).Msg(msgDeleteFtpConfigFailed)
+		return ErrDeleteFtpConfigFailed
 	}
 	return nil
 }
@@ -1179,6 +1265,38 @@ func convertInstrumentDaoToInstrument(dao instrumentDAO) (Instrument, error) {
 	}
 
 	return instrument, nil
+}
+
+func convertFtpConfigToDao(ftpConfig FTPConfig) ftpConfigDAO {
+	return ftpConfigDAO{
+		InstrumentId:              ftpConfig.InstrumentId,
+		FtpServerBasePath:         ftpConfig.FtpServerBasePath,
+		FtpServerFileMaskDownload: ftpConfig.FtpServerFileMaskDownload,
+		FtpServerFileMaskUpload:   ftpConfig.FtpServerFileMaskUpload,
+		FtpServerHostKey:          ftpConfig.FtpServerHostKey,
+		FtpServerHostname:         ftpConfig.FtpServerHostname,
+		FtpServerUsername:         ftpConfig.FtpServerUsername,
+		FtpServerPassword:         ftpConfig.FtpServerPassword,
+		FtpServerPort:             ftpConfig.FtpServerPort,
+		FtpServerPublicKey:        ftpConfig.FtpServerPublicKey,
+		FtpServerType:             ftpConfig.FtpServerType,
+	}
+}
+
+func convertFtpConfigDaoToFtpConfig(dao ftpConfigDAO) FTPConfig {
+	return FTPConfig{
+		InstrumentId:              dao.InstrumentId,
+		FtpServerBasePath:         dao.FtpServerBasePath,
+		FtpServerFileMaskDownload: dao.FtpServerFileMaskDownload,
+		FtpServerFileMaskUpload:   dao.FtpServerFileMaskUpload,
+		FtpServerHostKey:          dao.FtpServerHostKey,
+		FtpServerHostname:         dao.FtpServerHostname,
+		FtpServerUsername:         dao.FtpServerUsername,
+		FtpServerPassword:         dao.FtpServerPassword,
+		FtpServerPort:             dao.FtpServerPort,
+		FtpServerPublicKey:        dao.FtpServerPublicKey,
+		FtpServerType:             dao.FtpServerType,
+	}
 }
 
 func convertAnalyteMappingToDAO(analyteMapping AnalyteMapping, instrumentID uuid.UUID) analyteMappingDAO {

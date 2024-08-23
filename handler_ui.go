@@ -11,25 +11,35 @@ import (
 )
 
 type instrumentTO struct {
-	ID                 uuid.UUID             `json:"id"`
-	Type               InstrumentType        `json:"instrumentType"`
-	Name               string                `json:"name"`
-	ProtocolID         uuid.UUID             `json:"protocolId"`
-	ProtocolName       Protocol              `json:"type"`
-	Enabled            bool                  `json:"enabled"`
-	ConnectionMode     ConnectionMode        `json:"connectionMode"`
-	ResultMode         ResultMode            `json:"runningMode"`
-	CaptureResults     bool                  `json:"captureResults"`
-	CaptureDiagnostics bool                  `json:"captureDiagnostics"`
-	ReplyToQuery       bool                  `json:"replyToQuery"`
-	Status             string                `json:"status"`
-	FileEncoding       string                `json:"fileEncoding"`
-	Timezone           string                `json:"timezone"`
-	Hostname           string                `json:"hostname"`
-	ClientPort         *int                  `json:"clientPort"`
-	AnalyteMappings    []analyteMappingTO    `json:"analyteMappings"`
-	RequestMappings    []requestMappingTO    `json:"requestMappings"`
-	Settings           []instrumentSettingTO `json:"instrumentSettings"`
+	ID                        uuid.UUID             `json:"id"`
+	Type                      InstrumentType        `json:"instrumentType"`
+	Name                      string                `json:"name"`
+	ProtocolID                uuid.UUID             `json:"protocolId"`
+	ProtocolName              Protocol              `json:"type"`
+	Enabled                   bool                  `json:"enabled"`
+	ConnectionMode            ConnectionMode        `json:"connectionMode"`
+	ResultMode                ResultMode            `json:"runningMode"`
+	CaptureResults            bool                  `json:"captureResults"`
+	CaptureDiagnostics        bool                  `json:"captureDiagnostics"`
+	ReplyToQuery              bool                  `json:"replyToQuery"`
+	Status                    string                `json:"status"`
+	FileEncoding              string                `json:"fileEncoding"`
+	Timezone                  string                `json:"timezone"`
+	Hostname                  string                `json:"hostname"`
+	ClientPort                *int                  `json:"clientPort"`
+	FtpServerBasePath         string                `json:"ftpServerBasepath"`
+	FtpServerFileMaskDownload string                `json:"ftpServerFilemaskDownload"`
+	FtpServerFileMaskUpload   string                `json:"ftpServerFilemaskUpload"`
+	FtpServerHostKey          string                `json:"ftpServerHostkey"`
+	FtpServerHostname         string                `json:"ftpServerHostname"`
+	FtpServerUsername         string                `json:"ftpServerUsername"`
+	FtpServerPassword         string                `json:"ftpServerPassword"`
+	FtpServerPort             int                   `json:"ftpServerPort"`
+	FtpServerPublicKey        string                `json:"ftpServerPublicKey"`
+	FtpServerType             string                `json:"ftpServerType"`
+	AnalyteMappings           []analyteMappingTO    `json:"analyteMappings"`
+	RequestMappings           []requestMappingTO    `json:"requestMappings"`
+	Settings                  []instrumentSettingTO `json:"instrumentSettings"`
 }
 
 type listInstrumentTO struct {
@@ -619,9 +629,22 @@ func convertInstrumentTOToInstrument(instrumentTO instrumentTO) Instrument {
 		Timezone:           instrumentTO.Timezone,
 		Hostname:           instrumentTO.Hostname,
 		ClientPort:         instrumentTO.ClientPort,
-		AnalyteMappings:    make([]AnalyteMapping, len(instrumentTO.AnalyteMappings)),
-		RequestMappings:    make([]RequestMapping, len(instrumentTO.RequestMappings)),
-		Settings:           convertInstrumentSettingTOsToInstrumentSettings(instrumentTO.Settings),
+		FTPConfig: FTPConfig{
+			InstrumentId:              instrumentTO.ID,
+			FtpServerBasePath:         instrumentTO.FtpServerBasePath,
+			FtpServerFileMaskDownload: instrumentTO.FtpServerFileMaskDownload,
+			FtpServerFileMaskUpload:   instrumentTO.FtpServerFileMaskUpload,
+			FtpServerHostKey:          instrumentTO.FtpServerHostKey,
+			FtpServerHostname:         instrumentTO.FtpServerHostname,
+			FtpServerUsername:         instrumentTO.FtpServerUsername,
+			FtpServerPassword:         instrumentTO.FtpServerPassword,
+			FtpServerPort:             instrumentTO.FtpServerPort,
+			FtpServerPublicKey:        instrumentTO.FtpServerPublicKey,
+			FtpServerType:             instrumentTO.FtpServerType,
+		},
+		AnalyteMappings: make([]AnalyteMapping, len(instrumentTO.AnalyteMappings)),
+		RequestMappings: make([]RequestMapping, len(instrumentTO.RequestMappings)),
+		Settings:        convertInstrumentSettingTOsToInstrumentSettings(instrumentTO.Settings),
 	}
 
 	if instrumentTO.Status == "" {
@@ -660,6 +683,20 @@ func convertInstrumentToInstrumentTO(instrument Instrument) instrumentTO {
 		AnalyteMappings:    make([]analyteMappingTO, len(instrument.AnalyteMappings)),
 		RequestMappings:    make([]requestMappingTO, len(instrument.RequestMappings)),
 		Settings:           convertInstrumentSettingsToSettingsTOs(instrument.Settings),
+	}
+
+	if instrument.ConnectionMode == FTP {
+		ftpConf := instrument.FTPConfig
+		model.FtpServerBasePath = ftpConf.FtpServerBasePath
+		model.FtpServerFileMaskDownload = ftpConf.FtpServerFileMaskDownload
+		model.FtpServerFileMaskUpload = ftpConf.FtpServerFileMaskUpload
+		model.FtpServerHostKey = ftpConf.FtpServerHostKey
+		model.Hostname = ftpConf.FtpServerHostname
+		model.FtpServerUsername = ftpConf.FtpServerUsername
+		model.FtpServerPassword = ftpConf.FtpServerPassword
+		model.FtpServerPort = ftpConf.FtpServerPort
+		model.FtpServerPublicKey = ftpConf.FtpServerPublicKey
+		model.FtpServerType = ftpConf.FtpServerType
 	}
 
 	for i, analyteMapping := range instrument.AnalyteMappings {
