@@ -157,7 +157,7 @@ type Instrument struct {
 	Timezone           string
 	Hostname           string
 	ClientPort         *int
-	FTPConfig          FTPConfig
+	FTPConfig          *FTPConfig
 	AnalyteMappings    []AnalyteMapping
 	RequestMappings    []RequestMapping
 	Settings           []InstrumentSetting

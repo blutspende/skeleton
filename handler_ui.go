@@ -629,7 +629,7 @@ func convertInstrumentTOToInstrument(instrumentTO instrumentTO) Instrument {
 		Timezone:           instrumentTO.Timezone,
 		Hostname:           instrumentTO.Hostname,
 		ClientPort:         instrumentTO.ClientPort,
-		FTPConfig: FTPConfig{
+		FTPConfig: &FTPConfig{
 			InstrumentId:              instrumentTO.ID,
 			FtpServerBasePath:         instrumentTO.FtpServerBasePath,
 			FtpServerFileMaskDownload: instrumentTO.FtpServerFileMaskDownload,
@@ -685,13 +685,13 @@ func convertInstrumentToInstrumentTO(instrument Instrument) instrumentTO {
 		Settings:           convertInstrumentSettingsToSettingsTOs(instrument.Settings),
 	}
 
-	if instrument.ConnectionMode == FTP {
+	if instrument.ConnectionMode == FTP && instrument.FTPConfig != nil {
 		ftpConf := instrument.FTPConfig
 		model.FtpServerBasePath = ftpConf.FtpServerBasePath
 		model.FtpServerFileMaskDownload = ftpConf.FtpServerFileMaskDownload
 		model.FtpServerFileMaskUpload = ftpConf.FtpServerFileMaskUpload
 		model.FtpServerHostKey = ftpConf.FtpServerHostKey
-		model.Hostname = ftpConf.FtpServerHostname
+		model.FtpServerHostname = ftpConf.FtpServerHostname
 		model.FtpServerUsername = ftpConf.FtpServerUsername
 		model.FtpServerPassword = ftpConf.FtpServerPassword
 		model.FtpServerPort = ftpConf.FtpServerPort

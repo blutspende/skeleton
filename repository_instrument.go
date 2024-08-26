@@ -33,6 +33,7 @@ const (
 	msgDeleteFtpConfigFailed              = "delete FTP config failed"
 	msgFtpConfigNotFound                  = "ftp config not found"
 	msgGetFtpConfigFailed                 = "get ftp config by instrument id failed"
+	msgFtpConfigExistsFailed              = "failed to check whether ftp config exists"
 	msgGetProtocolByIDFailed              = "get protocol by ID failed"
 	msgUpsertSupportedProtocolFailed      = "upsert supported protocol failed"
 	msgUpsertProtocolAbilitiesFailed      = "upsert protocol abilities failed"
@@ -81,6 +82,7 @@ var (
 	ErrDeleteFtpConfigFailed              = errors.New(msgDeleteFtpConfigFailed)
 	ErrFtpConfigNotFound                  = errors.New(msgFtpConfigNotFound)
 	ErrGetFtpConfigFailed                 = errors.New(msgGetFtpConfigFailed)
+	ErrFtpConfigExistsFailed              = errors.New(msgFtpConfigExistsFailed)
 	ErrGetProtocolByIDFailed              = errors.New(msgGetProtocolByIDFailed)
 	ErrUpsertSupportedProtocolFailed      = errors.New(msgUpsertSupportedProtocolFailed)
 	ErrUpsertProtocolAbilitiesFailed      = errors.New(msgUpsertProtocolAbilitiesFailed)
@@ -251,9 +253,10 @@ type InstrumentRepository interface {
 	GetInstrumentByIP(ctx context.Context, ip string) (Instrument, error)
 	UpdateInstrument(ctx context.Context, instrument Instrument) error
 	DeleteInstrument(ctx context.Context, id uuid.UUID) error
-	CreateFtpConfig(ctx context.Context, ftpConfig FTPConfig) error
+	CreateFtpConfig(ctx context.Context, ftpConfig *FTPConfig) error
 	GetFtpConfigByInstrumentId(ctx context.Context, instrumentId uuid.UUID) (FTPConfig, error)
-	UpdateFtpConfig(ctx context.Context, ftpConfig FTPConfig) error
+	FtpConfigExists(ctx context.Context, instrumentId uuid.UUID) (bool, error)
+	UpdateFtpConfig(ctx context.Context, ftpConfig *FTPConfig) error
 	DeleteFtpConfig(ctx context.Context, instrumentId uuid.UUID) error
 	MarkAsSentToCerberus(ctx context.Context, id uuid.UUID) error
 	GetUnsentToCerberus(ctx context.Context) ([]uuid.UUID, error)
@@ -431,7 +434,7 @@ func (r *instrumentRepository) DeleteInstrument(ctx context.Context, id uuid.UUI
 	return nil
 }
 
-func (r *instrumentRepository) CreateFtpConfig(ctx context.Context, ftpConfig FTPConfig) error {
+func (r *instrumentRepository) CreateFtpConfig(ctx context.Context, ftpConfig *FTPConfig) error {
 	query := fmt.Sprintf(`INSERT INTO %s.sk_instrument_ftp_config(instrument_id, ftp_server_base_path, ftp_server_file_mask_download, ftp_server_file_mask_upload, ftp_server_host_key, ftp_server_hostname, ftp_server_username, ftp_server_password, ftp_server_port, ftp_server_public_key, ftp_server_type)
 		VALUES(:instrument_id, :ftp_server_base_path, :ftp_server_file_mask_download, :ftp_server_file_mask_upload, :ftp_server_host_key, :ftp_server_hostname, :ftp_server_username, :ftp_server_password, :ftp_server_port, :ftp_server_public_key, :ftp_server_type)`, r.dbSchema)
 
@@ -452,6 +455,7 @@ func (r *instrumentRepository) GetFtpConfigByInstrumentId(ctx context.Context, i
 	err := r.db.QueryRowxContext(ctx, query, instrumentId).StructScan(&dao)
 	if err != nil {
 		if err == sql.ErrNoRows {
+			log.Warn().Interface("instrumentId", instrumentId).Msg("ftp config queried bot not found")
 			return ftpConfig, ErrFtpConfigNotFound
 		}
 		log.Error().Err(err).Msg(msgGetFtpConfigFailed)
@@ -462,7 +466,20 @@ func (r *instrumentRepository) GetFtpConfigByInstrumentId(ctx context.Context, i
 	return ftpConfig, nil
 }
 
-func (r *instrumentRepository) UpdateFtpConfig(ctx context.Context, ftpConfig FTPConfig) error {
+func (r *instrumentRepository) FtpConfigExists(ctx context.Context, instrumentId uuid.UUID) (bool, error) {
+	query := fmt.Sprintf(`SELECT EXISTS(SELECT 1 FROM %s.sk_instrument_ftp_config WHERE instrument_id = $1)`, r.dbSchema)
+
+	var ftpConfigExists bool
+	err := r.db.QueryRowxContext(ctx, query, instrumentId).Scan(&ftpConfigExists)
+	if err != nil {
+		log.Error().Err(err).Msg(msgFtpConfigExistsFailed)
+		return ftpConfigExists, ErrFtpConfigExistsFailed
+	}
+
+	return ftpConfigExists, nil
+}
+
+func (r *instrumentRepository) UpdateFtpConfig(ctx context.Context, ftpConfig *FTPConfig) error {
 	query := fmt.Sprintf(`UPDATE %s.sk_instrument_ftp_config SET ftp_server_base_path = :ftp_server_base_path,
         ftp_server_file_mask_download = :ftp_server_file_mask_download, ftp_server_file_mask_upload = :ftp_server_file_mask_upload,
         ftp_server_host_key = :ftp_server_host_key, ftp_server_hostname = :ftp_server_hostname, ftp_server_username = :ftp_server_username,
@@ -1267,7 +1284,7 @@ func convertInstrumentDaoToInstrument(dao instrumentDAO) (Instrument, error) {
 	return instrument, nil
 }
 
-func convertFtpConfigToDao(ftpConfig FTPConfig) ftpConfigDAO {
+func convertFtpConfigToDao(ftpConfig *FTPConfig) ftpConfigDAO {
 	return ftpConfigDAO{
 		InstrumentId:              ftpConfig.InstrumentId,
 		FtpServerBasePath:         ftpConfig.FtpServerBasePath,
