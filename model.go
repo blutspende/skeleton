@@ -169,6 +169,7 @@ type Instrument struct {
 type Protocol string
 
 type FTPConfig struct {
+	ID               uuid.UUID
 	InstrumentId     uuid.UUID
 	Username         string
 	Password         string
@@ -177,6 +178,7 @@ type FTPConfig struct {
 	ResultRemotePath string
 	FileSuffix       string
 	FtpServerType    string
+	DeletedAt        *time.Time
 }
 
 type AnalyteMapping struct {

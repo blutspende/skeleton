@@ -198,9 +198,8 @@ func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
 	assert.Nil(t, err)
 
 	// test that the FTP config deleted when instrument deleted
-	ftpConf, err := instrumentRepository.GetFtpConfigByInstrumentId(ctx, instrumentId)
-	assert.Nil(t, err)
-	assert.Nil(t, ftpConf)
+	_, err = instrumentRepository.GetFtpConfigByInstrumentId(ctx, instrumentId)
+	assert.Equal(t, err, ErrFtpConfigNotFound)
 }
 
 func TestFtpConfigConnectionModeChange(t *testing.T) {
@@ -323,9 +322,8 @@ func TestFtpConfigConnectionModeChange(t *testing.T) {
 	assert.Nil(t, err)
 
 	// test that FTP config deleted after the instrument update
-	ftpConf, err := instrumentRepository.GetFtpConfigByInstrumentId(ctx, instrumentId)
-	assert.Nil(t, err)
-	assert.Nil(t, ftpConf)
+	_, err = instrumentRepository.GetFtpConfigByInstrumentId(ctx, instrumentId)
+	assert.Equal(t, err, ErrFtpConfigNotFound)
 }
 
 func TestUpdateInstrument(t *testing.T) {
@@ -723,15 +721,15 @@ func (r *instrumentRepositoryMock) DeleteInstrument(ctx context.Context, id uuid
 	return nil
 }
 
-func (r *instrumentRepositoryMock) CreateFtpConfig(ctx context.Context, ftpConfig *FTPConfig) error {
+func (r *instrumentRepositoryMock) CreateFtpConfig(ctx context.Context, ftpConfig FTPConfig) error {
 	return nil
 }
 
-func (r *instrumentRepositoryMock) GetFtpConfigByInstrumentId(ctx context.Context, instrumentId uuid.UUID) (*FTPConfig, error) {
-	return &FTPConfig{}, nil
+func (r *instrumentRepositoryMock) GetFtpConfigByInstrumentId(ctx context.Context, instrumentId uuid.UUID) (FTPConfig, error) {
+	return FTPConfig{}, nil
 }
 
-func (r *instrumentRepositoryMock) UpdateFtpConfig(ctx context.Context, ftpConfig *FTPConfig) error {
+func (r *instrumentRepositoryMock) UpdateFtpConfig(ctx context.Context, ftpConfig FTPConfig) error {
 	return nil
 }
 

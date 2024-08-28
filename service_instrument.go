@@ -67,7 +67,7 @@ func (s *instrumentService) CreateInstrument(ctx context.Context, instrument Ins
 
 	if instrument.ConnectionMode == FTP && instrument.FTPConfig != nil {
 		instrument.FTPConfig.InstrumentId = id
-		err = s.instrumentRepository.WithTransaction(transaction).CreateFtpConfig(ctx, instrument.FTPConfig)
+		err = s.instrumentRepository.WithTransaction(transaction).CreateFtpConfig(ctx, *instrument.FTPConfig)
 		if err != nil {
 			_ = transaction.Rollback()
 			return uuid.Nil, err
@@ -133,11 +133,14 @@ func (s *instrumentService) GetInstruments(ctx context.Context) ([]Instrument, e
 		}
 		instruments[i].ProtocolName = protocol.Name
 
-		ftpConfig, err := s.instrumentRepository.GetFtpConfigByInstrumentId(ctx, instruments[i].ID)
-		if err != nil {
-			return nil, err
+		if instruments[i].ConnectionMode == FTP {
+			ftpConfig, err := s.instrumentRepository.GetFtpConfigByInstrumentId(ctx, instruments[i].ID)
+			if err == nil {
+				instruments[i].FTPConfig = &ftpConfig
+			} else if err != nil && err != ErrFtpConfigNotFound {
+				return instruments, err
+			}
 		}
-		instruments[i].FTPConfig = ftpConfig
 
 		instrumentIDs[i] = instruments[i].ID
 		instrumentsByIDs[instruments[i].ID] = &instruments[i]
@@ -227,10 +230,11 @@ func (s *instrumentService) GetInstrumentByID(ctx context.Context, tx db.DbConne
 
 	if instrument.ConnectionMode == FTP {
 		ftpConf, err := s.instrumentRepository.WithTransaction(tx).GetFtpConfigByInstrumentId(ctx, instrument.ID)
-		if err != nil {
+		if err == nil {
+			instrument.FTPConfig = &ftpConf
+		} else if err != nil && err != ErrFtpConfigNotFound {
 			return instrument, err
 		}
-		instrument.FTPConfig = ftpConf
 	}
 
 	instrumentIDs := []uuid.UUID{instrument.ID}
@@ -314,10 +318,11 @@ func (s *instrumentService) GetInstrumentByIP(ctx context.Context, ip string) (I
 
 	if instrument.ConnectionMode == FTP {
 		ftpConf, err := s.instrumentRepository.GetFtpConfigByInstrumentId(ctx, instrument.ID)
-		if err != nil {
+		if err == nil {
+			instrument.FTPConfig = &ftpConf
+		} else if err != nil && err != ErrFtpConfigNotFound {
 			return instrument, err
 		}
-		instrument.FTPConfig = ftpConf
 	}
 
 	instrumentIDs := []uuid.UUID{instrument.ID}
@@ -412,13 +417,13 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 		}
 
 		if exists {
-			err = s.instrumentRepository.WithTransaction(tx).UpdateFtpConfig(ctx, instrument.FTPConfig)
+			err = s.instrumentRepository.WithTransaction(tx).UpdateFtpConfig(ctx, *instrument.FTPConfig)
 			if err != nil {
 				_ = tx.Rollback()
 				return err
 			}
 		} else {
-			err = s.instrumentRepository.WithTransaction(tx).CreateFtpConfig(ctx, instrument.FTPConfig)
+			err = s.instrumentRepository.WithTransaction(tx).CreateFtpConfig(ctx, *instrument.FTPConfig)
 			if err != nil {
 				_ = tx.Rollback()
 				return err

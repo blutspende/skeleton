@@ -32,6 +32,7 @@ const (
 	msgUpdateFtpConfigFailed              = "update FTP config failed"
 	msgDeleteFtpConfigFailed              = "delete FTP config failed"
 	msgGetFtpConfigFailed                 = "get ftp config by instrument id failed"
+	msgFtpConfigNotFound                  = "ftp config not found"
 	msgFtpConfigExistsFailed              = "failed to check whether ftp config exists"
 	msgGetProtocolByIDFailed              = "get protocol by ID failed"
 	msgUpsertSupportedProtocolFailed      = "upsert supported protocol failed"
@@ -80,6 +81,7 @@ var (
 	ErrUpdateFtpConfigFailed              = errors.New(msgUpdateFtpConfigFailed)
 	ErrDeleteFtpConfigFailed              = errors.New(msgDeleteFtpConfigFailed)
 	ErrGetFtpConfigFailed                 = errors.New(msgGetFtpConfigFailed)
+	ErrFtpConfigNotFound                  = errors.New(msgFtpConfigNotFound)
 	ErrFtpConfigExistsFailed              = errors.New(msgFtpConfigExistsFailed)
 	ErrGetProtocolByIDFailed              = errors.New(msgGetProtocolByIDFailed)
 	ErrUpsertSupportedProtocolFailed      = errors.New(msgUpsertSupportedProtocolFailed)
@@ -134,14 +136,16 @@ type instrumentDAO struct {
 }
 
 type ftpConfigDAO struct {
-	InstrumentId     uuid.UUID `db:"instrument_id"`
-	Username         string    `db:"username"`
-	Password         string    `db:"password"`
-	RemotePath       string    `db:"remote_path"`
-	FileMask         string    `db:"file_mask"`
-	ResultRemotePath string    `db:"result_remote_path"`
-	FileSuffix       string    `db:"file_suffix"`
-	FtpServerType    string    `db:"ftp_server_type"`
+	ID               uuid.UUID    `db:"id"`
+	InstrumentId     uuid.UUID    `db:"instrument_id"`
+	Username         string       `db:"username"`
+	Password         string       `db:"password"`
+	RemotePath       string       `db:"remote_path"`
+	FileMask         string       `db:"file_mask"`
+	ResultRemotePath string       `db:"result_remote_path"`
+	FileSuffix       string       `db:"file_suffix"`
+	FtpServerType    string       `db:"ftp_server_type"`
+	DeletedAt        sql.NullTime `db:"deleted_at"`
 }
 
 type analyteMappingDAO struct {
@@ -248,10 +252,10 @@ type InstrumentRepository interface {
 	GetInstrumentByIP(ctx context.Context, ip string) (Instrument, error)
 	UpdateInstrument(ctx context.Context, instrument Instrument) error
 	DeleteInstrument(ctx context.Context, id uuid.UUID) error
-	CreateFtpConfig(ctx context.Context, ftpConfig *FTPConfig) error
-	GetFtpConfigByInstrumentId(ctx context.Context, instrumentId uuid.UUID) (*FTPConfig, error)
+	CreateFtpConfig(ctx context.Context, ftpConfig FTPConfig) error
+	GetFtpConfigByInstrumentId(ctx context.Context, instrumentId uuid.UUID) (FTPConfig, error)
 	FtpConfigExists(ctx context.Context, instrumentId uuid.UUID) (bool, error)
-	UpdateFtpConfig(ctx context.Context, ftpConfig *FTPConfig) error
+	UpdateFtpConfig(ctx context.Context, ftpConfig FTPConfig) error
 	DeleteFtpConfig(ctx context.Context, instrumentId uuid.UUID) error
 	MarkAsSentToCerberus(ctx context.Context, id uuid.UUID) error
 	GetUnsentToCerberus(ctx context.Context) ([]uuid.UUID, error)
@@ -429,9 +433,10 @@ func (r *instrumentRepository) DeleteInstrument(ctx context.Context, id uuid.UUI
 	return nil
 }
 
-func (r *instrumentRepository) CreateFtpConfig(ctx context.Context, ftpConfig *FTPConfig) error {
-	query := fmt.Sprintf(`INSERT INTO %s.sk_instrument_ftp_config(instrument_id, username, password, remote_path, file_mask, result_remote_path, file_suffix, ftp_server_type)
-		VALUES(:instrument_id, :username, :password, :remote_path, :file_mask, :result_remote_path, :file_suffix, :ftp_server_type)`, r.dbSchema)
+func (r *instrumentRepository) CreateFtpConfig(ctx context.Context, ftpConfig FTPConfig) error {
+	query := fmt.Sprintf(`INSERT INTO %s.sk_instrument_ftp_config(id, instrument_id, username, password, remote_path, file_mask, result_remote_path, file_suffix, ftp_server_type)
+		VALUES(:id, :instrument_id, :username, :password, :remote_path, :file_mask, :result_remote_path, :file_suffix, :ftp_server_type)`, r.dbSchema)
+	ftpConfig.ID = uuid.New()
 
 	dao := convertFtpConfigToDao(ftpConfig)
 	_, err := r.db.NamedExecContext(ctx, query, dao)
@@ -442,25 +447,26 @@ func (r *instrumentRepository) CreateFtpConfig(ctx context.Context, ftpConfig *F
 	return nil
 }
 
-func (r *instrumentRepository) GetFtpConfigByInstrumentId(ctx context.Context, instrumentId uuid.UUID) (*FTPConfig, error) {
-	query := fmt.Sprintf(`SELECT * FROM %s.sk_instrument_ftp_config WHERE instrument_id = $1`, r.dbSchema)
+func (r *instrumentRepository) GetFtpConfigByInstrumentId(ctx context.Context, instrumentId uuid.UUID) (FTPConfig, error) {
+	query := fmt.Sprintf(`SELECT * FROM %s.sk_instrument_ftp_config WHERE instrument_id = $1 AND deleted_at is NULL;`, r.dbSchema)
 
+	var ftpConfig FTPConfig
 	var dao ftpConfigDAO
 	err := r.db.QueryRowxContext(ctx, query, instrumentId).StructScan(&dao)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			log.Warn().Interface("instrumentId", instrumentId).Msg("ftp config queried bot not found")
-			return nil, nil
+			return ftpConfig, ErrFtpConfigNotFound
 		}
 		log.Error().Err(err).Msg(msgGetFtpConfigFailed)
-		return nil, ErrGetFtpConfigFailed
+		return ftpConfig, ErrGetFtpConfigFailed
 	}
 
 	return convertFtpConfigDaoToFtpConfig(dao), nil
 }
 
 func (r *instrumentRepository) FtpConfigExists(ctx context.Context, instrumentId uuid.UUID) (bool, error) {
-	query := fmt.Sprintf(`SELECT EXISTS(SELECT 1 FROM %s.sk_instrument_ftp_config WHERE instrument_id = $1)`, r.dbSchema)
+	query := fmt.Sprintf(`SELECT EXISTS(SELECT 1 FROM %s.sk_instrument_ftp_config WHERE instrument_id = $1 AND deleted_at is NULL);`, r.dbSchema)
 
 	var ftpConfigExists bool
 	err := r.db.QueryRowxContext(ctx, query, instrumentId).Scan(&ftpConfigExists)
@@ -472,10 +478,10 @@ func (r *instrumentRepository) FtpConfigExists(ctx context.Context, instrumentId
 	return ftpConfigExists, nil
 }
 
-func (r *instrumentRepository) UpdateFtpConfig(ctx context.Context, ftpConfig *FTPConfig) error {
+func (r *instrumentRepository) UpdateFtpConfig(ctx context.Context, ftpConfig FTPConfig) error {
 	query := fmt.Sprintf(`UPDATE %s.sk_instrument_ftp_config SET username = :username, password = :password,
         remote_path = :remote_path, file_mask = :file_mask, result_remote_path = :result_remote_path, file_suffix = :file_suffix,
-        ftp_server_type = :ftp_server_type WHERE instrument_id = :instrument_id`, r.dbSchema)
+        ftp_server_type = :ftp_server_type WHERE instrument_id = :instrument_id AND deleted_at is NULL;`, r.dbSchema)
 
 	dao := convertFtpConfigToDao(ftpConfig)
 	_, err := r.db.NamedExecContext(ctx, query, dao)
@@ -487,7 +493,7 @@ func (r *instrumentRepository) UpdateFtpConfig(ctx context.Context, ftpConfig *F
 }
 
 func (r *instrumentRepository) DeleteFtpConfig(ctx context.Context, instrumentId uuid.UUID) error {
-	query := fmt.Sprintf(`DELETE FROM %s.sk_instrument_ftp_config WHERE instrument_id = $1;`, r.dbSchema)
+	query := fmt.Sprintf(`UPDATE %s.sk_instrument_ftp_config SET deleted_at = timezone('utc', now()) WHERE instrument_id = $1 AND deleted_at is NULL;`, r.dbSchema)
 
 	_, err := r.db.ExecContext(ctx, query, instrumentId)
 	if err != nil {
@@ -1275,8 +1281,9 @@ func convertInstrumentDaoToInstrument(dao instrumentDAO) (Instrument, error) {
 	return instrument, nil
 }
 
-func convertFtpConfigToDao(ftpConfig *FTPConfig) ftpConfigDAO {
+func convertFtpConfigToDao(ftpConfig FTPConfig) ftpConfigDAO {
 	return ftpConfigDAO{
+		ID:               ftpConfig.ID,
 		InstrumentId:     ftpConfig.InstrumentId,
 		Username:         ftpConfig.Username,
 		Password:         ftpConfig.Password,
@@ -1288,8 +1295,9 @@ func convertFtpConfigToDao(ftpConfig *FTPConfig) ftpConfigDAO {
 	}
 }
 
-func convertFtpConfigDaoToFtpConfig(dao ftpConfigDAO) *FTPConfig {
-	return &FTPConfig{
+func convertFtpConfigDaoToFtpConfig(dao ftpConfigDAO) FTPConfig {
+	return FTPConfig{
+		ID:               dao.ID,
 		InstrumentId:     dao.InstrumentId,
 		Username:         dao.Username,
 		Password:         dao.Password,
