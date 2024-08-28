@@ -86,16 +86,13 @@ func TestCreateInstrument(t *testing.T) {
   ],
   "fileEncoding": "UTF8",
   "timezone": "Europe/Budapest",
-  "ftpServerType": "",
-  "ftpServerHostname": "",
-  "ftpServerHostkey": "",
-  "ftpServerBasepath": "",
-  "ftpServerFilemaskDownload": "",
-  "ftpServerFilemaskUpload": "",
-  "ftpServerUsername": "",
-  "ftpServerPassword": "",
-  "ftpServerPublicKey": "",
-  "ftpServerPort": ""
+  "ftpUserName": "",
+  "ftpPassword": "",
+  "ftpRemotePath": "",
+  "ftpFileMask": "",
+  "ftpResultRemotePath": "",
+  "ftpFileSuffix": "",
+  "ftpServerType": ""
 }`)))
 	api := api{
 		config:            &config,
@@ -174,16 +171,82 @@ func TestCreateInstrumentWithoutRequestMapping(t *testing.T) {
   "requestMappings": [],
   "fileEncoding": "UTF8",
   "timezone": "Europe/Budapest",
-  "ftpServerType": "",
-  "ftpServerHostname": "",
-  "ftpServerHostkey": "",
-  "ftpServerBasepath": "",
-  "ftpServerFilemaskDownload": "",
-  "ftpServerFilemaskUpload": "",
-  "ftpServerUsername": "",
-  "ftpServerPassword": "",
-  "ftpServerPublicKey": "",
-  "ftpServerPort": ""
+  "ftpUserName": "",
+  "ftpPassword": "",
+  "ftpRemotePath": "",
+  "ftpFileMask": "",
+  "ftpResultRemotePath": "",
+  "ftpFileSuffix": "",
+  "ftpServerType": ""
+}`)))
+	api := api{
+		config:            &config,
+		engine:            engine,
+		instrumentService: instrumentService,
+	}
+	engine.POST("/v1/instruments", api.CreateInstrument)
+
+	engine.ServeHTTP(responseRecorder, c.Request)
+
+	if responseRecorder.Code != http.StatusOK {
+		t.Errorf("Expected status %d, got %d", http.StatusOK, responseRecorder.Code)
+	}
+}
+
+func TestCreateInstrumentWithFtpConfig(t *testing.T) {
+	sqlConn, _ := sqlx.Connect("postgres", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
+	schemaName := "instrument_test"
+	_, _ = sqlConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
+	_, _ = sqlConn.Exec(fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schemaName))
+	_, _ = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
+	migrator := migrator.NewSkeletonMigrator()
+	_ = migrator.Run(context.Background(), sqlConn, schemaName)
+	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
+
+	config := config.Configuration{
+		APIPort:                          5000,
+		Authorization:                    false,
+		PermittedOrigin:                  "*",
+		ApplicationName:                  "Instrument API Test",
+		TCPListenerPort:                  5401,
+		InstrumentTransferRetryDelayInMs: 100,
+	}
+	dbConn := db.CreateDbConnector(sqlConn)
+	cerberusClientMock := &cerberusClientMock{}
+	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	defer cancel()
+
+	instrumentService := NewInstrumentService(&config, instrumentRepository, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
+
+	responseRecorder := &httptest.ResponseRecorder{}
+	c, engine := gin.CreateTestContext(responseRecorder)
+	c.Request, _ = http.NewRequest(http.MethodPost, "/v1/instruments", bytes.NewBuffer([]byte(`{
+  "id": "85fd0a74-e45a-4f9f-a862-89469050023d",
+  "protocolId": "abb539a3-286f-4c15-a7b7-2e9adf6eab91",
+  "type": "ANALYZER",
+  "name": "Asdmen",
+  "hostname": "192.168.1.10",
+  "clientPort": null,
+  "enabled": true,
+  "captureResults": true,
+  "captureDiagnostics": true,
+  "replyToQuery": true,
+  "status": "OFFLINE",
+  "connectionMode": "TCP_SERVER_ONLY",
+  "runningMode": "SIMULATION",
+  "protocolAbilities": null,
+  "fileEncoding": "UTF8",
+  "timezone": "Europe/Budapest",
+  "ftpUserName": "test",
+  "ftpPassword": "test",
+  "ftpRemotePath": "/remote",
+  "ftpFileMask": "*.EXP",
+  "ftpResultRemotePath": "/result",
+  "ftpFileSuffix": ".TLP",
+  "ftpServerType": "ftp"
 }`)))
 	api := api{
 		config:            &config,

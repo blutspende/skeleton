@@ -75,6 +75,259 @@ func TestRegisterCreatedInstrument(t *testing.T) {
 	}
 }
 
+func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
+	sqlConn, _ := sqlx.Connect("postgres", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
+	schemaName := "instrument_test"
+	_, _ = sqlConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
+	_, _ = sqlConn.Exec(fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schemaName))
+	_, _ = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
+	migrator := migrator.NewSkeletonMigrator()
+	_ = migrator.Run(context.Background(), sqlConn, schemaName)
+	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
+
+	configuration := config.Configuration{
+		APIPort:                          5000,
+		Authorization:                    false,
+		PermittedOrigin:                  "*",
+		ApplicationName:                  "Register instrument retry test",
+		TCPListenerPort:                  5401,
+		InstrumentTransferRetryDelayInMs: 50,
+		ClientID:                         "clientID",
+		ClientSecret:                     "clientSecret",
+	}
+	dbConn := db.CreateDbConnector(sqlConn)
+	cerberusClientMock := &cerberusClientMock{
+		registerInstrumentFunc: func(instrument Instrument) error {
+			return nil
+		},
+	}
+	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
+
+	ctxWithCancel, cancel := context.WithCancel(context.Background())
+
+	defer cancel()
+
+	instrumentService := NewInstrumentService(&configuration, instrumentRepository, NewSkeletonManager(ctxWithCancel), NewInstrumentCache(), cerberusClientMock)
+
+	clientPort := 22
+	instrumentWithFtp := Instrument{
+		Name:           "TestInstrument",
+		Type:           Analyzer,
+		ProtocolID:     uuid.MustParse("abb539a3-286f-4c15-a7b7-2e9adf6eab91"),
+		ProtocolName:   "Test Protocol",
+		Enabled:        true,
+		ConnectionMode: FTP,
+		ResultMode:     Production,
+		Status:         "ONLINE",
+		FileEncoding:   "UTF8",
+		Timezone:       "Europe/Budapest",
+		Hostname:       "192.168.1.20",
+		ClientPort:     &clientPort,
+		FTPConfig: &FTPConfig{
+			Username:         "test",
+			Password:         "test",
+			RemotePath:       "/remote",
+			FileMask:         "*.EXP",
+			ResultRemotePath: "/result",
+			FileSuffix:       ".TPL",
+			FtpServerType:    "ftp",
+		},
+	}
+
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, "Authorization", "BearerToken")
+	instrumentId, err := instrumentService.CreateInstrument(ctx, instrumentWithFtp)
+	assert.Nil(t, err)
+
+	// test that the FTP config created properly
+	instrument, err := instrumentService.GetInstrumentByID(ctx, nil, instrumentId, false)
+	assert.Nil(t, err)
+	assert.Equal(t, "TestInstrument", instrument.Name)
+	assert.Equal(t, FTP, instrument.ConnectionMode)
+	assert.NotNil(t, instrument.FTPConfig)
+	assert.Equal(t, instrumentId, instrument.FTPConfig.InstrumentId)
+	assert.Equal(t, "test", instrument.FTPConfig.Username)
+	assert.Equal(t, "test", instrument.FTPConfig.Password)
+	assert.Equal(t, "/remote", instrument.FTPConfig.RemotePath)
+	assert.Equal(t, "*.EXP", instrument.FTPConfig.FileMask)
+	assert.Equal(t, "/result", instrument.FTPConfig.ResultRemotePath)
+	assert.Equal(t, ".TPL", instrument.FTPConfig.FileSuffix)
+	assert.Equal(t, "ftp", instrument.FTPConfig.FtpServerType)
+
+	err = instrumentService.UpdateInstrument(ctx, Instrument{
+		ID:             instrumentId,
+		Name:           "TestInstrument",
+		Type:           Analyzer,
+		ProtocolID:     uuid.MustParse("abb539a3-286f-4c15-a7b7-2e9adf6eab91"),
+		ProtocolName:   "Test Protocol",
+		Enabled:        true,
+		ConnectionMode: FTP,
+		ResultMode:     Production,
+		Status:         "ONLINE",
+		FileEncoding:   "UTF8",
+		Timezone:       "Europe/Budapest",
+		Hostname:       "192.168.1.20",
+		ClientPort:     &clientPort,
+		FTPConfig: &FTPConfig{
+			InstrumentId:     instrumentId,
+			Username:         "updatedUsername",
+			Password:         "updatesPass",
+			RemotePath:       "/remote/updated",
+			FileMask:         "*.updated.EXP",
+			ResultRemotePath: "/result/updated",
+			FileSuffix:       ".updated.TPL",
+			FtpServerType:    "sftp",
+		},
+	})
+	assert.Nil(t, err)
+
+	// test that the FTP config updated properly
+	instrument, err = instrumentService.GetInstrumentByID(ctx, nil, instrumentId, false)
+	assert.Nil(t, err)
+	assert.NotNil(t, instrument.FTPConfig)
+	assert.Equal(t, instrumentId, instrument.FTPConfig.InstrumentId)
+	assert.Equal(t, "updatedUsername", instrument.FTPConfig.Username)
+	assert.Equal(t, "updatesPass", instrument.FTPConfig.Password)
+	assert.Equal(t, "/remote/updated", instrument.FTPConfig.RemotePath)
+	assert.Equal(t, "*.updated.EXP", instrument.FTPConfig.FileMask)
+	assert.Equal(t, "/result/updated", instrument.FTPConfig.ResultRemotePath)
+	assert.Equal(t, ".updated.TPL", instrument.FTPConfig.FileSuffix)
+	assert.Equal(t, "sftp", instrument.FTPConfig.FtpServerType)
+
+	err = instrumentService.DeleteInstrument(ctx, instrumentId)
+	assert.Nil(t, err)
+
+	// test that the FTP config deleted when instrument deleted
+	ftpConf, err := instrumentRepository.GetFtpConfigByInstrumentId(ctx, instrumentId)
+	assert.Nil(t, err)
+	assert.Nil(t, ftpConf)
+}
+
+func TestFtpConfigConnectionModeChange(t *testing.T) {
+	sqlConn, _ := sqlx.Connect("postgres", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
+	schemaName := "instrument_test"
+	_, _ = sqlConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
+	_, _ = sqlConn.Exec(fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schemaName))
+	_, _ = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
+	migrator := migrator.NewSkeletonMigrator()
+	_ = migrator.Run(context.Background(), sqlConn, schemaName)
+	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
+
+	configuration := config.Configuration{
+		APIPort:                          5000,
+		Authorization:                    false,
+		PermittedOrigin:                  "*",
+		ApplicationName:                  "Register instrument retry test",
+		TCPListenerPort:                  5401,
+		InstrumentTransferRetryDelayInMs: 50,
+		ClientID:                         "clientID",
+		ClientSecret:                     "clientSecret",
+	}
+	dbConn := db.CreateDbConnector(sqlConn)
+	cerberusClientMock := &cerberusClientMock{
+		registerInstrumentFunc: func(instrument Instrument) error {
+			return nil
+		},
+	}
+	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
+
+	ctxWithCancel, cancel := context.WithCancel(context.Background())
+
+	defer cancel()
+
+	instrumentService := NewInstrumentService(&configuration, instrumentRepository, NewSkeletonManager(ctxWithCancel), NewInstrumentCache(), cerberusClientMock)
+
+	clientPort := 22
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, "Authorization", "BearerToken")
+
+	instrumentId, err := instrumentService.CreateInstrument(ctx, Instrument{
+		Name:           "TestInstrument",
+		Type:           Analyzer,
+		ProtocolID:     uuid.MustParse("abb539a3-286f-4c15-a7b7-2e9adf6eab91"),
+		ProtocolName:   "Test Protocol",
+		Enabled:        true,
+		ConnectionMode: TCPClientMode,
+		ResultMode:     Production,
+		Status:         "ONLINE",
+		FileEncoding:   "UTF8",
+		Timezone:       "Europe/Budapest",
+		Hostname:       "192.168.1.20",
+		ClientPort:     &clientPort,
+	})
+	assert.Nil(t, err)
+
+	// instrument created, but FTP config not
+	instrument, err := instrumentService.GetInstrumentByID(ctx, nil, instrumentId, false)
+	assert.Nil(t, err)
+	assert.Equal(t, "TestInstrument", instrument.Name)
+	assert.Equal(t, TCPClientMode, instrument.ConnectionMode)
+	assert.Nil(t, instrument.FTPConfig)
+
+	err = instrumentService.UpdateInstrument(ctx, Instrument{
+		ID:             instrumentId,
+		Name:           "TestInstrument",
+		Type:           Analyzer,
+		ProtocolID:     uuid.MustParse("abb539a3-286f-4c15-a7b7-2e9adf6eab91"),
+		ProtocolName:   "Test Protocol",
+		Enabled:        true,
+		ConnectionMode: FTP,
+		ResultMode:     Production,
+		Status:         "ONLINE",
+		FileEncoding:   "UTF8",
+		Timezone:       "Europe/Budapest",
+		Hostname:       "192.168.1.20",
+		ClientPort:     &clientPort,
+		FTPConfig: &FTPConfig{
+			InstrumentId:     instrumentId,
+			Username:         "test",
+			Password:         "test",
+			RemotePath:       "/remote",
+			FileMask:         "*.EXP",
+			ResultRemotePath: "/result",
+			FileSuffix:       ".TPL",
+			FtpServerType:    "ftp",
+		},
+	})
+	assert.Nil(t, err)
+
+	// test that FTP config created after connection mode updated to FTP and config passed
+	instrument, err = instrumentService.GetInstrumentByID(ctx, nil, instrumentId, false)
+	assert.Nil(t, err)
+	assert.Equal(t, FTP, instrument.ConnectionMode)
+	assert.NotNil(t, instrument.FTPConfig)
+	assert.Equal(t, instrumentId, instrument.FTPConfig.InstrumentId)
+	assert.Equal(t, "test", instrument.FTPConfig.Username)
+	assert.Equal(t, "test", instrument.FTPConfig.Password)
+	assert.Equal(t, "/remote", instrument.FTPConfig.RemotePath)
+	assert.Equal(t, "*.EXP", instrument.FTPConfig.FileMask)
+	assert.Equal(t, "/result", instrument.FTPConfig.ResultRemotePath)
+	assert.Equal(t, ".TPL", instrument.FTPConfig.FileSuffix)
+	assert.Equal(t, "ftp", instrument.FTPConfig.FtpServerType)
+
+	err = instrumentService.UpdateInstrument(ctx, Instrument{
+		ID:             instrumentId,
+		Name:           "TestInstrument",
+		Type:           Analyzer,
+		ProtocolID:     uuid.MustParse("abb539a3-286f-4c15-a7b7-2e9adf6eab91"),
+		ProtocolName:   "Test Protocol",
+		Enabled:        true,
+		ConnectionMode: TCPMixed,
+		ResultMode:     Production,
+		Status:         "ONLINE",
+		FileEncoding:   "UTF8",
+		Timezone:       "Europe/Budapest",
+		Hostname:       "192.168.1.20",
+		ClientPort:     &clientPort,
+	})
+	assert.Nil(t, err)
+
+	// test that FTP config deleted after the instrument update
+	ftpConf, err := instrumentRepository.GetFtpConfigByInstrumentId(ctx, instrumentId)
+	assert.Nil(t, err)
+	assert.Nil(t, ftpConf)
+}
+
 func TestUpdateInstrument(t *testing.T) {
 	sqlConn, _ := sqlx.Connect("postgres", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
 	schemaName := "instrument_test"
