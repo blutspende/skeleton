@@ -11,35 +11,32 @@ import (
 )
 
 type instrumentTO struct {
-	ID                        uuid.UUID             `json:"id"`
-	Type                      InstrumentType        `json:"instrumentType"`
-	Name                      string                `json:"name"`
-	ProtocolID                uuid.UUID             `json:"protocolId"`
-	ProtocolName              Protocol              `json:"type"`
-	Enabled                   bool                  `json:"enabled"`
-	ConnectionMode            ConnectionMode        `json:"connectionMode"`
-	ResultMode                ResultMode            `json:"runningMode"`
-	CaptureResults            bool                  `json:"captureResults"`
-	CaptureDiagnostics        bool                  `json:"captureDiagnostics"`
-	ReplyToQuery              bool                  `json:"replyToQuery"`
-	Status                    string                `json:"status"`
-	FileEncoding              string                `json:"fileEncoding"`
-	Timezone                  string                `json:"timezone"`
-	Hostname                  string                `json:"hostname"`
-	ClientPort                *int                  `json:"clientPort"`
-	FtpServerBasePath         string                `json:"ftpServerBasepath"`
-	FtpServerFileMaskDownload string                `json:"ftpServerFilemaskDownload"`
-	FtpServerFileMaskUpload   string                `json:"ftpServerFilemaskUpload"`
-	FtpServerHostKey          string                `json:"ftpServerHostkey"`
-	FtpServerHostname         string                `json:"ftpServerHostname"`
-	FtpServerUsername         string                `json:"ftpServerUsername"`
-	FtpServerPassword         string                `json:"ftpServerPassword"`
-	FtpServerPort             int                   `json:"ftpServerPort"`
-	FtpServerPublicKey        string                `json:"ftpServerPublicKey"`
-	FtpServerType             string                `json:"ftpServerType"`
-	AnalyteMappings           []analyteMappingTO    `json:"analyteMappings"`
-	RequestMappings           []requestMappingTO    `json:"requestMappings"`
-	Settings                  []instrumentSettingTO `json:"instrumentSettings"`
+	ID                  uuid.UUID             `json:"id"`
+	Type                InstrumentType        `json:"instrumentType"`
+	Name                string                `json:"name"`
+	ProtocolID          uuid.UUID             `json:"protocolId"`
+	ProtocolName        Protocol              `json:"type"`
+	Enabled             bool                  `json:"enabled"`
+	ConnectionMode      ConnectionMode        `json:"connectionMode"`
+	ResultMode          ResultMode            `json:"runningMode"`
+	CaptureResults      bool                  `json:"captureResults"`
+	CaptureDiagnostics  bool                  `json:"captureDiagnostics"`
+	ReplyToQuery        bool                  `json:"replyToQuery"`
+	Status              string                `json:"status"`
+	FileEncoding        string                `json:"fileEncoding"`
+	Timezone            string                `json:"timezone"`
+	Hostname            string                `json:"hostname"`
+	ClientPort          *int                  `json:"clientPort"`
+	FtpUsername         string                `json:"ftpUserName"`
+	FtpPassword         string                `json:"ftpPassword"`
+	FtpRemotePath       string                `json:"ftpRemotePath"`
+	FtpFileMask         string                `json:"ftpFileMask"`
+	FtpResultRemotePath string                `json:"ftpResultRemotePath"`
+	FtpFileSuffix       string                `json:"ftpFileSuffix"`
+	FtpServerType       string                `json:"ftpServerType"`
+	AnalyteMappings     []analyteMappingTO    `json:"analyteMappings"`
+	RequestMappings     []requestMappingTO    `json:"requestMappings"`
+	Settings            []instrumentSettingTO `json:"instrumentSettings"`
 }
 
 type listInstrumentTO struct {
@@ -629,22 +626,22 @@ func convertInstrumentTOToInstrument(instrumentTO instrumentTO) Instrument {
 		Timezone:           instrumentTO.Timezone,
 		Hostname:           instrumentTO.Hostname,
 		ClientPort:         instrumentTO.ClientPort,
-		FTPConfig: &FTPConfig{
-			InstrumentId:              instrumentTO.ID,
-			FtpServerBasePath:         instrumentTO.FtpServerBasePath,
-			FtpServerFileMaskDownload: instrumentTO.FtpServerFileMaskDownload,
-			FtpServerFileMaskUpload:   instrumentTO.FtpServerFileMaskUpload,
-			FtpServerHostKey:          instrumentTO.FtpServerHostKey,
-			FtpServerHostname:         instrumentTO.FtpServerHostname,
-			FtpServerUsername:         instrumentTO.FtpServerUsername,
-			FtpServerPassword:         instrumentTO.FtpServerPassword,
-			FtpServerPort:             instrumentTO.FtpServerPort,
-			FtpServerPublicKey:        instrumentTO.FtpServerPublicKey,
-			FtpServerType:             instrumentTO.FtpServerType,
-		},
-		AnalyteMappings: make([]AnalyteMapping, len(instrumentTO.AnalyteMappings)),
-		RequestMappings: make([]RequestMapping, len(instrumentTO.RequestMappings)),
-		Settings:        convertInstrumentSettingTOsToInstrumentSettings(instrumentTO.Settings),
+		AnalyteMappings:    make([]AnalyteMapping, len(instrumentTO.AnalyteMappings)),
+		RequestMappings:    make([]RequestMapping, len(instrumentTO.RequestMappings)),
+		Settings:           convertInstrumentSettingTOsToInstrumentSettings(instrumentTO.Settings),
+	}
+
+	if instrumentTO.ConnectionMode == FTP {
+		model.FTPConfig = &FTPConfig{
+			InstrumentId:     instrumentTO.ID,
+			Username:         instrumentTO.FtpUsername,
+			Password:         instrumentTO.FtpPassword,
+			RemotePath:       instrumentTO.FtpRemotePath,
+			FileMask:         instrumentTO.FtpFileMask,
+			ResultRemotePath: instrumentTO.FtpResultRemotePath,
+			FileSuffix:       instrumentTO.FtpFileSuffix,
+			FtpServerType:    instrumentTO.FtpServerType,
+		}
 	}
 
 	if instrumentTO.Status == "" {
@@ -686,17 +683,13 @@ func convertInstrumentToInstrumentTO(instrument Instrument) instrumentTO {
 	}
 
 	if instrument.ConnectionMode == FTP && instrument.FTPConfig != nil {
-		ftpConf := instrument.FTPConfig
-		model.FtpServerBasePath = ftpConf.FtpServerBasePath
-		model.FtpServerFileMaskDownload = ftpConf.FtpServerFileMaskDownload
-		model.FtpServerFileMaskUpload = ftpConf.FtpServerFileMaskUpload
-		model.FtpServerHostKey = ftpConf.FtpServerHostKey
-		model.FtpServerHostname = ftpConf.FtpServerHostname
-		model.FtpServerUsername = ftpConf.FtpServerUsername
-		model.FtpServerPassword = ftpConf.FtpServerPassword
-		model.FtpServerPort = ftpConf.FtpServerPort
-		model.FtpServerPublicKey = ftpConf.FtpServerPublicKey
-		model.FtpServerType = ftpConf.FtpServerType
+		model.FtpServerType = instrument.FTPConfig.FtpServerType
+		model.FtpUsername = instrument.FTPConfig.Username
+		model.FtpPassword = instrument.FTPConfig.Password
+		model.FtpRemotePath = instrument.FTPConfig.RemotePath
+		model.FtpFileMask = instrument.FTPConfig.FileMask
+		model.FtpResultRemotePath = instrument.FTPConfig.ResultRemotePath
+		model.FtpFileSuffix = instrument.FTPConfig.FileSuffix
 	}
 
 	for i, analyteMapping := range instrument.AnalyteMappings {

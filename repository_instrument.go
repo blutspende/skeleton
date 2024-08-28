@@ -31,7 +31,6 @@ const (
 	msgCreateFtpConfigFailed              = "create FTP config failed"
 	msgUpdateFtpConfigFailed              = "update FTP config failed"
 	msgDeleteFtpConfigFailed              = "delete FTP config failed"
-	msgFtpConfigNotFound                  = "ftp config not found"
 	msgGetFtpConfigFailed                 = "get ftp config by instrument id failed"
 	msgFtpConfigExistsFailed              = "failed to check whether ftp config exists"
 	msgGetProtocolByIDFailed              = "get protocol by ID failed"
@@ -80,7 +79,6 @@ var (
 	ErrCreateFtpConfigFailed              = errors.New(msgCreateFtpConfigFailed)
 	ErrUpdateFtpConfigFailed              = errors.New(msgUpdateFtpConfigFailed)
 	ErrDeleteFtpConfigFailed              = errors.New(msgDeleteFtpConfigFailed)
-	ErrFtpConfigNotFound                  = errors.New(msgFtpConfigNotFound)
 	ErrGetFtpConfigFailed                 = errors.New(msgGetFtpConfigFailed)
 	ErrFtpConfigExistsFailed              = errors.New(msgFtpConfigExistsFailed)
 	ErrGetProtocolByIDFailed              = errors.New(msgGetProtocolByIDFailed)
@@ -136,17 +134,14 @@ type instrumentDAO struct {
 }
 
 type ftpConfigDAO struct {
-	InstrumentId              uuid.UUID `db:"instrument_id"`
-	FtpServerBasePath         string    `db:"ftp_server_base_path"`
-	FtpServerFileMaskDownload string    `db:"ftp_server_file_mask_download"`
-	FtpServerFileMaskUpload   string    `db:"ftp_server_file_mask_upload"`
-	FtpServerHostKey          string    `db:"ftp_server_host_key"`
-	FtpServerHostname         string    `db:"ftp_server_hostname"`
-	FtpServerUsername         string    `db:"ftp_server_username"`
-	FtpServerPassword         string    `db:"ftp_server_password"`
-	FtpServerPort             int       `db:"ftp_server_port"`
-	FtpServerPublicKey        string    `db:"ftp_server_public_key"`
-	FtpServerType             string    `db:"ftp_server_type"`
+	InstrumentId     uuid.UUID `db:"instrument_id"`
+	Username         string    `db:"username"`
+	Password         string    `db:"password"`
+	RemotePath       string    `db:"remote_path"`
+	FileMask         string    `db:"file_mask"`
+	ResultRemotePath string    `db:"result_remote_path"`
+	FileSuffix       string    `db:"file_suffix"`
+	FtpServerType    string    `db:"ftp_server_type"`
 }
 
 type analyteMappingDAO struct {
@@ -254,7 +249,7 @@ type InstrumentRepository interface {
 	UpdateInstrument(ctx context.Context, instrument Instrument) error
 	DeleteInstrument(ctx context.Context, id uuid.UUID) error
 	CreateFtpConfig(ctx context.Context, ftpConfig *FTPConfig) error
-	GetFtpConfigByInstrumentId(ctx context.Context, instrumentId uuid.UUID) (FTPConfig, error)
+	GetFtpConfigByInstrumentId(ctx context.Context, instrumentId uuid.UUID) (*FTPConfig, error)
 	FtpConfigExists(ctx context.Context, instrumentId uuid.UUID) (bool, error)
 	UpdateFtpConfig(ctx context.Context, ftpConfig *FTPConfig) error
 	DeleteFtpConfig(ctx context.Context, instrumentId uuid.UUID) error
@@ -435,8 +430,8 @@ func (r *instrumentRepository) DeleteInstrument(ctx context.Context, id uuid.UUI
 }
 
 func (r *instrumentRepository) CreateFtpConfig(ctx context.Context, ftpConfig *FTPConfig) error {
-	query := fmt.Sprintf(`INSERT INTO %s.sk_instrument_ftp_config(instrument_id, ftp_server_base_path, ftp_server_file_mask_download, ftp_server_file_mask_upload, ftp_server_host_key, ftp_server_hostname, ftp_server_username, ftp_server_password, ftp_server_port, ftp_server_public_key, ftp_server_type)
-		VALUES(:instrument_id, :ftp_server_base_path, :ftp_server_file_mask_download, :ftp_server_file_mask_upload, :ftp_server_host_key, :ftp_server_hostname, :ftp_server_username, :ftp_server_password, :ftp_server_port, :ftp_server_public_key, :ftp_server_type)`, r.dbSchema)
+	query := fmt.Sprintf(`INSERT INTO %s.sk_instrument_ftp_config(instrument_id, username, password, remote_path, file_mask, result_remote_path, file_suffix, ftp_server_type)
+		VALUES(:instrument_id, :username, :password, :remote_path, :file_mask, :result_remote_path, :file_suffix, :ftp_server_type)`, r.dbSchema)
 
 	dao := convertFtpConfigToDao(ftpConfig)
 	_, err := r.db.NamedExecContext(ctx, query, dao)
@@ -447,23 +442,21 @@ func (r *instrumentRepository) CreateFtpConfig(ctx context.Context, ftpConfig *F
 	return nil
 }
 
-func (r *instrumentRepository) GetFtpConfigByInstrumentId(ctx context.Context, instrumentId uuid.UUID) (FTPConfig, error) {
+func (r *instrumentRepository) GetFtpConfigByInstrumentId(ctx context.Context, instrumentId uuid.UUID) (*FTPConfig, error) {
 	query := fmt.Sprintf(`SELECT * FROM %s.sk_instrument_ftp_config WHERE instrument_id = $1`, r.dbSchema)
 
-	var ftpConfig FTPConfig
 	var dao ftpConfigDAO
 	err := r.db.QueryRowxContext(ctx, query, instrumentId).StructScan(&dao)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			log.Warn().Interface("instrumentId", instrumentId).Msg("ftp config queried bot not found")
-			return ftpConfig, ErrFtpConfigNotFound
+			return nil, nil
 		}
 		log.Error().Err(err).Msg(msgGetFtpConfigFailed)
-		return ftpConfig, ErrGetFtpConfigFailed
+		return nil, ErrGetFtpConfigFailed
 	}
 
-	ftpConfig = convertFtpConfigDaoToFtpConfig(dao)
-	return ftpConfig, nil
+	return convertFtpConfigDaoToFtpConfig(dao), nil
 }
 
 func (r *instrumentRepository) FtpConfigExists(ctx context.Context, instrumentId uuid.UUID) (bool, error) {
@@ -480,10 +473,8 @@ func (r *instrumentRepository) FtpConfigExists(ctx context.Context, instrumentId
 }
 
 func (r *instrumentRepository) UpdateFtpConfig(ctx context.Context, ftpConfig *FTPConfig) error {
-	query := fmt.Sprintf(`UPDATE %s.sk_instrument_ftp_config SET ftp_server_base_path = :ftp_server_base_path,
-        ftp_server_file_mask_download = :ftp_server_file_mask_download, ftp_server_file_mask_upload = :ftp_server_file_mask_upload,
-        ftp_server_host_key = :ftp_server_host_key, ftp_server_hostname = :ftp_server_hostname, ftp_server_username = :ftp_server_username,
-        ftp_server_password = :ftp_server_password, ftp_server_port = :ftp_server_port, ftp_server_public_key = :ftp_server_public_key,
+	query := fmt.Sprintf(`UPDATE %s.sk_instrument_ftp_config SET username = :username, password = :password,
+        remote_path = :remote_path, file_mask = :file_mask, result_remote_path = :result_remote_path, file_suffix = :file_suffix,
         ftp_server_type = :ftp_server_type WHERE instrument_id = :instrument_id`, r.dbSchema)
 
 	dao := convertFtpConfigToDao(ftpConfig)
@@ -1286,33 +1277,27 @@ func convertInstrumentDaoToInstrument(dao instrumentDAO) (Instrument, error) {
 
 func convertFtpConfigToDao(ftpConfig *FTPConfig) ftpConfigDAO {
 	return ftpConfigDAO{
-		InstrumentId:              ftpConfig.InstrumentId,
-		FtpServerBasePath:         ftpConfig.FtpServerBasePath,
-		FtpServerFileMaskDownload: ftpConfig.FtpServerFileMaskDownload,
-		FtpServerFileMaskUpload:   ftpConfig.FtpServerFileMaskUpload,
-		FtpServerHostKey:          ftpConfig.FtpServerHostKey,
-		FtpServerHostname:         ftpConfig.FtpServerHostname,
-		FtpServerUsername:         ftpConfig.FtpServerUsername,
-		FtpServerPassword:         ftpConfig.FtpServerPassword,
-		FtpServerPort:             ftpConfig.FtpServerPort,
-		FtpServerPublicKey:        ftpConfig.FtpServerPublicKey,
-		FtpServerType:             ftpConfig.FtpServerType,
+		InstrumentId:     ftpConfig.InstrumentId,
+		Username:         ftpConfig.Username,
+		Password:         ftpConfig.Password,
+		RemotePath:       ftpConfig.RemotePath,
+		FileMask:         ftpConfig.FileMask,
+		ResultRemotePath: ftpConfig.ResultRemotePath,
+		FileSuffix:       ftpConfig.FileSuffix,
+		FtpServerType:    ftpConfig.FtpServerType,
 	}
 }
 
-func convertFtpConfigDaoToFtpConfig(dao ftpConfigDAO) FTPConfig {
-	return FTPConfig{
-		InstrumentId:              dao.InstrumentId,
-		FtpServerBasePath:         dao.FtpServerBasePath,
-		FtpServerFileMaskDownload: dao.FtpServerFileMaskDownload,
-		FtpServerFileMaskUpload:   dao.FtpServerFileMaskUpload,
-		FtpServerHostKey:          dao.FtpServerHostKey,
-		FtpServerHostname:         dao.FtpServerHostname,
-		FtpServerUsername:         dao.FtpServerUsername,
-		FtpServerPassword:         dao.FtpServerPassword,
-		FtpServerPort:             dao.FtpServerPort,
-		FtpServerPublicKey:        dao.FtpServerPublicKey,
-		FtpServerType:             dao.FtpServerType,
+func convertFtpConfigDaoToFtpConfig(dao ftpConfigDAO) *FTPConfig {
+	return &FTPConfig{
+		InstrumentId:     dao.InstrumentId,
+		Username:         dao.Username,
+		Password:         dao.Password,
+		RemotePath:       dao.RemotePath,
+		FileMask:         dao.FileMask,
+		ResultRemotePath: dao.ResultRemotePath,
+		FileSuffix:       dao.FileSuffix,
+		FtpServerType:    dao.FtpServerType,
 	}
 }
 

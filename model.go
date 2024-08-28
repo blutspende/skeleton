@@ -169,17 +169,14 @@ type Instrument struct {
 type Protocol string
 
 type FTPConfig struct {
-	InstrumentId              uuid.UUID
-	FtpServerBasePath         string
-	FtpServerFileMaskDownload string
-	FtpServerFileMaskUpload   string
-	FtpServerHostKey          string
-	FtpServerHostname         string
-	FtpServerUsername         string
-	FtpServerPassword         string
-	FtpServerPort             int
-	FtpServerPublicKey        string
-	FtpServerType             string
+	InstrumentId     uuid.UUID
+	Username         string
+	Password         string
+	RemotePath       string
+	FileMask         string
+	ResultRemotePath string
+	FileSuffix       string
+	FtpServerType    string
 }
 
 type AnalyteMapping struct {

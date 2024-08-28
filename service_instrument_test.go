@@ -470,16 +470,20 @@ func (r *instrumentRepositoryMock) DeleteInstrument(ctx context.Context, id uuid
 	return nil
 }
 
-func (r *instrumentRepositoryMock) CreateFtpConfig(ctx context.Context, ftpConfig FTPConfig) error {
+func (r *instrumentRepositoryMock) CreateFtpConfig(ctx context.Context, ftpConfig *FTPConfig) error {
 	return nil
 }
 
-func (r *instrumentRepositoryMock) GetFtpConfigByInstrumentId(ctx context.Context, instrumentId uuid.UUID) (FTPConfig, error) {
-	return FTPConfig{}, nil
+func (r *instrumentRepositoryMock) GetFtpConfigByInstrumentId(ctx context.Context, instrumentId uuid.UUID) (*FTPConfig, error) {
+	return &FTPConfig{}, nil
 }
 
-func (r *instrumentRepositoryMock) UpdateFtpConfig(ctx context.Context, ftpConfig FTPConfig) error {
+func (r *instrumentRepositoryMock) UpdateFtpConfig(ctx context.Context, ftpConfig *FTPConfig) error {
 	return nil
+}
+
+func (r *instrumentRepositoryMock) FtpConfigExists(ctx context.Context, instrumentId uuid.UUID) (bool, error) {
+	return true, nil
 }
 
 func (r *instrumentRepositoryMock) DeleteFtpConfig(ctx context.Context, instrumentId uuid.UUID) error {

@@ -137,7 +137,7 @@ func (s *instrumentService) GetInstruments(ctx context.Context) ([]Instrument, e
 		if err != nil {
 			return nil, err
 		}
-		instruments[i].FTPConfig = &ftpConfig
+		instruments[i].FTPConfig = ftpConfig
 
 		instrumentIDs[i] = instruments[i].ID
 		instrumentsByIDs[instruments[i].ID] = &instruments[i]
@@ -227,11 +227,10 @@ func (s *instrumentService) GetInstrumentByID(ctx context.Context, tx db.DbConne
 
 	if instrument.ConnectionMode == FTP {
 		ftpConf, err := s.instrumentRepository.WithTransaction(tx).GetFtpConfigByInstrumentId(ctx, instrument.ID)
-		if err == nil {
-			instrument.FTPConfig = &ftpConf
-		} else if err != nil && err != ErrFtpConfigNotFound {
+		if err != nil {
 			return instrument, err
 		}
+		instrument.FTPConfig = ftpConf
 	}
 
 	instrumentIDs := []uuid.UUID{instrument.ID}
@@ -315,11 +314,10 @@ func (s *instrumentService) GetInstrumentByIP(ctx context.Context, ip string) (I
 
 	if instrument.ConnectionMode == FTP {
 		ftpConf, err := s.instrumentRepository.GetFtpConfigByInstrumentId(ctx, instrument.ID)
-		if err == nil {
-			instrument.FTPConfig = &ftpConf
-		} else if err != nil && err != ErrFtpConfigNotFound {
+		if err != nil {
 			return instrument, err
 		}
+		instrument.FTPConfig = ftpConf
 	}
 
 	instrumentIDs := []uuid.UUID{instrument.ID}
