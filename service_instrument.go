@@ -411,23 +411,16 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 	}
 
 	if instrument.ConnectionMode == FTP && instrument.FTPConfig != nil {
-		exists, err := s.instrumentRepository.WithTransaction(tx).FtpConfigExists(ctx, instrument.ID)
+		err = s.instrumentRepository.WithTransaction(tx).DeleteFtpConfig(ctx, instrument.ID)
 		if err != nil {
+			_ = tx.Rollback()
 			return err
 		}
 
-		if exists {
-			err = s.instrumentRepository.WithTransaction(tx).UpdateFtpConfig(ctx, *instrument.FTPConfig)
-			if err != nil {
-				_ = tx.Rollback()
-				return err
-			}
-		} else {
-			err = s.instrumentRepository.WithTransaction(tx).CreateFtpConfig(ctx, *instrument.FTPConfig)
-			if err != nil {
-				_ = tx.Rollback()
-				return err
-			}
+		err = s.instrumentRepository.WithTransaction(tx).CreateFtpConfig(ctx, *instrument.FTPConfig)
+		if err != nil {
+			_ = tx.Rollback()
+			return err
 		}
 	}
 
@@ -688,14 +681,24 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 }
 
 func (s *instrumentService) DeleteInstrument(ctx context.Context, id uuid.UUID) error {
-	err := s.instrumentRepository.DeleteInstrument(ctx, id)
+	tx, err := s.instrumentRepository.CreateTransaction()
+	err = s.instrumentRepository.WithTransaction(tx).DeleteFtpConfig(ctx, id)
 	if err != nil {
+		_ = tx.Rollback()
 		return err
 	}
-	err = s.instrumentRepository.DeleteFtpConfig(ctx, id)
+	err = s.instrumentRepository.WithTransaction(tx).DeleteInstrument(ctx, id)
 	if err != nil {
+		_ = tx.Rollback()
 		return err
 	}
+
+	err = tx.Commit()
+	if err != nil {
+		_ = tx.Rollback()
+		return db.ErrCommitTransactionFailed
+	}
+
 	s.instrumentCache.Invalidate()
 	return nil
 }

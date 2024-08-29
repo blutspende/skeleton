@@ -257,8 +257,6 @@ type InstrumentRepository interface {
 	DeleteInstrument(ctx context.Context, id uuid.UUID) error
 	CreateFtpConfig(ctx context.Context, ftpConfig FTPConfig) error
 	GetFtpConfigByInstrumentId(ctx context.Context, instrumentId uuid.UUID) (FTPConfig, error)
-	FtpConfigExists(ctx context.Context, instrumentId uuid.UUID) (bool, error)
-	UpdateFtpConfig(ctx context.Context, ftpConfig FTPConfig) error
 	DeleteFtpConfig(ctx context.Context, instrumentId uuid.UUID) error
 	MarkAsSentToCerberus(ctx context.Context, id uuid.UUID) error
 	GetUnsentToCerberus(ctx context.Context) ([]uuid.UUID, error)
@@ -460,7 +458,7 @@ func (r *instrumentRepository) GetFtpConfigByInstrumentId(ctx context.Context, i
 	err := r.db.QueryRowxContext(ctx, query, instrumentId).StructScan(&dao)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			log.Warn().Interface("instrumentId", instrumentId).Msg("ftp config queried bot not found")
+			log.Warn().Interface("instrumentId", instrumentId).Msg("ftp config queried but not found")
 			return ftpConfig, ErrFtpConfigNotFound
 		}
 		log.Error().Err(err).Msg(msgGetFtpConfigFailed)
@@ -468,34 +466,6 @@ func (r *instrumentRepository) GetFtpConfigByInstrumentId(ctx context.Context, i
 	}
 
 	return convertFtpConfigDaoToFtpConfig(dao), nil
-}
-
-func (r *instrumentRepository) FtpConfigExists(ctx context.Context, instrumentId uuid.UUID) (bool, error) {
-	query := fmt.Sprintf(`SELECT EXISTS(SELECT 1 FROM %s.sk_instrument_ftp_config WHERE instrument_id = $1 AND deleted_at is NULL);`, r.dbSchema)
-
-	var ftpConfigExists bool
-	err := r.db.QueryRowxContext(ctx, query, instrumentId).Scan(&ftpConfigExists)
-	if err != nil {
-		log.Error().Err(err).Msg(msgFtpConfigExistsFailed)
-		return ftpConfigExists, ErrFtpConfigExistsFailed
-	}
-
-	return ftpConfigExists, nil
-}
-
-func (r *instrumentRepository) UpdateFtpConfig(ctx context.Context, ftpConfig FTPConfig) error {
-	query := fmt.Sprintf(`UPDATE %s.sk_instrument_ftp_config SET username = :username, password = :password,
-        order_path = :order_path, order_file_mask = :order_file_mask, order_file_suffix = :order_file_suffix,
-        result_path = :result_path, result_file_mask = :result_file_mask, result_file_suffix = :result_file_suffix,
-        ftp_server_type = :ftp_server_type WHERE instrument_id = :instrument_id AND deleted_at is NULL;`, r.dbSchema)
-
-	dao := convertFtpConfigToDao(ftpConfig)
-	_, err := r.db.NamedExecContext(ctx, query, dao)
-	if err != nil {
-		log.Error().Err(err).Msg(msgUpdateFtpConfigFailed)
-		return ErrUpdateFtpConfigFailed
-	}
-	return nil
 }
 
 func (r *instrumentRepository) DeleteFtpConfig(ctx context.Context, instrumentId uuid.UUID) error {
