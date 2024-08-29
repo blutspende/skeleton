@@ -140,11 +140,14 @@ type ftpConfigDAO struct {
 	InstrumentId     uuid.UUID    `db:"instrument_id"`
 	Username         string       `db:"username"`
 	Password         string       `db:"password"`
-	RemotePath       string       `db:"remote_path"`
-	FileMask         string       `db:"file_mask"`
-	ResultRemotePath string       `db:"result_remote_path"`
-	FileSuffix       string       `db:"file_suffix"`
+	OrderPath        string       `db:"order_path"`
+	OrderFileMask    string       `db:"order_file_mask"`
+	OrderFileSuffix  string       `db:"order_file_suffix"`
+	ResultPath       string       `db:"result_path"`
+	ResultFileMask   string       `db:"result_file_mask"`
+	ResultFileSuffix string       `db:"result_file_suffix"`
 	FtpServerType    string       `db:"ftp_server_type"`
+	CreatedAt        time.Time    `db:"created_at"`
 	DeletedAt        sql.NullTime `db:"deleted_at"`
 }
 
@@ -434,8 +437,10 @@ func (r *instrumentRepository) DeleteInstrument(ctx context.Context, id uuid.UUI
 }
 
 func (r *instrumentRepository) CreateFtpConfig(ctx context.Context, ftpConfig FTPConfig) error {
-	query := fmt.Sprintf(`INSERT INTO %s.sk_instrument_ftp_config(id, instrument_id, username, password, remote_path, file_mask, result_remote_path, file_suffix, ftp_server_type)
-		VALUES(:id, :instrument_id, :username, :password, :remote_path, :file_mask, :result_remote_path, :file_suffix, :ftp_server_type)`, r.dbSchema)
+	query := fmt.Sprintf(`INSERT INTO %s.sk_instrument_ftp_config(id, instrument_id, username, password,
+        order_path, order_file_mask, order_file_suffix, result_path, result_file_mask, result_file_suffix, ftp_server_type)
+		VALUES(:id, :instrument_id, :username, :password, :order_path, :order_file_mask, :order_file_suffix, :result_path,
+		:result_file_mask, :result_file_suffix, :ftp_server_type)`, r.dbSchema)
 	ftpConfig.ID = uuid.New()
 
 	dao := convertFtpConfigToDao(ftpConfig)
@@ -480,7 +485,8 @@ func (r *instrumentRepository) FtpConfigExists(ctx context.Context, instrumentId
 
 func (r *instrumentRepository) UpdateFtpConfig(ctx context.Context, ftpConfig FTPConfig) error {
 	query := fmt.Sprintf(`UPDATE %s.sk_instrument_ftp_config SET username = :username, password = :password,
-        remote_path = :remote_path, file_mask = :file_mask, result_remote_path = :result_remote_path, file_suffix = :file_suffix,
+        order_path = :order_path, order_file_mask = :order_file_mask, order_file_suffix = :order_file_suffix,
+        result_path = :result_path, result_file_mask = :result_file_mask, result_file_suffix = :result_file_suffix,
         ftp_server_type = :ftp_server_type WHERE instrument_id = :instrument_id AND deleted_at is NULL;`, r.dbSchema)
 
 	dao := convertFtpConfigToDao(ftpConfig)
@@ -1287,11 +1293,14 @@ func convertFtpConfigToDao(ftpConfig FTPConfig) ftpConfigDAO {
 		InstrumentId:     ftpConfig.InstrumentId,
 		Username:         ftpConfig.Username,
 		Password:         ftpConfig.Password,
-		RemotePath:       ftpConfig.RemotePath,
-		FileMask:         ftpConfig.FileMask,
-		ResultRemotePath: ftpConfig.ResultRemotePath,
-		FileSuffix:       ftpConfig.FileSuffix,
+		OrderPath:        ftpConfig.OrderPath,
+		OrderFileMask:    ftpConfig.OrderFileMask,
+		OrderFileSuffix:  ftpConfig.OrderFileSuffix,
+		ResultPath:       ftpConfig.ResultPath,
+		ResultFileMask:   ftpConfig.ResultFileMask,
+		ResultFileSuffix: ftpConfig.ResultFileSuffix,
 		FtpServerType:    ftpConfig.FtpServerType,
+		CreatedAt:        ftpConfig.CreatedAt,
 	}
 }
 
@@ -1301,11 +1310,14 @@ func convertFtpConfigDaoToFtpConfig(dao ftpConfigDAO) FTPConfig {
 		InstrumentId:     dao.InstrumentId,
 		Username:         dao.Username,
 		Password:         dao.Password,
-		RemotePath:       dao.RemotePath,
-		FileMask:         dao.FileMask,
-		ResultRemotePath: dao.ResultRemotePath,
-		FileSuffix:       dao.FileSuffix,
+		OrderPath:        dao.OrderPath,
+		OrderFileMask:    dao.OrderFileMask,
+		OrderFileSuffix:  dao.OrderFileSuffix,
+		ResultPath:       dao.ResultPath,
+		ResultFileMask:   dao.ResultFileMask,
+		ResultFileSuffix: dao.ResultFileSuffix,
 		FtpServerType:    dao.FtpServerType,
+		CreatedAt:        dao.CreatedAt,
 	}
 }
 

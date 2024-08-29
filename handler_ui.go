@@ -27,13 +27,15 @@ type instrumentTO struct {
 	Timezone            string                `json:"timezone"`
 	Hostname            string                `json:"hostname"`
 	ClientPort          *int                  `json:"clientPort"`
-	FtpUsername         string                `json:"ftpUserName"`
-	FtpPassword         string                `json:"ftpPassword"`
-	FtpRemotePath       string                `json:"ftpRemotePath"`
-	FtpFileMask         string                `json:"ftpFileMask"`
-	FtpResultRemotePath string                `json:"ftpResultRemotePath"`
-	FtpFileSuffix       string                `json:"ftpFileSuffix"`
-	FtpServerType       string                `json:"ftpServerType"`
+	FtpUsername         *string               `json:"ftpUserName"`
+	FtpPassword         *string               `json:"ftpPassword"`
+	FtpOrderPath        *string               `json:"ftpOrderPath"`
+	FtpOrderFileMask    *string               `json:"ftpOrderFileMask"`
+	FtpOrderFileSuffix  *string               `json:"ftpOrderFileSuffix"`
+	FtpResultPath       *string               `json:"ftpResultPath"`
+	FtpResultFileMask   *string               `json:"ftpResultFileMask"`
+	FtpResultFileSuffix *string               `json:"ftpResultFileSuffix"`
+	FtpServerType       *string               `json:"ftpServerType"`
 	AnalyteMappings     []analyteMappingTO    `json:"analyteMappings"`
 	RequestMappings     []requestMappingTO    `json:"requestMappings"`
 	Settings            []instrumentSettingTO `json:"instrumentSettings"`
@@ -634,13 +636,15 @@ func convertInstrumentTOToInstrument(instrumentTO instrumentTO) Instrument {
 	if instrumentTO.ConnectionMode == FTP {
 		model.FTPConfig = &FTPConfig{
 			InstrumentId:     instrumentTO.ID,
-			Username:         instrumentTO.FtpUsername,
-			Password:         instrumentTO.FtpPassword,
-			RemotePath:       instrumentTO.FtpRemotePath,
-			FileMask:         instrumentTO.FtpFileMask,
-			ResultRemotePath: instrumentTO.FtpResultRemotePath,
-			FileSuffix:       instrumentTO.FtpFileSuffix,
-			FtpServerType:    instrumentTO.FtpServerType,
+			Username:         stringPointerToString(instrumentTO.FtpUsername),
+			Password:         stringPointerToString(instrumentTO.FtpPassword),
+			OrderPath:        stringPointerToStringWithDefault(instrumentTO.FtpOrderPath, "/"),
+			OrderFileMask:    stringPointerToString(instrumentTO.FtpOrderFileMask),
+			OrderFileSuffix:  stringPointerToString(instrumentTO.FtpOrderFileSuffix),
+			ResultPath:       stringPointerToStringWithDefault(instrumentTO.FtpResultPath, "/"),
+			ResultFileMask:   stringPointerToString(instrumentTO.FtpResultFileMask),
+			ResultFileSuffix: stringPointerToString(instrumentTO.FtpResultFileSuffix),
+			FtpServerType:    stringPointerToString(instrumentTO.FtpServerType),
 		}
 	}
 
@@ -683,13 +687,15 @@ func convertInstrumentToInstrumentTO(instrument Instrument) instrumentTO {
 	}
 
 	if instrument.ConnectionMode == FTP && instrument.FTPConfig != nil {
-		model.FtpServerType = instrument.FTPConfig.FtpServerType
-		model.FtpUsername = instrument.FTPConfig.Username
-		model.FtpPassword = instrument.FTPConfig.Password
-		model.FtpRemotePath = instrument.FTPConfig.RemotePath
-		model.FtpFileMask = instrument.FTPConfig.FileMask
-		model.FtpResultRemotePath = instrument.FTPConfig.ResultRemotePath
-		model.FtpFileSuffix = instrument.FTPConfig.FileSuffix
+		model.FtpServerType = &instrument.FTPConfig.FtpServerType
+		model.FtpUsername = &instrument.FTPConfig.Username
+		model.FtpPassword = &instrument.FTPConfig.Password
+		model.FtpOrderPath = &instrument.FTPConfig.OrderPath
+		model.FtpOrderFileMask = &instrument.FTPConfig.OrderFileMask
+		model.FtpOrderFileSuffix = &instrument.FTPConfig.OrderFileSuffix
+		model.FtpResultPath = &instrument.FTPConfig.ResultPath
+		model.FtpResultFileMask = &instrument.FTPConfig.ResultFileMask
+		model.FtpResultFileSuffix = &instrument.FTPConfig.ResultFileSuffix
 	}
 
 	for i, analyteMapping := range instrument.AnalyteMappings {

@@ -126,10 +126,12 @@ func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
 		FTPConfig: &FTPConfig{
 			Username:         "test",
 			Password:         "test",
-			RemotePath:       "/remote",
-			FileMask:         "*.EXP",
-			ResultRemotePath: "/result",
-			FileSuffix:       ".TPL",
+			OrderPath:        "/remote",
+			OrderFileMask:    "*.EXP",
+			OrderFileSuffix:  ".*",
+			ResultPath:       "/result",
+			ResultFileMask:   "*",
+			ResultFileSuffix: ".TPL",
 			FtpServerType:    "ftp",
 		},
 	}
@@ -148,10 +150,12 @@ func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
 	assert.Equal(t, instrumentId, instrument.FTPConfig.InstrumentId)
 	assert.Equal(t, "test", instrument.FTPConfig.Username)
 	assert.Equal(t, "test", instrument.FTPConfig.Password)
-	assert.Equal(t, "/remote", instrument.FTPConfig.RemotePath)
-	assert.Equal(t, "*.EXP", instrument.FTPConfig.FileMask)
-	assert.Equal(t, "/result", instrument.FTPConfig.ResultRemotePath)
-	assert.Equal(t, ".TPL", instrument.FTPConfig.FileSuffix)
+	assert.Equal(t, "/remote", instrument.FTPConfig.OrderPath)
+	assert.Equal(t, "*.EXP", instrument.FTPConfig.OrderFileMask)
+	assert.Equal(t, ".*", instrument.FTPConfig.OrderFileSuffix)
+	assert.Equal(t, "/result", instrument.FTPConfig.ResultPath)
+	assert.Equal(t, "*", instrument.FTPConfig.ResultFileMask)
+	assert.Equal(t, ".TPL", instrument.FTPConfig.ResultFileSuffix)
 	assert.Equal(t, "ftp", instrument.FTPConfig.FtpServerType)
 
 	err = instrumentService.UpdateInstrument(ctx, Instrument{
@@ -172,10 +176,12 @@ func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
 			InstrumentId:     instrumentId,
 			Username:         "updatedUsername",
 			Password:         "updatesPass",
-			RemotePath:       "/remote/updated",
-			FileMask:         "*.updated.EXP",
-			ResultRemotePath: "/result/updated",
-			FileSuffix:       ".updated.TPL",
+			OrderPath:        "/remote/updated",
+			OrderFileMask:    "*.updated.EXP",
+			OrderFileSuffix:  "updated.*",
+			ResultPath:       "/result/updated",
+			ResultFileMask:   "*updated*",
+			ResultFileSuffix: ".updated.TPL",
 			FtpServerType:    "sftp",
 		},
 	})
@@ -188,10 +194,12 @@ func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
 	assert.Equal(t, instrumentId, instrument.FTPConfig.InstrumentId)
 	assert.Equal(t, "updatedUsername", instrument.FTPConfig.Username)
 	assert.Equal(t, "updatesPass", instrument.FTPConfig.Password)
-	assert.Equal(t, "/remote/updated", instrument.FTPConfig.RemotePath)
-	assert.Equal(t, "*.updated.EXP", instrument.FTPConfig.FileMask)
-	assert.Equal(t, "/result/updated", instrument.FTPConfig.ResultRemotePath)
-	assert.Equal(t, ".updated.TPL", instrument.FTPConfig.FileSuffix)
+	assert.Equal(t, "/remote/updated", instrument.FTPConfig.OrderPath)
+	assert.Equal(t, "*.updated.EXP", instrument.FTPConfig.OrderFileMask)
+	assert.Equal(t, "updated.*", instrument.FTPConfig.OrderFileSuffix)
+	assert.Equal(t, "/result/updated", instrument.FTPConfig.ResultPath)
+	assert.Equal(t, "*updated*", instrument.FTPConfig.ResultFileMask)
+	assert.Equal(t, ".updated.TPL", instrument.FTPConfig.ResultFileSuffix)
 	assert.Equal(t, "sftp", instrument.FTPConfig.FtpServerType)
 
 	err = instrumentService.DeleteInstrument(ctx, instrumentId)
@@ -281,10 +289,12 @@ func TestFtpConfigConnectionModeChange(t *testing.T) {
 			InstrumentId:     instrumentId,
 			Username:         "test",
 			Password:         "test",
-			RemotePath:       "/remote",
-			FileMask:         "*.EXP",
-			ResultRemotePath: "/result",
-			FileSuffix:       ".TPL",
+			OrderPath:        "/remote",
+			OrderFileMask:    "*.EXP",
+			OrderFileSuffix:  "",
+			ResultPath:       "/result",
+			ResultFileMask:   "",
+			ResultFileSuffix: ".TPL",
 			FtpServerType:    "ftp",
 		},
 	})
@@ -298,10 +308,12 @@ func TestFtpConfigConnectionModeChange(t *testing.T) {
 	assert.Equal(t, instrumentId, instrument.FTPConfig.InstrumentId)
 	assert.Equal(t, "test", instrument.FTPConfig.Username)
 	assert.Equal(t, "test", instrument.FTPConfig.Password)
-	assert.Equal(t, "/remote", instrument.FTPConfig.RemotePath)
-	assert.Equal(t, "*.EXP", instrument.FTPConfig.FileMask)
-	assert.Equal(t, "/result", instrument.FTPConfig.ResultRemotePath)
-	assert.Equal(t, ".TPL", instrument.FTPConfig.FileSuffix)
+	assert.Equal(t, "/remote", instrument.FTPConfig.OrderPath)
+	assert.Equal(t, "*.EXP", instrument.FTPConfig.OrderFileMask)
+	assert.Equal(t, "", instrument.FTPConfig.OrderFileSuffix)
+	assert.Equal(t, "/result", instrument.FTPConfig.ResultPath)
+	assert.Equal(t, "", instrument.FTPConfig.ResultFileMask)
+	assert.Equal(t, ".TPL", instrument.FTPConfig.ResultFileSuffix)
 	assert.Equal(t, "ftp", instrument.FTPConfig.FtpServerType)
 
 	err = instrumentService.UpdateInstrument(ctx, Instrument{

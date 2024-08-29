@@ -173,11 +173,14 @@ type FTPConfig struct {
 	InstrumentId     uuid.UUID
 	Username         string
 	Password         string
-	RemotePath       string
-	FileMask         string
-	ResultRemotePath string
-	FileSuffix       string
+	OrderPath        string
+	OrderFileMask    string
+	OrderFileSuffix  string
+	ResultPath       string
+	ResultFileMask   string
+	ResultFileSuffix string
 	FtpServerType    string
+	CreatedAt        time.Time
 	DeletedAt        *time.Time
 }
 
