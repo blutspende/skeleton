@@ -10,7 +10,7 @@ instrument, err := s.skeleton.GetInstrumentByIP(remoteAddress)
 
 ## API 
 ### Analysis-Request
-Received by skeleton from cerberus on /v1/analysisRequest/batch [POST]
+Received by skeleton from cerberus on /v1/analysis-requests/batch [POST]
 
 ```text 
 workItemId     uuid.UUID Reference to the WorkitemId
@@ -20,6 +20,7 @@ materialId     uuid.UUID Reference to the (ordered) MaterialId
 laboratoryId   uuid.UUID Laboratory 
 validUntilTime time.Time Upper time-limit until which the request should be regarded as valid
 subject        (obsolete)
+extraValues    []ExtraValue List of key-value pairs for extra information of analysis request
 ```
 
 ### Analysis-Result
@@ -37,13 +38,15 @@ operator                 string
 technicalReleaseDateTime *time.time
 instrumentId             uuid.UUID
 instrumentRunId          uuid.UUID
-reagentInfos
-extraValues              []ExtraValues
 resultEdit               bool
 editReason               string
+isInvalid                bool
+channelResults           []ChannelResultTO
+extraValues              []ExtraValueTO
+reagentInfos             []ReagentInfoTO
+images                   []ImageTO
+warnFlag                 bool
 warnings                 []string
-channelResults           []channelResult
-images                   []imageV1TO         
 ```
 
 ### UI 

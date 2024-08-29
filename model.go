@@ -339,17 +339,6 @@ type Image struct {
 	UploadedToDeaAt *time.Time
 }
 
-type SubmitType string
-
-const (
-	// Batch with delay, store & send to Cerberus
-	SubmitTypeBatchStoreAndSend = ""
-	// Store & Send to Cerberus, no batching = single request
-	SubmitTypeInstantStoreAndSend = "INSTANT_PROCESS"
-	// Store only internally for reference (like the Requests-Search in UI)
-	SubmitTypeStoreOnly = "STORE_ONLY"
-)
-
 // SupportedManufacturerTests Information about the tests that are supported by the manufacturer
 // These are the testcodes as they are usually set by the vendor of an instrument. In many cases
 // they are hardwired by the driver-software on the respective instrument.
