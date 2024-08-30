@@ -157,6 +157,7 @@ type Instrument struct {
 	Timezone           string
 	Hostname           string
 	ClientPort         *int
+	FTPConfig          *FTPConfig
 	AnalyteMappings    []AnalyteMapping
 	RequestMappings    []RequestMapping
 	Settings           []InstrumentSetting
@@ -166,6 +167,22 @@ type Instrument struct {
 }
 
 type Protocol string
+
+type FTPConfig struct {
+	ID               uuid.UUID
+	InstrumentId     uuid.UUID
+	Username         string
+	Password         string
+	OrderPath        string
+	OrderFileMask    string
+	OrderFileSuffix  string
+	ResultPath       string
+	ResultFileMask   string
+	ResultFileSuffix string
+	FtpServerType    string
+	CreatedAt        time.Time
+	DeletedAt        *time.Time
+}
 
 type AnalyteMapping struct {
 	ID                uuid.UUID

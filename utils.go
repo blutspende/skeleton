@@ -56,6 +56,13 @@ func stringPointerToString(value *string) string {
 	return ""
 }
 
+func stringPointerToStringWithDefault(value *string, defaultValue string) string {
+	if value != nil {
+		return *value
+	}
+	return defaultValue
+}
+
 func nullStringToString(value sql.NullString) string {
 	if value.Valid {
 		return value.String

@@ -64,6 +64,16 @@ func (s *instrumentService) CreateInstrument(ctx context.Context, instrument Ins
 		_ = transaction.Rollback()
 		return uuid.Nil, err
 	}
+
+	if instrument.ConnectionMode == FTP && instrument.FTPConfig != nil {
+		instrument.FTPConfig.InstrumentId = id
+		err = s.instrumentRepository.WithTransaction(transaction).CreateFtpConfig(ctx, *instrument.FTPConfig)
+		if err != nil {
+			_ = transaction.Rollback()
+			return uuid.Nil, err
+		}
+	}
+
 	analyteMappingIDs, err := s.instrumentRepository.WithTransaction(transaction).CreateAnalyteMappings(ctx, instrument.AnalyteMappings, id)
 	if err != nil {
 		_ = transaction.Rollback()
@@ -122,6 +132,15 @@ func (s *instrumentService) GetInstruments(ctx context.Context) ([]Instrument, e
 			return nil, err
 		}
 		instruments[i].ProtocolName = protocol.Name
+
+		if instruments[i].ConnectionMode == FTP {
+			ftpConfig, err := s.instrumentRepository.GetFtpConfigByInstrumentId(ctx, instruments[i].ID)
+			if err == nil {
+				instruments[i].FTPConfig = &ftpConfig
+			} else if err != nil && err != ErrFtpConfigNotFound {
+				return instruments, err
+			}
+		}
 
 		instrumentIDs[i] = instruments[i].ID
 		instrumentsByIDs[instruments[i].ID] = &instruments[i]
@@ -208,6 +227,16 @@ func (s *instrumentService) GetInstrumentByID(ctx context.Context, tx db.DbConne
 	if err != nil {
 		return instrument, err
 	}
+
+	if instrument.ConnectionMode == FTP {
+		ftpConf, err := s.instrumentRepository.WithTransaction(tx).GetFtpConfigByInstrumentId(ctx, instrument.ID)
+		if err == nil {
+			instrument.FTPConfig = &ftpConf
+		} else if err != nil && err != ErrFtpConfigNotFound {
+			return instrument, err
+		}
+	}
+
 	instrumentIDs := []uuid.UUID{instrument.ID}
 	analyteMappingsByInstrumentID, err := s.instrumentRepository.WithTransaction(tx).GetAnalyteMappings(ctx, instrumentIDs)
 	if err != nil {
@@ -286,6 +315,16 @@ func (s *instrumentService) GetInstrumentByIP(ctx context.Context, ip string) (I
 	if err != nil {
 		return instrument, err
 	}
+
+	if instrument.ConnectionMode == FTP {
+		ftpConf, err := s.instrumentRepository.GetFtpConfigByInstrumentId(ctx, instrument.ID)
+		if err == nil {
+			instrument.FTPConfig = &ftpConf
+		} else if err != nil && err != ErrFtpConfigNotFound {
+			return instrument, err
+		}
+	}
+
 	instrumentIDs := []uuid.UUID{instrument.ID}
 
 	protocol, err := s.instrumentRepository.GetProtocolByID(ctx, instrument.ProtocolID)
@@ -371,11 +410,34 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 		return err
 	}
 
+	if instrument.ConnectionMode == FTP && instrument.FTPConfig != nil {
+		err = s.instrumentRepository.WithTransaction(tx).DeleteFtpConfig(ctx, instrument.ID)
+		if err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+
+		err = s.instrumentRepository.WithTransaction(tx).CreateFtpConfig(ctx, *instrument.FTPConfig)
+		if err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+	}
+
+	if oldInstrument.ConnectionMode == FTP && instrument.ConnectionMode != FTP {
+		err = s.instrumentRepository.WithTransaction(tx).DeleteFtpConfig(ctx, instrument.ID)
+		if err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+	}
+
 	err = s.instrumentRepository.WithTransaction(tx).UpdateInstrument(ctx, instrument)
 	if err != nil {
 		_ = tx.Rollback()
 		return err
 	}
+
 	deletedAnalyteMappingIDs := make([]uuid.UUID, 0)
 	deletedChannelMappingIDs := make([]uuid.UUID, 0)
 	deletedResultMappingIDs := make([]uuid.UUID, 0)
@@ -619,10 +681,24 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 }
 
 func (s *instrumentService) DeleteInstrument(ctx context.Context, id uuid.UUID) error {
-	err := s.instrumentRepository.DeleteInstrument(ctx, id)
+	tx, err := s.instrumentRepository.CreateTransaction()
+	err = s.instrumentRepository.WithTransaction(tx).DeleteFtpConfig(ctx, id)
 	if err != nil {
+		_ = tx.Rollback()
 		return err
 	}
+	err = s.instrumentRepository.WithTransaction(tx).DeleteInstrument(ctx, id)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		_ = tx.Rollback()
+		return db.ErrCommitTransactionFailed
+	}
+
 	s.instrumentCache.Invalidate()
 	return nil
 }
