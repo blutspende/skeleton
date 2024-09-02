@@ -99,21 +99,23 @@ const (
 type ReagentType string
 
 const (
-	Reagent ReagentType = "Reagent"
-	Diluent ReagentType = "Diluent"
+	Standard  ReagentType = "Standard"
+	Diluent   ReagentType = "Diluent"
+	Composite ReagentType = "Composite"
 )
 
-type ReagentInfo struct {
-	SerialNumber            string      `json:"serialNo" db:"serial"`
-	Name                    string      `json:"name" db:"name"`
-	Code                    string      `json:"code" db:"code"`
-	ShelfLife               time.Time   `json:"shelfLife" db:"shelfLife"`
-	LotNo                   string      `json:"lotNo"`
-	ManufacturerName        string      `json:"manufacturer" db:"manufacturer_name"`
-	ReagentManufacturerDate time.Time   `json:"reagentManufacturerDate" db:"reagent_manufacturer_date"`
-	ReagentType             ReagentType `json:"reagentType" db:"reagent_type"`
-	UseUntil                time.Time   `json:"useUntil"`
-	DateCreated             time.Time   `json:"dateCreated" db:"date_created"`
+type Reagent struct {
+	ID                uuid.UUID
+	Manufacturer      string
+	SerialNumber      string
+	LotNo             string
+	Name              string
+	Code              *string
+	Type              ReagentType
+	ManufacturingDate *time.Time
+	ExpirationDate    *time.Time
+	CreatedAt         time.Time
+	ControlResults    []ControlResult
 }
 
 type ExtraValue struct {
@@ -192,12 +194,18 @@ type AnalyteMapping struct {
 	ChannelMappings   []ChannelMapping
 	ResultMappings    []ResultMapping
 	ResultType        ResultType
+	ControlMappings   []ControlMapping
 }
 
 type ChannelMapping struct {
 	ID                uuid.UUID
 	InstrumentChannel string
 	ChannelID         uuid.UUID
+}
+
+type ControlMapping struct {
+	ControlAnalyteCode    string
+	ExpectedControlResult string
 }
 
 // ResultMapping - Maps a ManufacturerTestCode to an AnalyteId (cerberus)
@@ -258,13 +266,41 @@ type AnalysisResult struct {
 	Warnings                 []string
 	ChannelResults           []ChannelResult
 	ExtraValues              []ExtraValue
-	ReagentInfos             []ReagentInfo
+	Reagents                 []Reagent
+	ControlResults           []ControlResult
 	Images                   []Image
+}
+
+type ControlResult struct {
+	ID          uuid.UUID
+	CerberusID  *uuid.UUID
+	SampleCode  *string
+	AnalyteCode *string
+	Result      string
+	ExaminedAt  time.Time
+}
+
+type StandaloneControlResult struct {
+	ControlResult
+	Reagents  []Reagent
+	ResultIDs []uuid.UUID
+}
+
+type MappedStandaloneControlResult struct {
+	ControlResult
+	Reagents  []Reagent
+	ResultIDs map[uuid.UUID]uuid.UUID
+}
+
+type AnalysisResultBatchItemReagentInfo struct {
+	CerberusID                uuid.UUID
+	CerberusControlResultsIDs []uuid.UUID
 }
 
 type AnalysisResultBatchItemInfo struct {
 	AnalysisResult           *AnalysisResultTO
 	CerberusAnalysisResultID *uuid.UUID
+	CerberusReagentIDs       []AnalysisResultBatchItemReagentInfo
 	ErrorMessage             string
 }
 
@@ -284,6 +320,27 @@ func (r AnalysisResultBatchResponse) HasResult() bool {
 }
 
 func (r AnalysisResultBatchResponse) IsSuccess() bool {
+	return r.HTTPStatusCode >= http.StatusOK && r.HTTPStatusCode < http.StatusMultipleChoices
+}
+
+type ControlResultBatchItemInfo struct {
+	ControlResult      *StandaloneControlResultTO
+	CerberusID         uuid.UUID
+	CerberusReagentIDs []uuid.UUID
+}
+
+type ControlResultBatchResponse struct {
+	ControlResultBatchItemInfoList []ControlResultBatchItemInfo
+	ErrorMessage                   string
+	HTTPStatusCode                 int
+	RawResponse                    string
+}
+
+func (r ControlResultBatchResponse) HasResult() bool {
+	return r.HTTPStatusCode != 0 || r.ErrorMessage != ""
+}
+
+func (r ControlResultBatchResponse) IsSuccess() bool {
 	return r.HTTPStatusCode >= http.StatusOK && r.HTTPStatusCode < http.StatusMultipleChoices
 }
 

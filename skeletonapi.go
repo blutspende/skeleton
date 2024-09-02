@@ -82,6 +82,8 @@ type SkeletonAPI interface {
 	// use the batch-endpoint of cerberus for performance reasons
 	SubmitAnalysisResultBatch(ctx context.Context, resultBatch []AnalysisResult) error
 
+	SubmitControlResults(ctx context.Context, controlResults []StandaloneControlResult) error
+
 	// GetInstrument returns all the settings regarding an instrument
 	// contains AnalyteMappings[] and RequestMappings[]
 	GetInstrument(ctx context.Context, instrumentID uuid.UUID) (Instrument, error)

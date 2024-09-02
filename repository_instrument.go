@@ -34,7 +34,7 @@ const (
 	msgGetFtpConfigFailed                 = "get ftp config by instrument id failed"
 	msgFtpConfigNotFound                  = "ftp config not found"
 	msgFtpConfigExistsFailed              = "failed to check whether ftp config exists"
-	msgGetProtocolByIDFailed              = "get protocol by ID failed"
+	msgGetProtocolByIDFailed              = "get protocol by CerberusID failed"
 	msgUpsertSupportedProtocolFailed      = "upsert supported protocol failed"
 	msgUpsertProtocolAbilitiesFailed      = "upsert protocol abilities failed"
 	msgUpdateInstrumentStatusFailed       = "update instrument status failed"
