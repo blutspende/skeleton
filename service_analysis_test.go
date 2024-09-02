@@ -54,6 +54,13 @@ type mockManager struct {
 	AnalysisRequestsSentForProcessing []AnalysisRequest
 }
 
+func (m *mockManager) SendControlResultForProcessing(controlResult MappedStandaloneControlResult) {
+}
+
+func (m *mockManager) GetControlResultChan() chan MappedStandaloneControlResult {
+	return nil
+}
+
 func (m *mockManager) EnqueueInstrument(id uuid.UUID, event instrumentEventType) {
 
 }
@@ -81,6 +88,78 @@ func (m *mockManager) GetResultChan() chan AnalysisResult {
 
 type extendedMockAnalysisRepo struct {
 	analysisRepositoryMock
+}
+
+func (r *extendedMockAnalysisRepo) GetUnprocessedControlResultIDs(ctx context.Context) ([]uuid.UUID, error) {
+	return nil, nil
+}
+
+func (r *extendedMockAnalysisRepo) GetUnprocessedAnalysisResultIDsByControlResultIDs(ctx context.Context, controlResultIDs []uuid.UUID) (map[uuid.UUID]map[uuid.UUID]uuid.UUID, error) {
+	return nil, nil
+}
+
+func (r *extendedMockAnalysisRepo) GetUnprocessedReagentIDsByControlResultIDs(ctx context.Context, controlResultIDs []uuid.UUID) (map[uuid.UUID][]uuid.UUID, error) {
+	return nil, nil
+}
+
+func (r *extendedMockAnalysisRepo) GetReagentsByIDs(ctx context.Context, reagentIDs []uuid.UUID) (map[uuid.UUID]Reagent, error) {
+	return nil, nil
+}
+
+func (r *extendedMockAnalysisRepo) GetControlResultsByIDs(ctx context.Context, controlResultIDs []uuid.UUID) (map[uuid.UUID]ControlResult, error) {
+	return nil, nil
+}
+
+func (r *extendedMockAnalysisRepo) UpdateCerberusQueueItemStatus(ctx context.Context, queueItem CerberusQueueItem) error {
+	return nil
+}
+
+func (r *extendedMockAnalysisRepo) GetControlResultQueueItems(ctx context.Context) ([]CerberusQueueItem, error) {
+	return []CerberusQueueItem{}, nil
+}
+
+func (r *extendedMockAnalysisRepo) CreateControlResultQueueItem(ctx context.Context, controlResults []StandaloneControlResult) (uuid.UUID, error) {
+	return uuid.New(), nil
+}
+
+func (r *extendedMockAnalysisRepo) CreateReagents(ctx context.Context, reagents []Reagent) ([]uuid.UUID, error) {
+	return []uuid.UUID{}, nil
+}
+
+func (r *extendedMockAnalysisRepo) CreateControlResultBatch(ctx context.Context, controlResults []ControlResult) ([]uuid.UUID, error) {
+	return []uuid.UUID{}, nil
+}
+
+func (r *extendedMockAnalysisRepo) CreateReagentControlResultRelations(ctx context.Context, relationDAOs []reagentControlResultRelationDAO) error {
+	return nil
+}
+
+func (r *extendedMockAnalysisRepo) CreateAnalysisResultControlResultRelations(ctx context.Context, relationDAOs []analysisResultControlResultRelationDAO) error {
+	return nil
+}
+
+func (r *extendedMockAnalysisRepo) GetCerberusIDForAnalysisResults(ctx context.Context, analysisResultIDs []uuid.UUID) (map[uuid.UUID]uuid.UUID, error) {
+	return map[uuid.UUID]uuid.UUID{}, nil
+}
+
+func (r *extendedMockAnalysisRepo) SaveCerberusIDForAnalysisResult(ctx context.Context, analysisResultID uuid.UUID, cerberusID uuid.UUID) error {
+	return nil
+}
+
+func (r *extendedMockAnalysisRepo) SaveCerberusIDForControlResult(ctx context.Context, controlResultID uuid.UUID, cerberusID uuid.UUID) error {
+	return nil
+}
+
+func (r *extendedMockAnalysisRepo) SaveCerberusIDForReagent(ctx context.Context, reagentID uuid.UUID, cerberusID uuid.UUID) error {
+	return nil
+}
+
+func (r *extendedMockAnalysisRepo) MarkReagentControlResultRelationsAsProcessed(ctx context.Context, controlResultID uuid.UUID, reagentIDs []uuid.UUID) error {
+	return nil
+}
+
+func (r *extendedMockAnalysisRepo) MarkAnalysisResultControlResultRelationsAsProcessed(ctx context.Context, controlResultID uuid.UUID, analysisResultIDs []uuid.UUID) error {
+	return nil
 }
 
 func (r *extendedMockAnalysisRepo) CreateAnalysisRequestsBatch(ctx context.Context, analysisRequests []AnalysisRequest) ([]uuid.UUID, []uuid.UUID, error) {
