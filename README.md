@@ -38,6 +38,8 @@ operator                 string
 technicalReleaseDateTime *time.time
 instrumentId             uuid.UUID
 instrumentRunId          uuid.UUID
+reagents
+extraValues              []ExtraValues
 resultEdit               bool
 editReason               string
 isInvalid                bool

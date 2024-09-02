@@ -56,7 +56,7 @@ func TestSkeletonStart(t *testing.T) {
 func TestSubmitAnalysisRequestsParallel(t *testing.T) {
 	sqlConn, _ := sqlx.Connect("pgx", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
 
-	schemaName := "testSubmitAnalysisResultsWithoutRequests"
+	schemaName := "testSubmitAnalysisRequestsParallel"
 	_, _ = sqlConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
 	_, _ = sqlConn.Exec(fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schemaName))
 	_, _ = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
@@ -479,7 +479,7 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 			Warnings:                 []string{"test warning"},
 			ChannelResults:           []ChannelResult{},
 			ExtraValues:              []ExtraValue{},
-			ReagentInfos:             []ReagentInfo{},
+			Reagents:                 []Reagent{},
 			Images:                   []Image{},
 		},
 		{
@@ -503,7 +503,7 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 			Warnings:                 []string{},
 			ChannelResults:           []ChannelResult{},
 			ExtraValues:              []ExtraValue{},
-			ReagentInfos:             []ReagentInfo{},
+			Reagents:                 []Reagent{},
 			Images:                   []Image{},
 		},
 	}
@@ -527,7 +527,7 @@ func TestRegisterProtocol(t *testing.T) {
 func TestAnalysisResultsReprocessing(t *testing.T) {
 	sqlConn, _ := sqlx.Connect("pgx", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
 
-	schemaName := "testSubmitAnalysisResultsWithoutRequests"
+	schemaName := "testAnalysisResultsReprocessing"
 	_, _ = sqlConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
 	_, _ = sqlConn.Exec(fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schemaName))
 	_, _ = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
@@ -696,10 +696,23 @@ type cerberusClientMock struct {
 	registerInstrumentFunc           func(instrument Instrument) error
 	registerInstrumentDriverFunc     func(serviceName string, apiVersion string, apiPort uint16, tlsEnabled bool, extraValueKeys []string) error
 	sendAnalysisResultBatchFunc      func(analysisResults []AnalysisResultTO) (AnalysisResultBatchResponse, error)
+	sendControlResultBatchFunc       func(controlResults []StandaloneControlResultTO) (ControlResultBatchResponse, error)
 	sendAnalysisResultImageBatchFunc func(images []WorkItemResultImageTO) error
 
-	AnalysisResults []AnalysisResultTO
-	BatchResponse   AnalysisResultBatchResponse
+	AnalysisResults      []AnalysisResultTO
+	ControlResults       []StandaloneControlResultTO
+	BatchResponse        AnalysisResultBatchResponse
+	ControlBatchResponse ControlResultBatchResponse
+}
+
+func (m *cerberusClientMock) SendControlResultBatch(controlResults []StandaloneControlResultTO) (ControlResultBatchResponse, error) {
+	m.ControlResults = append(m.ControlResults, controlResults...)
+	if m.sendControlResultBatchFunc == nil {
+		return ControlResultBatchResponse{}, errors.New("not implemented")
+	}
+	response, err := m.sendControlResultBatchFunc(controlResults)
+	m.ControlBatchResponse = response
+	return response, err
 }
 
 func (m *cerberusClientMock) RegisterInstrument(instrument Instrument) error {
@@ -761,6 +774,20 @@ func generateAnalysisRequestsJson(count int) string {
 type analysisServiceMock struct {
 }
 
+func (m *analysisServiceMock) QueueControlResults(ctx context.Context, results []MappedStandaloneControlResult) error {
+	return nil
+}
+
+func (m *analysisServiceMock) SaveCerberusIDsForControlResultBatchItems(ctx context.Context, controlResults []ControlResultBatchItemInfo) {
+}
+
+func (m *analysisServiceMock) SaveCerberusIDsForAnalysisResultBatchItems(ctx context.Context, analysisResults []AnalysisResultBatchItemInfo) {
+}
+
+func (m *analysisServiceMock) GetUnprocessedMappedStandaloneControlResultsByIDs(ctx context.Context, controlResultIDs []uuid.UUID) ([]MappedStandaloneControlResult, error) {
+	return []MappedStandaloneControlResult{}, nil
+}
+
 func (m *analysisServiceMock) CreateAnalysisRequests(ctx context.Context, analysisRequests []AnalysisRequest) ([]AnalysisRequestStatus, error) {
 	return nil, nil
 }
@@ -812,6 +839,78 @@ func (m *analysisRepositoryMock) DeleteOldAnalysisRequestsWithTx(ctx context.Con
 
 func (m *analysisRepositoryMock) DeleteOldAnalysisResultsWithTx(ctx context.Context, cleanupDays, limit int, tx db.DbConnector) (int64, error) {
 	return 0, nil
+}
+
+func (m *analysisRepositoryMock) UpdateCerberusQueueItemStatus(ctx context.Context, queueItem CerberusQueueItem) error {
+	return nil
+}
+
+func (m *analysisRepositoryMock) GetControlResultQueueItems(ctx context.Context) ([]CerberusQueueItem, error) {
+	return []CerberusQueueItem{}, nil
+}
+
+func (m *analysisRepositoryMock) CreateControlResultQueueItem(ctx context.Context, controlResults []StandaloneControlResult) (uuid.UUID, error) {
+	return uuid.Nil, nil
+}
+
+func (m *analysisRepositoryMock) GetUnprocessedControlResultIDs(ctx context.Context) ([]uuid.UUID, error) {
+	return []uuid.UUID{}, nil
+}
+
+func (m *analysisRepositoryMock) GetUnprocessedAnalysisResultIDsByControlResultIDs(ctx context.Context, controlResultIDs []uuid.UUID) (map[uuid.UUID]map[uuid.UUID]uuid.UUID, error) {
+	return make(map[uuid.UUID]map[uuid.UUID]uuid.UUID), nil
+}
+
+func (m *analysisRepositoryMock) GetUnprocessedReagentIDsByControlResultIDs(ctx context.Context, controlResultIDs []uuid.UUID) (map[uuid.UUID][]uuid.UUID, error) {
+	return make(map[uuid.UUID][]uuid.UUID), nil
+}
+
+func (m *analysisRepositoryMock) CreateReagents(ctx context.Context, reagents []Reagent) ([]uuid.UUID, error) {
+	return []uuid.UUID{}, nil
+}
+
+func (m *analysisRepositoryMock) GetReagentsByIDs(ctx context.Context, reagentIDs []uuid.UUID) (map[uuid.UUID]Reagent, error) {
+	return make(map[uuid.UUID]Reagent), nil
+}
+
+func (m *analysisRepositoryMock) CreateControlResultBatch(ctx context.Context, controlResults []ControlResult) ([]uuid.UUID, error) {
+	return []uuid.UUID{}, nil
+}
+
+func (m *analysisRepositoryMock) GetControlResultsByIDs(ctx context.Context, controlResultIDs []uuid.UUID) (map[uuid.UUID]ControlResult, error) {
+	return make(map[uuid.UUID]ControlResult), nil
+}
+
+func (m *analysisRepositoryMock) CreateReagentControlResultRelations(ctx context.Context, relationDAOs []reagentControlResultRelationDAO) error {
+	return nil
+}
+
+func (m *analysisRepositoryMock) CreateAnalysisResultControlResultRelations(ctx context.Context, relationDAOs []analysisResultControlResultRelationDAO) error {
+	return nil
+}
+
+func (m *analysisRepositoryMock) GetCerberusIDForAnalysisResults(ctx context.Context, analysisResultIDs []uuid.UUID) (map[uuid.UUID]uuid.UUID, error) {
+	return make(map[uuid.UUID]uuid.UUID), nil
+}
+
+func (m *analysisRepositoryMock) SaveCerberusIDForAnalysisResult(ctx context.Context, analysisResultID uuid.UUID, cerberusID uuid.UUID) error {
+	return nil
+}
+
+func (m *analysisRepositoryMock) SaveCerberusIDForControlResult(ctx context.Context, controlResultID uuid.UUID, cerberusID uuid.UUID) error {
+	return nil
+}
+
+func (m *analysisRepositoryMock) SaveCerberusIDForReagent(ctx context.Context, reagentID uuid.UUID, cerberusID uuid.UUID) error {
+	return nil
+}
+
+func (m *analysisRepositoryMock) MarkReagentControlResultRelationsAsProcessed(ctx context.Context, controlResultID uuid.UUID, reagentIDs []uuid.UUID) error {
+	return nil
+}
+
+func (m *analysisRepositoryMock) MarkAnalysisResultControlResultRelationsAsProcessed(ctx context.Context, controlResultID uuid.UUID, analysisResultIDs []uuid.UUID) error {
+	return nil
 }
 
 func (m *analysisRepositoryMock) CreateAnalysisRequestExtraValues(ctx context.Context, extraValuesByAnalysisRequestIDs map[uuid.UUID][]ExtraValue) error {
@@ -962,8 +1061,21 @@ var analysisResultsWithoutAnalysisRequestsTest_analysisResults = []AnalysisResul
 		Warnings:                 []string{"test warning"},
 		ChannelResults:           []ChannelResult{},
 		ExtraValues:              []ExtraValue{},
-		ReagentInfos:             []ReagentInfo{},
-		Images:                   []Image{},
+		Reagents: []Reagent{
+			{
+				ID:                uuid.New(),
+				Manufacturer:      "manufacturer",
+				SerialNumber:      "serialNumber",
+				LotNo:             "lotNo",
+				Name:              "name",
+				Code:              nil,
+				Type:              Standard,
+				ExpirationDate:    nil,
+				ManufacturingDate: nil,
+				ControlResults:    nil,
+			},
+		},
+		Images: []Image{},
 	},
 	{
 		AnalysisRequest:          AnalysisRequest{},
@@ -986,7 +1098,7 @@ var analysisResultsWithoutAnalysisRequestsTest_analysisResults = []AnalysisResul
 		Warnings:                 []string{},
 		ChannelResults:           []ChannelResult{},
 		ExtraValues:              []ExtraValue{},
-		ReagentInfos:             []ReagentInfo{},
+		Reagents:                 []Reagent{},
 		Images:                   []Image{},
 	},
 }
@@ -1008,7 +1120,7 @@ var analysisResultsWithoutAnalysisRequestsTest_analysisResultTOs = []AnalysisRes
 		Warnings:                 []string{"test warning"},
 		ChannelResults:           []ChannelResultTO{},
 		ExtraValues:              []ExtraValueTO{},
-		ReagentInfos:             []ReagentInfoTO{},
+		Reagents:                 []ReagentTO{},
 		Images:                   []ImageTO{},
 	},
 	{
@@ -1027,7 +1139,7 @@ var analysisResultsWithoutAnalysisRequestsTest_analysisResultTOs = []AnalysisRes
 		Warnings:                 []string{},
 		ChannelResults:           []ChannelResultTO{},
 		ExtraValues:              []ExtraValueTO{},
-		ReagentInfos:             []ReagentInfoTO{},
+		Reagents:                 []ReagentTO{},
 		Images:                   []ImageTO{},
 	},
 }

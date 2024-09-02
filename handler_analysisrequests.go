@@ -183,7 +183,7 @@ func (api *api) CreateAnalysisRequestBatch(c *gin.Context) {
 }
 
 // RevokeAnalysisRequestBatch
-// @Summary Revoke a batch of Analysis Request by Work Item ID
+// @Summary Revoke a batch of Analysis Request by Work Item CerberusID
 // @Description Revoke multiple analysis requests by work item id.
 // @Tags AnalysisRequest
 // @Produce json

@@ -12,10 +12,11 @@ import (
 type SkeletonTestRig struct {
 	eventHandler SkeletonCallbackHandlerV1
 
-	storedInstrumentsMap       map[string]Instrument
-	StoredAnalysisResults      []AnalysisResult
-	AnalysisRequests           []*AnalysisRequest
-	AnalysisRequestExtraValues map[string]string
+	storedInstrumentsMap              map[string]Instrument
+	StoredAnalysisResults             []AnalysisResult
+	StoredStandaloneControlResultSets []StandaloneControlResult
+	AnalysisRequests                  []*AnalysisRequest
+	AnalysisRequestExtraValues        map[string]string
 }
 
 func NewTestRig() *SkeletonTestRig {
@@ -81,6 +82,11 @@ func (sr *SkeletonTestRig) SubmitAnalysisResult(ctx context.Context, resultData 
 
 func (sr *SkeletonTestRig) SubmitAnalysisResultBatch(ctx context.Context, resultBatch []AnalysisResult) error {
 	sr.StoredAnalysisResults = append(sr.StoredAnalysisResults, resultBatch...)
+	return nil
+}
+
+func (sr *SkeletonTestRig) SubmitControlResults(ctx context.Context, controlResults []StandaloneControlResult) error {
+	sr.StoredStandaloneControlResultSets = append(sr.StoredStandaloneControlResultSets, controlResults...)
 	return nil
 }
 

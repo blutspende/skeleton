@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/blutspende/skeleton/config"
@@ -34,6 +35,8 @@ type skeleton struct {
 	sortingRuleService         SortingRuleService
 	resultsBuffer              []AnalysisResult
 	resultBatchesChan          chan []AnalysisResult
+	controlResultsBuffer         []MappedStandaloneControlResult
+	controlResultBatchesChan     chan []MappedStandaloneControlResult
 	cerberusClient             CerberusClient
 	deaClient                  DeaClientV1
 	manager                    Manager
@@ -41,7 +44,10 @@ type skeleton struct {
 	imageRetrySeconds          int
 	serviceName                string
 	extraValueKeys             []string
+	unprocessedHandlingWaitGroup sync.WaitGroup
 }
+
+const waitGroupSize = 3
 
 func (s *skeleton) SetCallbackHandler(eventHandler SkeletonCallbackHandlerV1) {
 	s.manager.SetCallbackHandler(eventHandler)
@@ -111,11 +117,13 @@ func (s *skeleton) SaveAnalysisRequestsInstrumentTransmissions(ctx context.Conte
 }
 
 func (s *skeleton) SubmitAnalysisResult(ctx context.Context, resultData AnalysisResult) error {
+	s.unprocessedHandlingWaitGroup.Wait()
+
 	if resultData.AnalyteMapping.ID == uuid.Nil {
-		return errors.New("analyte mapping ID is missing")
+		return errors.New("analyte mapping CerberusID is missing")
 	}
 	if resultData.Instrument.ID == uuid.Nil {
-		return errors.New("instrument ID is missing")
+		return errors.New("instrument CerberusID is missing")
 	}
 
 	if resultData.ResultMode == "" {
@@ -158,12 +166,14 @@ func (s *skeleton) SubmitAnalysisResult(ctx context.Context, resultData Analysis
 }
 
 func (s *skeleton) SubmitAnalysisResultBatch(ctx context.Context, resultBatch []AnalysisResult) error {
+	s.unprocessedHandlingWaitGroup.Wait()
+
 	for i := range resultBatch {
 		if resultBatch[i].AnalyteMapping.ID == uuid.Nil {
-			return errors.New(fmt.Sprintf("analyte mapping ID is missing at index: %d", i))
+			return errors.New(fmt.Sprintf("analyte mapping CerberusID is missing at index: %d", i))
 		}
 		if resultBatch[i].Instrument.ID == uuid.Nil {
-			return errors.New(fmt.Sprintf("instrument ID is missing at index: %d", i))
+			return errors.New(fmt.Sprintf("instrument CerberusID is missing at index: %d", i))
 		}
 		if resultBatch[i].ResultMode == "" {
 			resultBatch[i].ResultMode = resultBatch[i].Instrument.ResultMode
@@ -202,6 +212,110 @@ func (s *skeleton) SubmitAnalysisResultBatch(ctx context.Context, resultBatch []
 			}
 		}
 	}(savedAnalysisResults)
+
+	return nil
+}
+
+func (s *skeleton) SubmitControlResults(ctx context.Context, controlResults []StandaloneControlResult) error {
+	s.unprocessedHandlingWaitGroup.Wait()
+
+	tx, err := s.analysisRepository.CreateTransaction()
+	if err != nil {
+		return err
+	}
+
+	crs := make([]ControlResult, len(controlResults))
+	analysisResultIDs := make([]uuid.UUID, 0)
+	reagents := make([]Reagent, 0)
+
+	for i, controlResult := range controlResults {
+		crs[i] = controlResults[i].ControlResult
+		analysisResultIDs = append(analysisResultIDs, controlResult.ResultIDs...)
+		reagents = append(reagents, controlResults[i].Reagents...)
+	}
+
+	crIDs, err := s.analysisRepository.WithTransaction(tx).CreateControlResultBatch(ctx, crs)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	reagentIDs, err := s.analysisRepository.WithTransaction(tx).CreateReagents(ctx, reagents)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	for i := range crIDs {
+		controlResults[i].ID = crIDs[i]
+	}
+
+	reagentControlResultRelationDAOs := make([]reagentControlResultRelationDAO, 0)
+	analysisResultControlResultRelationDAOs := make([]analysisResultControlResultRelationDAO, 0)
+
+	var reagentIndex = 0
+
+	for i := range crIDs {
+		controlResults[i].ID = crIDs[i]
+
+		for j := range controlResults[i].Reagents {
+			controlResults[i].Reagents[j].ID = reagentIDs[reagentIndex]
+
+			reagentControlResultRelationDAOs = append(reagentControlResultRelationDAOs, reagentControlResultRelationDAO{ReagentID: reagentIDs[reagentIndex], ControlResultID: crIDs[i], IsProcessed: false})
+
+			reagentIndex++
+		}
+
+		for _, resultID := range controlResults[i].ResultIDs {
+			analysisResultControlResultRelationDAOs = append(analysisResultControlResultRelationDAOs, analysisResultControlResultRelationDAO{AnalysisResultID: resultID, ControlResultID: crIDs[i], IsProcessed: false})
+		}
+	}
+
+	err = s.analysisRepository.WithTransaction(tx).CreateReagentControlResultRelations(ctx, reagentControlResultRelationDAOs)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	err = s.analysisRepository.WithTransaction(tx).CreateAnalysisResultControlResultRelations(ctx, analysisResultControlResultRelationDAOs)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	if err = tx.Commit(); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	analysisResultIDMap, err := s.analysisRepository.GetCerberusIDForAnalysisResults(ctx, analysisResultIDs)
+	if err != nil {
+		return nil
+	}
+
+	mappedStandaloneControlResults := make([]MappedStandaloneControlResult, 0)
+
+	for _, controlResult := range controlResults {
+		mappedControlResult := MappedStandaloneControlResult{
+			ControlResult: controlResult.ControlResult,
+			Reagents:      controlResult.Reagents,
+		}
+
+		for _, resultID := range controlResult.ResultIDs {
+			if cerberusID, ok := analysisResultIDMap[resultID]; ok {
+				if mappedControlResult.ResultIDs == nil {
+					mappedControlResult.ResultIDs = make(map[uuid.UUID]uuid.UUID)
+				}
+				mappedControlResult.ResultIDs[resultID] = cerberusID
+			}
+		}
+
+		mappedStandaloneControlResults = append(mappedStandaloneControlResults, mappedControlResult)
+	}
+
+	for _, controlResult := range mappedStandaloneControlResults {
+		s.manager.SendControlResultForProcessing(controlResult)
+	}
 
 	return nil
 }
@@ -468,11 +582,18 @@ func (s *skeleton) Start() error {
 	}
 	go s.processAnalysisResults(s.ctx)
 	go s.processAnalysisResultBatches(s.ctx)
+	go s.processControlResults(s.ctx)
+	go s.processControlResultBatches(s.ctx)
 	go s.submitAnalysisResultsToCerberus(s.ctx)
+	go s.submitControlResultsToCerberus(s.ctx)
 	go s.processStuckImagesToDEA(s.ctx)
 	go s.processStuckImagesToCerberus(s.ctx)
+
 	go s.enqueueUnprocessedAnalysisRequests(s.ctx)
 	go s.enqueueUnprocessedAnalysisResults(s.ctx)
+	go s.enqueueUnprocessedControlResults(s.ctx)
+
+	s.unprocessedHandlingWaitGroup.Wait()
 
 	// Todo - use cancellable context what is passed to the routines above too
 	err = s.api.Run()
@@ -522,9 +643,10 @@ func (s *skeleton) enqueueUnprocessedAnalysisRequests(ctx context.Context) {
 	for {
 		requests, err := s.analysisRepository.GetUnprocessedAnalysisRequests(ctx)
 		if err != nil {
-			time.Sleep(5 * time.Minute)
-			continue
+			panic(err)
 		}
+
+		s.unprocessedHandlingWaitGroup.Done()
 
 		for {
 			failed := make([]AnalysisRequest, 0)
@@ -572,14 +694,20 @@ func (s *skeleton) enqueueUnprocessedAnalysisResults(ctx context.Context) {
 	for {
 		resultIDs, err := s.analysisRepository.GetUnprocessedAnalysisResultIDs(ctx)
 		if err != nil {
-			time.Sleep(5 * time.Minute)
-			continue
+			panic(err)
 		}
 
+		s.unprocessedHandlingWaitGroup.Done()
+
 		for {
+			failed := make([]uuid.UUID, 0)
+
 			err = utils.Partition(len(resultIDs), 500, func(low int, high int) error {
-				results, err := s.analysisRepository.GetAnalysisResultsByIDs(ctx, resultIDs[low:high])
+				partition := resultIDs[low:high]
+
+				results, err := s.analysisRepository.GetAnalysisResultsByIDs(ctx, partition)
 				if err != nil {
+					failed = append(failed, partition...)
 					return err
 				}
 
@@ -591,6 +719,50 @@ func (s *skeleton) enqueueUnprocessedAnalysisResults(ctx context.Context) {
 			})
 			if err != nil {
 				log.Error().Err(err).Msg("GetAnalysisResultsByIDs failed")
+				resultIDs = failed
+				time.Sleep(5 * time.Minute)
+				continue
+			}
+
+			break
+		}
+
+		break
+	}
+}
+
+func (s *skeleton) enqueueUnprocessedControlResults(ctx context.Context) {
+	for {
+		resultIDs, err := s.analysisRepository.GetUnprocessedControlResultIDs(ctx)
+		if err != nil {
+			panic(err)
+		}
+
+		s.unprocessedHandlingWaitGroup.Done()
+
+		for {
+			failed := make([]uuid.UUID, 0)
+
+			err = utils.Partition(len(resultIDs), 500, func(low int, high int) error {
+				partition := resultIDs[low:high]
+
+				controlResults, err := s.analysisService.GetUnprocessedMappedStandaloneControlResultsByIDs(ctx, partition)
+				if err != nil {
+					failed = append(failed, partition...)
+					return err
+				}
+
+				for _, controlResult := range controlResults {
+					s.manager.SendControlResultForProcessing(controlResult)
+				}
+
+				return nil
+			})
+			if err != nil {
+				log.Error().Err(err).Msg("GetControlResultsByIDs failed")
+				resultIDs = failed
+				time.Sleep(5 * time.Minute)
+				continue
 			}
 
 			break
@@ -669,6 +841,50 @@ func (s *skeleton) processAnalysisResultBatches(ctx context.Context) {
 		if err != nil {
 			time.AfterFunc(30*time.Second, func() {
 				s.resultBatchesChan <- resultsBatch
+			})
+			continue
+		}
+	}
+}
+
+func (s *skeleton) processControlResults(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case result, ok := <-s.manager.GetControlResultChan():
+			if !ok {
+				log.Fatal().Msg("processing control results stopped: control results channel closed")
+			}
+			s.controlResultsBuffer = append(s.controlResultsBuffer, result)
+			if len(s.controlResultsBuffer) >= 500 {
+				s.controlResultBatchesChan <- s.controlResultsBuffer
+				s.controlResultsBuffer = make([]MappedStandaloneControlResult, 0, 500)
+			}
+		case <-time.After(3 * time.Second):
+			if len(s.controlResultsBuffer) > 0 {
+				s.controlResultBatchesChan <- s.controlResultsBuffer
+				s.controlResultsBuffer = make([]MappedStandaloneControlResult, 0, 500)
+			}
+		}
+	}
+}
+
+func (s *skeleton) processControlResultBatches(ctx context.Context) {
+	for {
+		controlResultsBatch, ok := <-s.controlResultBatchesChan
+		if !ok {
+			log.Fatal().Msg("processing control result batches stopped: control result batches channel closed")
+		}
+
+		if len(controlResultsBatch) < 1 {
+			continue
+		}
+
+		err := s.analysisService.QueueControlResults(ctx, controlResultsBatch)
+		if err != nil {
+			time.AfterFunc(30*time.Second, func() {
+				s.controlResultBatchesChan <- controlResultsBatch
 			})
 			continue
 		}
@@ -798,10 +1014,12 @@ func (s *skeleton) submitAnalysisResultsToCerberus(ctx context.Context) {
 					cerberusQueueItem.RetryNotBefore = utcNow.Add(10 * time.Minute)
 				}
 
-				err = s.analysisRepository.UpdateAnalysisResultQueueItemStatus(ctx, cerberusQueueItem)
+				err = s.analysisRepository.UpdateCerberusQueueItemStatus(ctx, cerberusQueueItem)
 				if err != nil {
 					log.Error().Err(err).Msg("Failed to update the status of the cerberus queue item")
 				}
+
+				s.analysisService.SaveCerberusIDsForAnalysisResultBatchItems(ctx, response.AnalysisResultBatchItemInfoList)
 			}
 
 			log.Trace().Int64("elapsedExecutionTime", time.Since(executionStarted).Milliseconds()).
@@ -821,6 +1039,95 @@ func (s *skeleton) submitAnalysisResultsToCerberus(ctx context.Context) {
 			}()
 		case <-ticker.C:
 			queueItems, err := s.analysisRepository.GetAnalysisResultQueueItems(ctx)
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to get cerberus queue items")
+				break
+			}
+			go func() {
+				time.Sleep(50 * time.Millisecond)
+				continuousTrigger <- queueItems
+			}()
+		}
+	}
+}
+
+func (s *skeleton) submitControlResultsToCerberus(ctx context.Context) {
+	tickerTriggerDuration := time.Duration(s.resultTransferFlushTimeout) * time.Second
+	ticker := time.NewTicker(tickerTriggerDuration)
+	continuousTrigger := make(chan []CerberusQueueItem)
+	for {
+		select {
+		case <-ctx.Done():
+			log.Debug().Msg("Stopping control result submit job")
+			ticker.Stop()
+			return
+		case queueItems := <-continuousTrigger:
+			if len(queueItems) == 0 {
+				continue
+			}
+			executionStarted := time.Now()
+			log.Trace().Msgf("Triggered control result sending to cerberus. Sending %d batches", len(queueItems))
+			ticker.Stop()
+
+			sentResultCount := 0
+			for _, queueItem := range queueItems {
+				var controlResults []StandaloneControlResultTO
+				if err := json.Unmarshal([]byte(queueItem.JsonMessage), &controlResults); err != nil {
+					log.Error().Err(err).Msg("Failed to unmarshal control results")
+					continue
+				}
+
+				response, err := s.cerberusClient.SendControlResultBatch(controlResults)
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to send control results to cerberus")
+				}
+
+				if !response.HasResult() {
+					continue
+				}
+
+				sentResultCount += len(controlResults)
+
+				responseJsonMessage, _ := json.Marshal(response.ControlResultBatchItemInfoList)
+
+				cerberusQueueItem := CerberusQueueItem{
+					ID:                  queueItem.ID,
+					LastHTTPStatus:      response.HTTPStatusCode,
+					LastError:           response.ErrorMessage,
+					RawResponse:         response.RawResponse,
+					ResponseJsonMessage: string(responseJsonMessage),
+				}
+				if !response.IsSuccess() {
+					utcNow := time.Now().UTC()
+					cerberusQueueItem.LastErrorAt = &utcNow
+					cerberusQueueItem.RetryNotBefore = utcNow.Add(10 * time.Minute)
+				}
+
+				err = s.analysisRepository.UpdateCerberusQueueItemStatus(ctx, cerberusQueueItem)
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to update the status of the cerberus queue item")
+				}
+
+				s.analysisService.SaveCerberusIDsForControlResultBatchItems(ctx, response.ControlResultBatchItemInfoList)
+			}
+
+			log.Trace().Int64("elapsedExecutionTime", time.Since(executionStarted).Milliseconds()).
+				Msgf("Sent (or tried to send) %d results to cerberus", sentResultCount)
+
+			queueItems, err := s.analysisRepository.GetControlResultQueueItems(ctx)
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to get cerberus queue items")
+			}
+			if len(queueItems) < 1 {
+				ticker.Reset(tickerTriggerDuration)
+				break
+			}
+			go func() {
+				time.Sleep(1 * time.Second)
+				continuousTrigger <- queueItems
+			}()
+		case <-ticker.C:
+			queueItems, err := s.analysisRepository.GetControlResultQueueItems(ctx)
 			if err != nil {
 				log.Error().Err(err).Msg("Failed to get cerberus queue items")
 				break
@@ -891,9 +1198,13 @@ func NewSkeleton(ctx context.Context, serviceName string, requestedExtraValueKey
 		deaClient:                  deaClient,
 		resultsBuffer:              make([]AnalysisResult, 0, 500),
 		resultBatchesChan:          make(chan []AnalysisResult, 10),
+		controlResultsBuffer:       make([]MappedStandaloneControlResult, 0, 500),
+		controlResultBatchesChan:   make(chan []MappedStandaloneControlResult, 10),
 		resultTransferFlushTimeout: config.ResultTransferFlushTimeout,
 		imageRetrySeconds:          config.ImageRetrySeconds,
 	}
+
+	skeleton.unprocessedHandlingWaitGroup.Add(waitGroupSize)
 
 	err := skeleton.migrateUp(context.Background(), skeleton.sqlConn, skeleton.dbSchema)
 	if err != nil {
