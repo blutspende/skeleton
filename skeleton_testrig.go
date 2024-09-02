@@ -48,30 +48,6 @@ func (sr *SkeletonTestRig) GetAnalysisRequestExtraValues(ctx context.Context, an
 	return sr.AnalysisRequestExtraValues, nil
 }
 
-// This function is not very good as it doesnt fit. TODO: This function implicitly tires to provide a
-// pagination without a concept -> REMOVE !!!! If its required provide an iterator implementation that
-// then is consequently used in the library itself (currentPage, itemsPerPage gone!)
-// Also this Function is a duplicate to GetAnalysisRequestBySampleCode, limiting the choice to
-// those with no results is just a parameter (of more to come in the future i assume) TODO: remove this funciton
-// and add these as parameters to the Original functions (or a global switch or or...)
-func (sr *SkeletonTestRig) GetAnalysisRequestWithNoResults(ctx context.Context, currentPage, itemsPerPage int) (requests []AnalysisRequest, maxPages int, err error) {
-
-	ar := []AnalysisRequest{}
-	for _, rqs := range sr.AnalysisRequests {
-		isIncluded := false
-		for _, having := range sr.StoredAnalysisResults {
-			if having.AnalysisRequest.AnalyteID == rqs.ID {
-				isIncluded = true
-			}
-		}
-		if !isIncluded {
-			ar = append(ar, *rqs)
-		}
-	}
-
-	return ar, 0, nil
-}
-
 // Overridden for Testing: Returns All ARQS for the samplecode
 func (sr *SkeletonTestRig) GetAnalysisRequestsBySampleCode(ctx context.Context, sampleCode string, allowResending bool) ([]AnalysisRequest, error) {
 	ar := []AnalysisRequest{}
@@ -94,20 +70,16 @@ func (sr *SkeletonTestRig) GetAnalysisRequestsBySampleCodes(ctx context.Context,
 	return analysisRequestsBySampleCodes, nil
 }
 
-func (sr *SkeletonTestRig) GetRequestMappingsByInstrumentID(ctx context.Context, instrumentID uuid.UUID) ([]RequestMapping, error) {
-	return []RequestMapping{}, nil
-}
-
 func (sr *SkeletonTestRig) SaveAnalysisRequestsInstrumentTransmissions(ctx context.Context, analysisRequestIDs []uuid.UUID, instrumentID uuid.UUID) error {
 	return nil
 }
 
-func (sr *SkeletonTestRig) SubmitAnalysisResult(ctx context.Context, resultData AnalysisResult, submitTypes ...SubmitType) error {
+func (sr *SkeletonTestRig) SubmitAnalysisResult(ctx context.Context, resultData AnalysisResult) error {
 	sr.StoredAnalysisResults = append(sr.StoredAnalysisResults, resultData)
 	return nil
 }
 
-func (sr *SkeletonTestRig) SubmitAnalysisResultBatch(ctx context.Context, resultBatch []AnalysisResult, submitTypes ...SubmitType) error {
+func (sr *SkeletonTestRig) SubmitAnalysisResultBatch(ctx context.Context, resultBatch []AnalysisResult) error {
 	sr.StoredAnalysisResults = append(sr.StoredAnalysisResults, resultBatch...)
 	return nil
 }
@@ -136,16 +108,8 @@ func (sr *SkeletonTestRig) GetInstruments(ctx context.Context) ([]Instrument, er
 	return instruments, nil
 }
 
-func (sr *SkeletonTestRig) FindAnalyteByManufacturerTestCode(instrument Instrument, testCode string) AnalyteMapping {
-	return AnalyteMapping{}
-}
-
 func (sr *SkeletonTestRig) FindResultEntities(ctx context.Context, InstrumentID uuid.UUID, SampleCode string, ManufacturerTestCode string) (Instrument, []AnalysisRequest, AnalyteMapping, error) {
 	return Instrument{}, []AnalysisRequest{}, AnalyteMapping{}, nil
-}
-
-func (sr *SkeletonTestRig) FindResultMapping(searchValue string, mapping []ResultMapping) (string, error) {
-	return "", nil
 }
 
 func (sr *SkeletonTestRig) RegisterProtocol(ctx context.Context, id uuid.UUID, name string, description string, abilities []ProtocolAbility, settings []ProtocolSetting) error {

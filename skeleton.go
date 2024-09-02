@@ -64,15 +64,10 @@ func (s *skeleton) LogDebug(instrumentID uuid.UUID, msg string) {
 	s.consoleLogService.Debug(instrumentID, "[GENERAL]", msg)
 }
 
-func (s *skeleton) GetAnalysisRequestWithNoResults(ctx context.Context, currentPage, itemsPerPage int) (requests []AnalysisRequest, maxPages int, err error) {
-
-	return []AnalysisRequest{}, 0, nil
-}
-
 func (s *skeleton) GetAnalysisRequestsBySampleCode(ctx context.Context, sampleCode string, allowResending bool) ([]AnalysisRequest, error) {
 	analysisRequests, err := s.analysisRepository.GetAnalysisRequestsBySampleCodes(ctx, []string{sampleCode}, allowResending)
 	if err != nil {
-		return []AnalysisRequest{}, nil
+		return []AnalysisRequest{}, err
 	}
 
 	return analysisRequests[sampleCode], nil
@@ -81,7 +76,7 @@ func (s *skeleton) GetAnalysisRequestsBySampleCode(ctx context.Context, sampleCo
 func (s *skeleton) GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string, allowResending bool) (map[string][]AnalysisRequest, error) {
 	analysisRequests, err := s.analysisRepository.GetAnalysisRequestsBySampleCodes(ctx, sampleCodes, allowResending)
 	if err != nil {
-		return map[string][]AnalysisRequest{}, nil
+		return map[string][]AnalysisRequest{}, err
 	}
 
 	return analysisRequests, nil
@@ -114,11 +109,7 @@ func (s *skeleton) SaveAnalysisRequestsInstrumentTransmissions(ctx context.Conte
 	return nil
 }
 
-func (s *skeleton) GetRequestMappingsByInstrumentID(ctx context.Context, instrumentID uuid.UUID) ([]RequestMapping, error) {
-	return []RequestMapping{}, nil
-}
-
-func (s *skeleton) SubmitAnalysisResult(ctx context.Context, resultData AnalysisResult, submitTypes ...SubmitType) error {
+func (s *skeleton) SubmitAnalysisResult(ctx context.Context, resultData AnalysisResult) error {
 	if resultData.AnalyteMapping.ID == uuid.Nil {
 		return errors.New("analyte mapping ID is missing")
 	}
@@ -165,7 +156,7 @@ func (s *skeleton) SubmitAnalysisResult(ctx context.Context, resultData Analysis
 	return nil
 }
 
-func (s *skeleton) SubmitAnalysisResultBatch(ctx context.Context, resultBatch []AnalysisResult, submitTypes ...SubmitType) error {
+func (s *skeleton) SubmitAnalysisResultBatch(ctx context.Context, resultBatch []AnalysisResult) error {
 	for i := range resultBatch {
 		if resultBatch[i].AnalyteMapping.ID == uuid.Nil {
 			return errors.New(fmt.Sprintf("analyte mapping ID is missing at index: %d", i))
@@ -321,14 +312,6 @@ func (s *skeleton) GetInstrumentByIP(ctx context.Context, ip string) (Instrument
 
 func (s *skeleton) GetInstruments(ctx context.Context) ([]Instrument, error) {
 	return s.instrumentService.GetInstruments(ctx)
-}
-
-func (s *skeleton) FindAnalyteByManufacturerTestCode(instrument Instrument, testCode string) AnalyteMapping {
-	return AnalyteMapping{}
-}
-
-func (s *skeleton) FindResultMapping(searchValue string, mapping []ResultMapping) (string, error) {
-	return "", nil
 }
 
 func (s *skeleton) FindResultEntities(ctx context.Context, InstrumentID uuid.UUID, sampleCode string, ManufacturerTestCode string) (Instrument, []AnalysisRequest, AnalyteMapping, error) {

@@ -25,7 +25,7 @@ func TestSubmitResultCanBeQueried(t *testing.T) {
 		ID:     uuid.New(),
 		Result: "pos",
 	}
-	err := rig.SubmitAnalysisResult(context.Background(), ar, SubmitTypeInstantStoreAndSend)
+	err := rig.SubmitAnalysisResult(context.Background(), ar)
 	assert.Nil(t, err)
 
 	assert.Equal(t, 1, len(rig.StoredAnalysisResults))

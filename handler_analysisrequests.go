@@ -94,8 +94,7 @@ type nameIDPair struct {
 // @Param AnalysisRequests body []model.AnalysisRequest true "Array of AnalysisRequest"
 // @Success 200 {object} analysisRequestResponse "OK"
 // @Failure 400 {object} model.HTTPError "Bad Request"
-// @Router /v1/int/analysisRequest/batch [POST]
-// @Router /v1/analysis-request/batch [POST]
+// @Router /v1/analysis-requests/batch [POST]
 func (api *api) CreateAnalysisRequestBatch(c *gin.Context) {
 	requestStart := time.Now()
 	api.createAnalysisRequestMutex.Lock()
@@ -191,7 +190,7 @@ func (api *api) CreateAnalysisRequestBatch(c *gin.Context) {
 // @Accept json
 // @Param WorkItemIDs body []uuid.UUID true "Array of work item id"
 // @Success 204 "No Content"
-// @Router /v1/analysis-request/batch [DELETE]
+// @Router /v1/analysis-requests/batch [DELETE]
 func (api *api) RevokeAnalysisRequestBatch(c *gin.Context) {
 	var workItemIDs []uuid.UUID
 	err := c.ShouldBindJSON(&workItemIDs)

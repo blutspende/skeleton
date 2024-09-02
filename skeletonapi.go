@@ -54,42 +54,30 @@ type SkeletonAPI interface {
 	// Log : (debug) logging to ui console
 	LogDebug(instrumentID uuid.UUID, msg string)
 
-	// GetAnalysisRequestWithNoResults - return those requests that have no results yet
-
-	//TODO maybe remove
-	GetAnalysisRequestWithNoResults(ctx context.Context, currentPage, itemsPerPage int) (requests []AnalysisRequest, maxPages int, err error)
+	// GetAnalysisRequestsBySampleCode - Return a list of AnalysisRequests that contain the sampleCode
+	// Empty List if nothing is found. Error occurs only on Database-error
+	// if allowResending is true, returns all analysis requests for the sample code, without checking if they were already sent to the instrument
 	GetAnalysisRequestsBySampleCode(ctx context.Context, sampleCode string, allowResending bool) ([]AnalysisRequest, error)
 
 	// GetAnalysisRequestsBySampleCodes - Return a list of AnalysisRequests that contains the sampleCodes
 	// Empty List if nothing is found. Error occurs only on Database-error
 	// if allowResending is true, returns all analysis requests for the sample code, without checking if they were already sent to the instrument
 	GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string, allowResending bool) (map[string][]AnalysisRequest, error)
+	// GetAnalysisRequestExtraValues - returns a map of the analysis request extra values. Error occurs on database error.
 	GetAnalysisRequestExtraValues(ctx context.Context, analysisRequestID uuid.UUID) (map[string]string, error)
-	GetRequestMappingsByInstrumentID(ctx context.Context, instrumentID uuid.UUID) ([]RequestMapping, error)
-
+	// SaveAnalysisRequestsInstrumentTransmissions - persists in the database that an outgoing transmission was sent
+	// related to the provided analysis request IDs for the instrument with the provided ID
 	SaveAnalysisRequestsInstrumentTransmissions(ctx context.Context, analysisRequestIDs []uuid.UUID, instrumentID uuid.UUID) error
 
-	// SubmitAnalysisResult - Submit result to Skeleton and/or Cerberus,
-	//
-	// SubmitTypes:
-	//  * <No Parameter given> = SubmitTypeBatchStoreAndSend (default)
-	//  * SubmitTypeBatchStoreAndSend = Batch request and send with a 3 seconds delay
-	//  * SubmitTypeInstantStoreAndSend = Instantly send the Result
-	//  * SubmitTypeStoreOnly = Store the results and do not send to cerberus
+	// SubmitAnalysisResult - Submit result to Skeleton and Cerberus,
 	// By default this function batches the transmissions by collecting them and
 	// use the batch-endpoint of cerberus for performance reasons
-	SubmitAnalysisResult(ctx context.Context, resultData AnalysisResult, submitTypes ...SubmitType) error
+	SubmitAnalysisResult(ctx context.Context, resultData AnalysisResult) error
 
-	// SubmitAnalysisResultBatch - Submit result batch to Skeleton and/or Cerberus,
-	//
-	// SubmitTypes:
-	//  * <No Parameter given> = SubmitTypeBatchStoreAndSend (default)
-	//  * SubmitTypeBatchStoreAndSend = Batch request and send with a 3 seconds delay
-	//  * SubmitTypeInstantStoreAndSend = Instantly send the Result
-	//  * SubmitTypeStoreOnly = Store the results and do not send to cerberus
+	// SubmitAnalysisResultBatch - Submit result batch to Skeleton and Cerberus,
 	// By default this function batches the transmissions by collecting them and
 	// use the batch-endpoint of cerberus for performance reasons
-	SubmitAnalysisResultBatch(ctx context.Context, resultBatch []AnalysisResult, submitTypes ...SubmitType) error
+	SubmitAnalysisResultBatch(ctx context.Context, resultBatch []AnalysisResult) error
 
 	// GetInstrument returns all the settings regarding an instrument
 	// contains AnalyteMappings[] and RequestMappings[]
@@ -103,26 +91,22 @@ type SkeletonAPI interface {
 	// contains AnalyteMappings[] and RequestMappings[]
 	GetInstruments(ctx context.Context) ([]Instrument, error)
 
-	// FindAnalyteByManufacturerTestCode - Search for the analyte that is mapped (check ui for more info)
-	// Returns the mapping or model.EmptyAnalyteMapping
-	FindAnalyteByManufacturerTestCode(instrument Instrument, testCode string) AnalyteMapping
-
-	// FindResultEntities - Convienient: Lookup Instrument, AnalysisRequest and ResulteMapping for the analyte at once
+	// FindResultEntities - Convenient: Lookup Instrument, AnalysisRequest and ResultMapping for the analyte at once
 	FindResultEntities(ctx context.Context, InstrumentID uuid.UUID, SampleCode string, ManufacturerTestCode string) (Instrument, []AnalysisRequest, AnalyteMapping, error)
 
-	// FindResultMapping - Helper function to search for the RESULT mapping
-	// ResultMappings can be made via the ui to translate results
-	// e.g. "+" -> "pos" to be used in a pein datatype
-	FindResultMapping(searchValue string, mapping []ResultMapping) (string, error)
-
-	// RegisterProtocol - Registers
+	// RegisterProtocol - Registers the supported protocols of a driver class
 	RegisterProtocol(ctx context.Context, id uuid.UUID, name string, description string, abilities []ProtocolAbility, settings []ProtocolSetting) error
 
+	// SetOnlineStatus - Sets the current status of an instrument. Possible values:
+	// - ONLINE - instrument is actively connected
+	// - READY - instrument is not actively connected, but ready to connect
+	// - OFFLINE - instrument is offline
 	SetOnlineStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error
 
 	// Start - MUST BE CALLED ON STARTUP
 	// - migrates skeleton database
 	// - launches goroutines for analysis request/result processing
+	// - registers driver class in cerberus
 	Start() error
 }
 
