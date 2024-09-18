@@ -787,6 +787,18 @@ type analysisRepositoryMock struct {
 	callCount int
 }
 
+func (m *analysisRepositoryMock) DeleteOldCerberusQueueItems(ctx context.Context, cleanupDays, limit int) (int64, error) {
+	return 0, nil
+}
+
+func (m *analysisRepositoryMock) DeleteOldAnalysisRequests(ctx context.Context, limit int) (int64, error) {
+	return 0, nil
+}
+
+func (m *analysisRepositoryMock) DeleteOldAnalysisResults(ctx context.Context, limit int) (int64, error) {
+	return 0, nil
+}
+
 func (m *analysisRepositoryMock) CreateAnalysisRequestExtraValues(ctx context.Context, extraValuesByAnalysisRequestIDs map[uuid.UUID][]ExtraValue) error {
 	return nil
 }
