@@ -272,12 +272,21 @@ type AnalysisResult struct {
 }
 
 type ControlResult struct {
-	ID          uuid.UUID
-	CerberusID  *uuid.UUID
-	SampleCode  *string
-	AnalyteCode *string
-	Result      string
-	ExaminedAt  time.Time
+	ID uuid.UUID
+	//Something unique other than the ID that is same in all the systems??
+	CerberusID              *uuid.UUID
+	SampleCode              *string
+	AnalyteMapping          AnalyteMapping
+	Result                  string
+	ExpectedControlResultId uuid.UUID
+	Edited                  bool
+	EditReason              string
+	EditedBy                *uuid.UUID
+	IsValid                 bool
+	ExaminedAt              time.Time
+	Warnings                []string
+	ChannelResults          []ChannelResult
+	ExtraValues             []ExtraValue
 }
 
 type StandaloneControlResult struct {
