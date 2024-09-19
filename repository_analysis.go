@@ -191,13 +191,23 @@ type reagentDAO struct {
 }
 
 type controlResultDAO struct {
-	ID          uuid.UUID      `db:"id"`
-	SampleCode  sql.NullString `db:"sample_code"`
-	AnalyteCode sql.NullString `db:"analyte_code"`
-	Result      string         `db:"result"`
-	ExaminedAt  time.Time      `db:"examined_at"`
-	CerberusID  uuid.NullUUID  `db:"cerberus_id"`
-	CreatedAt   time.Time      `db:"created_at"`
+	ID                      uuid.UUID         `db:"id"`
+	SampleCode              sql.NullString    `db:"sample_code"`
+	AnalyteMappingID        uuid.UUID         `db:"analyte_mapping_id"`
+	ExpectedControlResultId uuid.UUID         `db:"expected_control_result_id"`
+	Edited                  bool              `db:"edited"`
+	EditReason              sql.NullString    `db:"edit_reason"`
+	EditedBy                uuid.NullUUID     `db:"edited_by"`
+	IsValid                 bool              `db:"is_valid"`
+	Result                  string            `db:"result"`
+	ExaminedAt              time.Time         `db:"examined_at"`
+	CerberusID              uuid.NullUUID     `db:"cerberus_id"`
+	CreatedAt               time.Time         `db:"created_at"`
+	AnalyteMapping          analyteMappingDAO `db:"analyte_mapping"`
+	ChannelResults          []channelResultDAO
+	ExtraValues             []resultExtraValueDAO
+	Warnings                []warningDAO
+	//Something unique other than the ID that is same in all the systems??
 }
 
 type analysisResultReagentRelationDAO struct {
@@ -3742,7 +3752,7 @@ func (r *analysisRepository) GetControlResultsByIDs(ctx context.Context, control
 			return controlResults, ErrFailedToGetControlResultsByIDs
 		}
 
-		controlResults[controlResult.ID] = convertControlResultDAOToReagent(controlResult)
+		controlResults[controlResult.ID] = convertControlResultDAOToControlResult(controlResult)
 	}
 
 	return controlResults, err
@@ -4479,7 +4489,7 @@ func convertReagentDAOToReagent(reagentDAO reagentDAO) Reagent {
 	return reagent
 }
 
-func convertControlResultDAOToReagent(controlResultDao controlResultDAO) ControlResult {
+func convertControlResultDAOToControlResult(controlResultDao controlResultDAO) ControlResult {
 	controlResult := ControlResult{
 		ID:         controlResultDao.ID,
 		Result:     controlResultDao.Result,

@@ -122,12 +122,20 @@ type ReagentTO struct {
 }
 
 type ControlResultTO struct {
-	ID          uuid.UUID  `json:"id"`
-	CerberusID  *uuid.UUID `json:"cerberusId"`
-	SampleCode  *string    `json:"sampleCode"`
-	AnalyteCode *string    `json:"analyteCode"`
-	Result      string     `json:"result"`
-	ExaminedAt  time.Time  `json:"examinedAt"`
+	ID                      uuid.UUID         `json:"id"`
+	CerberusID              *uuid.UUID        `json:"cerberusId"`
+	ExpectedControlResultId uuid.UUID         `json:"expectedControlResultId"`
+	SampleCode              *string           `json:"sampleCode"`
+	Edited                  bool              `json:"resultEdit"`
+	EditReason              string            `json:"editReason"`
+	EditedBy                *uuid.UUID        `json:"editedBy"`
+	IsValid                 bool              `json:"isValid"`
+	Result                  string            `json:"result"`
+	ExaminedAt              time.Time         `json:"examinedAt"`
+	AnalyteMapping          analyteMappingTO  `json:"analyteMapping"`
+	ChannelResults          []ChannelResultTO `json:"channelResults"`
+	ExtraValues             []ExtraValueTO    `json:"extraValues"`
+	Warnings                []string          `json:"warnings"`
 }
 
 type StandaloneControlResultTO struct {
