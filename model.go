@@ -188,13 +188,15 @@ type FTPConfig struct {
 }
 
 type AnalyteMapping struct {
-	ID                uuid.UUID
-	InstrumentAnalyte string
-	AnalyteID         uuid.UUID
-	ChannelMappings   []ChannelMapping
-	ResultMappings    []ResultMapping
-	ResultType        ResultType
-	ControlMappings   []ControlMapping
+	ID                       uuid.UUID
+	InstrumentAnalyte        string
+	ControlInstrumentAnalyte *string
+	AnalyteID                uuid.UUID
+	ChannelMappings          []ChannelMapping
+	ResultMappings           []ResultMapping
+	ResultType               ResultType
+	ControlResultRequired    bool
+	ExpectedControlResults   []ExpectedControlResults
 }
 
 type ChannelMapping struct {
@@ -203,10 +205,30 @@ type ChannelMapping struct {
 	ChannelID         uuid.UUID
 }
 
-type ControlMapping struct {
-	ControlAnalyteCode    string
-	ExpectedControlResult string
+type ExpectedControlResults struct {
+	ID             uuid.UUID
+	SampleCode     string
+	Operator       ComparisonOperator
+	ExpectedValue  string
+	ExpectedValue2 *string
+	CreatedAt      time.Time
+	DeletedAt      *time.Time
+	CreatedBy      uuid.UUID
+	DeletedBy      uuid.NullUUID
 }
+
+type ComparisonOperator string
+
+const (
+	Equal            ComparisonOperator = "equal"
+	NotEqual         ComparisonOperator = "notEqual"
+	Less             ComparisonOperator = "less"
+	LessOrEqual      ComparisonOperator = "lessOrEqual"
+	Greater          ComparisonOperator = "greater"
+	GreaterOrEqual   ComparisonOperator = "greaterOrEqual"
+	InOpenInterval   ComparisonOperator = "inOpenInterval"
+	InClosedInterval ComparisonOperator = "inClosedInterval"
+)
 
 // ResultMapping - Maps a ManufacturerTestCode to an AnalyteId (cerberus)
 type ResultMapping struct {
@@ -272,18 +294,14 @@ type AnalysisResult struct {
 }
 
 type ControlResult struct {
-	ID uuid.UUID
-	//Something unique other than the ID that is same in all the systems??
-	CerberusID              *uuid.UUID
-	SampleCode              *string
+	ID                      uuid.UUID
+	SampleCode              string
 	AnalyteMapping          AnalyteMapping
 	Result                  string
-	ExpectedControlResultId uuid.UUID
-	Edited                  bool
-	EditReason              string
-	EditedBy                *uuid.UUID
+	ExpectedControlResultId uuid.NullUUID
 	IsValid                 bool
 	ExaminedAt              time.Time
+	InstrumentID            uuid.UUID
 	Warnings                []string
 	ChannelResults          []ChannelResult
 	ExtraValues             []ExtraValue
