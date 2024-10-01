@@ -18,6 +18,9 @@ type InstrumentService interface {
 	GetInstrumentByIP(ctx context.Context, ip string) (Instrument, error)
 	UpdateInstrument(ctx context.Context, instrument Instrument) error
 	DeleteInstrument(ctx context.Context, id uuid.UUID) error
+	GetExpectedControlResultsByInstrumentId(ctx context.Context, instrumentId uuid.UUID) (map[uuid.UUID][]ExpectedControlResult, error)
+	CreateExpectedControlResults(ctx context.Context, expectedControlResultsMap map[uuid.UUID][]ExpectedControlResult, createdByUserId uuid.UUID) error
+	DeleteExpectedControlResults(ctx context.Context, expectedControlResultIds []uuid.UUID, deletedByUserId uuid.UUID) error
 	GetSupportedProtocols(ctx context.Context) ([]SupportedProtocol, error)
 	GetProtocolAbilities(ctx context.Context, protocolID uuid.UUID) ([]ProtocolAbility, error)
 	GetManufacturerTests(ctx context.Context, instrumentID uuid.UUID, protocolID uuid.UUID) ([]SupportedManufacturerTests, error)
@@ -192,6 +195,14 @@ func (s *instrumentService) GetInstruments(ctx context.Context) ([]Instrument, e
 		analyteMappingsByIDs[analyteMappingID].ResultMappings = resultMappings
 	}
 
+	expectedControlResultMappingsByAnalyteMappingID, err := s.instrumentRepository.GetExpectedControlResultsByAnalyteMappingIds(ctx, analyteMappingsIDs)
+	if err != nil {
+		return nil, err
+	}
+	for analyteMappingID, expectedControlResults := range expectedControlResultMappingsByAnalyteMappingID {
+		analyteMappingsByIDs[analyteMappingID].ExpectedControlResults = expectedControlResults
+	}
+
 	requestMappingsByInstrumentID, err := s.instrumentRepository.GetRequestMappings(ctx, instrumentIDs)
 	if err != nil {
 		return nil, err
@@ -297,6 +308,14 @@ func (s *instrumentService) GetInstrumentByID(ctx context.Context, tx db.DbConne
 		analyteMappingsByIDs[analyteMappingID].ResultMappings = resultMappings
 	}
 
+	expectedControlResultMappingsByAnalyteMappingID, err := s.instrumentRepository.GetExpectedControlResultsByAnalyteMappingIds(ctx, analyteMappingsIDs)
+	if err != nil {
+		return instrument, err
+	}
+	for analyteMappingID, expectedControlResults := range expectedControlResultMappingsByAnalyteMappingID {
+		analyteMappingsByIDs[analyteMappingID].ExpectedControlResults = expectedControlResults
+	}
+
 	requestMappingsByInstrumentID, err := s.instrumentRepository.WithTransaction(tx).GetRequestMappings(ctx, instrumentIDs)
 	if err != nil {
 		return instrument, err
@@ -398,6 +417,14 @@ func (s *instrumentService) GetInstrumentByIP(ctx context.Context, ip string) (I
 	}
 	for analyteMappingID, resultMappings := range resultMappingsByAnalyteMappingID {
 		analyteMappingsByIDs[analyteMappingID].ResultMappings = resultMappings
+	}
+
+	expectedControlResultMappingsByAnalyteMappingID, err := s.instrumentRepository.GetExpectedControlResultsByAnalyteMappingIds(ctx, analyteMappingsIDs)
+	if err != nil {
+		return instrument, err
+	}
+	for analyteMappingID, expectedControlResults := range expectedControlResultMappingsByAnalyteMappingID {
+		analyteMappingsByIDs[analyteMappingID].ExpectedControlResults = expectedControlResults
 	}
 
 	requestMappingsByInstrumentID, err := s.instrumentRepository.GetRequestMappings(ctx, instrumentIDs)
@@ -798,6 +825,57 @@ func (s *instrumentService) DeleteInstrument(ctx context.Context, id uuid.UUID) 
 	}
 
 	s.instrumentCache.Invalidate()
+	return nil
+}
+
+func (s *instrumentService) GetExpectedControlResultsByInstrumentId(ctx context.Context, instrumentId uuid.UUID) (map[uuid.UUID][]ExpectedControlResult, error) {
+	expectedControlResultsMapByAnalyteId, err := s.instrumentRepository.GetExpectedControlResultsByInstrumentId(ctx, instrumentId)
+	if err != nil {
+		return nil, err
+	}
+
+	return expectedControlResultsMapByAnalyteId, nil
+}
+
+func (s *instrumentService) CreateExpectedControlResults(ctx context.Context, expectedControlResultsMap map[uuid.UUID][]ExpectedControlResult, createdByUserId uuid.UUID) error {
+	tx, err := s.instrumentRepository.CreateTransaction()
+
+	for analyteMappingId, expectedControlResults := range expectedControlResultsMap {
+		for i := range expectedControlResults {
+			expectedControlResultsMap[analyteMappingId][i].CreatedBy = createdByUserId
+		}
+	}
+
+	_, err = s.instrumentRepository.WithTransaction(tx).CreateExpectedControlResults(ctx, expectedControlResultsMap)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		_ = tx.Rollback()
+		return db.ErrCommitTransactionFailed
+	}
+
+	return nil
+}
+
+func (s *instrumentService) DeleteExpectedControlResults(ctx context.Context, expectedControlResultIds []uuid.UUID, deletedByUserId uuid.UUID) error {
+	tx, err := s.instrumentRepository.CreateTransaction()
+
+	err = s.instrumentRepository.WithTransaction(tx).DeleteExpectedControlResults(ctx, expectedControlResultIds, deletedByUserId)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		_ = tx.Rollback()
+		return db.ErrCommitTransactionFailed
+	}
+
 	return nil
 }
 

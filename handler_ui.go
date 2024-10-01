@@ -1,6 +1,7 @@
 package skeleton
 
 import (
+	"github.com/blutspende/skeleton/middleware"
 	"net/http"
 	"time"
 
@@ -156,6 +157,15 @@ type reprocessTO struct {
 	SampleCode string `json:"sampleCode"`
 }
 
+type expectedControlResultTo struct {
+	ID               uuid.UUID          `json:"id"`
+	AnalyteMappingId uuid.UUID          `json:"analyteMappingId"`
+	SampleCode       string             `json:"sampleCode"`
+	Operator         ComparisonOperator `json:"operator"`
+	ExpectedValue    string             `json:"expectedValue"`
+	ExpectedValue2   *string            `json:"expectedValue2"`
+}
+
 const (
 	MsgFailedToReprocessInstrumentData = "failed to reprocess instrument data"
 	keyFailedToReprocessInstrumentData = "failedToReprocessInstrumentData"
@@ -302,6 +312,72 @@ func (api *api) DeleteInstrument(c *gin.Context) {
 	}
 
 	c.Status(http.StatusNoContent)
+}
+
+func (api *api) GetExpectedControlResultsByInstrumentId(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("instrumentId"))
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, "GetExpectedControlResultsByAnalyteMappingID Error")
+		return
+	}
+
+	expectedControlResultsMapByAnalyteId, err := api.instrumentService.GetExpectedControlResultsByInstrumentId(c, id)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, "GetSupportedProtocols Error")
+		return
+	}
+
+	c.JSON(http.StatusOK, convertExpectedControlResultMapToExpectedControlResultTOList(expectedControlResultsMapByAnalyteId))
+}
+
+func (api *api) CreateExpectedControlResults(c *gin.Context) {
+	user, ok := c.Get("User")
+	if !ok {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, "api_errors.InvalidTokenError")
+		return
+	}
+	userId := user.(middleware.UserToken).UserID
+
+	var expectedControlResultTos []expectedControlResultTo
+	err := c.ShouldBindJSON(&expectedControlResultTos)
+	if err != nil {
+		log.Error().Err(err).Msg("Create expected control results failed! Can't bind request body!")
+		c.AbortWithStatusJSON(http.StatusBadRequest, "api_errors.InvalidRequestBody")
+		return
+	}
+
+	err = api.instrumentService.CreateExpectedControlResults(c, convertExpectedControlResultTOsToExpectedControlResultMap(expectedControlResultTos), userId)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, "GetSupportedProtocols Error")
+		return
+	}
+
+	c.Status(http.StatusOK)
+}
+
+func (api *api) DeleteExpectedControlResults(c *gin.Context) {
+	user, ok := c.Get("User")
+	if !ok {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, "api_errors.InvalidTokenError")
+		return
+	}
+	userId := user.(middleware.UserToken).UserID
+
+	var expectedControlResultIds []uuid.UUID
+	err := c.ShouldBindJSON(&expectedControlResultIds)
+	if err != nil {
+		log.Error().Err(err).Msg("Create expected control results failed! Can't bind request body!")
+		c.AbortWithStatusJSON(http.StatusBadRequest, "api_errors.InvalidRequestBody")
+		return
+	}
+
+	err = api.instrumentService.DeleteExpectedControlResults(c, expectedControlResultIds, userId)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, "GetSupportedProtocols Error")
+		return
+	}
+
+	c.Status(http.StatusOK)
 }
 
 func (api *api) GetSupportedProtocols(c *gin.Context) {
@@ -1154,6 +1230,48 @@ func convertTOToConditionOperand(to conditionOperandTO) ConditionOperand {
 		Type:          to.Type,
 		ConstantValue: to.ConstantValue,
 		ExtraValueKey: to.ExtraValueKey,
+	}
+}
+
+func convertExpectedControlResultMapToExpectedControlResultTOList(expectedControlResultsMap map[uuid.UUID][]ExpectedControlResult) []expectedControlResultTo {
+	tos := make([]expectedControlResultTo, 0)
+	for analyteMappingId, expectedControlResults := range expectedControlResultsMap {
+		for i := range expectedControlResults {
+			tos = append(tos, convertExpectedControlResultToExpectedControlResultTO(analyteMappingId, expectedControlResults[i]))
+		}
+	}
+	return tos
+}
+
+func convertExpectedControlResultToExpectedControlResultTO(analyteId uuid.UUID, expectedControlResult ExpectedControlResult) expectedControlResultTo {
+	return expectedControlResultTo{
+		ID:               expectedControlResult.ID,
+		AnalyteMappingId: analyteId,
+		SampleCode:       expectedControlResult.SampleCode,
+		Operator:         expectedControlResult.Operator,
+		ExpectedValue:    expectedControlResult.ExpectedValue,
+		ExpectedValue2:   expectedControlResult.ExpectedValue2,
+	}
+}
+
+func convertExpectedControlResultTOsToExpectedControlResultMap(expectedControlResultTOs []expectedControlResultTo) map[uuid.UUID][]ExpectedControlResult {
+	expectedControlResultMap := make(map[uuid.UUID][]ExpectedControlResult)
+	for i := range expectedControlResultTOs {
+		if _, ok := expectedControlResultMap[expectedControlResultTOs[i].AnalyteMappingId]; !ok {
+			expectedControlResultMap[expectedControlResultTOs[i].AnalyteMappingId] = make([]ExpectedControlResult, 0)
+		}
+		expectedControlResultMap[expectedControlResultTOs[i].AnalyteMappingId] = append(expectedControlResultMap[expectedControlResultTOs[i].AnalyteMappingId], convertExpectedControlResultTOToExpectedControlResult(expectedControlResultTOs[i]))
+	}
+	return expectedControlResultMap
+}
+
+func convertExpectedControlResultTOToExpectedControlResult(expectedControlResultTO expectedControlResultTo) ExpectedControlResult {
+	return ExpectedControlResult{
+		ID:             expectedControlResultTO.ID,
+		SampleCode:     expectedControlResultTO.SampleCode,
+		Operator:       expectedControlResultTO.Operator,
+		ExpectedValue:  expectedControlResultTO.ExpectedValue,
+		ExpectedValue2: expectedControlResultTO.ExpectedValue2,
 	}
 }
 

@@ -75,12 +75,12 @@ type SkeletonAPI interface {
 	// SubmitAnalysisResult - Submit result to Skeleton and Cerberus,
 	// By default this function batches the transmissions by collecting them and
 	// use the batch-endpoint of cerberus for performance reasons
-	SubmitAnalysisResult(ctx context.Context, resultData AnalysisResult) error
+	//SubmitAnalysisResult(ctx context.Context, resultData AnalysisResultSet) error
 
 	// SubmitAnalysisResultBatch - Submit result batch to Skeleton and Cerberus,
 	// By default this function batches the transmissions by collecting them and
 	// use the batch-endpoint of cerberus for performance reasons
-	SubmitAnalysisResultBatch(ctx context.Context, resultBatch []AnalysisResult) error
+	SubmitAnalysisResultBatch(ctx context.Context, resultBatch AnalysisResultSet) error
 
 	SubmitControlResults(ctx context.Context, controlResults []StandaloneControlResult) error
 
