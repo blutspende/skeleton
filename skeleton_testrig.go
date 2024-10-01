@@ -13,7 +13,7 @@ type SkeletonTestRig struct {
 	eventHandler SkeletonCallbackHandlerV1
 
 	storedInstrumentsMap              map[string]Instrument
-	StoredAnalysisResults             []AnalysisResult
+	StoredAnalysisResults             []AnalysisResultSet
 	StoredStandaloneControlResultSets []StandaloneControlResult
 	AnalysisRequests                  []*AnalysisRequest
 	AnalysisRequestExtraValues        map[string]string
@@ -22,7 +22,7 @@ type SkeletonTestRig struct {
 func NewTestRig() *SkeletonTestRig {
 	return &SkeletonTestRig{
 		storedInstrumentsMap:       make(map[string]Instrument),
-		StoredAnalysisResults:      []AnalysisResult{},
+		StoredAnalysisResults:      []AnalysisResultSet{},
 		AnalysisRequests:           []*AnalysisRequest{},
 		AnalysisRequestExtraValues: make(map[string]string),
 	}
@@ -75,13 +75,13 @@ func (sr *SkeletonTestRig) SaveAnalysisRequestsInstrumentTransmissions(ctx conte
 	return nil
 }
 
-func (sr *SkeletonTestRig) SubmitAnalysisResult(ctx context.Context, resultData AnalysisResult) error {
+func (sr *SkeletonTestRig) SubmitAnalysisResult(ctx context.Context, resultData AnalysisResultSet) error {
 	sr.StoredAnalysisResults = append(sr.StoredAnalysisResults, resultData)
 	return nil
 }
 
-func (sr *SkeletonTestRig) SubmitAnalysisResultBatch(ctx context.Context, resultBatch []AnalysisResult) error {
-	sr.StoredAnalysisResults = append(sr.StoredAnalysisResults, resultBatch...)
+func (sr *SkeletonTestRig) SubmitAnalysisResultBatch(ctx context.Context, resultBatch AnalysisResultSet) error {
+	sr.StoredAnalysisResults = append(sr.StoredAnalysisResults, resultBatch)
 	return nil
 }
 
@@ -133,7 +133,7 @@ func (sr *SkeletonTestRig) Start() error {
 // ---------------------------------------------------------------------------------- Additonal Testing Functionality
 // Testfunktion: Clear the stored Analysis Results
 func (sr *SkeletonTestRig) ClearStoredAnalysisResults() {
-	sr.StoredAnalysisResults = []AnalysisResult{}
+	sr.StoredAnalysisResults = []AnalysisResultSet{}
 }
 
 // Testfunktion: Create an Analysis Request for a SampleCode and analyte id
