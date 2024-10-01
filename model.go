@@ -105,17 +105,14 @@ const (
 )
 
 type Reagent struct {
-	ID                uuid.UUID
-	Manufacturer      string
-	SerialNumber      string
-	LotNo             string
-	Name              string
-	Code              *string
-	Type              ReagentType
-	ManufacturingDate *time.Time
-	ExpirationDate    *time.Time
-	CreatedAt         time.Time
-	ControlResults    []ControlResult
+	ID             uuid.UUID
+	Manufacturer   string
+	SerialNumber   string
+	LotNo          string
+	Type           ReagentType
+	CreatedAt      time.Time
+	ExpirationDate *time.Time
+	ControlResults []ControlResult
 }
 
 type ExtraValue struct {
@@ -196,7 +193,7 @@ type AnalyteMapping struct {
 	ResultMappings           []ResultMapping
 	ResultType               ResultType
 	ControlResultRequired    bool
-	ExpectedControlResults   []ExpectedControlResults
+	ExpectedControlResults   []ExpectedControlResult
 }
 
 type ChannelMapping struct {
@@ -205,7 +202,7 @@ type ChannelMapping struct {
 	ChannelID         uuid.UUID
 }
 
-type ExpectedControlResults struct {
+type ExpectedControlResult struct {
 	ID             uuid.UUID
 	SampleCode     string
 	Operator       ComparisonOperator
@@ -262,6 +259,12 @@ const (
 	Pseudonym SubjectType = "PSEUDONYMIZED"
 )
 
+type AnalysisResultSet struct {
+	Results        []AnalysisResult
+	Reagents       []Reagent
+	ControlResults []ControlResult
+}
+
 // AnalysisResult - The final result on 'per-workitem' basis to return the result to cerberus.
 // Call v1.SubmitAnalysisResult for submission.
 type AnalysisResult struct {
@@ -294,17 +297,18 @@ type AnalysisResult struct {
 }
 
 type ControlResult struct {
-	ID                      uuid.UUID
-	SampleCode              string
-	AnalyteMapping          AnalyteMapping
-	Result                  string
-	ExpectedControlResultId uuid.NullUUID
-	IsValid                 bool
-	ExaminedAt              time.Time
-	InstrumentID            uuid.UUID
-	Warnings                []string
-	ChannelResults          []ChannelResult
-	ExtraValues             []ExtraValue
+	ID                         uuid.UUID
+	SampleCode                 string
+	AnalyteMapping             AnalyteMapping
+	Result                     string
+	ExpectedControlResultId    uuid.NullUUID
+	IsValid                    bool
+	IsComparedToExpectedResult bool
+	ExaminedAt                 time.Time
+	InstrumentID               uuid.UUID
+	Warnings                   []string
+	ChannelResults             []ChannelResult
+	ExtraValues                []ExtraValue
 }
 
 type StandaloneControlResult struct {

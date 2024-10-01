@@ -77,6 +77,12 @@ type ChannelResultTO struct {
 	Images                []ImageTO         `json:"images"`
 }
 
+type AnalysisResultSetTO struct {
+	Results        []AnalysisResultTO
+	Reagents       []ReagentTO
+	ControlResults []ControlResultTO
+}
+
 type AnalysisResultTO struct {
 	ID                       uuid.UUID         `json:"id"`
 	WorkingItemID            uuid.UUID         `json:"workItemId"`
@@ -109,33 +115,26 @@ type ImageTO struct {
 }
 
 type ReagentTO struct {
-	ID                uuid.UUID         `json:"id"`
-	Manufacturer      string            `json:"manufacturer"`
-	SerialNumber      string            `json:"serialNo"`
-	LotNo             string            `json:"lotNo"`
-	Name              string            `json:"name"`
-	Code              *string           `json:"code"`
-	ReagentType       ReagentType       `json:"type"`
-	ExpirationDate    *time.Time        `json:"expirationDate"`
-	ManufacturingDate *time.Time        `json:"manufacturingDate"`
-	ControlResults    []ControlResultTO `json:"controlResults"`
+	ID             uuid.UUID         `json:"id"`
+	Manufacturer   string            `json:"manufacturer"`
+	SerialNumber   string            `json:"serialNo"`
+	LotNo          string            `json:"lotNo"`
+	ReagentType    ReagentType       `json:"type"`
+	ControlResults []ControlResultTO `json:"controlResults"`
 }
 
 type ControlResultTO struct {
-	ID                      uuid.UUID         `json:"id"`
-	CerberusID              *uuid.UUID        `json:"cerberusId"`
-	ExpectedControlResultId uuid.UUID         `json:"expectedControlResultId"`
-	SampleCode              *string           `json:"sampleCode"`
-	Edited                  bool              `json:"resultEdit"`
-	EditReason              string            `json:"editReason"`
-	EditedBy                *uuid.UUID        `json:"editedBy"`
-	IsValid                 bool              `json:"isValid"`
-	Result                  string            `json:"result"`
-	ExaminedAt              time.Time         `json:"examinedAt"`
-	AnalyteMapping          analyteMappingTO  `json:"analyteMapping"`
-	ChannelResults          []ChannelResultTO `json:"channelResults"`
-	ExtraValues             []ExtraValueTO    `json:"extraValues"`
-	Warnings                []string          `json:"warnings"`
+	ID                         uuid.UUID         `json:"id"`
+	InstrumentID               uuid.UUID         `json:"instrumentID"`
+	SampleCode                 string            `json:"sampleCode"`
+	AnalyteID                  uuid.UUID         `json:"analyteID"`
+	IsValid                    bool              `json:"isValid"`
+	IsComparedToExpectedResult bool              `json:"isComparedToExpectedResult"`
+	Result                     string            `json:"result"`
+	ExaminedAt                 time.Time         `json:"examinedAt"`
+	ChannelResults             []ChannelResultTO `json:"channelResults"`
+	ExtraValues                []ExtraValueTO    `json:"extraValues"`
+	Warnings                   []string          `json:"warnings"`
 }
 
 type StandaloneControlResultTO struct {

@@ -30,7 +30,8 @@ const (
 	msgGetSampleCodesByOrderIDFailed                       = "get sample codes by order ID failed"
 	msgCreateSubjectsFailed                                = "create subject failed"
 	msgCreateReagentFailed                             	   = "create analysis result reagent infos failed"
-	msgCreateWarningsFailed                                = "create warnings failed"
+	msgCreateWarningsFailed                                       = "create warnings failed"
+	msgCreateControlResultWarningsFailed                          = "create control result warnings failed"
 	msgFailedToSaveDEAImageID                              = "failed to save DEA image id"
 	msgFailedToIncreaseImageUploadRetryCount               = "failed to increase image upload retry count"
 	msgFailedToGetStuckImages                              = "failed to get stuck images"
@@ -68,6 +69,7 @@ var (
 	ErrCreateSubjectsFailed                                = errors.New(msgCreateSubjectsFailed)
 	ErrCreateReagentFailed                                 = errors.New(msgCreateReagentFailed)
 	ErrCreateWarningsFailed                                = errors.New(msgCreateWarningsFailed)
+	ErrCreateControlResultWarningsFailed                          = errors.New(msgCreateControlResultWarningsFailed)
 	ErrFailedToSaveDEAImageID                              = errors.New(msgFailedToSaveDEAImageID)
 	ErrFailedToIncreaseImageUploadRetryCount               = errors.New(msgFailedToSaveDEAImageID)
 	ErrFailedToGetStuckImages                              = errors.New(msgFailedToGetStuckImages)
@@ -177,37 +179,66 @@ type requestExtraValueDAO struct {
 }
 
 type reagentDAO struct {
-	ID                uuid.UUID      `db:"id"`
-	Manufacturer      string         `db:"manufacturer"`
-	SerialNumber      string         `db:"serial"`
-	LotNo             string         `db:"lot_no"`
-	Name              string         `db:"name"`
-	Code              sql.NullString `db:"code"`
-	Type              ReagentType    `db:"type"`
-	ManufacturingDate sql.NullTime   `db:"manufacturing_date"`
-	ExpirationDate    sql.NullTime   `db:"expiration_date"`
-	CreatedAt         time.Time      `db:"created_at"`
-	CerberusID        uuid.NullUUID  `db:"cerberus_id"`
+	ID             uuid.UUID    `db:"id"`
+	Manufacturer   string       `db:"manufacturer"`
+	SerialNumber   string       `db:"serial"`
+	LotNo          string       `db:"lot_no"`
+	Type           ReagentType  `db:"type"`
+	ExpirationDate sql.NullTime `db:"expiration_date"`
+	CreatedAt      time.Time    `db:"created_at"`
 }
 
 type controlResultDAO struct {
-	ID                      uuid.UUID         `db:"id"`
-	SampleCode              sql.NullString    `db:"sample_code"`
-	AnalyteMappingID        uuid.UUID         `db:"analyte_mapping_id"`
-	ExpectedControlResultId uuid.UUID         `db:"expected_control_result_id"`
-	Edited                  bool              `db:"edited"`
-	EditReason              sql.NullString    `db:"edit_reason"`
-	EditedBy                uuid.NullUUID     `db:"edited_by"`
-	IsValid                 bool              `db:"is_valid"`
-	Result                  string            `db:"result"`
-	ExaminedAt              time.Time         `db:"examined_at"`
-	CerberusID              uuid.NullUUID     `db:"cerberus_id"`
-	CreatedAt               time.Time         `db:"created_at"`
-	AnalyteMapping          analyteMappingDAO `db:"analyte_mapping"`
-	ChannelResults          []channelResultDAO
-	ExtraValues             []resultExtraValueDAO
-	Warnings                []warningDAO
-	//Something unique other than the ID that is same in all the systems??
+	ID                         uuid.UUID         `db:"id"`
+	SampleCode                 string            `db:"sample_code"`
+	AnalyteMappingID           uuid.UUID         `db:"analyte_mapping_id"`
+	InstrumentID               uuid.UUID         `db:"instrument_id"`
+	ExpectedControlResultId    uuid.NullUUID     `db:"expected_control_result_id"`
+	IsValid                    bool              `db:"is_valid"`
+	IsComparedToExpectedResult bool              `db:"is_compared_to_expected_result"`
+	Result                     string            `db:"result"`
+	ExaminedAt                 time.Time         `db:"examined_at"`
+	CreatedAt                  time.Time         `db:"created_at"`
+	AnalyteMapping             analyteMappingDAO `db:"analyte_mapping"`
+	ChannelResults             []controlResultChannelResultDAO
+	ExtraValues                []controlResultExtraValueDAO
+	Warnings                   []controlResultWarningDAO
+}
+
+type controlResultChannelResultDAO struct {
+	ID                    uuid.UUID `db:"id"`
+	ControlResultId       uuid.UUID `db:"control_result_id"`
+	ChannelID             uuid.UUID `db:"channel_id"`
+	QualitativeResult     string    `db:"qualitative_result"`
+	QualitativeResultEdit bool      `db:"qualitative_result_edited"`
+	QuantitativeResults   []quantitativeChannelResultDAO
+	Images                []controlResultImageDAO
+}
+
+type controlResultWarningDAO struct {
+	ID              uuid.UUID `db:"id"`
+	ControlResultId uuid.UUID `db:"control_result_id"`
+	Warning         string    `db:"warning"`
+}
+
+type controlResultExtraValueDAO struct {
+	ID              uuid.UUID `db:"id"`
+	ControlResultId uuid.UUID `db:"control_result_id"`
+	Key             string    `db:"key"`
+	Value           string    `db:"value"`
+}
+
+type controlResultImageDAO struct {
+	ID               uuid.UUID      `db:"id"`
+	ControlResultId  uuid.UUID      `db:"control_result_id"`
+	ChannelResultID  uuid.NullUUID  `db:"channel_result_id"`
+	Name             string         `db:"name"`
+	Description      sql.NullString `db:"description"`
+	ImageBytes       []byte         `db:"image_bytes"`
+	DeaImageID       uuid.NullUUID  `db:"dea_image_id"`
+	UploadedToDeaAt  sql.NullTime   `db:"uploaded_to_dea_at"`
+	UploadRetryCount int            `db:"upload_retry_count"`
+	UploadError      sql.NullString `db:"upload_error"`
 }
 
 type analysisResultReagentRelationDAO struct {
@@ -320,10 +351,19 @@ type AnalysisRepository interface {
 	SaveAnalysisRequestsInstrumentTransmissions(ctx context.Context, analysisRequestIDs []uuid.UUID, instrumentID uuid.UUID) error
 
 	CreateAnalysisResultsBatch(ctx context.Context, analysisResults []AnalysisResult) ([]AnalysisResult, error)
+	UpdateStatusAnalysisResultsBatch(ctx context.Context, analysisResultsToUpdate []AnalysisResult) error
+	CreateAnalysisResultReagentRelations(ctx context.Context, relationDAOs []analysisResultReagentRelationDAO) error
 	GetAnalysisResultsBySampleCodeAndAnalyteID(ctx context.Context, sampleCode string, analyteID uuid.UUID) ([]AnalysisResult, error)
 	GetAnalysisResultByID(ctx context.Context, id uuid.UUID, allowDeletedAnalyteMapping bool) (AnalysisResult, error)
 	GetAnalysisResultsByIDs(ctx context.Context, ids []uuid.UUID) ([]AnalysisResult, error)
 	GetAnalysisResultsByBatchIDs(ctx context.Context, batchIDs []uuid.UUID) ([]AnalysisResult, error)
+	CreateAnalysisResultExtraValues(ctx context.Context, extraValuesByAnalysisRequestIDs map[uuid.UUID][]ExtraValue) error
+	CreateChannelResults(ctx context.Context, channelResults []ChannelResult, analysisResultID uuid.UUID) ([]uuid.UUID, error)
+	CreateChannelResultQuantitativeValues(ctx context.Context, quantitativeValuesByChannelResultIDs map[uuid.UUID]map[string]string) error
+	CreateReagentsByAnalysisResultID(ctx context.Context, reagentsByAnalysisResultID map[uuid.UUID][]Reagent) (map[uuid.UUID]map[uuid.UUID][]ControlResult, map[uuid.UUID][]Reagent, error)
+	CreateReagentBatch(ctx context.Context, reagents []Reagent) ([]Reagent, error)
+	CreateControlResults(ctx context.Context, controlResultsMap map[uuid.UUID]map[uuid.UUID][]ControlResult) (map[uuid.UUID]map[uuid.UUID][]uuid.UUID, error)
+	CreateWarnings(ctx context.Context, warningsByAnalysisResultID map[uuid.UUID][]string) error
 	GetAnalysisResultsByBatchIDsMapped(ctx context.Context, batchIDs []uuid.UUID) (map[uuid.UUID][]AnalysisResultInfo, error)
 
 	UpdateCerberusQueueItemStatus(ctx context.Context, queueItem CerberusQueueItem) error
@@ -333,6 +373,7 @@ type AnalysisRepository interface {
 	CreateControlResultQueueItem(ctx context.Context, controlResults []StandaloneControlResult) (uuid.UUID, error)
 
 	SaveImages(ctx context.Context, images []imageDAO) ([]uuid.UUID, error)
+	SaveControlResultImages(ctx context.Context, images []controlResultImageDAO) ([]uuid.UUID, error)
 	GetStuckImageIDsForDEA(ctx context.Context) ([]uuid.UUID, error)
 	GetStuckImageIDsForCerberus(ctx context.Context) ([]uuid.UUID, error)
 	GetImagesForDEAUploadByIDs(ctx context.Context, ids []uuid.UUID) ([]imageDAO, error)
@@ -1050,115 +1091,59 @@ func (r *analysisRepository) createAnalysisResultsBatch(ctx context.Context, ana
 	if err != nil {
 		return analysisResults, err
 	}
-
-	extraValuesMap := make(map[uuid.UUID][]ExtraValue)
-	warningsMap := make(map[uuid.UUID][]string)
-	reagentsMap := make(map[uuid.UUID][]Reagent)
-
-	for i := range analysisResults {
-		extraValuesMap[analysisResults[i].ID] = analysisResults[i].ExtraValues
-		warningsMap[analysisResults[i].ID] = analysisResults[i].Warnings
-		reagentsMap[analysisResults[i].ID] = analysisResults[i].Reagents
-	}
-
-	err = r.CreateAnalysisResultExtraValues(ctx, extraValuesMap)
-	if err != nil {
-		return analysisResults, err
-	}
-
-	for i := range analysisResults {
-		quantitativeChannelResultsMap := make(map[uuid.UUID]map[string]string)
-		channelImagesMap := make(map[uuid.NullUUID][]Image)
-		channelResultIDs, err := r.createChannelResults(ctx, analysisResults[i].ChannelResults, analysisResults[i].ID)
-		if err != nil {
-			return analysisResults, err
-		}
-		for j := range analysisResults[i].ChannelResults {
-			if len(channelResultIDs) > j {
-				analysisResults[i].ChannelResults[j].ID = channelResultIDs[j]
-			}
-			quantitativeChannelResultsMap[channelResultIDs[j]] = analysisResults[i].ChannelResults[j].QuantitativeResults
-			channelImagesMap[uuid.NullUUID{UUID: channelResultIDs[j], Valid: true}] = analysisResults[i].ChannelResults[j].Images
-		}
-		err = r.CreateChannelResultQuantitativeValues(ctx, quantitativeChannelResultsMap)
-		if err != nil {
-			return analysisResults, err
-		}
-	}
-
-	err = r.CreateWarnings(ctx, warningsMap)
-	if err != nil {
-		return analysisResults, err
-	}
-
-	controlResultsMap, err := r.CreateReagentsByAnalysisResultID(ctx, reagentsMap)
-	if err != nil {
-		return analysisResults, err
-	}
-
-	relationsMap, err := r.CreateControlResults(ctx, controlResultsMap)
-	if err != nil {
-		return analysisResults, err
-	}
-
-	analysisResultReagentRelationDAOs := make([]analysisResultReagentRelationDAO, 0)
-	reagentControlResultRelationDAOs := make([]reagentControlResultRelationDAO, 0)
-	analysisResultControlResultRelationDAOs := make([]analysisResultControlResultRelationDAO, 0)
-
-	for analysisResultID, reagents := range relationsMap {
-		for reagentID, controlResults := range reagents {
-			analysisResultReagentRelationDAOs = append(analysisResultReagentRelationDAOs, analysisResultReagentRelationDAO{
-				AnalysisResultID: analysisResultID,
-				ReagentID:        reagentID,
-			})
-
-			for _, controlResultID := range controlResults {
-				reagentControlResultRelationDAOs = append(reagentControlResultRelationDAOs, reagentControlResultRelationDAO{
-					ReagentID:       reagentID,
-					ControlResultID: controlResultID,
-					IsProcessed:     true,
-				})
-
-				analysisResultControlResultRelationDAOs = append(analysisResultControlResultRelationDAOs, analysisResultControlResultRelationDAO{
-					AnalysisResultID: analysisResultID,
-					ControlResultID:  controlResultID,
-					IsProcessed:      true,
-				})
-			}
-		}
-	}
-
-	err = r.createAnalysisResultReagentRelations(ctx, analysisResultReagentRelationDAOs)
-	if err != nil {
-		return analysisResults, err
-	}
-
-	err = r.CreateReagentControlResultRelations(ctx, reagentControlResultRelationDAOs)
-	if err != nil {
-		return analysisResults, err
-	}
-
-	err = r.CreateAnalysisResultControlResultRelations(ctx, analysisResultControlResultRelationDAOs)
-	if err != nil {
-		return analysisResults, err
-	}
-
-	return analysisResults, nil
+	return analysisResults, err
 }
 
-func (r *analysisRepository) createAnalysisResultReagentRelations(ctx context.Context, relationDAOs []analysisResultReagentRelationDAO) error {
+func (r *analysisRepository) UpdateStatusAnalysisResultsBatch(ctx context.Context, analysisResultsToUpdate []AnalysisResult) error {
+	if len(analysisResultsToUpdate) == 0 {
+		return nil
+	}
+	statusMap := make(map[ResultStatus][]uuid.UUID)
+	for i := range analysisResultsToUpdate {
+		if _, ok := statusMap[analysisResultsToUpdate[i].Status]; !ok {
+			statusMap[analysisResultsToUpdate[i].Status] = make([]uuid.UUID, 0)
+		}
+		statusMap[analysisResultsToUpdate[i].Status] = append(statusMap[analysisResultsToUpdate[i].Status], analysisResultsToUpdate[i].ID)
+	}
+
+	var err error
+	for status := range statusMap {
+		err = utils.Partition(len(statusMap[status]), analysisResultBatchSize, func(low int, high int) error {
+			query := fmt.Sprintf(`UPDATE %s.sk_analysis_results SET status = ? WHERE id in (?);`, r.dbSchema)
+			query, ars, _ := sqlx.In(query, status, statusMap[status][low:high])
+			query = r.db.Rebind(query)
+			_, err := r.db.ExecContext(ctx, query, ars...)
+			if err != nil {
+				log.Error().Err(err).Msg("create analysis result batch failed")
+				return err
+			}
+			return nil
+		})
+	}
+	return err
+}
+
+const analysisResultRelationBatch = 15000
+
+func (r *analysisRepository) CreateAnalysisResultReagentRelations(ctx context.Context, relationDAOs []analysisResultReagentRelationDAO) error {
 	if len(relationDAOs) == 0 {
 		return nil
 	}
 
-	query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_result_reagent_relations(analysis_result_id, reagent_id)
+	err := utils.Partition(len(relationDAOs), analysisResultRelationBatch, func(low int, high int) error {
+		query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_result_reagent_relations(analysis_result_id, reagent_id)
 		VALUES(:analysis_result_id, :reagent_id)`, r.dbSchema)
 
-	_, err := r.db.NamedExecContext(ctx, query, relationDAOs)
+		_, err := r.db.NamedExecContext(ctx, query, relationDAOs[low:high])
 
+		if err != nil {
+			log.Error().Err(err).Msg(msgFailedToCreateAnalysisResultReagentRelations)
+			return ErrFailedToCreateAnalysisResultReagentRelations
+		}
+		return nil
+	})
 	if err != nil {
-		log.Error().Err(err).Msg(msgFailedToCreateAnalysisResultReagentRelations)
-		return ErrFailedToCreateAnalysisResultReagentRelations
+		return err
 	}
 
 	return nil
@@ -1169,14 +1154,21 @@ func (r *analysisRepository) CreateReagentControlResultRelations(ctx context.Con
 		return nil
 	}
 
-	query := fmt.Sprintf(`INSERT INTO %s.sk_reagent_control_result_relations(reagent_id, control_result_id, is_processed)
+	err := utils.Partition(len(relationDAOs), analysisResultRelationBatch, func(low int, high int) error {
+		query := fmt.Sprintf(`INSERT INTO %s.sk_reagent_control_result_relations(reagent_id, control_result_id, is_processed)
 		VALUES(:reagent_id, :control_result_id, :is_processed) ON CONFLICT DO NOTHING`, r.dbSchema)
 
-	_, err := r.db.NamedExecContext(ctx, query, relationDAOs)
+		_, err := r.db.NamedExecContext(ctx, query, relationDAOs[low:high])
+
+		if err != nil {
+			log.Error().Err(err).Msg(msgFailedToCreateReagentControlResultRelations)
+			return ErrFailedToCreateReagentControlResultRelations
+		}
+		return nil
+	})
 
 	if err != nil {
-		log.Error().Err(err).Msg(msgFailedToCreateReagentControlResultRelations)
-		return ErrFailedToCreateReagentControlResultRelations
+		return err
 	}
 
 	return nil
@@ -1187,14 +1179,20 @@ func (r *analysisRepository) CreateAnalysisResultControlResultRelations(ctx cont
 		return nil
 	}
 
-	query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_result_control_result_relations(analysis_result_id, control_result_id, is_processed)
+	err := utils.Partition(len(relationDAOs), analysisResultRelationBatch, func(low int, high int) error {
+		query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_result_control_result_relations(analysis_result_id, control_result_id, is_processed)
 		VALUES(:analysis_result_id, :control_result_id, :is_processed)`, r.dbSchema)
 
-	_, err := r.db.NamedExecContext(ctx, query, relationDAOs)
+		_, err := r.db.NamedExecContext(ctx, query, relationDAOs[low:high])
 
+		if err != nil {
+			log.Error().Err(err).Msg(msgFailedToCreateAnalysisResultControlResultRelations)
+			return ErrFailedToCreateAnalysisResultControlResultRelations
+		}
+		return nil
+	})
 	if err != nil {
-		log.Error().Err(err).Msg(msgFailedToCreateAnalysisResultControlResultRelations)
-		return ErrFailedToCreateAnalysisResultControlResultRelations
+		return err
 	}
 
 	return nil
@@ -2097,17 +2095,12 @@ func (r *analysisRepository) CreateAnalysisResultExtraValues(ctx context.Context
 	if len(extraValuesDAOs) == 0 {
 		return nil
 	}
-	var err error
-	for i := 0; i < len(extraValuesDAOs); i += extraValueBatchSize {
-		if len(extraValuesDAOs) >= i+extraValueBatchSize {
-			err = r.createAnalysisResultExtraValues(ctx, extraValuesDAOs[i:i+extraValueBatchSize])
-		} else {
-			err = r.createAnalysisResultExtraValues(ctx, extraValuesDAOs[i:])
-		}
-		if err != nil {
-			return err
-		}
+
+	err := r.createAnalysisResultExtraValues(ctx, extraValuesDAOs)
+	if err != nil {
+		return err
 	}
+
 	return nil
 }
 
@@ -2123,37 +2116,61 @@ func (r *analysisRepository) CreateAnalysisRequestExtraValues(ctx context.Contex
 	if len(extraValuesDAOs) == 0 {
 		return nil
 	}
-	var err error
-	for i := 0; i < len(extraValuesDAOs); i += extraValueBatchSize {
-		if len(extraValuesDAOs) >= i+extraValueBatchSize {
-			err = r.createAnalysisRequestExtraValues(ctx, extraValuesDAOs[i:i+extraValueBatchSize])
-		} else {
-			err = r.createAnalysisRequestExtraValues(ctx, extraValuesDAOs[i:])
-		}
-		if err != nil {
-			return err
-		}
+
+	err := r.createAnalysisRequestExtraValues(ctx, extraValuesDAOs)
+	if err != nil {
+		return err
 	}
+
 	return nil
 }
 
 func (r *analysisRepository) createAnalysisResultExtraValues(ctx context.Context, extraValues []resultExtraValueDAO) error {
-	query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_result_extravalues(id, analysis_result_id, "key", "value")
+	err := utils.Partition(len(extraValues), extraValueBatchSize, func(low int, high int) error {
+		query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_result_extravalues(id, analysis_result_id, "key", "value")
 		VALUES(:id, :analysis_result_id, :key, :value)`, r.dbSchema)
-	_, err := r.db.NamedExecContext(ctx, query, extraValues)
+		_, err := r.db.NamedExecContext(ctx, query, extraValues[low:high])
+		if err != nil {
+			log.Error().Err(err).Msg("create analysis result batch failed")
+			return err
+		}
+		return nil
+	})
 	if err != nil {
-		log.Error().Err(err).Msg("create analysis result batch failed")
 		return err
 	}
 	return nil
 }
 
 func (r *analysisRepository) createAnalysisRequestExtraValues(ctx context.Context, extraValues []requestExtraValueDAO) error {
-	query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_request_extra_values(id, analysis_request_id, "key", "value")
+	err := utils.Partition(len(extraValues), extraValueBatchSize, func(low int, high int) error {
+		query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_request_extra_values(id, analysis_request_id, "key", "value")
 		VALUES(:id, :analysis_request_id, :key, :value)`, r.dbSchema)
-	_, err := r.db.NamedExecContext(ctx, query, extraValues)
+		_, err := r.db.NamedExecContext(ctx, query, extraValues[low:high])
+		if err != nil {
+			log.Error().Err(err).Msg("create analysis request extra values failed")
+			return err
+		}
+		return nil
+	})
 	if err != nil {
-		log.Error().Err(err).Msg("create analysis request extra values failed")
+		return err
+	}
+	return nil
+}
+
+func (r *analysisRepository) createControlResultExtraValues(ctx context.Context, extraValues []controlResultExtraValueDAO) error {
+	err := utils.Partition(len(extraValues), extraValueBatchSize, func(low int, high int) error {
+		query := fmt.Sprintf(`INSERT INTO %s.sk_control_result_extravalues(id, control_resilt_id, "key", "value")
+		VALUES(:id, :control_resilt_id, :key, :value)`, r.dbSchema)
+		_, err := r.db.NamedExecContext(ctx, query, extraValues[low:high])
+		if err != nil {
+			log.Error().Err(err).Msg("create control result extra values failed")
+			return err
+		}
+		return nil
+	})
+	if err != nil {
 		return err
 	}
 	return nil
@@ -2198,18 +2215,12 @@ const channelResultBatchSize = 12000
 func (r *analysisRepository) CreateChannelResults(ctx context.Context, channelResults []ChannelResult, analysisResultID uuid.UUID) ([]uuid.UUID, error) {
 	ids := make([]uuid.UUID, 0, len(channelResults))
 	var err error
-	var idsPart []uuid.UUID
-	for i := 0; i < len(channelResults); i += channelResultBatchSize {
-		if len(channelResults) >= i+channelResultBatchSize {
-			idsPart, err = r.createChannelResults(ctx, channelResults[i:i+channelResultBatchSize], analysisResultID)
-		} else {
-			idsPart, err = r.createChannelResults(ctx, channelResults[i:], analysisResultID)
-		}
-		if err != nil {
-			return nil, err
-		}
-		ids = append(ids, idsPart...)
+
+	ids, err = r.createChannelResults(ctx, channelResults, analysisResultID)
+	if err != nil {
+		return nil, err
 	}
+
 	return ids, err
 }
 
@@ -2225,13 +2236,49 @@ func (r *analysisRepository) createChannelResults(ctx context.Context, channelRe
 		ids[i] = channelResults[i].ID
 	}
 
-	query := fmt.Sprintf(`INSERT INTO %s.sk_channel_results(id, analysis_result_id, channel_id, qualitative_result, qualitative_result_edited)
+	err := utils.Partition(len(channelResults), channelResultBatchSize, func(low int, high int) error {
+		query := fmt.Sprintf(`INSERT INTO %s.sk_channel_results(id, analysis_result_id, channel_id, qualitative_result, qualitative_result_edited)
 		VALUES(:id, :analysis_result_id, :channel_id, :qualitative_result, :qualitative_result_edited);`, r.dbSchema)
-	_, err := r.db.NamedExecContext(ctx, query, convertChannelResultsToDAOs(channelResults, analysisResultID))
+		_, err := r.db.NamedExecContext(ctx, query, convertChannelResultsToDAOs(channelResults[low:high], analysisResultID))
+		if err != nil {
+			log.Error().Err(err).Msg("create channel result batch failed")
+			return err
+		}
+		return nil
+	})
 	if err != nil {
-		log.Error().Err(err).Msg("create channel result batch failed")
+		return nil, err
+	}
+
+	return ids, nil
+}
+
+func (r *analysisRepository) createControlResultChannelResults(ctx context.Context, channelResults []ChannelResult, controlResultID uuid.UUID) ([]uuid.UUID, error) {
+	if len(channelResults) == 0 {
+		return []uuid.UUID{}, nil
+	}
+	ids := make([]uuid.UUID, len(channelResults))
+	for i := range channelResults {
+		if (channelResults[i].ID == uuid.UUID{}) || (channelResults[i].ID == uuid.Nil) {
+			channelResults[i].ID = uuid.New()
+		}
+		ids[i] = channelResults[i].ID
+	}
+
+	err := utils.Partition(len(channelResults), channelResultBatchSize, func(low int, high int) error {
+		query := fmt.Sprintf(`INSERT INTO %s.sk_control_result_channel_results(id, control_result_id, channel_id, qualitative_result, qualitative_result_edited)
+		VALUES(:id, :control_result_id, :channel_id, :qualitative_result, :qualitative_result_edited);`, r.dbSchema)
+		_, err := r.db.NamedExecContext(ctx, query, convertChannelResultsToDAOs(channelResults[low:high], controlResultID))
+		if err != nil {
+			log.Error().Err(err).Msg("create control result channel result batch failed")
+			return err
+		}
+		return nil
+	})
+	if err != nil {
 		return []uuid.UUID{}, err
 	}
+
 	return ids, nil
 }
 
@@ -2282,17 +2329,12 @@ func (r *analysisRepository) CreateChannelResultQuantitativeValues(ctx context.C
 		}
 		quantitativeChannelResultDAOs = append(quantitativeChannelResultDAOs, qrDAOs...)
 	}
-	var err error
-	for i := 0; i < len(quantitativeChannelResultDAOs); i += channelResultQVBatchSize {
-		if len(quantitativeChannelResultDAOs) >= i+channelResultQVBatchSize {
-			err = r.createChannelResultQuantitativeValues(ctx, quantitativeChannelResultDAOs[i:i+channelResultQVBatchSize])
-		} else {
-			err = r.createChannelResultQuantitativeValues(ctx, quantitativeChannelResultDAOs[i:])
-		}
-		if err != nil {
-			return err
-		}
+
+	err := r.createChannelResultQuantitativeValues(ctx, quantitativeChannelResultDAOs)
+	if err != nil {
+		return err
 	}
+
 	return nil
 }
 
@@ -2300,13 +2342,59 @@ func (r *analysisRepository) createChannelResultQuantitativeValues(ctx context.C
 	if len(quantitativeChannelResults) == 0 {
 		return nil
 	}
-	query := fmt.Sprintf(`INSERT INTO %s.sk_channel_result_quantitative_values(id, channel_result_id, metric, "value")
+
+	err := utils.Partition(len(quantitativeChannelResults), channelResultQVBatchSize, func(low int, high int) error {
+		query := fmt.Sprintf(`INSERT INTO %s.sk_channel_result_quantitative_values(id, channel_result_id, metric, "value")
 		VALUES(:id, :channel_result_id, :metric, :value);`, r.dbSchema)
-	_, err := r.db.NamedExecContext(ctx, query, quantitativeChannelResults)
+		_, err := r.db.NamedExecContext(ctx, query, quantitativeChannelResults[low:high])
+		if err != nil {
+			log.Error().Err(err).Msg("create channel result quantitative values batch failed")
+			return err
+		}
+		return nil
+	})
 	if err != nil {
-		log.Error().Err(err).Msg("create channel result quantitative values batch failed")
 		return err
 	}
+
+	return nil
+}
+
+func (r *analysisRepository) CreateControlResultChannelResultQuantitativeValues(ctx context.Context, quantitativeValuesByChannelResultIDs map[uuid.UUID]map[string]string) error {
+	quantitativeChannelResultDAOs := make([]quantitativeChannelResultDAO, 0)
+	for channelResultID, quantitativeValues := range quantitativeValuesByChannelResultIDs {
+		qrDAOs := convertQuantitativeResultsToDAOs(quantitativeValues, channelResultID)
+		for i := range qrDAOs {
+			qrDAOs[i].ID = uuid.New()
+		}
+		quantitativeChannelResultDAOs = append(quantitativeChannelResultDAOs, qrDAOs...)
+	}
+	err := r.createControlResultChannelResultQuantitativeValues(ctx, quantitativeChannelResultDAOs)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *analysisRepository) createControlResultChannelResultQuantitativeValues(ctx context.Context, quantitativeChannelResults []quantitativeChannelResultDAO) error {
+	if len(quantitativeChannelResults) == 0 {
+		return nil
+	}
+
+	err := utils.Partition(len(quantitativeChannelResults), channelResultQVBatchSize, func(low int, high int) error {
+		query := fmt.Sprintf(`INSERT INTO %s.sk_control_result_channel_result_quantitative_values(id, channel_result_id, metric, "value")
+		VALUES(:id, :channel_result_id, :metric, :value);`, r.dbSchema)
+		_, err := r.db.NamedExecContext(ctx, query, quantitativeChannelResults[low:high])
+		if err != nil {
+			log.Error().Err(err).Msg("create control result channel result quantitative values batch failed")
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -2411,7 +2499,7 @@ func (r *analysisRepository) getAnalysisResultControlResultRelations(ctx context
 
 const reagentBatchSize = 5000
 
-func (r *analysisRepository) CreateReagentsByAnalysisResultID(ctx context.Context, reagentsByAnalysisResultID map[uuid.UUID][]Reagent) (map[uuid.UUID]map[uuid.UUID][]ControlResult, error) {
+func (r *analysisRepository) CreateReagentsByAnalysisResultID(ctx context.Context, reagentsByAnalysisResultID map[uuid.UUID][]Reagent) (map[uuid.UUID]map[uuid.UUID][]ControlResult, map[uuid.UUID][]Reagent, error) {
 	reagentDAOs := make([]reagentDAO, 0)
 	controlResultsMap := make(map[uuid.UUID]map[uuid.UUID][]ControlResult)
 	for _, reagents := range reagentsByAnalysisResultID {
@@ -2425,23 +2513,45 @@ func (r *analysisRepository) CreateReagentsByAnalysisResultID(ctx context.Contex
 
 	reagentIDs, err := r.createReagents(ctx, reagentDAOs)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	var index = 0
 	for analysisResultID, reagents := range reagentsByAnalysisResultID {
-		for _, reagent := range reagents {
+		for j, reagent := range reagents {
 			if _, ok := controlResultsMap[analysisResultID]; !ok {
 				controlResultsMap[analysisResultID] = make(map[uuid.UUID][]ControlResult)
 			}
 
 			controlResultsMap[analysisResultID][reagentIDs[index]] = reagent.ControlResults
+			reagentsByAnalysisResultID[analysisResultID][j].ID = reagentIDs[index]
 
 			index++
 		}
 	}
 
-	return controlResultsMap, nil
+	return controlResultsMap, reagentsByAnalysisResultID, nil
+}
+
+func (r *analysisRepository) CreateReagentBatch(ctx context.Context, reagents []Reagent) ([]Reagent, error) {
+	reagentDAOs := make([]reagentDAO, 0)
+	rDAOs := make([]reagentDAO, len(reagents))
+	for i := range reagents {
+		rDAOs[i] = convertReagentToDAO(reagents[i])
+	}
+
+	reagentDAOs = append(reagentDAOs, rDAOs...)
+
+	reagentIDs, err := r.createReagents(ctx, reagentDAOs)
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range reagents {
+		reagents[i].ID = reagentIDs[i]
+	}
+
+	return reagents, nil
 }
 
 func (r *analysisRepository) createReagents(ctx context.Context, reagentDAOs []reagentDAO) ([]uuid.UUID, error) {
@@ -2455,8 +2565,8 @@ func (r *analysisRepository) createReagents(ctx context.Context, reagentDAOs []r
 		if reagentDAOs[i].ID == uuid.Nil {
 			reagentDAOs[i].ID = uuid.New()
 		}
-		if _, ok := uniqueReagentToIncomingIndexMap[fmt.Sprintf("%s%s%s%s", reagentDAOs[i].Manufacturer, reagentDAOs[i].LotNo, reagentDAOs[i].SerialNumber, reagentDAOs[i].Name)]; !ok {
-			uniqueReagentToIncomingIndexMap[fmt.Sprintf("%s%s%s%s", reagentDAOs[i].Manufacturer, reagentDAOs[i].LotNo, reagentDAOs[i].SerialNumber, reagentDAOs[i].Name)] = reagentsToInsertCounter
+		if _, ok := uniqueReagentToIncomingIndexMap[getUniqueReagentString(reagentDAOs[i])]; !ok {
+			uniqueReagentToIncomingIndexMap[getUniqueReagentString(reagentDAOs[i])] = reagentsToInsertCounter
 			reagentsToSave = append(reagentsToSave, reagentDAOs[i])
 			reagentsToInsertCounter++
 		}
@@ -2464,9 +2574,9 @@ func (r *analysisRepository) createReagents(ctx context.Context, reagentDAOs []r
 	insertedIds := make([]uuid.UUID, 0)
 
 	err := utils.Partition(len(reagentsToSave), reagentBatchSize, func(low int, high int) error {
-		query := fmt.Sprintf(`INSERT INTO %s.sk_reagents(id, manufacturer, serial, lot_no, name, code, type, manufacturing_date, expiration_date)
-		VALUES(:id, :manufacturer, :serial, :lot_no, :name, :code, :type, :manufacturing_date, :expiration_date)
-		ON CONFLICT (manufacturer, serial, lot_no, name) DO UPDATE SET manufacturer = excluded.manufacturer RETURNING id;`, r.dbSchema)
+		query := fmt.Sprintf(`INSERT INTO %s.sk_reagents(id, manufacturer, serial, lot_no, type)
+		VALUES(:id, :manufacturer, :serial, :lot_no, :type)
+		ON CONFLICT (manufacturer, serial, lot_no) DO UPDATE SET manufacturer = excluded.manufacturer RETURNING id;`, r.dbSchema)
 
 		rows, err := r.db.NamedQueryContext(ctx, query, reagentsToSave[low:high])
 		if err != nil {
@@ -2492,81 +2602,140 @@ func (r *analysisRepository) createReagents(ctx context.Context, reagentDAOs []r
 
 	returnIds := make([]uuid.UUID, 0)
 	for _, reagent := range reagentDAOs {
-		if _, ok := uniqueReagentToIncomingIndexMap[fmt.Sprintf("%s%s%s%s", reagent.Manufacturer, reagent.LotNo, reagent.SerialNumber, reagent.Name)]; !ok {
+		if _, ok := uniqueReagentToIncomingIndexMap[getUniqueReagentString(reagent)]; !ok {
 			log.Error().
 				Err(err).
 				Interface("reagents", reagentDAOs).
 				Msg(msgCreateReagentFailed)
 			return nil, ErrCreateReagentFailed
 		}
-		returnIds = append(returnIds, insertedIds[uniqueReagentToIncomingIndexMap[fmt.Sprintf("%s%s%s%s", reagent.Manufacturer, reagent.LotNo, reagent.SerialNumber, reagent.Name)]])
+		returnIds = append(returnIds, insertedIds[uniqueReagentToIncomingIndexMap[getUniqueReagentString(reagent)]])
 	}
 
 	return returnIds, nil
 }
 
+func getUniqueReagentString(reagent reagentDAO) string {
+	return fmt.Sprintf("%s%s%s", reagent.Manufacturer, reagent.LotNo, reagent.SerialNumber)
+}
+
 const controlResultBatchSize = 5000
 
 func (r *analysisRepository) CreateControlResults(ctx context.Context, controlResultsMap map[uuid.UUID]map[uuid.UUID][]ControlResult) (map[uuid.UUID]map[uuid.UUID][]uuid.UUID, error) {
-	controlResultDAOs := make([]controlResultDAO, 0)
+	controlResults := make([]ControlResult, 0)
 	idMap := make(map[uuid.UUID]map[uuid.UUID][]uuid.UUID)
 	for analysisResultID, reagents := range controlResultsMap {
 		idMap[analysisResultID] = make(map[uuid.UUID][]uuid.UUID)
 
-		for reagentID, controlResults := range reagents {
+		for reagentID, reagentControlResults := range reagents {
 			idMap[analysisResultID][reagentID] = make([]uuid.UUID, 0)
 
-			crDAOs := make([]controlResultDAO, 0)
-			for i := range controlResults {
+			crs := make([]ControlResult, 0)
+			for i := range reagentControlResults {
 				var crID uuid.UUID
 
-				if controlResults[i].ID == uuid.Nil {
+				if reagentControlResults[i].ID == uuid.Nil {
 					crID = uuid.New()
+					reagentControlResults[i].ID = crID
 
-					crDAO := convertControlResultToDAO(controlResults[i])
-					crDAO.ID = crID
-
-					crDAOs = append(crDAOs, crDAO)
+					crs = append(crs, reagentControlResults[i])
 				} else {
-					crID = controlResults[i].ID
+					crID = reagentControlResults[i].ID
 				}
 
 				idMap[analysisResultID][reagentID] = append(idMap[analysisResultID][reagentID], crID)
 			}
 
-			controlResultDAOs = append(controlResultDAOs, crDAOs...)
+			controlResults = append(controlResults, crs...)
 		}
 	}
-	var err error
-	for i := 0; i < len(controlResultDAOs); i += controlResultBatchSize {
-		if len(controlResultDAOs) >= i+controlResultBatchSize {
-			err = r.createControlResults(ctx, controlResultDAOs[i:i+controlResultBatchSize])
-		} else {
-			err = r.createControlResults(ctx, controlResultDAOs[i:])
-		}
-		if err != nil {
-			return nil, err
-		}
+
+	_, err := r.createControlResults(ctx, controlResults)
+	if err != nil {
+		return nil, err
 	}
 	return idMap, nil
 }
 
-func (r *analysisRepository) createControlResults(ctx context.Context, controlResultDAOs []controlResultDAO) error {
-	if len(controlResultDAOs) == 0 {
+func (r *analysisRepository) createControlResults(ctx context.Context, controlResults []ControlResult) ([]uuid.UUID, error) {
+	if len(controlResults) == 0 {
+		return []uuid.UUID{}, nil
+	}
+
+	controlResultIds := make([]uuid.UUID, 0)
+
+	for i := range controlResults {
+		if (controlResults[i].ID == uuid.UUID{}) || (controlResults[i].ID == uuid.Nil) {
+			controlResults[i].ID = uuid.New()
+		}
+		controlResultIds = append(controlResultIds, controlResults[i].ID)
+	}
+
+	err := utils.Partition(len(controlResults), controlResultBatchSize, func(low int, high int) error {
+		query := fmt.Sprintf(`INSERT INTO %s.sk_control_results(id, sample_code, analyte_mapping_id, instrument_id, expected_control_result_id, is_valid, is_compared_to_expected_result, result, examined_at, created_at)
+		VALUES(:id, :sample_code, :analyte_mapping_id, :instrument_id, :expected_control_result_id, :is_valid, :is_compared_to_expected_result, :result, :examined_at, :created_at)`, r.dbSchema)
+
+		_, err := r.db.NamedExecContext(ctx, query, convertControlResultsToDAO(controlResults[low:high]))
+		if err != nil {
+			return err
+		}
 		return nil
+	})
+
+	extraValueDAOs := make([]controlResultExtraValueDAO, 0)
+	warningDAOs := make([]controlResultWarningDAO, 0)
+
+	for i := range controlResults {
+		for j := range controlResults[i].ExtraValues {
+			extraValueDAOs = append(extraValueDAOs, controlResultExtraValueDAO{
+				ID:              uuid.New(),
+				ControlResultId: controlResults[i].ID,
+				Key:             controlResults[i].ExtraValues[j].Key,
+				Value:           controlResults[i].ExtraValues[j].Value,
+			})
+		}
+		for k := range controlResults[i].Warnings {
+			warningDAOs = append(warningDAOs, controlResultWarningDAO{
+				ID:              uuid.New(),
+				ControlResultId: controlResults[i].ID,
+				Warning:         controlResults[i].Warnings[k],
+			})
+		}
 	}
 
-	query := fmt.Sprintf(`INSERT INTO %s.sk_control_results(id, sample_code, analyte_code, result, examined_at)
-		VALUES(:id, :sample_code, :analyte_code, :result, :examined_at)`, r.dbSchema)
-
-	_, err := r.db.NamedExecContext(ctx, query, controlResultDAOs)
-
+	err = r.createControlResultExtraValues(ctx, extraValueDAOs)
 	if err != nil {
-		log.Error().Err(err).Msg(msgCreateControlResultFailed)
-		return ErrCreateReagentFailed
+		return []uuid.UUID{}, err
 	}
 
-	return nil
+	for i := range controlResults {
+		quantitativeChannelResultsMap := make(map[uuid.UUID]map[string]string)
+		channelImagesMap := make(map[uuid.NullUUID][]Image)
+		channelResultIDs := make([]uuid.UUID, 0)
+		channelResultIDs, err = r.createControlResultChannelResults(ctx, controlResults[i].ChannelResults, controlResults[i].ID)
+		if err != nil {
+			return []uuid.UUID{}, err
+		}
+		for j := range controlResults[i].ChannelResults {
+			if len(channelResultIDs) > j {
+				controlResults[i].ChannelResults[j].ID = channelResultIDs[j]
+			}
+			quantitativeChannelResultsMap[channelResultIDs[j]] = controlResults[i].ChannelResults[j].QuantitativeResults
+			channelImagesMap[uuid.NullUUID{UUID: channelResultIDs[j], Valid: true}] = controlResults[i].ChannelResults[j].Images
+		}
+
+		err = r.CreateControlResultChannelResultQuantitativeValues(ctx, quantitativeChannelResultsMap)
+		if err != nil {
+			return []uuid.UUID{}, err
+		}
+	}
+
+	err = r.createControlResultWarnings(ctx, warningDAOs)
+	if err != nil {
+		return []uuid.UUID{}, err
+	}
+
+	return controlResultIds, nil
 }
 
 func (r *analysisRepository) getImages(ctx context.Context, analysisResultIDs []uuid.UUID) (map[uuid.UUID][]imageDAO, error) {
@@ -2643,6 +2812,42 @@ func (r *analysisRepository) saveImages(ctx context.Context, images []imageDAO) 
 	return ids, nil
 }
 
+func (r *analysisRepository) SaveControlResultImages(ctx context.Context, images []controlResultImageDAO) ([]uuid.UUID, error) {
+	ids, err := r.saveControlResultImages(ctx, images)
+	if err != nil {
+		return nil, err
+	}
+
+	return ids, nil
+}
+
+func (r *analysisRepository) saveControlResultImages(ctx context.Context, controlResultImages []controlResultImageDAO) ([]uuid.UUID, error) {
+	ids := make([]uuid.UUID, len(controlResultImages))
+	if len(controlResultImages) == 0 {
+		return ids, nil
+	}
+	for i := range controlResultImages {
+		controlResultImages[i].ID = uuid.New()
+		ids[i] = controlResultImages[i].ID
+	}
+
+	err := utils.Partition(len(controlResultImages), imageBatchSize, func(low int, high int) error {
+		query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_result_images(id, analysis_result_id, channel_result_id, "name", description, image_bytes, dea_image_id, uploaded_to_dea_at)
+		VALUES(:id, :analysis_result_id, :channel_result_id, :name, :description, :image_bytes, :dea_image_id, :uploaded_to_dea_at);`, r.dbSchema)
+		_, err := r.db.NamedExecContext(ctx, query, controlResultImages[low:high])
+		if err != nil {
+			log.Error().Err(err).Msg("create control result images failed")
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return ids, nil
+}
+
 func (r *analysisRepository) getWarnings(ctx context.Context, analysisResultIDs []uuid.UUID) (map[uuid.UUID][]warningDAO, error) {
 	warningsMap := make(map[uuid.UUID][]warningDAO)
 	err := utils.Partition(len(analysisResultIDs), maxParams, func(low int, high int) error {
@@ -2687,17 +2892,12 @@ func (r *analysisRepository) CreateWarnings(ctx context.Context, warningsByAnaly
 		}
 		warningDAOs = append(warningDAOs, wdaos...)
 	}
-	var err error
-	for i := 0; i < len(warningDAOs); i += warningBatchCount {
-		if len(warningDAOs) >= i+warningBatchCount {
-			err = r.createWarnings(ctx, warningDAOs[i:i+warningBatchCount])
-		} else {
-			err = r.createWarnings(ctx, warningDAOs[i:])
-		}
-		if err != nil {
-			return err
-		}
+
+	err := r.createWarnings(ctx, warningDAOs)
+	if err != nil {
+		return err
 	}
+
 	return nil
 }
 
@@ -2705,12 +2905,36 @@ func (r *analysisRepository) createWarnings(ctx context.Context, warningDAOs []w
 	if len(warningDAOs) == 0 {
 		return nil
 	}
-	query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_result_warnings(id, analysis_result_id, warning)
+
+	err := utils.Partition(len(warningDAOs), warningBatchCount, func(low int, high int) error {
+		query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_result_warnings(id, analysis_result_id, warning)
 		VALUES(:id, :analysis_result_id, :warning)`, r.dbSchema)
-	_, err := r.db.NamedExecContext(ctx, query, warningDAOs)
+		_, err := r.db.NamedExecContext(ctx, query, warningDAOs[low:high])
+		if err != nil {
+			log.Error().Err(err).Msg(msgCreateWarningsFailed)
+			return ErrCreateWarningsFailed
+		}
+		return nil
+	})
 	if err != nil {
-		log.Error().Err(err).Msg(msgCreateWarningsFailed)
-		return ErrCreateWarningsFailed
+		return err
+	}
+	return nil
+}
+
+func (r *analysisRepository) createControlResultWarnings(ctx context.Context, warnings []controlResultWarningDAO) error {
+	err := utils.Partition(len(warnings), warningBatchCount, func(low int, high int) error {
+		query := fmt.Sprintf(`INSERT INTO %s.sk_control_result_warnings(id, control_result_id, warning)
+		VALUES(:id, :analysis_result_id, :warning)`, r.dbSchema)
+		_, err := r.db.NamedExecContext(ctx, query, warnings[low:high])
+		if err != nil {
+			log.Error().Err(err).Msg(msgCreateControlResultWarningsFailed)
+			return ErrCreateControlResultWarningsFailed
+		}
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 	return nil
 }
@@ -2721,15 +2945,15 @@ func (r *analysisRepository) CreateAnalysisResultQueueItem(ctx context.Context, 
 	if len(analysisResults) < 1 {
 		return uuid.Nil, nil
 	}
-	analysisResultTOs, err := convertAnalysisResultsToTOs(analysisResults)
+	analysisResultSetTOs, err := convertAnalysisResultsToTOs(analysisResults)
 	if err != nil {
 		log.Error().Err(err).Msg(msgConvertAnalysisResultsFailed)
 		return uuid.Nil, ErrConvertAnalysisResultsFailed
 	}
-	jsonData, err := json.Marshal(analysisResultTOs)
+	jsonData, err := json.Marshal(analysisResultSetTOs)
 	if err != nil {
 		log.Error().Err(err).
-			Interface("analysisResults", analysisResults).
+			Interface("analysisResultSets", analysisResultSetTOs).
 			Msg("Failed to marshal analysis results, skipping further processing until manual intervention")
 		return uuid.Nil, ErrMarshalAnalysisResultsFailed
 	}
@@ -3197,46 +3421,19 @@ func convertAnalysisResultToTO(ar AnalysisResult) (AnalysisResultTO, error) {
 
 	for _, ri := range ar.Reagents {
 		reagentTO := ReagentTO{
-			Manufacturer:   ri.Manufacturer,
-			SerialNumber:   ri.SerialNumber,
-			LotNo:          ri.LotNo,
-			Name:           ri.Name,
-			Code:           ri.Code,
-			ExpirationDate: ri.ExpirationDate,
+			Manufacturer: ri.Manufacturer,
+			SerialNumber: ri.SerialNumber,
+			LotNo:        ri.LotNo,
 		}
 
 		if len(ri.ControlResults) > 0 {
-			reagentTO.ControlResults = make([]ControlResultTO, 0)
-
-			for _, cr := range ri.ControlResults {
-				controlResultTO := ControlResultTO{
-					ID:          cr.ID,
-					CerberusID:  cr.CerberusID,
-					SampleCode:  cr.SampleCode,
-					AnalyteCode: cr.AnalyteCode,
-					Result:      cr.Result,
-					ExaminedAt:  cr.ExaminedAt,
-				}
-
-				reagentTO.ControlResults = append(reagentTO.ControlResults, controlResultTO)
-			}
+			reagentTO.ControlResults = convertControlResultsToTOs(ri.ControlResults)
 		}
 
 		analysisResultTO.Reagents = append(analysisResultTO.Reagents, reagentTO)
 	}
 
-	for _, cr := range ar.ControlResults {
-		controlResultTO := ControlResultTO{
-			ID:          cr.ID,
-			CerberusID:  cr.CerberusID,
-			SampleCode:  cr.SampleCode,
-			AnalyteCode: cr.AnalyteCode,
-			Result:      cr.Result,
-			ExaminedAt:  cr.ExaminedAt,
-		}
-
-		analysisResultTO.ControlResults = append(analysisResultTO.ControlResults, controlResultTO)
-	}
+	analysisResultTO.ControlResults = convertControlResultsToTOs(ar.ControlResults)
 
 	return analysisResultTO, nil
 }
@@ -3623,7 +3820,7 @@ func (r *analysisRepository) MarkAnalysisRequestsAsProcessed(ctx context.Context
 	err := utils.Partition(len(analysisRequestIDs), maxParams, func(low int, high int) error {
 		query := fmt.Sprintf(`UPDATE %s.sk_analysis_requests SET is_processed = true WHERE id IN (?);`, r.dbSchema)
 
-		query, args, _ := sqlx.In(query, analysisRequestIDs)
+		query, args, _ := sqlx.In(query, analysisRequestIDs[low:high])
 		query = r.db.Rebind(query)
 
 		_, err := r.db.ExecContext(ctx, query, args...)
@@ -3642,7 +3839,7 @@ func (r *analysisRepository) MarkAnalysisResultsAsProcessed(ctx context.Context,
 	err := utils.Partition(len(analysisRequestIDs), maxParams, func(low int, high int) error {
 		query := fmt.Sprintf(`UPDATE %s.sk_analysis_results SET is_processed = true WHERE id IN (?);`, r.dbSchema)
 
-		query, args, _ := sqlx.In(query, analysisRequestIDs)
+		query, args, _ := sqlx.In(query, analysisRequestIDs[low:high])
 		query = r.db.Rebind(query)
 
 		_, err := r.db.ExecContext(ctx, query, args...)
@@ -3712,25 +3909,41 @@ func (r *analysisRepository) GetReagentsByIDs(ctx context.Context, reagentIDs []
 }
 
 func (r *analysisRepository) CreateControlResultBatch(ctx context.Context, controlResults []ControlResult) ([]uuid.UUID, error) {
-	crDAOs := make([]controlResultDAO, len(controlResults))
-	ids := make([]uuid.UUID, len(controlResults))
+	crs := make([]ControlResult, 0)
+	controlResultIds := make([]uuid.UUID, 0)
 	for i := range controlResults {
-		crDAOs[i] = convertControlResultToDAO(controlResults[i])
-		crDAOs[i].ID = uuid.New()
-		ids[i] = crDAOs[i].ID
+		var crID uuid.UUID
+
+		if controlResults[i].ID == uuid.Nil {
+			crID = uuid.New()
+			controlResults[i].ID = crID
+
+			crs = append(crs, controlResults[i])
+		} else {
+			crID = controlResults[i].ID
+		}
+
+		controlResultIds = append(controlResultIds, crID)
 	}
 
-	return ids, r.createControlResults(ctx, crDAOs)
+	_, err := r.createControlResults(ctx, crs)
+	if err != nil {
+		return nil, err
+	}
+
+	return controlResultIds, nil
 }
 
 func (r *analysisRepository) GetControlResultsByIDs(ctx context.Context, controlResultIDs []uuid.UUID) (map[uuid.UUID]ControlResult, error) {
-	controlResults := make(map[uuid.UUID]ControlResult)
-
 	if len(controlResultIDs) == 0 {
-		return controlResults, nil
+		return map[uuid.UUID]ControlResult{}, nil
 	}
 
-	query := `SELECT * FROM %schema_name%.sk_control_results scr WHERE scr.id IN (?);`
+	query := `SELECT scr.id, scr.analyte_mapping_id, scr.instrument_id, scr.sample_code, scr.expected_control_result_id, scr.is_valid, scr."result", scr.examined_at, scr.created_at,
+					sam.id AS "analyte_mapping.id", sam.instrument_id AS "analyte_mapping.instrument_id", sam.instrument_analyte AS "analyte_mapping.instrument_analyte", sam.analyte_id AS "analyte_mapping.analyte_id", sam.result_type AS "analyte_mapping.result_type", sam.created_at AS "analyte_mapping.created_at", sam.modified_at AS "analyte_mapping.modified_at"
+			FROM %schema_name%.sk_control_results scr
+			INNER JOIN %schema_name%.sk_analyte_mappings sam ON scr.analyte_mapping_id = sam.id
+			WHERE scr.id IN (?);`
 
 	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
 
@@ -3740,22 +3953,267 @@ func (r *analysisRepository) GetControlResultsByIDs(ctx context.Context, control
 	rows, err := r.db.QueryxContext(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgFailedToGetControlResultsByIDs)
-		return controlResults, ErrFailedToGetControlResultsByIDs
+		return map[uuid.UUID]ControlResult{}, ErrFailedToGetControlResultsByIDs
 	}
 	defer rows.Close()
 
+	controlResultDAOs := make([]controlResultDAO, 0)
 	for rows.Next() {
 		controlResult := controlResultDAO{}
 		err := rows.StructScan(&controlResult)
 		if err != nil {
 			log.Error().Err(err).Msg(msgFailedToGetControlResultsByIDs)
-			return controlResults, ErrFailedToGetControlResultsByIDs
+			return map[uuid.UUID]ControlResult{}, ErrFailedToGetControlResultsByIDs
 		}
 
-		controlResults[controlResult.ID] = convertControlResultDAOToControlResult(controlResult)
+		controlResultDAOs = append(controlResultDAOs, controlResult)
 	}
 
-	return controlResults, err
+	extraValues, err := r.getControlResultExtraValues(ctx, controlResultIDs)
+	if err != nil {
+		return map[uuid.UUID]ControlResult{}, err
+	}
+
+	imagesMap, err := r.getControlResultImages(ctx, controlResultIDs)
+	if err != nil {
+		return map[uuid.UUID]ControlResult{}, err
+	}
+
+	warningsMap, err := r.getControlResultWarnings(ctx, controlResultIDs)
+	if err != nil {
+		return map[uuid.UUID]ControlResult{}, err
+	}
+
+	channelResultsMap, err := r.getControlResultChannelResults(ctx, controlResultIDs)
+	if err != nil {
+		return map[uuid.UUID]ControlResult{}, err
+	}
+
+	channelResultIDs := make([]uuid.UUID, 0)
+	for _, channelResults := range channelResultsMap {
+		for _, channelResult := range channelResults {
+			channelResultIDs = append(channelResultIDs, channelResult.ID)
+		}
+	}
+
+	quantitativeValuesByChannelResultID, err := r.getControlResultChannelResultQuantitativeValues(ctx, channelResultIDs)
+	if err != nil {
+		return map[uuid.UUID]ControlResult{}, err
+	}
+
+	analyteMappingIDs := make([]uuid.UUID, 0)
+
+	for _, controlResultDao := range controlResultDAOs {
+		analyteMappingIDs = append(analyteMappingIDs, controlResultDao.AnalyteMappingID)
+	}
+
+	channelMappingsMap, err := r.getChannelMappings(ctx, analyteMappingIDs)
+	if err != nil {
+		return map[uuid.UUID]ControlResult{}, err
+	}
+	resultMappingsMap, err := r.getResultMappings(ctx, analyteMappingIDs)
+	if err != nil {
+		return map[uuid.UUID]ControlResult{}, err
+	}
+
+	controlResultsMap := make(map[uuid.UUID]ControlResult)
+
+	for i := range controlResultDAOs {
+		controlResultDAOs[i].ExtraValues = extraValues[controlResultDAOs[i].ID]
+		controlResultDAOs[i].Warnings = warningsMap[controlResultDAOs[i].ID]
+
+		for _, channelResult := range channelResultsMap[controlResultDAOs[i].ID] {
+			channelResult.QuantitativeResults = quantitativeValuesByChannelResultID[channelResult.ID]
+
+			for _, image := range imagesMap[controlResultDAOs[i].ID] {
+				if !image.ChannelResultID.Valid || (image.ChannelResultID.Valid && image.ChannelResultID.UUID != channelResult.ID) {
+					continue
+				}
+				channelResult.Images = append(channelResult.Images, image)
+			}
+
+			controlResultDAOs[i].ChannelResults = append(controlResultDAOs[i].ChannelResults, channelResult)
+		}
+
+		controlResult := convertControlResultDAOToControlResult(controlResultDAOs[i])
+		controlResult.AnalyteMapping.ChannelMappings = channelMappingsMap[controlResultDAOs[i].AnalyteMappingID]
+		controlResult.AnalyteMapping.ResultMappings = resultMappingsMap[controlResultDAOs[i].AnalyteMappingID]
+
+		controlResultsMap[controlResult.ID] = controlResult
+	}
+
+	return controlResultsMap, err
+}
+
+func (r *analysisRepository) getControlResultExtraValues(ctx context.Context, controlResultIDs []uuid.UUID) (map[uuid.UUID][]controlResultExtraValueDAO, error) {
+	extraValuesMap := make(map[uuid.UUID][]controlResultExtraValueDAO)
+	err := utils.Partition(len(controlResultIDs), maxParams, func(low int, high int) error {
+		query := fmt.Sprintf(`SELECT scre.id, scre.control_result_id, scre."key", scre."value"
+		FROM %s.sk_control_result_extravalues scre WHERE scre.control_result_id IN (?);`, r.dbSchema)
+		query, args, _ := sqlx.In(query, controlResultIDs[low:high])
+		query = r.db.Rebind(query)
+		rows, err := r.db.QueryxContext(ctx, query, args...)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				log.Trace().Msg("No control result extra value")
+				return nil
+			}
+			log.Error().Err(err).Msg("Can not search for control result extra values")
+			return err
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			extraValue := controlResultExtraValueDAO{}
+			err = rows.StructScan(&extraValue)
+			if err != nil {
+				log.Error().Err(err).Msg("Can not search for control result extra values")
+				return err
+			}
+
+			extraValuesMap[extraValue.ControlResultId] = append(extraValuesMap[extraValue.ControlResultId], extraValue)
+		}
+		return nil
+	})
+
+	return extraValuesMap, err
+}
+
+func (r *analysisRepository) getControlResultWarnings(ctx context.Context, controlResultIDs []uuid.UUID) (map[uuid.UUID][]controlResultWarningDAO, error) {
+	warningsMap := make(map[uuid.UUID][]controlResultWarningDAO)
+	err := utils.Partition(len(controlResultIDs), maxParams, func(low int, high int) error {
+		query := fmt.Sprintf(`SELECT scrw.id, scrw.control_result_id, scrw.warning FROM %s.sk_control_result_warnings scrw WHERE scrw.control_result_id IN (?);`, r.dbSchema)
+		query, args, _ := sqlx.In(query, controlResultIDs[low:high])
+		query = r.db.Rebind(query)
+		rows, err := r.db.QueryxContext(ctx, query, args...)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				log.Trace().Msg("No control result warnings")
+				return nil
+			}
+			log.Error().Err(err).Msg("Can not search for control result warnings")
+			return err
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			warning := controlResultWarningDAO{}
+			err := rows.StructScan(&warning)
+			if err != nil {
+				log.Error().Err(err).Msg("Can not search for control result warnings")
+				return err
+			}
+
+			warningsMap[warning.ControlResultId] = append(warningsMap[warning.ControlResultId], warning)
+		}
+		return nil
+	})
+
+	return warningsMap, err
+}
+
+func (r *analysisRepository) getControlResultChannelResults(ctx context.Context, controlResultIDs []uuid.UUID) (map[uuid.UUID][]controlResultChannelResultDAO, error) {
+	channelResultsMap := make(map[uuid.UUID][]controlResultChannelResultDAO)
+	err := utils.Partition(len(controlResultIDs), maxParams, func(low int, high int) error {
+		query := fmt.Sprintf(`SELECT scrcr.id, scrcr.control_result_id, scrcr.channel_id, scrcr.qualitative_result, scrcr.qualitative_result_edited
+		FROM %s.sk_control_result_channel_results scrcr WHERE scrcr.control_result_id IN (?);`, r.dbSchema)
+		query, args, _ := sqlx.In(query, controlResultIDs[low:high])
+		query = r.db.Rebind(query)
+		rows, err := r.db.QueryxContext(ctx, query, args...)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				log.Trace().Msg("No control result channel result")
+				return nil
+			}
+			log.Error().Err(err).Msg("Can not search for control result channel results")
+			return err
+		}
+
+		defer rows.Close()
+		for rows.Next() {
+			channelResult := controlResultChannelResultDAO{}
+			err = rows.StructScan(&channelResult)
+			if err != nil {
+				log.Error().Err(err).Msg("Can not search for control result channel results")
+				return err
+			}
+
+			channelResultsMap[channelResult.ControlResultId] = append(channelResultsMap[channelResult.ControlResultId], channelResult)
+		}
+		return nil
+	})
+
+	return channelResultsMap, err
+}
+
+func (r *analysisRepository) getControlResultChannelResultQuantitativeValues(ctx context.Context, channelResultIDs []uuid.UUID) (map[uuid.UUID][]quantitativeChannelResultDAO, error) {
+	valuesByChannelResultID := make(map[uuid.UUID][]quantitativeChannelResultDAO)
+
+	err := utils.Partition(len(channelResultIDs), maxParams, func(low int, high int) error {
+		query := fmt.Sprintf(`SELECT scrcrqv.id, scrcrqv.channel_result_id, scrcrqv.metric, scrcrqv."value"
+		FROM %s.sk_control_result_channel_result_quantitative_values scrcrqv WHERE scrcrqv.channel_result_id IN (?);`, r.dbSchema)
+		query, args, _ := sqlx.In(query, channelResultIDs[low:high])
+		query = r.db.Rebind(query)
+
+		rows, err := r.db.QueryxContext(ctx, query, args...)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				log.Trace().Msg("No control result quantitative channel result")
+				return nil
+			}
+			log.Error().Err(err).Msg("Can not search for control result quantitative channel results")
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			quantitativeChannelResult := quantitativeChannelResultDAO{}
+			err = rows.StructScan(&quantitativeChannelResult)
+			if err != nil {
+				log.Error().Err(err).Msg("Can not search for control result quantitative channel results")
+				return err
+			}
+
+			valuesByChannelResultID[quantitativeChannelResult.ChannelResultID] = append(valuesByChannelResultID[quantitativeChannelResult.ChannelResultID], quantitativeChannelResult)
+		}
+
+		return nil
+	})
+
+	return valuesByChannelResultID, err
+}
+
+func (r *analysisRepository) getControlResultImages(ctx context.Context, controlResultIDs []uuid.UUID) (map[uuid.UUID][]controlResultImageDAO, error) {
+	imagesMap := make(map[uuid.UUID][]controlResultImageDAO)
+	err := utils.Partition(len(controlResultIDs), maxParams, func(low int, high int) error {
+		query := fmt.Sprintf(`SELECT scri.id, scri.control_result_id, scri.channel_result_id, scri.name, scri.description, scri.dea_image_id FROM %s.sk_control_result_images scri WHERE scri.control_result_id IN (?);`, r.dbSchema)
+		query, args, _ := sqlx.In(query, controlResultIDs[low:high])
+		query = r.db.Rebind(query)
+		rows, err := r.db.QueryxContext(ctx, query, args...)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				log.Trace().Msg("No control result images")
+				return nil
+			}
+			log.Error().Err(err).Msg("Can not search for control result images")
+			return err
+		}
+
+		defer rows.Close()
+		for rows.Next() {
+			image := controlResultImageDAO{}
+			err := rows.StructScan(&image)
+			if err != nil {
+				log.Error().Err(err).Msg("Can not search for control result images")
+				return err
+			}
+
+			imagesMap[image.ControlResultId] = append(imagesMap[image.ControlResultId], image)
+		}
+
+		return nil
+	})
+
+	return imagesMap, err
 }
 
 func (r *analysisRepository) CreateControlResultQueueItem(ctx context.Context, controlResults []StandaloneControlResult) (uuid.UUID, error) {
@@ -3800,14 +4258,51 @@ func convertControlResultsToTOs(controlResults []ControlResult) []ControlResultT
 	tos := make([]ControlResultTO, 0)
 
 	for _, controlResult := range controlResults {
-		tos = append(tos, ControlResultTO{
-			ID:          controlResult.ID,
-			CerberusID:  controlResult.CerberusID,
-			SampleCode:  controlResult.SampleCode,
-			AnalyteCode: controlResult.AnalyteCode,
-			Result:      controlResult.Result,
-			ExaminedAt:  controlResult.ExaminedAt,
-		})
+		controlResultTO := ControlResultTO{
+			ID:                         controlResult.ID,
+			InstrumentID:               controlResult.InstrumentID,
+			SampleCode:                 controlResult.SampleCode,
+			AnalyteID:                  controlResult.AnalyteMapping.AnalyteID,
+			IsValid:                    controlResult.IsValid,
+			IsComparedToExpectedResult: controlResult.IsComparedToExpectedResult,
+			Result:                     controlResult.Result,
+			ExaminedAt:                 controlResult.ExaminedAt,
+			ChannelResults:             make([]ChannelResultTO, 0),
+			ExtraValues:                make([]ExtraValueTO, 0),
+			Warnings:                   controlResult.Warnings,
+		}
+
+		for _, ev := range controlResult.ExtraValues {
+			extraValueTO := ExtraValueTO{
+				Key:   ev.Key,
+				Value: ev.Value,
+			}
+			controlResultTO.ExtraValues = append(controlResultTO.ExtraValues, extraValueTO)
+		}
+
+		for _, cr := range controlResult.ChannelResults {
+			channelResultTO := ChannelResultTO{
+				ChannelID:             cr.ChannelID,
+				QualitativeResult:     cr.QualitativeResult,
+				QualitativeResultEdit: cr.QualitativeResultEdit,
+				QuantitativeResults:   cr.QuantitativeResults,
+				Images:                make([]ImageTO, 0),
+			}
+			for _, img := range cr.Images {
+				if !img.DeaImageID.Valid {
+					continue
+				}
+				imageTO := ImageTO{
+					ID:          img.DeaImageID.UUID,
+					Name:        img.Name,
+					Description: img.Description,
+				}
+				channelResultTO.Images = append(channelResultTO.Images, imageTO)
+			}
+			controlResultTO.ChannelResults = append(controlResultTO.ChannelResults, channelResultTO)
+		}
+
+		tos = append(tos, controlResultTO)
 	}
 
 	return tos
@@ -3825,33 +4320,66 @@ func convertReagentsToTOs(reagents []Reagent) []ReagentTO {
 
 func convertReagentToTO(reagent Reagent) ReagentTO {
 	to := ReagentTO{
-		ID:                reagent.ID,
-		Manufacturer:      reagent.Manufacturer,
-		SerialNumber:      reagent.SerialNumber,
-		LotNo:             reagent.LotNo,
-		Name:              reagent.Name,
-		Code:              reagent.Code,
-		ReagentType:       reagent.Type,
-		ExpirationDate:    reagent.ExpirationDate,
-		ManufacturingDate: reagent.ManufacturingDate,
-		ControlResults:    convertControlResultsToTOs(reagent.ControlResults),
+		ID:             reagent.ID,
+		Manufacturer:   reagent.Manufacturer,
+		SerialNumber:   reagent.SerialNumber,
+		LotNo:          reagent.LotNo,
+		ReagentType:    reagent.Type,
+		ControlResults: convertControlResultsToTOs(reagent.ControlResults),
 	}
 
 	return to
 }
 
 func convertStandaloneControlResultToTO(controlResult StandaloneControlResult) StandaloneControlResultTO {
+	controlResultTO := ControlResultTO{
+		ID:                         controlResult.ID,
+		InstrumentID:               controlResult.InstrumentID,
+		SampleCode:                 controlResult.SampleCode,
+		AnalyteID:                  controlResult.AnalyteMapping.AnalyteID,
+		IsValid:                    controlResult.IsValid,
+		IsComparedToExpectedResult: controlResult.IsComparedToExpectedResult,
+		Result:                     controlResult.Result,
+		ExaminedAt:                 controlResult.ExaminedAt,
+		ChannelResults:             make([]ChannelResultTO, 0),
+		ExtraValues:                make([]ExtraValueTO, 0),
+		Warnings:                   controlResult.Warnings,
+	}
+
+	for _, ev := range controlResult.ExtraValues {
+		extraValueTO := ExtraValueTO{
+			Key:   ev.Key,
+			Value: ev.Value,
+		}
+		controlResultTO.ExtraValues = append(controlResultTO.ExtraValues, extraValueTO)
+	}
+
+	for _, cr := range controlResult.ChannelResults {
+		channelResultTO := ChannelResultTO{
+			ChannelID:             cr.ChannelID,
+			QualitativeResult:     cr.QualitativeResult,
+			QualitativeResultEdit: cr.QualitativeResultEdit,
+			QuantitativeResults:   cr.QuantitativeResults,
+			Images:                make([]ImageTO, 0),
+		}
+		for _, img := range cr.Images {
+			if !img.DeaImageID.Valid {
+				continue
+			}
+			imageTO := ImageTO{
+				ID:          img.DeaImageID.UUID,
+				Name:        img.Name,
+				Description: img.Description,
+			}
+			channelResultTO.Images = append(channelResultTO.Images, imageTO)
+		}
+		controlResultTO.ChannelResults = append(controlResultTO.ChannelResults, channelResultTO)
+	}
+
 	return StandaloneControlResultTO{
-		ControlResultTO: ControlResultTO{
-			ID:          controlResult.ID,
-			CerberusID:  controlResult.CerberusID,
-			SampleCode:  controlResult.SampleCode,
-			AnalyteCode: controlResult.AnalyteCode,
-			Result:      controlResult.Result,
-			ExaminedAt:  controlResult.ExaminedAt,
-		},
-		Reagents:  convertReagentsToTOs(controlResult.Reagents),
-		ResultIDs: controlResult.ResultIDs,
+		ControlResultTO: controlResultTO,
+		Reagents:        convertReagentsToTOs(controlResult.Reagents),
+		ResultIDs:       controlResult.ResultIDs,
 	}
 }
 
@@ -4204,13 +4732,6 @@ func convertReagentToDAO(reagent Reagent) reagentDAO {
 		SerialNumber: reagent.SerialNumber,
 		LotNo:        reagent.LotNo,
 		Type:         reagent.Type,
-		Name:         reagent.Name,
-	}
-	if reagent.Code != nil {
-		dao.Code = sql.NullString{
-			String: *reagent.Code,
-			Valid:  *reagent.Code != "",
-		}
 	}
 	if reagent.ExpirationDate != nil {
 		dao.ExpirationDate = sql.NullTime{
@@ -4218,36 +4739,27 @@ func convertReagentToDAO(reagent Reagent) reagentDAO {
 			Valid: true,
 		}
 	}
-	if reagent.ManufacturingDate != nil {
-		dao.ManufacturingDate = sql.NullTime{
-			Time:  *reagent.ManufacturingDate,
-			Valid: true,
-		}
-	}
+
 	return dao
 }
 
-func convertControlResultToDAO(controlResult ControlResult) controlResultDAO {
-	dao := controlResultDAO{
-		Result:     controlResult.Result,
-		ExaminedAt: controlResult.ExaminedAt,
-	}
-
-	if controlResult.SampleCode != nil {
-		dao.SampleCode = sql.NullString{
-			String: *controlResult.SampleCode,
-			Valid:  *controlResult.SampleCode != "",
+func convertControlResultsToDAO(controlResults []ControlResult) []controlResultDAO {
+	controlResultDAOs := make([]controlResultDAO, len(controlResults))
+	for i := range controlResults {
+		controlResultDAOs[i] = controlResultDAO{
+			ID:                         controlResults[i].ID,
+			SampleCode:                 controlResults[i].SampleCode,
+			AnalyteMappingID:           controlResults[i].AnalyteMapping.ID,
+			InstrumentID:               controlResults[i].InstrumentID,
+			ExpectedControlResultId:    controlResults[i].ExpectedControlResultId,
+			IsValid:                    controlResults[i].IsValid,
+			IsComparedToExpectedResult: controlResults[i].IsComparedToExpectedResult,
+			Result:                     controlResults[i].Result,
+			ExaminedAt:                 controlResults[i].ExaminedAt,
 		}
 	}
 
-	if controlResult.AnalyteCode != nil {
-		dao.AnalyteCode = sql.NullString{
-			String: *controlResult.AnalyteCode,
-			Valid:  *controlResult.AnalyteCode != "",
-		}
-	}
-
-	return dao
+	return controlResultDAOs
 }
 
 func convertWarningsToDAOs(warnings []string, analysisResultID uuid.UUID) []warningDAO {
@@ -4465,10 +4977,6 @@ func convertReagentDAOsToReagentList(reagentDAOs []reagentDAO) []Reagent {
 			LotNo:        reagentDAOs[i].LotNo,
 			Type:         reagentDAOs[i].Type,
 			CreatedAt:    reagentDAOs[i].CreatedAt,
-			Name:         reagentDAOs[i].Name,
-		}
-		if reagentDAOs[i].Code.Valid {
-			reagentList[i].Code = &reagentDAOs[i].Code.String
 		}
 	}
 	return reagentList
@@ -4481,29 +4989,26 @@ func convertReagentDAOToReagent(reagentDAO reagentDAO) Reagent {
 		LotNo:        reagentDAO.LotNo,
 		Type:         reagentDAO.Type,
 		CreatedAt:    reagentDAO.CreatedAt,
-		Name:         reagentDAO.Name,
-	}
-	if reagentDAO.Code.Valid {
-		reagent.Code = &reagentDAO.Code.String
 	}
 	return reagent
 }
 
 func convertControlResultDAOToControlResult(controlResultDao controlResultDAO) ControlResult {
 	controlResult := ControlResult{
-		ID:         controlResultDao.ID,
-		Result:     controlResultDao.Result,
-		ExaminedAt: controlResultDao.ExaminedAt,
+		ID:                         controlResultDao.ID,
+		SampleCode:                 controlResultDao.SampleCode,
+		AnalyteMapping:             convertAnalyteMappingDaoToAnalyteMapping(controlResultDao.AnalyteMapping),
+		Result:                     controlResultDao.Result,
+		ExpectedControlResultId:    controlResultDao.ExpectedControlResultId,
+		IsValid:                    controlResultDao.IsValid,
+		IsComparedToExpectedResult: controlResultDao.IsComparedToExpectedResult,
+		ExaminedAt:                 controlResultDao.ExaminedAt,
+		InstrumentID:               controlResultDao.InstrumentID,
+		Warnings:                   convertControlResultWarningDAOsToWarnings(controlResultDao.Warnings),
+		ChannelResults:             convertControlResultChannelResultDAOsToChannelResults(controlResultDao.ChannelResults),
+		ExtraValues:                convertControlResultExtraValueDAOsToExtraValues(controlResultDao.ExtraValues),
 	}
-	if controlResultDao.CerberusID.Valid {
-		controlResult.CerberusID = &controlResultDao.CerberusID.UUID
-	}
-	if controlResultDao.SampleCode.Valid {
-		controlResult.SampleCode = &controlResultDao.SampleCode.String
-	}
-	if controlResultDao.AnalyteCode.Valid {
-		controlResult.AnalyteCode = &controlResultDao.AnalyteCode.String
-	}
+
 	return controlResult
 }
 
@@ -4514,8 +5019,26 @@ func convertAnalysisWarningDAOsToWarnings(warningDAOs []warningDAO) []string {
 	}
 	return warnings
 }
+func convertControlResultWarningDAOsToWarnings(warningDAOs []controlResultWarningDAO) []string {
+	warnings := make([]string, len(warningDAOs))
+	for i := range warningDAOs {
+		warnings[i] = warningDAOs[i].Warning
+	}
+	return warnings
+}
 
 func convertExtraValueDAOsToExtraValues(extraValueDAOs []resultExtraValueDAO) []ExtraValue {
+	extraValues := make([]ExtraValue, len(extraValueDAOs))
+	for i, extraValueDAO := range extraValueDAOs {
+		extraValues[i] = ExtraValue{
+			Key:   extraValueDAO.Key,
+			Value: extraValueDAO.Value,
+		}
+	}
+	return extraValues
+}
+
+func convertControlResultExtraValueDAOsToExtraValues(extraValueDAOs []controlResultExtraValueDAO) []ExtraValue {
 	extraValues := make([]ExtraValue, len(extraValueDAOs))
 	for i, extraValueDAO := range extraValueDAOs {
 		extraValues[i] = ExtraValue{
@@ -4541,6 +5064,21 @@ func convertChannelResultDAOsToChannelResults(channelResultDAOs []channelResultD
 	return channelResults
 }
 
+func convertControlResultChannelResultDAOsToChannelResults(channelResultDAOs []controlResultChannelResultDAO) []ChannelResult {
+	channelResults := make([]ChannelResult, len(channelResultDAOs))
+	for i, channelResultDAO := range channelResultDAOs {
+		channelResults[i] = ChannelResult{
+			ID:                    channelResultDAO.ID,
+			ChannelID:             channelResultDAO.ChannelID,
+			QualitativeResult:     channelResultDAO.QualitativeResult,
+			QualitativeResultEdit: channelResultDAO.QualitativeResultEdit,
+			QuantitativeResults:   convertQuantitativeResultDAOsToQuantitativeResults(channelResultDAO.QuantitativeResults),
+			Images:                convertControlResultImageDAOsToImages(channelResultDAO.Images),
+		}
+	}
+	return channelResults
+}
+
 func convertQuantitativeResultDAOsToQuantitativeResults(quantitativeChannelResultDAOs []quantitativeChannelResultDAO) map[string]string {
 	quantitativeChannelResults := make(map[string]string, len(quantitativeChannelResultDAOs))
 	for _, quantitativeChannelResultDAO := range quantitativeChannelResultDAOs {
@@ -4550,6 +5088,19 @@ func convertQuantitativeResultDAOsToQuantitativeResults(quantitativeChannelResul
 }
 
 func convertImageDAOsToImages(imageDAOs []imageDAO) []Image {
+	images := make([]Image, len(imageDAOs))
+	for i, imageDAO := range imageDAOs {
+		images[i] = Image{
+			ID:          imageDAO.ID,
+			Name:        imageDAO.Name,
+			Description: nullStringToStringPointer(imageDAO.Description),
+			DeaImageID:  imageDAO.DeaImageID,
+		}
+	}
+	return images
+}
+
+func convertControlResultImageDAOsToImages(imageDAOs []controlResultImageDAO) []Image {
 	images := make([]Image, len(imageDAOs))
 	for i, imageDAO := range imageDAOs {
 		images[i] = Image{

@@ -892,6 +892,15 @@ func (r *instrumentRepositoryMock) UpdateResultMapping(ctx context.Context, resu
 func (r *instrumentRepositoryMock) DeleteResultMappings(ctx context.Context, ids []uuid.UUID) error {
 	return nil
 }
+func (r *instrumentRepositoryMock) CreateExpectedControlResults(ctx context.Context, expectedControlResultsMap map[uuid.UUID][]ExpectedControlResult) ([]uuid.UUID, error) {
+	return nil, nil
+}
+func (r *instrumentRepositoryMock) GetExpectedControlResultsByInstrumentId(ctx context.Context, instrumentId uuid.UUID) (map[uuid.UUID][]ExpectedControlResult, error) {
+	return nil, nil
+}
+func (r *instrumentRepositoryMock) DeleteExpectedControlResults(ctx context.Context, ids []uuid.UUID, deletedByUserId uuid.UUID) error {
+	return nil
+}
 func (r *instrumentRepositoryMock) CreateRequestMappings(ctx context.Context, requestMappings []RequestMapping, instrumentID uuid.UUID) ([]uuid.UUID, error) {
 	return make([]uuid.UUID, 0), nil
 }
