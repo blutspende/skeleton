@@ -267,15 +267,15 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 
 	time.Sleep(1 * time.Second)
 
-	for _, analysisResult := range analysisResultsWithoutAnalysisRequestsTest_analysisResults {
-		err := skeletonInstance.SubmitAnalysisResult(context.TODO(), analysisResult)
-		assert.Nil(t, err)
-	}
+	err := skeletonInstance.SubmitAnalysisResultBatch(context.TODO(), AnalysisResultSet{
+		Results: analysisResultsWithoutAnalysisRequestsTest_analysisResults,
+	})
+	assert.Nil(t, err)
 
 	time.Sleep(5 * time.Second)
 
 	var resultCount int
-	err := sqlConn.QueryRowx(fmt.Sprintf(`SELECT COUNT(*) FROM %s.sk_analysis_results;`, schemaName)).Scan(&resultCount)
+	err = sqlConn.QueryRowx(fmt.Sprintf(`SELECT COUNT(*) FROM %s.sk_analysis_results;`, schemaName)).Scan(&resultCount)
 	assert.Nil(t, err)
 	assert.Equal(t, 2, resultCount)
 
@@ -496,10 +496,10 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 		},
 	}
 
-	for _, analysisResult := range analysisResults {
-		err := skeletonInstance.SubmitAnalysisResult(context.TODO(), analysisResult)
-		assert.Nil(t, err)
-	}
+	err = skeletonInstance.SubmitAnalysisResultBatch(context.TODO(), AnalysisResultSet{
+		Results: analysisResults,
+	})
+	assert.Nil(t, err)
 
 	time.Sleep(4 * time.Second)
 	assert.Equal(t, 0, len(cerberusClientMock.AnalysisResults))
@@ -794,9 +794,16 @@ func (m *analysisServiceMock) GetAnalysisResultsInfo(ctx context.Context, instru
 func (m *analysisServiceMock) GetAnalysisBatches(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisBatch, int, error) {
 	return nil, 0, nil
 }
+func (m *analysisServiceMock) CreateAnalysisResultsBatch(ctx context.Context, analysisResults AnalysisResultSet) ([]AnalysisResult, error) {
+	for i := range analysisResults.Results {
+		analysisResults.Results[i].ID = uuid.New()
+	}
+	return analysisResults.Results, nil
+}
 func (m *analysisServiceMock) QueueAnalysisResults(ctx context.Context, results []AnalysisResult) error {
 	return nil
 }
+
 func (m *analysisServiceMock) RetransmitResult(ctx context.Context, resultID uuid.UUID) error {
 	return nil
 }
@@ -818,11 +825,11 @@ func (m *analysisRepositoryMock) DeleteOldCerberusQueueItems(ctx context.Context
 	return 0, nil
 }
 
-func (m *analysisRepositoryMock) DeleteOldAnalysisRequests(ctx context.Context, limit int) (int64, error) {
+func (m *analysisRepositoryMock) DeleteOldAnalysisRequests(ctx context.Context, cleanupDays, limit int) (int64, error) {
 	return 0, nil
 }
 
-func (m *analysisRepositoryMock) DeleteOldAnalysisResults(ctx context.Context, limit int) (int64, error) {
+func (m *analysisRepositoryMock) DeleteOldAnalysisResults(ctx context.Context, cleanupDays, limit int) (int64, error) {
 	return 0, nil
 }
 
@@ -953,7 +960,10 @@ func (m *analysisRepositoryMock) SaveAnalysisRequestsInstrumentTransmissions(ctx
 	return nil
 }
 func (m *analysisRepositoryMock) CreateAnalysisResultsBatch(ctx context.Context, analysisResults []AnalysisResult) ([]AnalysisResult, error) {
-	return nil, nil
+	return analysisResults, nil
+}
+func (m *analysisRepositoryMock) CreateAnalysisResultReagentRelations(ctx context.Context, relationDAOs []analysisResultReagentRelationDAO) error {
+	return nil
 }
 func (m *analysisRepositoryMock) GetAnalysisResultsBySampleCodeAndAnalyteID(ctx context.Context, sampleCode string, analyteID uuid.UUID) ([]AnalysisResult, error) {
 	return nil, nil
@@ -963,6 +973,55 @@ func (m *analysisRepositoryMock) GetAnalysisResultByID(ctx context.Context, id u
 }
 func (m *analysisRepositoryMock) GetAnalysisResultsByBatchIDs(ctx context.Context, batchIDs []uuid.UUID) ([]AnalysisResult, error) {
 	return nil, nil
+}
+func (m *analysisRepositoryMock) CreateAnalysisResultExtraValues(ctx context.Context, extraValuesByAnalysisRequestIDs map[uuid.UUID][]ExtraValue) error {
+	return nil
+}
+func (m *analysisRepositoryMock) CreateChannelResults(ctx context.Context, channelResults []ChannelResult, analysisResultID uuid.UUID) ([]uuid.UUID, error) {
+	return nil, nil
+}
+func (m *analysisRepositoryMock) CreateChannelResultQuantitativeValues(ctx context.Context, quantitativeValuesByChannelResultIDs map[uuid.UUID]map[string]string) error {
+	return nil
+}
+func (m *analysisRepositoryMock) CreateReagentsByAnalysisResultID(ctx context.Context, reagentsByAnalysisResultID map[uuid.UUID][]Reagent) (map[uuid.UUID]map[uuid.UUID][]ControlResult, map[uuid.UUID][]Reagent, error) {
+	reagentsMapWithIds := make(map[uuid.UUID][]Reagent)
+	controlResultsMap := make(map[uuid.UUID]map[uuid.UUID][]ControlResult)
+	for analysisResultId, reagents := range reagentsByAnalysisResultID {
+		reagentArray := make([]Reagent, 0)
+		for i, reagent := range reagents {
+			reagentsByAnalysisResultID[analysisResultId][i].ID = uuid.New()
+			reagentArray = append(reagentArray, reagentsByAnalysisResultID[analysisResultId][i])
+			controlResults := make([]ControlResult, 0)
+			for j := range reagent.ControlResults {
+				reagentsByAnalysisResultID[analysisResultId][i].ControlResults[j].ID = uuid.New()
+				controlResults = append(controlResults, reagentsByAnalysisResultID[analysisResultId][i].ControlResults[j])
+			}
+			controlResultsMap[analysisResultId] = make(map[uuid.UUID][]ControlResult)
+			controlResultsMap[analysisResultId][reagentsByAnalysisResultID[analysisResultId][i].ID] = controlResults
+		}
+		reagentsMapWithIds[analysisResultId] = reagentArray
+	}
+	return controlResultsMap, reagentsMapWithIds, nil
+}
+func (m *analysisRepositoryMock) CreateReagentBatch(ctx context.Context, reagents []Reagent) ([]Reagent, error) {
+	return nil, nil
+}
+func (m *analysisRepositoryMock) CreateControlResults(ctx context.Context, controlResultsMap map[uuid.UUID]map[uuid.UUID][]ControlResult) (map[uuid.UUID]map[uuid.UUID][]uuid.UUID, error) {
+	controlResultIdsMap := make(map[uuid.UUID]map[uuid.UUID][]uuid.UUID)
+	for analysisResultId, reagentMap := range controlResultsMap {
+		for reagentId, controlResults := range reagentMap {
+			controlResultIdsMap[analysisResultId] = make(map[uuid.UUID][]uuid.UUID)
+			controlResultIds := make([]uuid.UUID, 0)
+			for i := 0; i < len(controlResults); i++ {
+				controlResultIds = append(controlResultIds, uuid.New())
+			}
+			controlResultIdsMap[analysisResultId][reagentId] = controlResultIds
+		}
+	}
+	return controlResultIdsMap, nil
+}
+func (m *analysisRepositoryMock) CreateWarnings(ctx context.Context, warningsByAnalysisResultID map[uuid.UUID][]string) error {
+	return nil
 }
 func (m *analysisRepositoryMock) GetAnalysisResultsByBatchIDsMapped(ctx context.Context, batchIDs []uuid.UUID) (map[uuid.UUID][]AnalysisResultInfo, error) {
 	return nil, nil
@@ -980,6 +1039,9 @@ func (m *analysisRepositoryMock) CreateAnalysisResultQueueItem(ctx context.Conte
 	return uuid.New(), nil
 }
 func (m *analysisRepositoryMock) SaveImages(ctx context.Context, images []imageDAO) ([]uuid.UUID, error) {
+	return nil, nil
+}
+func (m *analysisRepositoryMock) SaveControlResultImages(ctx context.Context, images []controlResultImageDAO) ([]uuid.UUID, error) {
 	return nil, nil
 }
 func (m *analysisRepositoryMock) GetStuckImageIDsForDEA(ctx context.Context) ([]uuid.UUID, error) {
@@ -1044,16 +1106,13 @@ var analysisResultsWithoutAnalysisRequestsTest_analysisResults = []AnalysisResul
 		ExtraValues:              []ExtraValue{},
 		Reagents: []Reagent{
 			{
-				ID:                uuid.New(),
-				Manufacturer:      "manufacturer",
-				SerialNumber:      "serialNumber",
-				LotNo:             "lotNo",
-				Name:              "name",
-				Code:              nil,
-				Type:              Standard,
-				ExpirationDate:    nil,
-				ManufacturingDate: nil,
-				ControlResults:    nil,
+				ID:             uuid.New(),
+				Manufacturer:   "manufacturer",
+				SerialNumber:   "serialNumber",
+				LotNo:          "lotNo",
+				Type:           Standard,
+				ExpirationDate: nil,
+				ControlResults: nil,
 			},
 		},
 		Images: []Image{},

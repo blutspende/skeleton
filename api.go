@@ -108,6 +108,13 @@ func newAPI(engine *gin.Engine, config *config.Configuration, authManager AuthMa
 		}
 	}
 
+	expectedControlResultsGroup := v1Group.Group("/expected-control-results")
+	{
+		expectedControlResultsGroup.GET("/:instrumentId", api.GetExpectedControlResultsByInstrumentId)
+		expectedControlResultsGroup.POST("", api.CreateExpectedControlResults)
+		expectedControlResultsGroup.DELETE("", api.DeleteExpectedControlResults)
+	}
+
 	protocolVersions := v1Group.Group("/protocol-versions")
 	{
 		protocolVersions.GET("", api.GetSupportedProtocols)

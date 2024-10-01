@@ -115,39 +115,26 @@ func (s *skeleton) SaveAnalysisRequestsInstrumentTransmissions(ctx context.Conte
 	return nil
 }
 
-func (s *skeleton) SubmitAnalysisResult(ctx context.Context, resultData AnalysisResult) error {
+func (s *skeleton) SubmitAnalysisResult(ctx context.Context, resultData AnalysisResultSet) error {
 	s.unprocessedHandlingWaitGroup.Wait()
 
-	if resultData.AnalyteMapping.ID == uuid.Nil {
-		return errors.New("analyte mapping CerberusID is missing")
-	}
-	if resultData.Instrument.ID == uuid.Nil {
-		return errors.New("instrument CerberusID is missing")
-	}
-
-	if resultData.ResultMode == "" {
-		resultData.ResultMode = resultData.Instrument.ResultMode
-	}
-
-	tx, err := s.analysisRepository.CreateTransaction()
+	savedResultDataList, err := s.analysisService.CreateAnalysisResultsBatch(ctx, resultData)
 	if err != nil {
 		return err
 	}
-	savedResultDataList, err := s.analysisRepository.WithTransaction(tx).CreateAnalysisResultsBatch(ctx, []AnalysisResult{resultData})
-	if err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-	if err = tx.Commit(); err != nil {
-		_ = tx.Rollback()
-		return err
-	}
+
 	savedResultData := savedResultDataList[0]
 
 	go func(analysisResult AnalysisResult) {
 		err := s.saveImages(ctx, &analysisResult)
 		if err != nil {
 			log.Error().Err(err).Str("analysisResultID", analysisResult.ID.String()).Msg("save images of analysis result failed")
+		}
+		for j := range analysisResult.ControlResults {
+			err := s.SaveControlResultImages(ctx, &analysisResult.ControlResults[j])
+			if err != nil {
+				log.Error().Err(err).Str("controlResultID", analysisResult.ControlResults[j].ID.String()).Msg("save images of control result failed")
+			}
 		}
 		analyteRequests, err := s.analysisRepository.GetAnalysisRequestsBySampleCodeAndAnalyteID(ctx, analysisResult.SampleCode, analysisResult.AnalyteMapping.AnalyteID)
 		if err != nil {
@@ -164,32 +151,11 @@ func (s *skeleton) SubmitAnalysisResult(ctx context.Context, resultData Analysis
 	return nil
 }
 
-func (s *skeleton) SubmitAnalysisResultBatch(ctx context.Context, resultBatch []AnalysisResult) error {
+func (s *skeleton) SubmitAnalysisResultBatch(ctx context.Context, resultBatch AnalysisResultSet) error {
 	s.unprocessedHandlingWaitGroup.Wait()
 
-	for i := range resultBatch {
-		if resultBatch[i].AnalyteMapping.ID == uuid.Nil {
-			return errors.New(fmt.Sprintf("analyte mapping CerberusID is missing at index: %d", i))
-		}
-		if resultBatch[i].Instrument.ID == uuid.Nil {
-			return errors.New(fmt.Sprintf("instrument CerberusID is missing at index: %d", i))
-		}
-		if resultBatch[i].ResultMode == "" {
-			resultBatch[i].ResultMode = resultBatch[i].Instrument.ResultMode
-		}
-	}
-
-	tx, err := s.analysisRepository.CreateTransaction()
+	savedAnalysisResults, err := s.analysisService.CreateAnalysisResultsBatch(ctx, resultBatch)
 	if err != nil {
-		return err
-	}
-	savedAnalysisResults, err := s.analysisRepository.WithTransaction(tx).CreateAnalysisResultsBatch(ctx, resultBatch)
-	if err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-	if err = tx.Commit(); err != nil {
-		_ = tx.Rollback()
 		return err
 	}
 
@@ -199,6 +165,13 @@ func (s *skeleton) SubmitAnalysisResultBatch(ctx context.Context, resultBatch []
 			if err != nil {
 				log.Error().Err(err).Str("analysisResultID", analysisResults[i].ID.String()).Msg("save images of analysis result failed")
 			}
+			for j := range analysisResults[i].ControlResults {
+				err := s.SaveControlResultImages(ctx, &analysisResults[i].ControlResults[j])
+				if err != nil {
+					log.Error().Err(err).Str("controlResultID", analysisResults[i].ControlResults[j].ID.String()).Msg("save images of control result failed")
+				}
+			}
+
 			analyteRequests, err := s.analysisRepository.GetAnalysisRequestsBySampleCodeAndAnalyteID(ctx, analysisResults[i].SampleCode, analysisResults[i].AnalyteMapping.AnalyteID)
 			if err != nil {
 				log.Error().Err(err).Msg("get analysis requests by sample code and analyteID failed after saving results")
@@ -412,6 +385,61 @@ func (s *skeleton) saveImages(ctx context.Context, resultData *AnalysisResult) e
 	for i := range ids {
 		imagePtrs[i].ID = ids[i]
 		imagePtrs[i].DeaImageID = imageDaos[i].DeaImageID
+	}
+	return nil
+}
+
+func (s *skeleton) SaveControlResultImages(ctx context.Context, controlResult *ControlResult) error {
+	if controlResult == nil {
+		return nil
+	}
+	imageDaos := make([]controlResultImageDAO, 0)
+	for i := range controlResult.ChannelResults {
+		for j := range controlResult.ChannelResults[i].Images {
+			imageDao := controlResultImageDAO{
+				ControlResultId: controlResult.ID,
+				ChannelResultID: uuid.NullUUID{
+					UUID:  controlResult.ChannelResults[i].ID,
+					Valid: true,
+				},
+				Name: controlResult.ChannelResults[i].Images[j].Name,
+			}
+			if controlResult.ChannelResults[i].Images[j].Description != nil && len(*controlResult.ChannelResults[i].Images[j].Description) > 0 {
+				imageDao.Description = sql.NullString{
+					String: *controlResult.ChannelResults[i].Images[j].Description,
+					Valid:  true,
+				}
+			}
+
+			filename := fmt.Sprintf("%s_control_chres_%d_%d.jpg", controlResult.ID.String(), i, j)
+			id, err := s.deaClient.UploadImage(controlResult.ChannelResults[i].Images[j].ImageBytes, filename)
+			if err != nil {
+				imageDao.ImageBytes = controlResult.ChannelResults[i].Images[j].ImageBytes
+				imageDao.UploadError = sql.NullString{
+					String: err.Error(),
+					Valid:  true,
+				}
+				log.Error().
+					Err(err).
+					Str("analysisResultID", controlResult.ID.String()).
+					Str("channelResultID", controlResult.ChannelResults[i].ID.String()).
+					Msg("upload image to dea failed")
+			} else {
+				imageDao.DeaImageID = uuid.NullUUID{
+					UUID:  id,
+					Valid: true,
+				}
+				imageDao.UploadedToDeaAt = sql.NullTime{
+					Time:  time.Now().UTC(),
+					Valid: true,
+				}
+			}
+			imageDaos = append(imageDaos, imageDao)
+		}
+	}
+	_, err := s.analysisRepository.SaveControlResultImages(ctx, imageDaos)
+	if err != nil {
+		return err
 	}
 	return nil
 }

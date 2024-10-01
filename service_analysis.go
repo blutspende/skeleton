@@ -3,6 +3,8 @@ package skeleton
 import (
 	"context"
 	"errors"
+	"fmt"
+	"github.com/blutspende/skeleton/db"
 	"github.com/blutspende/skeleton/utils"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
@@ -19,6 +21,7 @@ type AnalysisService interface {
 	GetAnalysisRequestsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisRequestInfo, int, error)
 	GetAnalysisResultsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisResultInfo, int, error)
 	GetAnalysisBatches(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisBatch, int, error)
+	CreateAnalysisResultsBatch(ctx context.Context, analysisResults AnalysisResultSet) ([]AnalysisResult, error)
 	QueueAnalysisResults(ctx context.Context, results []AnalysisResult) error
 	QueueControlResults(ctx context.Context, results []MappedStandaloneControlResult) error
 	RetransmitResult(ctx context.Context, resultID uuid.UUID) error
@@ -185,6 +188,266 @@ func (as *analysisService) GetAnalysisBatches(ctx context.Context, instrumentID 
 	}
 
 	return analysisBatchList, totalCount, nil
+}
+
+func (as *analysisService) CreateAnalysisResultsBatch(ctx context.Context, analysisResults AnalysisResultSet) ([]AnalysisResult, error) {
+	tx, err := as.analysisRepository.CreateTransaction()
+	if err != nil {
+		log.Error().Err(err).Msg("failed to create transaction")
+		return nil, err
+	}
+	savedResultDataList, err := as.createAnalysisResultsBatch(ctx, tx, analysisResults)
+	if err != nil {
+		_ = tx.Rollback()
+		return nil, err
+	}
+	if err = tx.Commit(); err != nil {
+		_ = tx.Rollback()
+		return nil, err
+	}
+
+	savedAnalysisResults := savedResultDataList.Results
+	for i := range savedAnalysisResults {
+		savedAnalysisResults[i].Reagents = append(savedAnalysisResults[i].Reagents, savedResultDataList.Reagents...)
+		for j := range savedAnalysisResults[i].Reagents {
+			if savedAnalysisResults[i].Reagents[j].ControlResults == nil {
+				savedAnalysisResults[i].Reagents[j].ControlResults = make([]ControlResult, 0)
+			}
+			savedAnalysisResults[i].Reagents[j].ControlResults = append(savedAnalysisResults[i].Reagents[j].ControlResults, savedResultDataList.ControlResults...)
+		}
+	}
+
+	return savedAnalysisResults, nil
+}
+
+func (as *analysisService) createAnalysisResultsBatch(ctx context.Context, tx db.DbConnector, analysisResultSet AnalysisResultSet) (AnalysisResultSet, error) {
+	for i := range analysisResultSet.Results {
+		if analysisResultSet.Results[i].AnalyteMapping.ID == uuid.Nil {
+			return analysisResultSet, errors.New(fmt.Sprintf("analyte mapping CerberusID is missing at index: %d", i))
+		}
+		if analysisResultSet.Results[i].Instrument.ID == uuid.Nil {
+			return analysisResultSet, errors.New(fmt.Sprintf("instrument CerberusID is missing at index: %d", i))
+		}
+		if analysisResultSet.Results[i].ResultMode == "" {
+			analysisResultSet.Results[i].ResultMode = analysisResultSet.Results[i].Instrument.ResultMode
+		}
+
+		analysisResultSet.Results[i].Status = Preliminary
+		if analysisResultSet.Results[i].AnalyteMapping.ControlResultRequired {
+			controlSampleCodeMap := make(map[string]bool)
+			for j := range analysisResultSet.Results[i].AnalyteMapping.ExpectedControlResults {
+				controlSampleCodeMap[analysisResultSet.Results[i].AnalyteMapping.ExpectedControlResults[j].SampleCode] = false
+			}
+
+			for j := range analysisResultSet.Results[i].Reagents {
+				for k := range analysisResultSet.Results[i].Reagents[j].ControlResults {
+					controlResult, err := setControlResultIsValidAndExpectedControlResultId(analysisResultSet.Results[i].Reagents[j].ControlResults[k])
+					if err != nil {
+						return analysisResultSet, err
+					}
+					analysisResultSet.Results[i].Reagents[j].ControlResults[k] = controlResult
+					if _, ok := controlSampleCodeMap[controlResult.SampleCode]; ok {
+						controlSampleCodeMap[controlResult.SampleCode] = true
+					}
+				}
+			}
+
+			for j := range analysisResultSet.Results[i].ControlResults {
+				controlResult, err := setControlResultIsValidAndExpectedControlResultId(analysisResultSet.Results[i].ControlResults[j])
+				if err != nil {
+					return analysisResultSet, err
+				}
+				analysisResultSet.Results[i].ControlResults[j] = controlResult
+				if _, ok := controlSampleCodeMap[controlResult.SampleCode]; ok {
+					controlSampleCodeMap[controlResult.SampleCode] = true
+				}
+			}
+
+			var allExpectedControlHasControlResults = true
+			for _, boolValue := range controlSampleCodeMap {
+				if !boolValue {
+					allExpectedControlHasControlResults = false
+					break
+				}
+			}
+			if allExpectedControlHasControlResults {
+				analysisResultSet.Results[i].Status = Final
+			}
+		} else {
+			analysisResultSet.Results[i].Status = Final
+		}
+	}
+	var err error
+	analysisResultSet.Results, err = as.analysisRepository.WithTransaction(tx).CreateAnalysisResultsBatch(ctx, analysisResultSet.Results)
+	analysisResultSet.Reagents, err = as.analysisRepository.WithTransaction(tx).CreateReagentBatch(ctx, analysisResultSet.Reagents)
+	controlIds, err := as.analysisRepository.WithTransaction(tx).CreateControlResultBatch(ctx, analysisResultSet.ControlResults)
+	for i := range analysisResultSet.ControlResults {
+		analysisResultSet.ControlResults[i].ID = controlIds[i]
+	}
+
+	extraValuesMap := make(map[uuid.UUID][]ExtraValue)
+	warningsMap := make(map[uuid.UUID][]string)
+	reagentsMap := make(map[uuid.UUID][]Reagent)
+
+	for i := range analysisResultSet.Results {
+		extraValuesMap[analysisResultSet.Results[i].ID] = analysisResultSet.Results[i].ExtraValues
+		warningsMap[analysisResultSet.Results[i].ID] = analysisResultSet.Results[i].Warnings
+		reagentsMap[analysisResultSet.Results[i].ID] = analysisResultSet.Results[i].Reagents
+	}
+
+	err = as.analysisRepository.WithTransaction(tx).CreateAnalysisResultExtraValues(ctx, extraValuesMap)
+	if err != nil {
+		return analysisResultSet, err
+	}
+
+	for i := range analysisResultSet.Results {
+		quantitativeChannelResultsMap := make(map[uuid.UUID]map[string]string)
+		channelImagesMap := make(map[uuid.NullUUID][]Image)
+		channelResultIDs, err := as.analysisRepository.WithTransaction(tx).CreateChannelResults(ctx, analysisResultSet.Results[i].ChannelResults, analysisResultSet.Results[i].ID)
+		if err != nil {
+			return analysisResultSet, err
+		}
+		for j := range analysisResultSet.Results[i].ChannelResults {
+			if len(channelResultIDs) > j {
+				analysisResultSet.Results[i].ChannelResults[j].ID = channelResultIDs[j]
+			}
+			quantitativeChannelResultsMap[channelResultIDs[j]] = analysisResultSet.Results[i].ChannelResults[j].QuantitativeResults
+			channelImagesMap[uuid.NullUUID{UUID: channelResultIDs[j], Valid: true}] = analysisResultSet.Results[i].ChannelResults[j].Images
+		}
+		err = as.analysisRepository.WithTransaction(tx).CreateChannelResultQuantitativeValues(ctx, quantitativeChannelResultsMap)
+		if err != nil {
+			return analysisResultSet, err
+		}
+	}
+
+	err = as.analysisRepository.WithTransaction(tx).CreateWarnings(ctx, warningsMap)
+	if err != nil {
+		return analysisResultSet, err
+	}
+
+	controlResultsMap, reagentsMapWithIds, err := as.analysisRepository.WithTransaction(tx).CreateReagentsByAnalysisResultID(ctx, reagentsMap)
+	if err != nil {
+		return analysisResultSet, err
+	}
+
+	relationsMap, err := as.analysisRepository.WithTransaction(tx).CreateControlResults(ctx, controlResultsMap)
+	if err != nil {
+		return analysisResultSet, err
+	}
+	for i, result := range analysisResultSet.Results {
+		for j, reagent := range result.Reagents {
+			analysisResultSet.Results[i].Reagents[j].ID = reagentsMapWithIds[result.ID][j].ID
+			for k := range reagent.ControlResults {
+				analysisResultSet.Results[i].Reagents[j].ControlResults[k].ID = relationsMap[result.ID][reagent.ID][k]
+			}
+		}
+	}
+
+	analysisResultReagentRelationDAOs := make([]analysisResultReagentRelationDAO, 0)
+	reagentControlResultRelationDAOs := make([]reagentControlResultRelationDAO, 0)
+	analysisResultControlResultRelationDAOs := make([]analysisResultControlResultRelationDAO, 0)
+
+	commonReagentIds := make([]uuid.UUID, 0)
+	commonControlResultIds := make([]uuid.UUID, 0)
+	for i := range analysisResultSet.Reagents {
+		commonReagentIds = append(commonReagentIds, analysisResultSet.Reagents[i].ID)
+	}
+	for i := range analysisResultSet.ControlResults {
+		commonControlResultIds = append(commonControlResultIds, analysisResultSet.ControlResults[i].ID)
+	}
+
+	for analysisResultID := range relationsMap {
+
+		reagentsToLink := relationsMap[analysisResultID]
+		for i := range commonReagentIds {
+			reagentsToLink[commonReagentIds[i]] = make([]uuid.UUID, 0)
+		}
+		for reagentID := range reagentsToLink {
+			analysisResultReagentRelationDAOs = append(analysisResultReagentRelationDAOs, analysisResultReagentRelationDAO{
+				AnalysisResultID: analysisResultID,
+				ReagentID:        reagentID,
+			})
+			controlResultsToLink := relationsMap[analysisResultID][reagentID]
+			controlResultsToLink = append(controlResultsToLink, commonControlResultIds...)
+
+			for _, controlResultID := range controlResultsToLink {
+				reagentControlResultRelationDAOs = append(reagentControlResultRelationDAOs, reagentControlResultRelationDAO{
+					ReagentID:       reagentID,
+					ControlResultID: controlResultID,
+					IsProcessed:     true,
+				})
+
+				analysisResultControlResultRelationDAOs = append(analysisResultControlResultRelationDAOs, analysisResultControlResultRelationDAO{
+					AnalysisResultID: analysisResultID,
+					ControlResultID:  controlResultID,
+					IsProcessed:      true,
+				})
+
+			}
+		}
+	}
+
+	err = as.analysisRepository.WithTransaction(tx).CreateAnalysisResultReagentRelations(ctx, analysisResultReagentRelationDAOs)
+	if err != nil {
+		return analysisResultSet, err
+	}
+
+	err = as.analysisRepository.WithTransaction(tx).CreateReagentControlResultRelations(ctx, reagentControlResultRelationDAOs)
+	if err != nil {
+		return analysisResultSet, err
+	}
+
+	err = as.analysisRepository.WithTransaction(tx).CreateAnalysisResultControlResultRelations(ctx, analysisResultControlResultRelationDAOs)
+	if err != nil {
+		return analysisResultSet, err
+	}
+
+	return analysisResultSet, nil
+}
+
+func setControlResultIsValidAndExpectedControlResultId(controlResult ControlResult) (ControlResult, error) {
+	controlResult.IsValid = false
+	controlResult.IsComparedToExpectedResult = false
+	for i, expectedControlResult := range controlResult.AnalyteMapping.ExpectedControlResults {
+		if expectedControlResult.SampleCode == controlResult.SampleCode {
+			isValid, err := calculateControlResultIsValid(controlResult.Result, controlResult.AnalyteMapping.ExpectedControlResults[i])
+			if err != nil {
+				return controlResult, err
+			}
+			controlResult.IsValid = isValid
+			controlResult.ExpectedControlResultId = uuid.NullUUID{
+				UUID:  controlResult.AnalyteMapping.ExpectedControlResults[i].ID,
+				Valid: true,
+			}
+			controlResult.IsComparedToExpectedResult = true
+			break
+		}
+	}
+
+	return controlResult, nil
+}
+
+func calculateControlResultIsValid(controlResult string, expectedControlResult ExpectedControlResult) (bool, error) {
+	switch expectedControlResult.Operator {
+	case Equal:
+		return controlResult == expectedControlResult.ExpectedValue, nil
+	case NotEqual:
+		return controlResult != expectedControlResult.ExpectedValue, nil
+	case Greater:
+		return controlResult > expectedControlResult.ExpectedValue, nil
+	case GreaterOrEqual:
+		return controlResult >= expectedControlResult.ExpectedValue, nil
+	case Less:
+		return controlResult < expectedControlResult.ExpectedValue, nil
+	case LessOrEqual:
+		return controlResult <= expectedControlResult.ExpectedValue, nil
+	case InOpenInterval:
+		return controlResult >= expectedControlResult.ExpectedValue && controlResult <= *expectedControlResult.ExpectedValue2, nil
+	case InClosedInterval:
+		return controlResult > expectedControlResult.ExpectedValue && controlResult < *expectedControlResult.ExpectedValue2, nil
+	}
+	log.Error().Msg("unsupported expected control result operator found")
+	return false, errors.New("unsupported expected control result operator found")
 }
 
 func (as *analysisService) QueueAnalysisResults(ctx context.Context, results []AnalysisResult) error {
