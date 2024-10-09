@@ -31,6 +31,7 @@ type skeleton struct {
 	analysisService            AnalysisService
 	instrumentService          InstrumentService
 	consoleLogService          service.ConsoleLogService
+	sortingRuleService         SortingRuleService
 	resultsBuffer              []AnalysisResult
 	resultBatchesChan          chan []AnalysisResult
 	cerberusClient             CerberusClient
@@ -312,6 +313,93 @@ func (s *skeleton) GetInstrumentByIP(ctx context.Context, ip string) (Instrument
 
 func (s *skeleton) GetInstruments(ctx context.Context) ([]Instrument, error) {
 	return s.instrumentService.GetInstruments(ctx)
+}
+
+func (s *skeleton) GetSortingTarget(ctx context.Context, instrumentIP string, sampleCode string, programme string) (string, error) {
+	instrument, err := s.GetInstrumentByIP(ctx, instrumentIP)
+	if err != nil {
+		log.Error().Err(err).Str("instrumentIP", instrumentIP).Str("sampleCode", sampleCode).Msg("failed to get sorting target")
+		return "", err
+	}
+
+	sortingRules, err := s.sortingRuleService.GetByInstrumentIDAndProgramme(ctx, instrument.ID, programme)
+	if err != nil {
+		log.Error().Err(err).Str("instrumentIP", instrumentIP).Str("sampleCode", sampleCode).Msg("failed to get sorting target")
+		return "", err
+	}
+
+	analysisRequests, err := s.GetAnalysisRequestsBySampleCode(ctx, sampleCode, true)
+	if len(analysisRequests) == 0 {
+		analysisRequests = []AnalysisRequest{
+			{SampleCode: sampleCode},
+		}
+	} else {
+		extraValuesMap, err := s.GetAnalysisRequestExtraValues(ctx, analysisRequests[0].ID)
+		if err != nil {
+			log.Error().Err(err).Send()
+		}
+		for i := range analysisRequests {
+			for key, value := range extraValuesMap {
+				analysisRequests[i].ExtraValues = append(analysisRequests[i].ExtraValues, ExtraValue{
+					Key:   key,
+					Value: value,
+				})
+			}
+		}
+	}
+	var appliedTargets []string
+	sampleSequenceNumber := 1
+	targetsLoaded := false
+	sampleSequenceNumberLoaded := false
+	for i := range sortingRules {
+		if !targetsLoaded && ConditionHasOperator(sortingRules[i].Condition, TargetApplied, TargetNotApplied) {
+			appliedTargets, err = s.sortingRuleService.GetAppliedSortingRuleTargets(ctx, instrument.ID, programme, analysisRequests[0])
+			if err == nil {
+				targetsLoaded = true
+			}
+		}
+
+		if !sampleSequenceNumberLoaded && ConditionHasOperator(sortingRules[i].Condition, IsNthSample) {
+			sampleSequenceNumber, err = s.sortingRuleService.GetSampleSequenceNumber(ctx, sampleCode)
+			if err == nil {
+				sampleSequenceNumberLoaded = true
+			}
+		}
+		target, err := GetSortingTargetForAnalysisRequestAndCondition(analysisRequests, sortingRules[i], appliedTargets, sampleSequenceNumber)
+		if err != nil {
+			continue
+		}
+		return target, nil
+	}
+
+	return "", fmt.Errorf("no target found")
+}
+
+func (s *skeleton) MarkSortingTargetAsApplied(ctx context.Context, instrumentIP, sampleCode, programme, target string) error {
+	instrument, err := s.GetInstrumentByIP(ctx, instrumentIP)
+	if err != nil {
+		return err
+	}
+	analysisRequestsBySampleCode, err := s.GetAnalysisRequestsBySampleCodes(ctx, []string{sampleCode}, true)
+	if err != nil {
+		return err
+	}
+	var validUntil time.Time
+	analysisRequests := analysisRequestsBySampleCode[sampleCode]
+	if len(analysisRequests) == 0 {
+		validUntil = time.Now().UTC().AddDate(0, 3, 0)
+	} else {
+		validUntil = analysisRequests[0].ValidUntilTime
+	}
+	return s.sortingRuleService.ApplySortingRuleTarget(ctx, instrument.ID, programme, sampleCode, target, validUntil)
+}
+
+func (s *skeleton) FindAnalyteByManufacturerTestCode(instrument Instrument, testCode string) AnalyteMapping {
+	return AnalyteMapping{}
+}
+
+func (s *skeleton) FindResultMapping(searchValue string, mapping []ResultMapping) (string, error) {
+	return "", nil
 }
 
 func (s *skeleton) FindResultEntities(ctx context.Context, InstrumentID uuid.UUID, sampleCode string, ManufacturerTestCode string) (Instrument, []AnalysisRequest, AnalyteMapping, error) {
@@ -759,7 +847,7 @@ func (s *skeleton) processStuckImagesToCerberus(ctx context.Context) {
 	}
 }
 
-func NewSkeleton(ctx context.Context, serviceName string, requestedExtraValueKeys []string, sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api GinApi, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService service.ConsoleLogService, manager Manager, cerberusClient CerberusClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
+func NewSkeleton(ctx context.Context, serviceName string, requestedExtraValueKeys []string, sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api GinApi, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService service.ConsoleLogService, sortingRuleService SortingRuleService, manager Manager, cerberusClient CerberusClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
 	skeleton := &skeleton{
 		ctx:                        ctx,
 		serviceName:                serviceName,
@@ -773,6 +861,7 @@ func NewSkeleton(ctx context.Context, serviceName string, requestedExtraValueKey
 		analysisService:            analysisService,
 		instrumentService:          instrumentService,
 		consoleLogService:          consoleLogService,
+		sortingRuleService:         sortingRuleService,
 		manager:                    manager,
 		cerberusClient:             cerberusClient,
 		deaClient:                  deaClient,

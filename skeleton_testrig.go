@@ -148,6 +148,10 @@ func (sr *SkeletonTestRig) CreateAnalysisRequest(samplecode string, analyteID uu
 	return arq
 }
 
+func (sr *SkeletonTestRig) GetSortingTarget(ctx context.Context, instrumentIP string, sampleCode string, programme string) (string, error) {
+	return "", nil
+}
+
 func (sr *SkeletonTestRig) AddAnalysisRequestExtraValue(key string, value string) {
 	sr.AnalysisRequestExtraValues[key] = value
 }
@@ -155,4 +159,8 @@ func (sr *SkeletonTestRig) AddAnalysisRequestExtraValue(key string, value string
 func (sr *SkeletonTestRig) AddInstrument(instrument Instrument) {
 	sr.storedInstrumentsMap[instrument.ID.String()] = instrument
 	sr.storedInstrumentsMap[instrument.Hostname] = instrument
+}
+
+func (sr *SkeletonTestRig) MarkSortingTargetAsApplied(ctx context.Context, instrumentIP, sampleCode, programme, target string) error {
+	return nil
 }
