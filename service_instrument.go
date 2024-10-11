@@ -33,15 +33,23 @@ type InstrumentService interface {
 
 type instrumentService struct {
 	config               *config.Configuration
+	sortingRuleService   SortingRuleService
 	instrumentRepository InstrumentRepository
 	manager              Manager
 	instrumentCache      InstrumentCache
 	cerberusClient       CerberusClient
 }
 
-func NewInstrumentService(config *config.Configuration, instrumentRepository InstrumentRepository, manager Manager, instrumentCache InstrumentCache, cerberusClient CerberusClient) InstrumentService {
+func NewInstrumentService(
+	config *config.Configuration,
+	sortingRuleService SortingRuleService,
+	instrumentRepository InstrumentRepository,
+	manager Manager,
+	instrumentCache InstrumentCache,
+	cerberusClient CerberusClient) InstrumentService {
 	service := &instrumentService{
 		config:               config,
+		sortingRuleService:   sortingRuleService,
 		instrumentRepository: instrumentRepository,
 		manager:              manager,
 		instrumentCache:      instrumentCache,
@@ -104,6 +112,14 @@ func (s *instrumentService) CreateInstrument(ctx context.Context, instrument Ins
 	if err != nil {
 		_ = transaction.Rollback()
 		return uuid.Nil, err
+	}
+	for i := range instrument.SortingRules {
+		instrument.SortingRules[i].InstrumentID = id
+		err = s.sortingRuleService.WithTransaction(transaction).Create(ctx, &instrument.SortingRules[i])
+		if err != nil {
+			_ = transaction.Rollback()
+			return uuid.Nil, err
+		}
 	}
 	err = transaction.Commit()
 	if err != nil {
@@ -210,6 +226,17 @@ func (s *instrumentService) GetInstruments(ctx context.Context) ([]Instrument, e
 		instrumentsByIDs[instrumentID].Settings = settings
 	}
 
+	sortingRulesMap, err := s.sortingRuleService.GetByInstrumentIDs(ctx, instrumentIDs)
+	if err != nil {
+		return nil, err
+	}
+	for instrumentID, sortingRules := range sortingRulesMap {
+		if _, ok := instrumentsByIDs[instrumentID]; !ok {
+			continue
+		}
+		instrumentsByIDs[instrumentID].SortingRules = sortingRules
+	}
+
 	s.instrumentCache.Set(instruments)
 
 	return instruments, nil
@@ -300,6 +327,14 @@ func (s *instrumentService) GetInstrumentByID(ctx context.Context, tx db.DbConne
 
 	if instrumentSettings, ok := settingsMap[id]; ok {
 		instrument.Settings = instrumentSettings
+	}
+
+	sortingRulesMap, err := s.sortingRuleService.GetByInstrumentIDs(ctx, instrumentIDs)
+	if err != nil {
+		return instrument, err
+	}
+	for _, sortingRules := range sortingRulesMap {
+		instrument.SortingRules = sortingRules
 	}
 
 	return instrument, nil
@@ -394,6 +429,14 @@ func (s *instrumentService) GetInstrumentByIP(ctx context.Context, ip string) (I
 	}
 	if _, ok := settingsMap[instrument.ID]; ok {
 		instrument.Settings = settingsMap[instrument.ID]
+	}
+
+	sortingRulesMap, err := s.sortingRuleService.GetByInstrumentIDs(ctx, instrumentIDs)
+	if err != nil {
+		return instrument, err
+	}
+	for _, sortingRules := range sortingRulesMap {
+		instrument.SortingRules = sortingRules
 	}
 
 	return instrument, nil
@@ -656,9 +699,64 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 			return err
 		}
 	}
+	deletedSortingRules := make([]SortingRule, 0)
+	updatedSortingRules := make([]SortingRule, 0)
+	for i := range oldInstrument.SortingRules {
+		isRuleFound := false
+		for j := range instrument.SortingRules {
+			if instrument.SortingRules[j].ID == oldInstrument.SortingRules[i].ID {
+				isRuleFound = true
+				if IsSortingRuleUpdated(oldInstrument.SortingRules[i], instrument.SortingRules[j]) {
+					updatedSortingRules = append(updatedSortingRules, instrument.SortingRules[j])
+				} else if instrument.SortingRules[j].Priority != j {
+					instrument.SortingRules[j].Priority = j
+					updatedSortingRules = append(updatedSortingRules, instrument.SortingRules[j])
+				}
+				break
+			}
+		}
+		if isRuleFound {
+			continue
+		}
+
+		deletedSortingRules = append(deletedSortingRules, oldInstrument.SortingRules[i])
+	}
+	err = s.sortingRuleService.WithTransaction(tx).DeleteSortingRules(ctx, deletedSortingRules)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	for i := range updatedSortingRules {
+		err = s.sortingRuleService.WithTransaction(tx).Update(ctx, &updatedSortingRules[i])
+		if err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+	}
+
+	for i := range instrument.SortingRules {
+		isRuleFound := false
+		for j := range oldInstrument.SortingRules {
+			if oldInstrument.SortingRules[j].ID == instrument.SortingRules[i].ID {
+				isRuleFound = true
+				break
+			}
+		}
+		if isRuleFound {
+			continue
+		}
+		instrument.SortingRules[i].InstrumentID = instrument.ID
+		err = s.sortingRuleService.WithTransaction(tx).Create(ctx, &instrument.SortingRules[i])
+		if err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+	}
 
 	newInstrument, err := s.GetInstrumentByID(ctx, tx, instrument.ID, true)
 	if err != nil {
+		_ = tx.Rollback()
 		return err
 	}
 

@@ -39,8 +39,12 @@ func TestCreateInstrument(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	defer cancel()
-
-	instrumentService := NewInstrumentService(&config, instrumentRepository, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
+	conditionRepository := NewConditionRepository(dbConn, schemaName)
+	conditionService := NewConditionService(conditionRepository)
+	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
+	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
+	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
+	instrumentService := NewInstrumentService(&config, sortingRuleService, instrumentRepository, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
 
 	responseRecorder := &httptest.ResponseRecorder{}
 	c, engine := gin.CreateTestContext(responseRecorder)
@@ -133,8 +137,12 @@ func TestCreateInstrumentWithoutRequestMapping(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	defer cancel()
-
-	instrumentService := NewInstrumentService(&config, instrumentRepository, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
+	conditionRepository := NewConditionRepository(dbConn, schemaName)
+	conditionService := NewConditionService(conditionRepository)
+	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
+	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
+	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
+	instrumentService := NewInstrumentService(&config, sortingRuleService, instrumentRepository, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
 
 	responseRecorder := &httptest.ResponseRecorder{}
 	c, engine := gin.CreateTestContext(responseRecorder)
@@ -218,8 +226,12 @@ func TestCreateInstrumentWithFtpConfig(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	defer cancel()
-
-	instrumentService := NewInstrumentService(&config, instrumentRepository, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
+	conditionRepository := NewConditionRepository(dbConn, schemaName)
+	conditionService := NewConditionService(conditionRepository)
+	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
+	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
+	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
+	instrumentService := NewInstrumentService(&config, sortingRuleService, instrumentRepository, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
 
 	responseRecorder := &httptest.ResponseRecorder{}
 	c, engine := gin.CreateTestContext(responseRecorder)

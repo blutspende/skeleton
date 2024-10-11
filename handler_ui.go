@@ -39,6 +39,7 @@ type instrumentTO struct {
 	AnalyteMappings     []analyteMappingTO    `json:"analyteMappings"`
 	RequestMappings     []requestMappingTO    `json:"requestMappings"`
 	Settings            []instrumentSettingTO `json:"instrumentSettings"`
+	SortingRuleGroups   []sortingRuleGroupTO  `json:"sortingRuleGroups"`
 }
 
 type listInstrumentTO struct {
@@ -159,6 +160,41 @@ const (
 	MsgFailedToReprocessInstrumentData = "failed to reprocess instrument data"
 	keyFailedToReprocessInstrumentData = "failedToReprocessInstrumentData"
 )
+
+type sortingRuleGroupTO struct {
+	Name         string          `json:"name"`
+	SortingRules []sortingRuleTO `json:"sortingRules"`
+}
+
+type sortingRuleTO struct {
+	ID        uuid.UUID    `json:"id"`
+	Condition *conditionTO `json:"condition"`
+	Target    string       `json:"target"`
+	Priority  int          `json:"priority"`
+}
+
+type conditionTO struct {
+	ID                  uuid.UUID           `json:"id"`
+	Name                *string             `json:"name,omitempty"`
+	Operator            ConditionOperator   `json:"operator"`
+	SubCondition1       *conditionTO        `json:"subCondition1"`
+	SubCondition2       *conditionTO        `json:"subCondition2"`
+	SubCondition1ID     *uuid.UUID          `json:"subCondition1Id"`
+	SubCondition2ID     *uuid.UUID          `json:"subCondition2Id"`
+	NegateSubCondition1 bool                `json:"negateSubCondition1"`
+	NegateSubCondition2 bool                `json:"negateSubCondition2"`
+	Operand1            *conditionOperandTO `json:"operand1"`
+	Operand2            *conditionOperandTO `json:"operand2"`
+}
+
+type conditionOperandTO struct {
+	ID            uuid.UUID            `json:"id"`
+	Name          *string              `json:"name"`
+	Type          ConditionOperandType `json:"type"`
+	ConstantValue *string              `json:"constantValue"`
+	ExtraValueKey *string              `json:"extraValueKey"`
+	AnalyteID     *uuid.UUID           `json:"analyteId"`
+}
 
 func (api *api) GetInstruments(c *gin.Context) {
 	instruments, err := api.instrumentService.GetInstruments(c)
@@ -535,6 +571,7 @@ func convertInstrumentTOToInstrument(instrumentTO instrumentTO) Instrument {
 		ClientPort:         instrumentTO.ClientPort,
 		AnalyteMappings:    make([]AnalyteMapping, len(instrumentTO.AnalyteMappings)),
 		RequestMappings:    make([]RequestMapping, len(instrumentTO.RequestMappings)),
+		SortingRules:       make([]SortingRule, 0),
 		Settings:           convertInstrumentSettingTOsToInstrumentSettings(instrumentTO.Settings),
 	}
 
@@ -565,6 +602,8 @@ func convertInstrumentTOToInstrument(instrumentTO instrumentTO) Instrument {
 		model.RequestMappings[i] = convertRequestMappingTOToRequestMapping(requestMapping)
 	}
 
+	model.SortingRules = convertSortingRuleGroupTOsToSortingRules(instrumentTO.SortingRuleGroups, instrumentTO.ID)
+
 	return model
 }
 
@@ -588,6 +627,7 @@ func convertInstrumentToInstrumentTO(instrument Instrument) instrumentTO {
 		ClientPort:         instrument.ClientPort,
 		AnalyteMappings:    make([]analyteMappingTO, len(instrument.AnalyteMappings)),
 		RequestMappings:    make([]requestMappingTO, len(instrument.RequestMappings)),
+		SortingRuleGroups:  make([]sortingRuleGroupTO, len(instrument.SortingRules)),
 		Settings:           convertInstrumentSettingsToSettingsTOs(instrument.Settings),
 	}
 
@@ -610,6 +650,8 @@ func convertInstrumentToInstrumentTO(instrument Instrument) instrumentTO {
 	for i, requestMapping := range instrument.RequestMappings {
 		model.RequestMappings[i] = convertRequestMappingToRequestMappingTO(requestMapping)
 	}
+
+	model.SortingRuleGroups = convertSortingRulesToSortingRuleGroupTO(instrument.SortingRules)
 
 	return model
 }
@@ -871,6 +913,153 @@ func convertAnalysisBatchListToAnalysisBatchTOList(analysisBatchList []AnalysisB
 		tos[i] = convertAnalysisBatchToAnalysisBatchTO(analysisBatchList[i])
 	}
 	return tos
+}
+
+func convertTOToSortingRule(to sortingRuleTO, programme string, instrumentID uuid.UUID) SortingRule {
+	rule := SortingRule{
+		ID:           to.ID,
+		InstrumentID: instrumentID,
+		Target:       to.Target,
+		Programme:    programme,
+		Priority:     to.Priority,
+	}
+
+	if to.Condition != nil {
+		condition := convertTOToCondition(*to.Condition)
+		rule.Condition = &condition
+	}
+
+	return rule
+}
+
+func convertSortingRuleGroupTOsToSortingRules(tos []sortingRuleGroupTO, instrumentID uuid.UUID) []SortingRule {
+	sortingRules := make([]SortingRule, 0)
+	for i := range tos {
+		for _, sortingRule := range tos[i].SortingRules {
+			sortingRules = append(sortingRules, convertTOToSortingRule(sortingRule, tos[i].Name, instrumentID))
+		}
+	}
+
+	return sortingRules
+}
+
+func convertSortingRulesToSortingRuleGroupTO(sortingRules []SortingRule) []sortingRuleGroupTO {
+	sortingRulesByGroupNameMap := make(map[string][]SortingRule)
+	for i := range sortingRules {
+		if _, ok := sortingRulesByGroupNameMap[sortingRules[i].Programme]; !ok {
+			sortingRulesByGroupNameMap[sortingRules[i].Programme] = make([]SortingRule, 0)
+		}
+
+		sortingRulesByGroupNameMap[sortingRules[i].Programme] = append(sortingRulesByGroupNameMap[sortingRules[i].Programme], sortingRules[i])
+	}
+
+	tos := make([]sortingRuleGroupTO, 0)
+	for groupName, sortingRules := range sortingRulesByGroupNameMap {
+		tos = append(tos, sortingRuleGroupTO{
+			Name:         groupName,
+			SortingRules: convertSortingRulesToTOs(sortingRules),
+		})
+	}
+
+	return tos
+}
+
+func convertSortingRulesToTOs(sortingRules []SortingRule) []sortingRuleTO {
+	tos := make([]sortingRuleTO, len(sortingRules))
+	for i := range sortingRules {
+		tos[i] = convertSortingRuleToTO(sortingRules[i])
+	}
+
+	return tos
+}
+
+func convertSortingRuleToTO(sortingRule SortingRule) sortingRuleTO {
+	to := sortingRuleTO{
+		ID:       sortingRule.ID,
+		Target:   sortingRule.Target,
+		Priority: sortingRule.Priority,
+	}
+	if sortingRule.Condition != nil {
+		conditionTO := convertConditionToTO(*sortingRule.Condition)
+		to.Condition = &conditionTO
+	}
+	return to
+}
+func convertTOToCondition(to conditionTO) Condition {
+	condition := Condition{
+		ID:                  to.ID,
+		Name:                to.Name,
+		Operator:            to.Operator,
+		NegateSubCondition1: to.NegateSubCondition1,
+		NegateSubCondition2: to.NegateSubCondition1,
+	}
+	if to.SubCondition1 != nil {
+		subCondition1 := convertTOToCondition(*to.SubCondition1)
+		condition.SubCondition1 = &subCondition1
+	}
+	if to.SubCondition2 != nil {
+		subCondition2 := convertTOToCondition(*to.SubCondition2)
+		condition.SubCondition2 = &subCondition2
+	}
+	if to.Operand1 != nil {
+		operand1 := convertTOToConditionOperand(*to.Operand1)
+		condition.Operand1 = &operand1
+	}
+	if to.Operand2 != nil {
+		operand2 := convertTOToConditionOperand(*to.Operand2)
+		condition.Operand2 = &operand2
+	}
+
+	return condition
+}
+func convertConditionToTO(condition Condition) conditionTO {
+	to := conditionTO{
+		ID:                  condition.ID,
+		Name:                condition.Name,
+		Operator:            condition.Operator,
+		NegateSubCondition1: condition.NegateSubCondition1,
+		NegateSubCondition2: condition.NegateSubCondition2,
+	}
+	if condition.Operand1 != nil {
+		operand1TO := convertConditionOperandToTO(*condition.Operand1)
+		to.Operand1 = &operand1TO
+	}
+	if condition.Operand2 != nil {
+		operand2TO := convertConditionOperandToTO(*condition.Operand2)
+		to.Operand2 = &operand2TO
+	}
+	if condition.SubCondition1 != nil {
+		subCondition1 := convertConditionToTO(*condition.SubCondition1)
+		to.SubCondition1 = &subCondition1
+		to.SubCondition1ID = &condition.SubCondition1.ID
+	}
+	if condition.SubCondition2 != nil {
+		subCondition2 := convertConditionToTO(*condition.SubCondition2)
+		to.SubCondition2 = &subCondition2
+		to.SubCondition2ID = &condition.SubCondition2.ID
+	}
+
+	return to
+}
+
+func convertConditionOperandToTO(conditionOperand ConditionOperand) conditionOperandTO {
+	return conditionOperandTO{
+		ID:            conditionOperand.ID,
+		Name:          conditionOperand.Name,
+		ConstantValue: conditionOperand.ConstantValue,
+		ExtraValueKey: conditionOperand.ExtraValueKey,
+		Type:          conditionOperand.Type,
+	}
+}
+
+func convertTOToConditionOperand(to conditionOperandTO) ConditionOperand {
+	return ConditionOperand{
+		ID:            to.ID,
+		Name:          to.Name,
+		Type:          to.Type,
+		ConstantValue: to.ConstantValue,
+		ExtraValueKey: to.ExtraValueKey,
+	}
 }
 
 // Todo ZsN - Improve this

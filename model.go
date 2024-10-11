@@ -160,6 +160,7 @@ type Instrument struct {
 	FTPConfig          *FTPConfig
 	AnalyteMappings    []AnalyteMapping
 	RequestMappings    []RequestMapping
+	SortingRules       []SortingRule
 	Settings           []InstrumentSetting
 	CreatedAt          time.Time
 	ModifiedAt         *time.Time
@@ -421,4 +422,85 @@ type InstrumentType string
 const (
 	Analyzer InstrumentType = "ANALYZER"
 	Sorter   InstrumentType = "SORTER"
+)
+
+type SortingRule struct {
+	ID           uuid.UUID
+	InstrumentID uuid.UUID
+	Condition    *Condition
+	Target       string
+	Programme    string
+	Priority     int
+	CreatedAt    time.Time
+	ModifiedAt   *time.Time
+	DeletedAt    *time.Time
+}
+
+type ConditionError struct {
+	ConditionNodeIndex int
+	Error              error
+}
+
+type Condition struct {
+	ID                  uuid.UUID
+	Name                *string
+	Operator            ConditionOperator
+	SubCondition1       *Condition
+	SubCondition2       *Condition
+	NegateSubCondition1 bool
+	NegateSubCondition2 bool
+	Operand1            *ConditionOperand
+	Operand2            *ConditionOperand
+}
+
+type ConditionOperand struct {
+	ID            uuid.UUID
+	Name          *string
+	Type          ConditionOperandType
+	ConstantValue *string
+	ExtraValueKey *string
+}
+
+type ConditionOperandType string
+
+const (
+	AnalysisRequestExtraValue ConditionOperandType = "extraValue"
+	Analyte                   ConditionOperandType = "analyte"
+	Constant                  ConditionOperandType = "constant"
+	Laboratory                ConditionOperandType = "laboratory"
+	Order                     ConditionOperandType = "order"
+	SampleCode                ConditionOperandType = "sampleCode"
+	Target                    ConditionOperandType = "target"
+	Sample                    ConditionOperandType = "sample"
+	DefaultOperand            ConditionOperandType = "default"
+)
+
+type ConditionOperator string
+
+// Comparison operators
+const (
+	And            ConditionOperator = "and"
+	Or             ConditionOperator = "or"
+	Equals         ConditionOperator = "=="
+	NotEquals      ConditionOperator = "!="
+	Less           ConditionOperator = "<"
+	LessOrEqual    ConditionOperator = "<="
+	Greater        ConditionOperator = ">"
+	GreaterOrEqual ConditionOperator = ">="
+	Contains       ConditionOperator = "contains"
+	NotContains    ConditionOperator = "notContains"
+	MatchRegex     ConditionOperator = "regex"
+	Exists         ConditionOperator = "exists"
+	NotExists      ConditionOperator = "notExists"
+)
+
+// Lambda operators
+const (
+	MatchAny               ConditionOperator = "matchAny"
+	MatchAll               ConditionOperator = "matchAll"
+	TargetApplied          ConditionOperator = "targetApplied"
+	TargetNotApplied       ConditionOperator = "targetNotApplied"
+	IsNthSample            ConditionOperator = "isNthSample"
+	HasNPercentProbability ConditionOperator = "hasNPercentProbability"
+	Default                ConditionOperator = "default"
 )
