@@ -158,12 +158,12 @@ type reprocessTO struct {
 }
 
 type expectedControlResultTo struct {
-	ID               uuid.UUID          `json:"id"`
-	AnalyteMappingId uuid.UUID          `json:"analyteMappingId"`
-	SampleCode       string             `json:"sampleCode"`
-	Operator         ComparisonOperator `json:"operator"`
-	ExpectedValue    string             `json:"expectedValue"`
-	ExpectedValue2   *string            `json:"expectedValue2"`
+	ID               uuid.UUID         `json:"id"`
+	AnalyteMappingId uuid.UUID         `json:"analyteMappingId"`
+	SampleCode       string            `json:"sampleCode"`
+	Operator         ConditionOperator `json:"operator"`
+	ExpectedValue    string            `json:"expectedValue"`
+	ExpectedValue2   *string           `json:"expectedValue2"`
 }
 
 const (

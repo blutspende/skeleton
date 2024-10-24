@@ -622,6 +622,7 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 	dbConn := db.CreateDbConnector(sqlConn)
 
 	analysisRepositoryMock := &analysisRepositoryMock{}
+	conditionRepository := NewConditionRepository(dbConn, schemaName)
 	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
 	consoleLogRepository := repository.NewConsoleLogRepository(500)
 
@@ -650,8 +651,11 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 	deaClientMock := &deaClientMock{}
 
 	analysisService := NewAnalysisService(analysisRepositoryMock, deaClientMock, cerberusClientMock, skeletonManagerMock)
+	conditionService := NewConditionService(conditionRepository)
+	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
+	sortingRuleService := NewSortingRuleService(analysisRepositoryMock, conditionService, sortingRuleRepository)
 
-	instrumentService := NewInstrumentService(&configuration, instrumentRepository, skeletonManagerMock, NewInstrumentCache(), cerberusClientMock)
+	instrumentService := NewInstrumentService(&configuration, sortingRuleService, instrumentRepository, skeletonManagerMock, NewInstrumentCache(), cerberusClientMock)
 	consoleLogService := service.NewConsoleLogService(consoleLogRepository, nil)
 
 	ginEngine := gin.New()
@@ -660,7 +664,7 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 
 	api := newAPI(ginEngine, &configuration, &authManager, analysisService, instrumentService, consoleLogService, nil)
 
-	skeletonInstance, _ := NewSkeleton(ctx, serviceName, []string{}, sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepositoryMock, analysisService, instrumentService, consoleLogService, skeletonManagerMock, cerberusClientMock, deaClientMock, configuration)
+	skeletonInstance, _ := NewSkeleton(ctx, serviceName, []string{}, sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepositoryMock, analysisService, instrumentService, consoleLogService, sortingRuleService, skeletonManagerMock, cerberusClientMock, deaClientMock, configuration)
 
 	go func() {
 		_ = skeletonInstance.Start()
@@ -669,7 +673,7 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
 		SampleCode:     "Sample1",
-		Operator:       Equal,
+		Operator:       Equals,
 		ExpectedValue:  "40",
 		ExpectedValue2: nil,
 		CreatedAt:      time.Time{},

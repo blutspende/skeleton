@@ -72,7 +72,7 @@ func TestCreateAnalysisResultStatusAndControlResultNotAllControlAvailable(t *tes
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
 		SampleCode:     "Sample2",
-		Operator:       NotEqual,
+		Operator:       NotEquals,
 		ExpectedValue:  "25",
 		ExpectedValue2: nil,
 		CreatedAt:      expectedControlResultCreatedAt,
@@ -197,7 +197,7 @@ func TestCreateControlResultBatch(t *testing.T) {
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
 		SampleCode:     "Sample1",
-		Operator:       Equal,
+		Operator:       Equals,
 		ExpectedValue:  "40",
 		ExpectedValue2: nil,
 		CreatedAt:      expectedControlResultCreatedAt,
@@ -299,7 +299,7 @@ func setupTestDataForAnalysisResultStatusAndControlResultValidCheck(addExpectedC
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
 		SampleCode:     "Sample1",
-		Operator:       Equal,
+		Operator:       Equals,
 		ExpectedValue:  "40",
 		ExpectedValue2: nil,
 		CreatedAt:      expectedControlResultCreatedAt,
@@ -428,7 +428,7 @@ func setupTestDataForStandaloneControlProcessing() (ControlResult, Reagent) {
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
 		SampleCode:     "Sample1",
-		Operator:       Equal,
+		Operator:       Equals,
 		ExpectedValue:  "40",
 		ExpectedValue2: nil,
 		CreatedAt:      expectedControlResultCreatedAt,
