@@ -205,7 +205,7 @@ type ChannelMapping struct {
 type ExpectedControlResult struct {
 	ID             uuid.UUID
 	SampleCode     string
-	Operator       ComparisonOperator
+	Operator       ConditionOperator
 	ExpectedValue  string
 	ExpectedValue2 *string
 	CreatedAt      time.Time
@@ -213,19 +213,6 @@ type ExpectedControlResult struct {
 	CreatedBy      uuid.UUID
 	DeletedBy      uuid.NullUUID
 }
-
-type ComparisonOperator string
-
-const (
-	Equal            ComparisonOperator = "equal"
-	NotEqual         ComparisonOperator = "notEqual"
-	Less             ComparisonOperator = "less"
-	LessOrEqual      ComparisonOperator = "lessOrEqual"
-	Greater          ComparisonOperator = "greater"
-	GreaterOrEqual   ComparisonOperator = "greaterOrEqual"
-	InOpenInterval   ComparisonOperator = "inOpenInterval"
-	InClosedInterval ComparisonOperator = "inClosedInterval"
-)
 
 // ResultMapping - Maps a ManufacturerTestCode to an AnalyteId (cerberus)
 type ResultMapping struct {
@@ -591,4 +578,10 @@ const (
 	IsNthSample            ConditionOperator = "isNthSample"
 	HasNPercentProbability ConditionOperator = "hasNPercentProbability"
 	Default                ConditionOperator = "default"
+)
+
+// Extra comparison operators for Expected Control Results
+const (
+	InOpenInterval   ConditionOperator = "inOpenInterval"
+	InClosedInterval ConditionOperator = "inClosedInterval"
 )

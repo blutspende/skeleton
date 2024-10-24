@@ -898,6 +898,9 @@ func (r *instrumentRepositoryMock) CreateExpectedControlResults(ctx context.Cont
 func (r *instrumentRepositoryMock) GetExpectedControlResultsByInstrumentId(ctx context.Context, instrumentId uuid.UUID) (map[uuid.UUID][]ExpectedControlResult, error) {
 	return nil, nil
 }
+func (r *instrumentRepositoryMock) GetExpectedControlResultsByAnalyteMappingIds(ctx context.Context, analyteMappingIds []uuid.UUID) (map[uuid.UUID][]ExpectedControlResult, error) {
+	return nil, nil
+}
 func (r *instrumentRepositoryMock) DeleteExpectedControlResults(ctx context.Context, ids []uuid.UUID, deletedByUserId uuid.UUID) error {
 	return nil
 }

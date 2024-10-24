@@ -456,9 +456,9 @@ func setControlResultIsValidAndExpectedControlResultId(controlResult ControlResu
 
 func calculateControlResultIsValid(controlResult string, expectedControlResult ExpectedControlResult) (bool, error) {
 	switch expectedControlResult.Operator {
-	case Equal:
+	case Equals:
 		return controlResult == expectedControlResult.ExpectedValue, nil
-	case NotEqual:
+	case NotEquals:
 		return controlResult != expectedControlResult.ExpectedValue, nil
 	case Greater:
 		return controlResult > expectedControlResult.ExpectedValue, nil

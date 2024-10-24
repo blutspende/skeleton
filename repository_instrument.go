@@ -194,16 +194,16 @@ type resultMappingDAO struct {
 }
 
 type expectedControlResultDAO struct {
-	ID               uuid.UUID          `db:"id"`
-	AnalyteMappingID uuid.UUID          `db:"analyte_mapping_id"`
-	SampleCode       string             `db:"sample_code"`
-	Operator         ComparisonOperator `db:"operator"`
-	ExpectedValue    string             `db:"expected_value"`
-	ExpectedValue2   sql.NullString     `db:"expected_value2"`
-	CreatedAt        time.Time          `db:"created_at"`
-	DeletedAt        sql.NullTime       `db:"deleted_at"`
-	CreatedBy        uuid.UUID          `db:"created_by"`
-	DeletedBy        uuid.NullUUID      `db:"deleted_by"`
+	ID               uuid.UUID         `db:"id"`
+	AnalyteMappingID uuid.UUID         `db:"analyte_mapping_id"`
+	SampleCode       string            `db:"sample_code"`
+	Operator         ConditionOperator `db:"operator"`
+	ExpectedValue    string            `db:"expected_value"`
+	ExpectedValue2   sql.NullString    `db:"expected_value2"`
+	CreatedAt        time.Time         `db:"created_at"`
+	DeletedAt        sql.NullTime      `db:"deleted_at"`
+	CreatedBy        uuid.UUID         `db:"created_by"`
+	DeletedBy        uuid.NullUUID     `db:"deleted_by"`
 }
 
 type requestMappingDAO struct {
