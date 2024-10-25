@@ -115,7 +115,7 @@ type SkeletonAPI interface {
 	Start() error
 }
 
-func New(ctx context.Context, serviceName string, requestedExtraValueKeys []string, sqlConn *sqlx.DB, dbSchema string) (SkeletonAPI, error) {
+func New(ctx context.Context, serviceName string, requestedExtraValueKeys []string, reagentManufacturers []string, sqlConn *sqlx.DB, dbSchema string) (SkeletonAPI, error) {
 	config, err := config2.ReadConfiguration()
 	if err != nil {
 		return nil, err
@@ -158,5 +158,5 @@ func New(ctx context.Context, serviceName string, requestedExtraValueKeys []stri
 		},
 	})
 
-	return NewSkeleton(ctx, serviceName, requestedExtraValueKeys, sqlConn, dbSchema, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, sortingRuleService, manager, cerberusClient, deaClient, config)
+	return NewSkeleton(ctx, serviceName, requestedExtraValueKeys, reagentManufacturers, sqlConn, dbSchema, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, sortingRuleService, manager, cerberusClient, deaClient, config)
 }

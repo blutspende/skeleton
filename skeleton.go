@@ -37,13 +37,14 @@ type skeleton struct {
 	resultBatchesChan          chan []AnalysisResult
 	controlResultsBuffer         []MappedStandaloneControlResult
 	controlResultBatchesChan     chan []MappedStandaloneControlResult
-	cerberusClient             CerberusClient
-	deaClient                  DeaClientV1
-	manager                    Manager
-	resultTransferFlushTimeout int
-	imageRetrySeconds          int
-	serviceName                string
-	extraValueKeys             []string
+	cerberusClient               CerberusClient
+	deaClient                    DeaClientV1
+	manager                      Manager
+	resultTransferFlushTimeout   int
+	imageRetrySeconds            int
+	serviceName                  string
+	extraValueKeys               []string
+	reagentManufacturers         []string
 	unprocessedHandlingWaitGroup sync.WaitGroup
 }
 
@@ -571,7 +572,7 @@ func (s *skeleton) Start() error {
 func (s *skeleton) registerDriverToCerberus(ctx context.Context) error {
 	retryCount := 0
 	for {
-		err := s.cerberusClient.RegisterInstrumentDriver(s.serviceName, apiVersion, s.config.APIPort, s.config.EnableTLS, s.extraValueKeys)
+		err := s.cerberusClient.RegisterInstrumentDriver(s.serviceName, apiVersion, s.config.APIPort, s.config.EnableTLS, s.extraValueKeys, s.reagentManufacturers)
 		if err != nil {
 			log.Warn().Err(err).Int("retryCount", retryCount).Msg("register instrument driver to cerberus failed")
 			retryCount++
@@ -1143,11 +1144,12 @@ func (s *skeleton) processStuckImagesToCerberus(ctx context.Context) {
 	}
 }
 
-func NewSkeleton(ctx context.Context, serviceName string, requestedExtraValueKeys []string, sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api GinApi, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService service.ConsoleLogService, sortingRuleService SortingRuleService, manager Manager, cerberusClient CerberusClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
+func NewSkeleton(ctx context.Context, serviceName string, requestedExtraValueKeys []string, reagentManufacturers []string, sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api GinApi, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService service.ConsoleLogService, sortingRuleService SortingRuleService, manager Manager, cerberusClient CerberusClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
 	skeleton := &skeleton{
 		ctx:                        ctx,
 		serviceName:                serviceName,
 		extraValueKeys:             requestedExtraValueKeys,
+		reagentManufacturers:       reagentManufacturers,
 		config:                     config,
 		sqlConn:                    sqlConn,
 		dbSchema:                   dbSchema,
@@ -1157,7 +1159,6 @@ func NewSkeleton(ctx context.Context, serviceName string, requestedExtraValueKey
 		analysisService:            analysisService,
 		instrumentService:          instrumentService,
 		consoleLogService:          consoleLogService,
-		sortingRuleService:         sortingRuleService,
 		manager:                    manager,
 		cerberusClient:             cerberusClient,
 		deaClient:                  deaClient,

@@ -23,7 +23,7 @@ var (
 
 type CerberusClient interface {
 	RegisterInstrument(instrument Instrument) error
-	RegisterInstrumentDriver(name, apiVersion string, apiPort uint16, tlsEnabled bool, extraValueKeys []string) error
+	RegisterInstrumentDriver(name, apiVersion string, apiPort uint16, tlsEnabled bool, extraValueKeys []string, reagentManufacturers []string) error
 	SendAnalysisResultBatch(analysisResults []AnalysisResultTO) (AnalysisResultBatchResponse, error)
 	SendControlResultBatch(controlResults []StandaloneControlResultTO) (ControlResultBatchResponse, error)
 	SendAnalysisResultImageBatch(images []WorkItemResultImageTO) error
@@ -40,11 +40,12 @@ type ciaInstrumentTO struct {
 }
 
 type registerInstrumentDriverTO struct {
-	Name           string   `json:"name" binding:"required"`
-	APIVersion     string   `json:"apiVersion" binding:"required"`
-	APIPort        uint16   `json:"apiPort" binding:"required"`
-	TLSEnabled     bool     `json:"tlsEnabled" default:"false"`
-	ExtraValueKeys []string `json:"extraValueKeys,omitempty"`
+	Name                 string   `json:"name" binding:"required"`
+	APIVersion           string   `json:"apiVersion" binding:"required"`
+	APIPort              uint16   `json:"apiPort" binding:"required"`
+	TLSEnabled           bool     `json:"tlsEnabled" default:"false"`
+	ExtraValueKeys       []string `json:"extraValueKeys,omitempty"`
+	ReagentManufacturers []string `json:"reagentManufacturers"`
 }
 
 type ExtraValueTO struct {
@@ -191,15 +192,16 @@ func (c *cerberusClient) RegisterInstrument(instrument Instrument) error {
 	return nil
 }
 
-func (c *cerberusClient) RegisterInstrumentDriver(name, apiVersion string, apiPort uint16, tlsEnabled bool, extraValueKeys []string) error {
+func (c *cerberusClient) RegisterInstrumentDriver(name, apiVersion string, apiPort uint16, tlsEnabled bool, extraValueKeys []string, reagentManufacturers []string) error {
 	resp, err := c.client.R().
 		SetHeader("Content-Type", "application/json").
 		SetBody(registerInstrumentDriverTO{
-			Name:           name,
-			APIVersion:     apiVersion,
-			APIPort:        apiPort,
-			TLSEnabled:     tlsEnabled,
-			ExtraValueKeys: extraValueKeys,
+			Name:                 name,
+			APIVersion:           apiVersion,
+			APIPort:              apiPort,
+			TLSEnabled:           tlsEnabled,
+			ExtraValueKeys:       extraValueKeys,
+			ReagentManufacturers: reagentManufacturers,
 		}).
 		Post(c.cerberusUrl + "/v1/instrument-drivers")
 
