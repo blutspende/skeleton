@@ -120,6 +120,7 @@ type ReagentTO struct {
 	Manufacturer   string            `json:"manufacturer"`
 	SerialNumber   string            `json:"serialNo"`
 	LotNo          string            `json:"lotNo"`
+	Name           string            `json:"name"`
 	ReagentType    ReagentType       `json:"type"`
 	ControlResults []ControlResultTO `json:"controlResults"`
 }

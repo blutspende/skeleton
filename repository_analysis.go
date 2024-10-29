@@ -19,29 +19,29 @@ import (
 )
 
 const (
-	msgFailedToRevokeAnalysisRequests                      = "Failed to revoke analysis requests"
-	msgSaveAnalysisRequestsInstrumentTransmissions         = "save analysis requests' instrument transmissions"
-	msgIncreaseAnalysisRequestsSentToInstrumentCountFailed = "increase analysis requests sent to instrument count failed"
-	msgInvalidResultStatus                                 = "invalid result status"
-	msgConvertAnalysisResultsFailed                        = "convert analysis results"
-	msgMarshalAnalysisResultsFailed                        = "marshal analysis results failed"
-	msgInvalidReagentType                                  = "invalid reagent type"
-	msgCreateAnalysisRequestsBatchFailed                   = "create analysis requests batch failed"
-	msgGetSampleCodesByOrderIDFailed                       = "get sample codes by order ID failed"
-	msgCreateSubjectsFailed                                = "create subject failed"
-	msgCreateReagentFailed                             	   = "create analysis result reagent infos failed"
+	msgFailedToRevokeAnalysisRequests                             = "Failed to revoke analysis requests"
+	msgSaveAnalysisRequestsInstrumentTransmissions                = "save analysis requests' instrument transmissions"
+	msgIncreaseAnalysisRequestsSentToInstrumentCountFailed        = "increase analysis requests sent to instrument count failed"
+	msgInvalidResultStatus                                        = "invalid result status"
+	msgConvertAnalysisResultsFailed                               = "convert analysis results"
+	msgMarshalAnalysisResultsFailed                               = "marshal analysis results failed"
+	msgInvalidReagentType                                         = "invalid reagent type"
+	msgCreateAnalysisRequestsBatchFailed                          = "create analysis requests batch failed"
+	msgGetSampleCodesByOrderIDFailed                              = "get sample codes by order ID failed"
+	msgCreateSubjectsFailed                                       = "create subject failed"
+	msgCreateReagentFailed                                        = "create analysis result reagent infos failed"
 	msgCreateWarningsFailed                                       = "create warnings failed"
 	msgCreateControlResultWarningsFailed                          = "create control result warnings failed"
-	msgFailedToSaveDEAImageID                              = "failed to save DEA image id"
-	msgFailedToIncreaseImageUploadRetryCount               = "failed to increase image upload retry count"
-	msgFailedToGetStuckImages                              = "failed to get stuck images"
-	msgFailedToScanStuckImageId                            = "failed to scan stuck image id"
-	msgFailedToScanStuckImageData                          = "failed to scan stuck image data"
-	msgFailedToMarkImagesAsSyncedToCerberus                = "failed to mark images as synced to cerberus"
-	msgFailedToMarkAnalysisRequestsAsProcessed             = "failed to mark analysis requests as processed"
-	msgFailedToMarkAnalysisResultsAsProcessed              = "failed to mark analysis results as processed"
-	msgGetAnalysisRequestExtraValuesFailed                 = "get analysis request extra values failed"
-	msgDeleteAnalysisRequestExtraValuesFailed              = "delete analysis request extra values failed"
+	msgFailedToSaveDEAImageID                                     = "failed to save DEA image id"
+	msgFailedToIncreaseImageUploadRetryCount                      = "failed to increase image upload retry count"
+	msgFailedToGetStuckImages                                     = "failed to get stuck images"
+	msgFailedToScanStuckImageId                                   = "failed to scan stuck image id"
+	msgFailedToScanStuckImageData                                 = "failed to scan stuck image data"
+	msgFailedToMarkImagesAsSyncedToCerberus                       = "failed to mark images as synced to cerberus"
+	msgFailedToMarkAnalysisRequestsAsProcessed                    = "failed to mark analysis requests as processed"
+	msgFailedToMarkAnalysisResultsAsProcessed                     = "failed to mark analysis results as processed"
+	msgGetAnalysisRequestExtraValuesFailed                        = "get analysis request extra values failed"
+	msgDeleteAnalysisRequestExtraValuesFailed                     = "delete analysis request extra values failed"
 	msgCreateControlResultFailed                                  = "create control result failed"
 	msgFailedToCreateAnalysisResultReagentRelations               = "failed to create analysis result reagent relations"
 	msgFailedToCreateReagentControlResultRelations                = "failed to create reagent control result relations"
@@ -54,32 +54,35 @@ const (
 	msgFailedToSaveCerberusIdForAnalysisResult                    = "failed to save cerberus id for analysis result"
 	msgFailedToGetControlResultsByIDs                             = "failed to get control results by ids"
 	msgFailedToGetReagentsByIDs                                   = "failed to get reagents by ids"
+	msgFailedToLoadAnalysisResultIdsForLatestControlResult        = "failed to load analysis results for latest control result by reagent"
+	msgFailedToLoadLatestControlResultId                          = "failed to load latest control result id by reagent"
+	msgNoControlResultIdFoundForReagent                           = "no control result found for reagent"
 )
 
 var (
-	ErrFailedToRevokeAnalysisRequests                      = errors.New(msgFailedToRevokeAnalysisRequests)
-	ErrSaveAnalysisRequestsInstrumentTransmissions         = errors.New(msgSaveAnalysisRequestsInstrumentTransmissions)
-	ErrIncreaseAnalysisRequestsSentToInstrumentCountFailed = errors.New(msgIncreaseAnalysisRequestsSentToInstrumentCountFailed)
-	ErrInvalidReagentType                                  = errors.New(msgInvalidReagentType)
-	ErrInvalidResultStatus                                 = errors.New(msgInvalidResultStatus)
-	ErrConvertAnalysisResultsFailed                        = errors.New(msgConvertAnalysisResultsFailed)
-	ErrMarshalAnalysisResultsFailed                        = errors.New(msgMarshalAnalysisResultsFailed)
-	ErrCreateAnalysisRequestsBatchFailed                   = errors.New(msgCreateAnalysisRequestsBatchFailed)
-	ErrGetSampleCodesByOrderIDFailed                       = errors.New(msgGetSampleCodesByOrderIDFailed)
-	ErrCreateSubjectsFailed                                = errors.New(msgCreateSubjectsFailed)
-	ErrCreateReagentFailed                                 = errors.New(msgCreateReagentFailed)
-	ErrCreateWarningsFailed                                = errors.New(msgCreateWarningsFailed)
+	ErrFailedToRevokeAnalysisRequests                             = errors.New(msgFailedToRevokeAnalysisRequests)
+	ErrSaveAnalysisRequestsInstrumentTransmissions                = errors.New(msgSaveAnalysisRequestsInstrumentTransmissions)
+	ErrIncreaseAnalysisRequestsSentToInstrumentCountFailed        = errors.New(msgIncreaseAnalysisRequestsSentToInstrumentCountFailed)
+	ErrInvalidReagentType                                         = errors.New(msgInvalidReagentType)
+	ErrInvalidResultStatus                                        = errors.New(msgInvalidResultStatus)
+	ErrConvertAnalysisResultsFailed                               = errors.New(msgConvertAnalysisResultsFailed)
+	ErrMarshalAnalysisResultsFailed                               = errors.New(msgMarshalAnalysisResultsFailed)
+	ErrCreateAnalysisRequestsBatchFailed                          = errors.New(msgCreateAnalysisRequestsBatchFailed)
+	ErrGetSampleCodesByOrderIDFailed                              = errors.New(msgGetSampleCodesByOrderIDFailed)
+	ErrCreateSubjectsFailed                                       = errors.New(msgCreateSubjectsFailed)
+	ErrCreateReagentFailed                                        = errors.New(msgCreateReagentFailed)
+	ErrCreateWarningsFailed                                       = errors.New(msgCreateWarningsFailed)
 	ErrCreateControlResultWarningsFailed                          = errors.New(msgCreateControlResultWarningsFailed)
-	ErrFailedToSaveDEAImageID                              = errors.New(msgFailedToSaveDEAImageID)
-	ErrFailedToIncreaseImageUploadRetryCount               = errors.New(msgFailedToSaveDEAImageID)
-	ErrFailedToGetStuckImages                              = errors.New(msgFailedToGetStuckImages)
-	ErrFailedToScanStuckImageId                            = errors.New(msgFailedToScanStuckImageId)
-	ErrFailedToScanStuckImageData                          = errors.New(msgFailedToScanStuckImageData)
-	ErrFailedToMarkImagesAsSyncedToCerberus                = errors.New(msgFailedToMarkImagesAsSyncedToCerberus)
-	ErrFailedToMarkAnalysisRequestsAsProcessed             = errors.New(msgFailedToMarkAnalysisRequestsAsProcessed)
-	ErrFailedToMarkAnalysisResultsAsProcessed              = errors.New(msgFailedToMarkAnalysisResultsAsProcessed)
-	ErrGetAnalysisRequestExtraValuesFailed                 = errors.New(msgGetAnalysisRequestExtraValuesFailed)
-	ErrDeleteAnalysisRequestExtraValuesFailed              = errors.New(msgDeleteAnalysisRequestExtraValuesFailed)
+	ErrFailedToSaveDEAImageID                                     = errors.New(msgFailedToSaveDEAImageID)
+	ErrFailedToIncreaseImageUploadRetryCount                      = errors.New(msgFailedToSaveDEAImageID)
+	ErrFailedToGetStuckImages                                     = errors.New(msgFailedToGetStuckImages)
+	ErrFailedToScanStuckImageId                                   = errors.New(msgFailedToScanStuckImageId)
+	ErrFailedToScanStuckImageData                                 = errors.New(msgFailedToScanStuckImageData)
+	ErrFailedToMarkImagesAsSyncedToCerberus                       = errors.New(msgFailedToMarkImagesAsSyncedToCerberus)
+	ErrFailedToMarkAnalysisRequestsAsProcessed                    = errors.New(msgFailedToMarkAnalysisRequestsAsProcessed)
+	ErrFailedToMarkAnalysisResultsAsProcessed                     = errors.New(msgFailedToMarkAnalysisResultsAsProcessed)
+	ErrGetAnalysisRequestExtraValuesFailed                        = errors.New(msgGetAnalysisRequestExtraValuesFailed)
+	ErrDeleteAnalysisRequestExtraValuesFailed                     = errors.New(msgDeleteAnalysisRequestExtraValuesFailed)
 	ErrFailedToCreateAnalysisResultReagentRelations               = errors.New(msgFailedToCreateAnalysisResultReagentRelations)
 	ErrFailedToCreateReagentControlResultRelations                = errors.New(msgFailedToCreateReagentControlResultRelations)
 	ErrFailedToCreateAnalysisResultControlResultRelations         = errors.New(msgFailedToCreateAnalysisResultControlResultRelations)
@@ -91,6 +94,9 @@ var (
 	ErrFailedToSaveCerberusIdForAnalysisResult                    = errors.New(msgFailedToSaveCerberusIdForAnalysisResult)
 	ErrFailedToGetControlResultsByIDs                             = errors.New(msgFailedToGetControlResultsByIDs)
 	ErrFailedToGetReagentsByIDs                                   = errors.New(msgFailedToGetReagentsByIDs)
+	ErrFailedToLoadAnalysisResultIdsForLatestControlResult        = errors.New(msgFailedToLoadAnalysisResultIdsForLatestControlResult)
+	ErrFailedToLoadLatestControlResultId                          = errors.New(msgFailedToLoadLatestControlResultId)
+	ErrNoControlResultIdFoundForReagent                           = errors.New(msgNoControlResultIdFoundForReagent)
 )
 
 type analysisRequestDAO struct {
@@ -183,6 +189,7 @@ type reagentDAO struct {
 	Manufacturer   string       `db:"manufacturer"`
 	SerialNumber   string       `db:"serial"`
 	LotNo          string       `db:"lot_no"`
+	Name           string       `db:"name"`
 	Type           ReagentType  `db:"type"`
 	ExpirationDate sql.NullTime `db:"expiration_date"`
 	CreatedAt      time.Time    `db:"created_at"`
@@ -405,6 +412,9 @@ type AnalysisRepository interface {
 	SaveCerberusIDForAnalysisResult(ctx context.Context, analysisResultID uuid.UUID, cerberusID uuid.UUID) error
 	SaveCerberusIDForControlResult(ctx context.Context, controlResultID uuid.UUID, cerberusID uuid.UUID) error
 	SaveCerberusIDForReagent(ctx context.Context, reagentID uuid.UUID, cerberusID uuid.UUID) error
+
+	GetAnalysisResultIdsSinceLastControlByReagent(ctx context.Context, reagent Reagent, examinedAt time.Time) ([]uuid.UUID, error)
+	GetLatestControlResultIdByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time) (ControlResult, error)
 
 	MarkReagentControlResultRelationsAsProcessed(ctx context.Context, controlResultID uuid.UUID, reagentIDs []uuid.UUID) error
 	MarkAnalysisResultControlResultRelationsAsProcessed(ctx context.Context, controlResultID uuid.UUID, analysisResultIDs []uuid.UUID) error
@@ -2574,9 +2584,9 @@ func (r *analysisRepository) createReagents(ctx context.Context, reagentDAOs []r
 	insertedIds := make([]uuid.UUID, 0)
 
 	err := utils.Partition(len(reagentsToSave), reagentBatchSize, func(low int, high int) error {
-		query := fmt.Sprintf(`INSERT INTO %s.sk_reagents(id, manufacturer, serial, lot_no, type)
-		VALUES(:id, :manufacturer, :serial, :lot_no, :type)
-		ON CONFLICT (manufacturer, serial, lot_no) DO UPDATE SET manufacturer = excluded.manufacturer RETURNING id;`, r.dbSchema)
+		query := fmt.Sprintf(`INSERT INTO %s.sk_reagents(id, manufacturer, serial, lot_no, type, name)
+		VALUES(:id, :manufacturer, :serial, :lot_no, :type, :name)
+		ON CONFLICT (manufacturer, serial, lot_no, name) DO UPDATE SET manufacturer = excluded.manufacturer RETURNING id;`, r.dbSchema)
 
 		rows, err := r.db.NamedQueryContext(ctx, query, reagentsToSave[low:high])
 		if err != nil {
@@ -4324,6 +4334,7 @@ func convertReagentToTO(reagent Reagent) ReagentTO {
 		Manufacturer:   reagent.Manufacturer,
 		SerialNumber:   reagent.SerialNumber,
 		LotNo:          reagent.LotNo,
+		Name:           reagent.Name,
 		ReagentType:    reagent.Type,
 		ControlResults: convertControlResultsToTOs(reagent.ControlResults),
 	}
@@ -4484,6 +4495,90 @@ func (r *analysisRepository) SaveCerberusIDForReagent(ctx context.Context, reage
 	}
 
 	return nil
+}
+
+func (r *analysisRepository) GetAnalysisResultIdsSinceLastControlByReagent(ctx context.Context, reagent Reagent, examinedAt time.Time) ([]uuid.UUID, error) {
+	analysisResultIds := make([]uuid.UUID, 0)
+
+	preparedValues := map[string]interface{}{
+		"manufacturer": reagent.Manufacturer,
+		"lot_no":       reagent.LotNo,
+		"serial":       reagent.SerialNumber,
+		"name":         reagent.Name,
+		"examined_at":  examinedAt,
+	}
+
+	query := fmt.Sprintf(`WITH latest_control_timestamp AS (SELECT skra.id AS reagent_id, MAX(skcr.examined_at) AS control_examined_at
+		FROM %s.sk_reagents skra
+		JOIN %s.sk_reagent_control_result_relations skrcrr ON skra.id = skrcrr.reagent_id
+		JOIN %s.sk_control_results skcr ON skrcrr.control_result_id = skcr.id
+		WHERE skra.manufacturer = :manufacturer AND skra.lot_no = :lot_no AND skra.serial = :serial AND skra.name = :name AND skcr.examined_at < :examined_at
+		GROUP BY skra.id)
+	SELECT skar.id FROM %s.sk_analysis_results skar
+		JOIN %s.sk_analysis_result_reagent_relations skarr ON skar.id = skarr.analysis_result_id
+		JOIN %s.sk_reagents skr ON skarr.reagent_id = skr.id
+		LEFT JOIN latest_control_timestamp lct ON skr.id = lct.reagent_id
+	WHERE skr.manufacturer = :manufacturer AND skr.lot_no = :lot_no AND skr.serial = :serial AND skr.name = :name
+		AND skar.yielded_at < :examined_at AND (lct.control_examined_at IS NULL OR skar.yielded_at >= lct.control_examined_at)`, r.dbSchema, r.dbSchema, r.dbSchema, r.dbSchema, r.dbSchema, r.dbSchema)
+	rows, err := r.db.NamedQueryContext(ctx, query, preparedValues)
+	if err != nil {
+		log.Error().Err(err).Msg(msgFailedToLoadAnalysisResultIdsForLatestControlResult)
+		return analysisResultIds, ErrFailedToLoadAnalysisResultIdsForLatestControlResult
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		var analysisResultId uuid.UUID
+		err := rows.Scan(&analysisResultId)
+		if err != nil {
+			log.Error().Err(err).Msg(msgFailedToLoadAnalysisResultIdsForLatestControlResult)
+			return analysisResultIds, ErrFailedToLoadAnalysisResultIdsForLatestControlResult
+		}
+		analysisResultIds = append(analysisResultIds, analysisResultId)
+	}
+
+	return analysisResultIds, nil
+}
+
+func (r *analysisRepository) GetLatestControlResultIdByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time) (ControlResult, error) {
+	controlResult := ControlResult{}
+	preparedValues := map[string]interface{}{
+		"manufacturer": reagent.Manufacturer,
+		"lot_no":       reagent.LotNo,
+		"serial":       reagent.SerialNumber,
+		"name":         reagent.Name,
+	}
+
+	query := `SELECT skcr.id FROM citm.sk_control_results skcr
+    			JOIN citm.sk_reagent_control_result_relations skrcrr ON skcr.id = skrcrr.control_result_id
+    			JOIN citm.sk_reagents skr ON skrcrr.reagent_id = skr.id
+				WHERE skr.manufacturer = :manufacturer AND skr.lot_no = :lot_no AND skr.serial = :serial AND skr.name = :name`
+	if resultYieldTime != nil {
+		preparedValues["result_yield_time"] = resultYieldTime
+		query += ` AND skcr.examined_at < :result_yield_time`
+	}
+	query += ` ORDER BY skcr.examined_at DESC LIMIT 1`
+	rows, err := r.db.NamedQueryContext(ctx, query, preparedValues)
+	if err != nil {
+		log.Error().Err(err).Msg(msgFailedToLoadLatestControlResultId)
+		return controlResult, ErrFailedToLoadLatestControlResultId
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		var id uuid.UUID
+		err := rows.Scan(&id)
+		if err != nil {
+			log.Error().Err(err).Msg(msgFailedToLoadLatestControlResultId)
+			return controlResult, ErrFailedToLoadLatestControlResultId
+		}
+		controlResult.ID = id
+		return controlResult, nil
+	}
+
+	return controlResult, ErrNoControlResultIdFoundForReagent
 }
 
 func (r *analysisRepository) MarkReagentControlResultRelationsAsProcessed(ctx context.Context, controlResultID uuid.UUID, reagentIDs []uuid.UUID) error {
@@ -4731,6 +4826,7 @@ func convertReagentToDAO(reagent Reagent) reagentDAO {
 		Manufacturer: reagent.Manufacturer,
 		SerialNumber: reagent.SerialNumber,
 		LotNo:        reagent.LotNo,
+		Name:         reagent.Name,
 		Type:         reagent.Type,
 	}
 	if reagent.ExpirationDate != nil {
@@ -4976,6 +5072,7 @@ func convertReagentDAOsToReagentList(reagentDAOs []reagentDAO) []Reagent {
 			SerialNumber: reagentDAOs[i].SerialNumber,
 			LotNo:        reagentDAOs[i].LotNo,
 			Type:         reagentDAOs[i].Type,
+			Name:         reagentDAOs[i].Name,
 			CreatedAt:    reagentDAOs[i].CreatedAt,
 		}
 	}
@@ -4988,6 +5085,7 @@ func convertReagentDAOToReagent(reagentDAO reagentDAO) Reagent {
 		SerialNumber: reagentDAO.SerialNumber,
 		LotNo:        reagentDAO.LotNo,
 		Type:         reagentDAO.Type,
+		Name:         reagentDAO.Name,
 		CreatedAt:    reagentDAO.CreatedAt,
 	}
 	return reagent

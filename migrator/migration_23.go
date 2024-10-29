@@ -2,8 +2,6 @@ package migrator
 
 const migration_23 = `
 ALTER TABLE <SCHEMA_PLACEHOLDER>.sk_analysis_result_reagent_infos
-    DROP COLUMN name;
-ALTER TABLE <SCHEMA_PLACEHOLDER>.sk_analysis_result_reagent_infos
     DROP COLUMN code;
 ALTER TABLE <SCHEMA_PLACEHOLDER>.sk_analysis_result_reagent_infos
     DROP COLUMN analysis_result_id;                
@@ -24,7 +22,7 @@ ALTER TABLE <SCHEMA_PLACEHOLDER>.sk_analysis_result_reagent_infos
 ALTER TABLE <SCHEMA_PLACEHOLDER>.sk_analysis_result_reagent_infos
     RENAME COLUMN date_created TO created_at;
 ALTER TABLE <SCHEMA_PLACEHOLDER>.sk_analysis_result_reagent_infos RENAME TO sk_reagents;
-CREATE UNIQUE INDEX sk_idx_reagents_unique ON <SCHEMA_PLACEHOLDER>.sk_reagents(manufacturer, serial, lot_no);
+CREATE UNIQUE INDEX sk_idx_reagents_unique ON <SCHEMA_PLACEHOLDER>.sk_reagents(manufacturer, serial, lot_no, name);
 
 ALTER TABLE <SCHEMA_PLACEHOLDER>.sk_analysis_results
     ADD COLUMN cerberus_id UUID NULL;

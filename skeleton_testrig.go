@@ -2,6 +2,7 @@ package skeleton
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -14,6 +15,7 @@ type SkeletonTestRig struct {
 
 	storedInstrumentsMap              map[string]Instrument
 	StoredAnalysisResults             []AnalysisResultSet
+	ControlResults                    map[string]ControlResult
 	StoredStandaloneControlResultSets []StandaloneControlResult
 	AnalysisRequests                  []*AnalysisRequest
 	AnalysisRequestExtraValues        map[string]string
@@ -23,6 +25,7 @@ func NewTestRig() *SkeletonTestRig {
 	return &SkeletonTestRig{
 		storedInstrumentsMap:       make(map[string]Instrument),
 		StoredAnalysisResults:      []AnalysisResultSet{},
+		ControlResults:             make(map[string]ControlResult),
 		AnalysisRequests:           []*AnalysisRequest{},
 		AnalysisRequestExtraValues: make(map[string]string),
 	}
@@ -88,6 +91,14 @@ func (sr *SkeletonTestRig) SubmitAnalysisResultBatch(ctx context.Context, result
 func (sr *SkeletonTestRig) SubmitControlResults(ctx context.Context, controlResults []StandaloneControlResult) error {
 	sr.StoredStandaloneControlResultSets = append(sr.StoredStandaloneControlResultSets, controlResults...)
 	return nil
+}
+
+func (sr *SkeletonTestRig) GetAnalysisResultIdsSinceLastControlByReagent(ctx context.Context, reagent Reagent, examinedAt time.Time) ([]uuid.UUID, error) {
+	return make([]uuid.UUID, 0), nil
+}
+
+func (sr *SkeletonTestRig) GetLatestControlResultIdByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time) (ControlResult, error) {
+	return sr.ControlResults[fmt.Sprintf("%s%s%s", reagent.Manufacturer, reagent.LotNo, reagent.SerialNumber)], nil
 }
 
 func (sr *SkeletonTestRig) GetInstrument(ctx context.Context, instrumentID uuid.UUID) (Instrument, error) {

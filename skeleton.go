@@ -22,19 +22,19 @@ import (
 )
 
 type skeleton struct {
-	ctx                        context.Context
-	config                     config.Configuration
-	sqlConn                    *sqlx.DB
-	dbSchema                   string
-	migrator                   migrator.SkeletonMigrator
-	api                        GinApi
-	analysisRepository         AnalysisRepository
-	analysisService            AnalysisService
-	instrumentService          InstrumentService
-	consoleLogService          service.ConsoleLogService
-	sortingRuleService         SortingRuleService
-	resultsBuffer              []AnalysisResult
-	resultBatchesChan          chan []AnalysisResult
+	ctx                          context.Context
+	config                       config.Configuration
+	sqlConn                      *sqlx.DB
+	dbSchema                     string
+	migrator                     migrator.SkeletonMigrator
+	api                          GinApi
+	analysisRepository           AnalysisRepository
+	analysisService              AnalysisService
+	instrumentService            InstrumentService
+	consoleLogService            service.ConsoleLogService
+	sortingRuleService           SortingRuleService
+	resultsBuffer                []AnalysisResult
+	resultBatchesChan            chan []AnalysisResult
 	controlResultsBuffer         []MappedStandaloneControlResult
 	controlResultBatchesChan     chan []MappedStandaloneControlResult
 	cerberusClient               CerberusClient
@@ -379,6 +379,14 @@ func (s *skeleton) SaveControlResultImages(ctx context.Context, controlResult *C
 		return err
 	}
 	return nil
+}
+
+func (s *skeleton) GetAnalysisResultIdsSinceLastControlByReagent(ctx context.Context, reagent Reagent, examinedAt time.Time) ([]uuid.UUID, error) {
+	return s.analysisRepository.GetAnalysisResultIdsSinceLastControlByReagent(ctx, reagent, examinedAt)
+}
+
+func (s *skeleton) GetLatestControlResultIdByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time) (ControlResult, error) {
+	return s.analysisRepository.GetLatestControlResultIdByReagent(ctx, reagent, resultYieldTime)
 }
 
 func (s *skeleton) GetInstrument(ctx context.Context, instrumentID uuid.UUID) (Instrument, error) {

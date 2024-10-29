@@ -8,6 +8,7 @@ import (
 	"github.com/blutspende/skeleton/server"
 	"github.com/gin-gonic/gin"
 	"net/http"
+	"time"
 
 	config2 "github.com/blutspende/skeleton/config"
 	"github.com/blutspende/skeleton/db"
@@ -83,6 +84,9 @@ type SkeletonAPI interface {
 	SubmitAnalysisResultBatch(ctx context.Context, resultBatch AnalysisResultSet) error
 
 	SubmitControlResults(ctx context.Context, controlResults []StandaloneControlResult) error
+
+	GetAnalysisResultIdsSinceLastControlByReagent(ctx context.Context, reagent Reagent, examinedAt time.Time) ([]uuid.UUID, error)
+	GetLatestControlResultIdByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time) (ControlResult, error)
 
 	// GetInstrument returns all the settings regarding an instrument
 	// contains AnalyteMappings[] and RequestMappings[]

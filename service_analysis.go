@@ -11,7 +11,10 @@ import (
 	"time"
 )
 
-var ErrAnalysisRequestWithMatchingWorkItemIdFound = errors.New("analysis request with matching workitem id found")
+var (
+	ErrAnalysisRequestWithMatchingWorkItemIdFound = errors.New("analysis request with matching workitem id found")
+	ErrUnsupportedExpectedControlResultFound      = errors.New("unsupported expected control result operator found")
+)
 
 type AnalysisService interface {
 	CreateAnalysisRequests(ctx context.Context, analysisRequests []AnalysisRequest) ([]AnalysisRequestStatus, error)
@@ -473,8 +476,8 @@ func calculateControlResultIsValid(controlResult string, expectedControlResult E
 	case InClosedInterval:
 		return controlResult > expectedControlResult.ExpectedValue && controlResult < *expectedControlResult.ExpectedValue2, nil
 	}
-	log.Error().Msg("unsupported expected control result operator found")
-	return false, errors.New("unsupported expected control result operator found")
+	log.Error().Err(ErrUnsupportedExpectedControlResultFound)
+	return false, ErrUnsupportedExpectedControlResultFound
 }
 
 func (as *analysisService) CreateControlResultBatch(ctx context.Context, controlResults []StandaloneControlResult) ([]StandaloneControlResult, []uuid.UUID, error) {

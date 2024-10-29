@@ -109,6 +109,7 @@ type Reagent struct {
 	Manufacturer   string
 	SerialNumber   string
 	LotNo          string
+	Name           string
 	Type           ReagentType
 	CreatedAt      time.Time
 	ExpirationDate *time.Time

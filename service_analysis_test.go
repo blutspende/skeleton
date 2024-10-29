@@ -52,7 +52,7 @@ func TestCreateAnalysisRequestsWithError(t *testing.T) {
 }
 
 func TestCreateAnalysisResultStatusAndControlResultValid(t *testing.T) {
-	analysisResults := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(true, nil)
+	analysisResults := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(true, false, nil)
 
 	mockManager := &mockManager{}
 	analysisService := NewAnalysisService(&extendedMockAnalysisRepo{}, nil, nil, mockManager)
@@ -81,7 +81,7 @@ func TestCreateAnalysisResultStatusAndControlResultNotAllControlAvailable(t *tes
 		DeletedBy:      uuid.NullUUID{},
 	}
 
-	analysisResults := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(true, &expectedControlResult)
+	analysisResults := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(true, false, &expectedControlResult)
 
 	mockManager := &mockManager{}
 	analysisService := NewAnalysisService(&extendedMockAnalysisRepo{}, nil, nil, mockManager)
@@ -91,13 +91,15 @@ func TestCreateAnalysisResultStatusAndControlResultNotAllControlAvailable(t *tes
 	assert.Nil(t, err)
 	assert.Equal(t, 1, len(results))
 	assert.Equal(t, 2, len(results[0].AnalyteMapping.ExpectedControlResults))
+	assert.Equal(t, 1, len(results[0].Reagents[0].ControlResults))
 	assert.Equal(t, true, results[0].Reagents[0].ControlResults[0].IsValid)
 	assert.Equal(t, true, results[0].Reagents[0].ControlResults[0].IsComparedToExpectedResult)
+	//Expected 2 sample codes, only got control for one
 	assert.Equal(t, Preliminary, results[0].Status)
 }
 
 func TestCreateAnalysisResultStatusAndControlResultNotValid(t *testing.T) {
-	analysisResults := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(true, nil)
+	analysisResults := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(true, false, nil)
 	analysisResults[0].Reagents[0].ControlResults[0].Result = "37.5"
 
 	mockManager := &mockManager{}
@@ -114,7 +116,7 @@ func TestCreateAnalysisResultStatusAndControlResultNotValid(t *testing.T) {
 }
 
 func TestCreateAnalysisResultStatusAndControlResultNotMatchingSampleCodes(t *testing.T) {
-	analysisResults := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(true, nil)
+	analysisResults := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(true, false, nil)
 	analysisResults[0].Reagents[0].ControlResults[0].SampleCode = "sample2"
 	analysisResults[0].Reagents[0].ControlResults[0].AnalyteMapping = AnalyteMapping{}
 
@@ -132,7 +134,7 @@ func TestCreateAnalysisResultStatusAndControlResultNotMatchingSampleCodes(t *tes
 }
 
 func TestCreateAnalysisResultStatusAndControlResultWithoutExpectedControlResult(t *testing.T) {
-	analysisResults := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(false, nil)
+	analysisResults := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(false, false, nil)
 
 	mockManager := &mockManager{}
 	analysisService := NewAnalysisService(&extendedMockAnalysisRepo{}, nil, nil, mockManager)
@@ -145,6 +147,438 @@ func TestCreateAnalysisResultStatusAndControlResultWithoutExpectedControlResult(
 	assert.Equal(t, false, results[0].Reagents[0].ControlResults[0].IsValid)
 	assert.Equal(t, false, results[0].Reagents[0].ControlResults[0].IsComparedToExpectedResult)
 	assert.Equal(t, Final, results[0].Status)
+}
+
+func TestCreateAnalysisResultStatusAndControlResultWithOperatorNotEqualsValid(t *testing.T) {
+	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	expectedControlResult := ExpectedControlResult{
+		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
+		SampleCode:     "Sample1",
+		Operator:       NotEquals,
+		ExpectedValue:  "25",
+		ExpectedValue2: nil,
+		CreatedAt:      expectedControlResultCreatedAt,
+		DeletedAt:      nil,
+		CreatedBy:      uuid.UUID{},
+		DeletedBy:      uuid.NullUUID{},
+	}
+
+	analysisResults := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(true, true, &expectedControlResult)
+
+	mockManager := &mockManager{}
+	analysisService := NewAnalysisService(&extendedMockAnalysisRepo{}, nil, nil, mockManager)
+	results, err := analysisService.CreateAnalysisResultsBatch(context.TODO(), AnalysisResultSet{
+		Results: analysisResults,
+	})
+	assert.Nil(t, err)
+	assert.Equal(t, 1, len(results))
+	assert.Equal(t, 1, len(results[0].AnalyteMapping.ExpectedControlResults))
+	assert.Equal(t, true, results[0].Reagents[0].ControlResults[0].IsValid)
+	assert.Equal(t, true, results[0].Reagents[0].ControlResults[0].IsComparedToExpectedResult)
+	assert.Equal(t, Final, results[0].Status)
+}
+
+func TestCreateAnalysisResultStatusAndControlResultWithOperatorNotEqualsInvalid(t *testing.T) {
+	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	expectedControlResult := ExpectedControlResult{
+		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
+		SampleCode:     "Sample1",
+		Operator:       NotEquals,
+		ExpectedValue:  "40",
+		ExpectedValue2: nil,
+		CreatedAt:      expectedControlResultCreatedAt,
+		DeletedAt:      nil,
+		CreatedBy:      uuid.UUID{},
+		DeletedBy:      uuid.NullUUID{},
+	}
+
+	analysisResults := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(true, true, &expectedControlResult)
+
+	mockManager := &mockManager{}
+	analysisService := NewAnalysisService(&extendedMockAnalysisRepo{}, nil, nil, mockManager)
+	results, err := analysisService.CreateAnalysisResultsBatch(context.TODO(), AnalysisResultSet{
+		Results: analysisResults,
+	})
+	assert.Nil(t, err)
+	assert.Equal(t, 1, len(results))
+	assert.Equal(t, 1, len(results[0].AnalyteMapping.ExpectedControlResults))
+	assert.Equal(t, false, results[0].Reagents[0].ControlResults[0].IsValid)
+	assert.Equal(t, true, results[0].Reagents[0].ControlResults[0].IsComparedToExpectedResult)
+	assert.Equal(t, Final, results[0].Status)
+}
+
+func TestCreateAnalysisResultStatusAndControlResultWithOperatorGreaterOrEqualValid(t *testing.T) {
+	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	expectedControlResult := ExpectedControlResult{
+		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
+		SampleCode:     "Sample1",
+		Operator:       GreaterOrEqual,
+		ExpectedValue:  "25",
+		ExpectedValue2: nil,
+		CreatedAt:      expectedControlResultCreatedAt,
+		DeletedAt:      nil,
+		CreatedBy:      uuid.UUID{},
+		DeletedBy:      uuid.NullUUID{},
+	}
+
+	analysisResults := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(true, true, &expectedControlResult)
+
+	mockManager := &mockManager{}
+	analysisService := NewAnalysisService(&extendedMockAnalysisRepo{}, nil, nil, mockManager)
+	results, err := analysisService.CreateAnalysisResultsBatch(context.TODO(), AnalysisResultSet{
+		Results: analysisResults,
+	})
+	assert.Nil(t, err)
+	assert.Equal(t, 1, len(results))
+	assert.Equal(t, 1, len(results[0].AnalyteMapping.ExpectedControlResults))
+	assert.Equal(t, true, results[0].Reagents[0].ControlResults[0].IsValid)
+	assert.Equal(t, true, results[0].Reagents[0].ControlResults[0].IsComparedToExpectedResult)
+	assert.Equal(t, Final, results[0].Status)
+}
+
+func TestCreateAnalysisResultStatusAndControlResultWithOperatorGreaterOrEqualInvalid(t *testing.T) {
+	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	expectedControlResult := ExpectedControlResult{
+		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
+		SampleCode:     "Sample1",
+		Operator:       GreaterOrEqual,
+		ExpectedValue:  "45",
+		ExpectedValue2: nil,
+		CreatedAt:      expectedControlResultCreatedAt,
+		DeletedAt:      nil,
+		CreatedBy:      uuid.UUID{},
+		DeletedBy:      uuid.NullUUID{},
+	}
+
+	analysisResults := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(true, true, &expectedControlResult)
+
+	mockManager := &mockManager{}
+	analysisService := NewAnalysisService(&extendedMockAnalysisRepo{}, nil, nil, mockManager)
+	results, err := analysisService.CreateAnalysisResultsBatch(context.TODO(), AnalysisResultSet{
+		Results: analysisResults,
+	})
+	assert.Nil(t, err)
+	assert.Equal(t, 1, len(results))
+	assert.Equal(t, 1, len(results[0].AnalyteMapping.ExpectedControlResults))
+	assert.Equal(t, false, results[0].Reagents[0].ControlResults[0].IsValid)
+	assert.Equal(t, true, results[0].Reagents[0].ControlResults[0].IsComparedToExpectedResult)
+	assert.Equal(t, Final, results[0].Status)
+}
+
+func TestCreateAnalysisResultStatusAndControlResultWithOperatorGreaterValid(t *testing.T) {
+	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	expectedControlResult := ExpectedControlResult{
+		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
+		SampleCode:     "Sample1",
+		Operator:       Greater,
+		ExpectedValue:  "25",
+		ExpectedValue2: nil,
+		CreatedAt:      expectedControlResultCreatedAt,
+		DeletedAt:      nil,
+		CreatedBy:      uuid.UUID{},
+		DeletedBy:      uuid.NullUUID{},
+	}
+
+	analysisResults := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(true, true, &expectedControlResult)
+
+	mockManager := &mockManager{}
+	analysisService := NewAnalysisService(&extendedMockAnalysisRepo{}, nil, nil, mockManager)
+	results, err := analysisService.CreateAnalysisResultsBatch(context.TODO(), AnalysisResultSet{
+		Results: analysisResults,
+	})
+	assert.Nil(t, err)
+	assert.Equal(t, 1, len(results))
+	assert.Equal(t, 1, len(results[0].AnalyteMapping.ExpectedControlResults))
+	assert.Equal(t, true, results[0].Reagents[0].ControlResults[0].IsValid)
+	assert.Equal(t, true, results[0].Reagents[0].ControlResults[0].IsComparedToExpectedResult)
+	assert.Equal(t, Final, results[0].Status)
+}
+
+func TestCreateAnalysisResultStatusAndControlResultWithOperatorGreaterInvalid(t *testing.T) {
+	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	expectedControlResult := ExpectedControlResult{
+		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
+		SampleCode:     "Sample1",
+		Operator:       Greater,
+		ExpectedValue:  "40",
+		ExpectedValue2: nil,
+		CreatedAt:      expectedControlResultCreatedAt,
+		DeletedAt:      nil,
+		CreatedBy:      uuid.UUID{},
+		DeletedBy:      uuid.NullUUID{},
+	}
+
+	analysisResults := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(true, true, &expectedControlResult)
+
+	mockManager := &mockManager{}
+	analysisService := NewAnalysisService(&extendedMockAnalysisRepo{}, nil, nil, mockManager)
+	results, err := analysisService.CreateAnalysisResultsBatch(context.TODO(), AnalysisResultSet{
+		Results: analysisResults,
+	})
+	assert.Nil(t, err)
+	assert.Equal(t, 1, len(results))
+	assert.Equal(t, 1, len(results[0].AnalyteMapping.ExpectedControlResults))
+	assert.Equal(t, false, results[0].Reagents[0].ControlResults[0].IsValid)
+	assert.Equal(t, true, results[0].Reagents[0].ControlResults[0].IsComparedToExpectedResult)
+	assert.Equal(t, Final, results[0].Status)
+}
+
+func TestCreateAnalysisResultStatusAndControlResultWithOperatorLessOrEqualValid(t *testing.T) {
+	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	expectedControlResult := ExpectedControlResult{
+		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
+		SampleCode:     "Sample1",
+		Operator:       LessOrEqual,
+		ExpectedValue:  "45",
+		ExpectedValue2: nil,
+		CreatedAt:      expectedControlResultCreatedAt,
+		DeletedAt:      nil,
+		CreatedBy:      uuid.UUID{},
+		DeletedBy:      uuid.NullUUID{},
+	}
+
+	analysisResults := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(true, true, &expectedControlResult)
+
+	mockManager := &mockManager{}
+	analysisService := NewAnalysisService(&extendedMockAnalysisRepo{}, nil, nil, mockManager)
+	results, err := analysisService.CreateAnalysisResultsBatch(context.TODO(), AnalysisResultSet{
+		Results: analysisResults,
+	})
+	assert.Nil(t, err)
+	assert.Equal(t, 1, len(results))
+	assert.Equal(t, 1, len(results[0].AnalyteMapping.ExpectedControlResults))
+	assert.Equal(t, true, results[0].Reagents[0].ControlResults[0].IsValid)
+	assert.Equal(t, true, results[0].Reagents[0].ControlResults[0].IsComparedToExpectedResult)
+	assert.Equal(t, Final, results[0].Status)
+}
+
+func TestCreateAnalysisResultStatusAndControlResultWithOperatorLessOrEqualInvalid(t *testing.T) {
+	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	expectedControlResult := ExpectedControlResult{
+		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
+		SampleCode:     "Sample1",
+		Operator:       LessOrEqual,
+		ExpectedValue:  "25",
+		ExpectedValue2: nil,
+		CreatedAt:      expectedControlResultCreatedAt,
+		DeletedAt:      nil,
+		CreatedBy:      uuid.UUID{},
+		DeletedBy:      uuid.NullUUID{},
+	}
+
+	analysisResults := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(true, true, &expectedControlResult)
+
+	mockManager := &mockManager{}
+	analysisService := NewAnalysisService(&extendedMockAnalysisRepo{}, nil, nil, mockManager)
+	results, err := analysisService.CreateAnalysisResultsBatch(context.TODO(), AnalysisResultSet{
+		Results: analysisResults,
+	})
+	assert.Nil(t, err)
+	assert.Equal(t, 1, len(results))
+	assert.Equal(t, 1, len(results[0].AnalyteMapping.ExpectedControlResults))
+	assert.Equal(t, false, results[0].Reagents[0].ControlResults[0].IsValid)
+	assert.Equal(t, true, results[0].Reagents[0].ControlResults[0].IsComparedToExpectedResult)
+	assert.Equal(t, Final, results[0].Status)
+}
+
+func TestCreateAnalysisResultStatusAndControlResultWithOperatorLessValid(t *testing.T) {
+	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	expectedControlResult := ExpectedControlResult{
+		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
+		SampleCode:     "Sample1",
+		Operator:       Less,
+		ExpectedValue:  "45",
+		ExpectedValue2: nil,
+		CreatedAt:      expectedControlResultCreatedAt,
+		DeletedAt:      nil,
+		CreatedBy:      uuid.UUID{},
+		DeletedBy:      uuid.NullUUID{},
+	}
+
+	analysisResults := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(true, true, &expectedControlResult)
+
+	mockManager := &mockManager{}
+	analysisService := NewAnalysisService(&extendedMockAnalysisRepo{}, nil, nil, mockManager)
+	results, err := analysisService.CreateAnalysisResultsBatch(context.TODO(), AnalysisResultSet{
+		Results: analysisResults,
+	})
+	assert.Nil(t, err)
+	assert.Equal(t, 1, len(results))
+	assert.Equal(t, 1, len(results[0].AnalyteMapping.ExpectedControlResults))
+	assert.Equal(t, true, results[0].Reagents[0].ControlResults[0].IsValid)
+	assert.Equal(t, true, results[0].Reagents[0].ControlResults[0].IsComparedToExpectedResult)
+	assert.Equal(t, Final, results[0].Status)
+}
+
+func TestCreateAnalysisResultStatusAndControlResultWithOperatorLessInvalid(t *testing.T) {
+	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	expectedControlResult := ExpectedControlResult{
+		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
+		SampleCode:     "Sample1",
+		Operator:       Less,
+		ExpectedValue:  "40",
+		ExpectedValue2: nil,
+		CreatedAt:      expectedControlResultCreatedAt,
+		DeletedAt:      nil,
+		CreatedBy:      uuid.UUID{},
+		DeletedBy:      uuid.NullUUID{},
+	}
+
+	analysisResults := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(true, true, &expectedControlResult)
+
+	mockManager := &mockManager{}
+	analysisService := NewAnalysisService(&extendedMockAnalysisRepo{}, nil, nil, mockManager)
+	results, err := analysisService.CreateAnalysisResultsBatch(context.TODO(), AnalysisResultSet{
+		Results: analysisResults,
+	})
+	assert.Nil(t, err)
+	assert.Equal(t, 1, len(results))
+	assert.Equal(t, 1, len(results[0].AnalyteMapping.ExpectedControlResults))
+	assert.Equal(t, false, results[0].Reagents[0].ControlResults[0].IsValid)
+	assert.Equal(t, true, results[0].Reagents[0].ControlResults[0].IsComparedToExpectedResult)
+	assert.Equal(t, Final, results[0].Status)
+}
+
+func TestCreateAnalysisResultStatusAndControlResultWithOperatorInOpenIntervalValid(t *testing.T) {
+	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	expectedControlResult := ExpectedControlResult{
+		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
+		SampleCode:     "Sample1",
+		Operator:       InOpenInterval,
+		ExpectedValue:  "40",
+		ExpectedValue2: strToPtr("50"),
+		CreatedAt:      expectedControlResultCreatedAt,
+		DeletedAt:      nil,
+		CreatedBy:      uuid.UUID{},
+		DeletedBy:      uuid.NullUUID{},
+	}
+
+	analysisResults := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(true, true, &expectedControlResult)
+
+	mockManager := &mockManager{}
+	analysisService := NewAnalysisService(&extendedMockAnalysisRepo{}, nil, nil, mockManager)
+	results, err := analysisService.CreateAnalysisResultsBatch(context.TODO(), AnalysisResultSet{
+		Results: analysisResults,
+	})
+	assert.Nil(t, err)
+	assert.Equal(t, 1, len(results))
+	assert.Equal(t, 1, len(results[0].AnalyteMapping.ExpectedControlResults))
+	assert.Equal(t, true, results[0].Reagents[0].ControlResults[0].IsValid)
+	assert.Equal(t, true, results[0].Reagents[0].ControlResults[0].IsComparedToExpectedResult)
+	assert.Equal(t, Final, results[0].Status)
+}
+
+func TestCreateAnalysisResultStatusAndControlResultWithOperatorInOpenIntervalInvalid(t *testing.T) {
+	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	expectedControlResult := ExpectedControlResult{
+		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
+		SampleCode:     "Sample1",
+		Operator:       InOpenInterval,
+		ExpectedValue:  "41",
+		ExpectedValue2: strToPtr("50"),
+		CreatedAt:      expectedControlResultCreatedAt,
+		DeletedAt:      nil,
+		CreatedBy:      uuid.UUID{},
+		DeletedBy:      uuid.NullUUID{},
+	}
+
+	analysisResults := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(true, true, &expectedControlResult)
+
+	mockManager := &mockManager{}
+	analysisService := NewAnalysisService(&extendedMockAnalysisRepo{}, nil, nil, mockManager)
+	results, err := analysisService.CreateAnalysisResultsBatch(context.TODO(), AnalysisResultSet{
+		Results: analysisResults,
+	})
+	assert.Nil(t, err)
+	assert.Equal(t, 1, len(results))
+	assert.Equal(t, 1, len(results[0].AnalyteMapping.ExpectedControlResults))
+	assert.Equal(t, false, results[0].Reagents[0].ControlResults[0].IsValid)
+	assert.Equal(t, true, results[0].Reagents[0].ControlResults[0].IsComparedToExpectedResult)
+	assert.Equal(t, Final, results[0].Status)
+}
+
+func TestCreateAnalysisResultStatusAndControlResultWithOperatorInClosedIntervalValid(t *testing.T) {
+	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	expectedControlResult := ExpectedControlResult{
+		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
+		SampleCode:     "Sample1",
+		Operator:       InClosedInterval,
+		ExpectedValue:  "39",
+		ExpectedValue2: strToPtr("50"),
+		CreatedAt:      expectedControlResultCreatedAt,
+		DeletedAt:      nil,
+		CreatedBy:      uuid.UUID{},
+		DeletedBy:      uuid.NullUUID{},
+	}
+
+	analysisResults := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(true, true, &expectedControlResult)
+
+	mockManager := &mockManager{}
+	analysisService := NewAnalysisService(&extendedMockAnalysisRepo{}, nil, nil, mockManager)
+	results, err := analysisService.CreateAnalysisResultsBatch(context.TODO(), AnalysisResultSet{
+		Results: analysisResults,
+	})
+	assert.Nil(t, err)
+	assert.Equal(t, 1, len(results))
+	assert.Equal(t, 1, len(results[0].AnalyteMapping.ExpectedControlResults))
+	assert.Equal(t, true, results[0].Reagents[0].ControlResults[0].IsValid)
+	assert.Equal(t, true, results[0].Reagents[0].ControlResults[0].IsComparedToExpectedResult)
+	assert.Equal(t, Final, results[0].Status)
+}
+
+func TestCreateAnalysisResultStatusAndControlResultWithOperatorInClosedIntervalInvalid(t *testing.T) {
+	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	expectedControlResult := ExpectedControlResult{
+		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
+		SampleCode:     "Sample1",
+		Operator:       InClosedInterval,
+		ExpectedValue:  "40",
+		ExpectedValue2: strToPtr("50"),
+		CreatedAt:      expectedControlResultCreatedAt,
+		DeletedAt:      nil,
+		CreatedBy:      uuid.UUID{},
+		DeletedBy:      uuid.NullUUID{},
+	}
+
+	analysisResults := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(true, true, &expectedControlResult)
+
+	mockManager := &mockManager{}
+	analysisService := NewAnalysisService(&extendedMockAnalysisRepo{}, nil, nil, mockManager)
+	results, err := analysisService.CreateAnalysisResultsBatch(context.TODO(), AnalysisResultSet{
+		Results: analysisResults,
+	})
+	assert.Nil(t, err)
+	assert.Equal(t, 1, len(results))
+	assert.Equal(t, 1, len(results[0].AnalyteMapping.ExpectedControlResults))
+	assert.Equal(t, false, results[0].Reagents[0].ControlResults[0].IsValid)
+	assert.Equal(t, true, results[0].Reagents[0].ControlResults[0].IsComparedToExpectedResult)
+	assert.Equal(t, Final, results[0].Status)
+}
+
+func TestCreateAnalysisResultStatusAndControlResultWithUnsupportedOperator(t *testing.T) {
+	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	expectedControlResult := ExpectedControlResult{
+		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
+		SampleCode:     "Sample1",
+		Operator:       NotExists,
+		ExpectedValue:  "40",
+		ExpectedValue2: nil,
+		CreatedAt:      expectedControlResultCreatedAt,
+		DeletedAt:      nil,
+		CreatedBy:      uuid.UUID{},
+		DeletedBy:      uuid.NullUUID{},
+	}
+
+	analysisResults := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(true, true, &expectedControlResult)
+
+	mockManager := &mockManager{}
+	analysisService := NewAnalysisService(&extendedMockAnalysisRepo{}, nil, nil, mockManager)
+	results, err := analysisService.CreateAnalysisResultsBatch(context.TODO(), AnalysisResultSet{
+		Results: analysisResults,
+	})
+	assert.NotNil(t, err)
+	assert.Equal(t, ErrUnsupportedExpectedControlResultFound, err)
+	assert.Equal(t, 0, len(results))
 }
 
 func TestCreateControlResultBatchWithOnlyPreControlResults(t *testing.T) {
@@ -257,6 +691,7 @@ func TestCreateControlResultBatch(t *testing.T) {
 		Manufacturer:   "Roche",
 		SerialNumber:   "000000002",
 		LotNo:          "000000003",
+		Name:           "",
 		Type:           Standard,
 		CreatedAt:      time.Time{},
 		ControlResults: []ControlResult{controlResult1},
@@ -290,25 +725,28 @@ func TestCreateControlResultBatch(t *testing.T) {
 	assert.Equal(t, true, results[1].IsComparedToExpectedResult)
 }
 
-func setupTestDataForAnalysisResultStatusAndControlResultValidCheck(addExpectedControlResult bool, result *ExpectedControlResult) []AnalysisResult {
+func setupTestDataForAnalysisResultStatusAndControlResultValidCheck(addExpectedControlResult bool, useOnlyTheIncludedExpectedResult bool, result *ExpectedControlResult) []AnalysisResult {
 	resultYieldedAt, _ := utils.FormatTimeStringToBerlinTime("20240927162727", "20060102150405")
 	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	validUntil, _ := utils.FormatTimeStringToBerlinTime("20240930162727", "20060102150405")
 	controlInstrumentAnalyte := "TESTCONTROLANALYTE"
 
-	expectedControlResult := ExpectedControlResult{
-		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
-		SampleCode:     "Sample1",
-		Operator:       Equals,
-		ExpectedValue:  "40",
-		ExpectedValue2: nil,
-		CreatedAt:      expectedControlResultCreatedAt,
-		DeletedAt:      nil,
-		CreatedBy:      uuid.UUID{},
-		DeletedBy:      uuid.NullUUID{},
-	}
+	expectedControlResults := make([]ExpectedControlResult, 0)
 
-	expectedControlResults := []ExpectedControlResult{expectedControlResult}
+	if !useOnlyTheIncludedExpectedResult {
+		expectedControlResult := ExpectedControlResult{
+			ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
+			SampleCode:     "Sample1",
+			Operator:       Equals,
+			ExpectedValue:  "40",
+			ExpectedValue2: nil,
+			CreatedAt:      expectedControlResultCreatedAt,
+			DeletedAt:      nil,
+			CreatedBy:      uuid.UUID{},
+			DeletedBy:      uuid.NullUUID{},
+		}
+		expectedControlResults = append(expectedControlResults, expectedControlResult)
+	}
 
 	if result != nil {
 		expectedControlResults = append(expectedControlResults, *result)
@@ -384,6 +822,7 @@ func setupTestDataForAnalysisResultStatusAndControlResultValidCheck(addExpectedC
 		SerialNumber:   "000000001",
 		LotNo:          "000000002",
 		Type:           Standard,
+		Name:           "",
 		CreatedAt:      time.Time{},
 		ControlResults: []ControlResult{controlResult},
 	}
@@ -491,6 +930,7 @@ func setupTestDataForStandaloneControlProcessing() (ControlResult, Reagent) {
 		SerialNumber:   "000000001",
 		LotNo:          "000000002",
 		Type:           Standard,
+		Name:           "",
 		CreatedAt:      time.Time{},
 		ControlResults: []ControlResult{controlResult},
 	}
@@ -611,6 +1051,14 @@ func (r *extendedMockAnalysisRepo) SaveCerberusIDForControlResult(ctx context.Co
 
 func (r *extendedMockAnalysisRepo) SaveCerberusIDForReagent(ctx context.Context, reagentID uuid.UUID, cerberusID uuid.UUID) error {
 	return nil
+}
+
+func (r *extendedMockAnalysisRepo) GetAnalysisResultIdsSinceLastControlByReagent(ctx context.Context, reagent Reagent, examinedAt time.Time) ([]uuid.UUID, error) {
+	return nil, nil
+}
+
+func (r *extendedMockAnalysisRepo) GetLatestControlResultIdByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time) (ControlResult, error) {
+	return ControlResult{}, nil
 }
 
 func (r *extendedMockAnalysisRepo) MarkReagentControlResultRelationsAsProcessed(ctx context.Context, controlResultID uuid.UUID, reagentIDs []uuid.UUID) error {
