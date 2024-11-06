@@ -286,17 +286,16 @@ type AnalysisRepository interface {
 	MarkAnalysisResultsAsProcessed(ctx context.Context, analysisRequestIDs []uuid.UUID) error
 
 	DeleteOldCerberusQueueItems(ctx context.Context, cleanupDays, limit int) (int64, error)
-	DeleteOldAnalysisRequests(ctx context.Context, cleanupDays, limit int) (int64, error)
-	DeleteOldAnalysisResults(ctx context.Context, cleanupDays, limit int) (int64, error)
+	DeleteOldAnalysisRequestsWithTx(ctx context.Context, cleanupDays, limit int, tx db.DbConnector) (int64, error)
+	DeleteOldAnalysisResultsWithTx(ctx context.Context, cleanupDays, limit int, tx db.DbConnector) (int64, error)
 
 	CreateTransaction() (db.DbConnector, error)
 	WithTransaction(tx db.DbConnector) AnalysisRepository
 }
 
 type analysisRepository struct {
-	db           db.DbConnector
-	dbSchema     string
-	isExternalTx bool
+	db       db.DbConnector
+	dbSchema string
 }
 
 func NewAnalysisRepository(db db.DbConnector, dbSchema string) AnalysisRepository {
@@ -2153,21 +2152,12 @@ func (r *analysisRepository) DeleteOldCerberusQueueItems(ctx context.Context, cl
 	return result.RowsAffected()
 }
 
-func (r *analysisRepository) DeleteOldAnalysisRequests(ctx context.Context, cleanupDays, limit int) (int64, error) {
-	tx, err := r.getTransaction()
-	if err != nil {
-		log.Error().Err(err).Msg("delete old analysis requests failed")
-		return 0, err
-	}
-
+func (r *analysisRepository) DeleteOldAnalysisRequestsWithTx(ctx context.Context, cleanupDays, limit int, tx db.DbConnector) (int64, error) {
 	txR := *r
 	txR.db = tx
 	query := fmt.Sprintf(`SELECT id, sample_code FROM %s.sk_analysis_requests WHERE valid_until_time < (current_date - ($1 ||' DAY')::INTERVAL) AND is_processed LIMIT $2;`, r.dbSchema)
 	rows, err := txR.db.QueryxContext(ctx, query, cleanupDays, limit)
 	if err != nil {
-		if !r.isExternalTx {
-			_ = tx.Rollback()
-		}
 		log.Error().Err(err).Msg("delete old analysis requests failed")
 		return 0, err
 	}
@@ -2179,9 +2169,6 @@ func (r *analysisRepository) DeleteOldAnalysisRequests(ctx context.Context, clea
 		var sampleCode string
 		err = rows.Scan(&id, &sampleCode)
 		if err != nil {
-			if !r.isExternalTx {
-				_ = tx.Rollback()
-			}
 			log.Error().Err(err).Msg("delete old analysis requests failed")
 			return 0, err
 		}
@@ -2194,31 +2181,19 @@ func (r *analysisRepository) DeleteOldAnalysisRequests(ctx context.Context, clea
 
 	err = txR.deleteAnalysisRequestExtraValuesByAnalysisRequestIDs(ctx, analysisRequestIDs)
 	if err != nil {
-		if !r.isExternalTx {
-			_ = tx.Rollback()
-		}
 		return 0, err
 	}
 	err = txR.deleteSubjectInfosByAnalysisRequestIDs(ctx, analysisRequestIDs)
 	if err != nil {
-		if !r.isExternalTx {
-			_ = tx.Rollback()
-		}
 		return 0, err
 	}
 	err = txR.deleteAnalysisRequestInstrumentTransmissionsByAnalysisRequestIDs(ctx, analysisRequestIDs)
 	if err != nil {
-		if !r.isExternalTx {
-			_ = tx.Rollback()
-		}
 		return 0, err
 	}
 
 	err = txR.deleteAppliedSortingRuleTargetsBySampleCodes(ctx, sampleCodes)
 	if err != nil {
-		if !r.isExternalTx {
-			_ = tx.Rollback()
-		}
 		return 0, err
 	}
 
@@ -2227,18 +2202,8 @@ func (r *analysisRepository) DeleteOldAnalysisRequests(ctx context.Context, clea
 	query = txR.db.Rebind(query)
 	result, err := txR.db.ExecContext(ctx, query, args...)
 	if err != nil {
-		if !r.isExternalTx {
-			_ = tx.Rollback()
-		}
 		log.Error().Err(err).Msg("delete old analysis requests failed")
 		return 0, err
-	}
-	if !r.isExternalTx {
-		err = tx.Commit()
-		if err != nil {
-			_ = tx.Rollback()
-			return 0, err
-		}
 	}
 
 	return result.RowsAffected()
@@ -2324,21 +2289,13 @@ func (r *analysisRepository) deleteAppliedSortingRuleTargetsBySampleCodes(ctx co
 	return err
 }
 
-func (r *analysisRepository) DeleteOldAnalysisResults(ctx context.Context, cleanupDays, limit int) (int64, error) {
-	tx, err := r.getTransaction()
-	if err != nil {
-		log.Error().Err(err).Msg("delete old analysis results failed")
-		return 0, err
-	}
+func (r *analysisRepository) DeleteOldAnalysisResultsWithTx(ctx context.Context, cleanupDays, limit int, tx db.DbConnector) (int64, error) {
 	txR := *r
 	txR.db = tx
 
 	query := fmt.Sprintf(`SELECT id FROM %s.sk_analysis_results WHERE GREATEST(valid_until, created_at + INTERVAL '14 DAYS') < (current_date - ($1 ||' DAY')::INTERVAL) AND is_processed LIMIT $2;`, r.dbSchema)
 	rows, err := txR.db.QueryxContext(ctx, query, cleanupDays, limit)
 	if err != nil {
-		if !r.isExternalTx {
-			_ = tx.Rollback()
-		}
 		log.Error().Err(err).Msg("delete old analysis results failed")
 		return 0, err
 	}
@@ -2349,52 +2306,33 @@ func (r *analysisRepository) DeleteOldAnalysisResults(ctx context.Context, clean
 		var id uuid.UUID
 		err = rows.Scan(&id)
 		if err != nil {
-			if !r.isExternalTx {
-				_ = tx.Rollback()
-			}
 			log.Error().Err(err).Msg("delete old analysis results failed")
 			return 0, err
 		}
 		analysisResultIDs = append(analysisResultIDs, id)
 	}
 	if len(analysisResultIDs) == 0 {
-		_ = tx.Rollback()
 		return 0, nil
 	}
 
 	err = txR.deleteImagesByAnalysisResultIDs(ctx, analysisResultIDs)
 	if err != nil {
-		if !r.isExternalTx {
-			_ = tx.Rollback()
-		}
 		return 0, err
 	}
 	err = txR.deleteChannelResultsByAnalysisResultIDs(ctx, analysisResultIDs)
 	if err != nil {
-		if !r.isExternalTx {
-			_ = tx.Rollback()
-		}
 		return 0, err
 	}
 	err = txR.deleteAnalysisResultWarningsByAnalysisResultIDs(ctx, analysisResultIDs)
 	if err != nil {
-		if !r.isExternalTx {
-			_ = tx.Rollback()
-		}
 		return 0, err
 	}
 	err = txR.deleteAnalysisResultExtraValuesByAnalysisResultIDs(ctx, analysisResultIDs)
 	if err != nil {
-		if !r.isExternalTx {
-			_ = tx.Rollback()
-		}
 		return 0, err
 	}
 	err = txR.deleteReagentInfosByAnalysisResultIDs(ctx, analysisResultIDs)
 	if err != nil {
-		if !r.isExternalTx {
-			_ = tx.Rollback()
-		}
 		return 0, err
 	}
 	query = fmt.Sprintf(`DELETE FROM %s.sk_analysis_results WHERE id IN (?);`, r.dbSchema)
@@ -2402,19 +2340,8 @@ func (r *analysisRepository) DeleteOldAnalysisResults(ctx context.Context, clean
 	query = txR.db.Rebind(query)
 	result, err := txR.db.ExecContext(ctx, query, args...)
 	if err != nil {
-		if !r.isExternalTx {
-			_ = tx.Rollback()
-		}
 		log.Error().Err(err).Msg("delete old analysis results failed")
 		return 0, err
-	}
-
-	if !r.isExternalTx {
-		err = tx.Commit()
-		if err != nil {
-			_ = tx.Rollback()
-			return 0, err
-		}
 	}
 
 	return result.RowsAffected()
@@ -2999,16 +2926,7 @@ func (r *analysisRepository) CreateTransaction() (db.DbConnector, error) {
 func (r *analysisRepository) WithTransaction(tx db.DbConnector) AnalysisRepository {
 	txRepo := *r
 	txRepo.db = tx
-	txRepo.isExternalTx = true
 	return &txRepo
-}
-
-func (r *analysisRepository) getTransaction() (db.DbConnector, error) {
-	if r.isExternalTx {
-		return r.db, nil
-	}
-
-	return r.CreateTransaction()
 }
 
 func convertAnalysisRequestsToDAOs(analysisRequests []AnalysisRequest) []analysisRequestDAO {

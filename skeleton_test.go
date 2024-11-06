@@ -806,11 +806,11 @@ func (m *analysisRepositoryMock) DeleteOldCerberusQueueItems(ctx context.Context
 	return 0, nil
 }
 
-func (m *analysisRepositoryMock) DeleteOldAnalysisRequests(ctx context.Context, cleanupDays, limit int) (int64, error) {
+func (m *analysisRepositoryMock) DeleteOldAnalysisRequestsWithTx(ctx context.Context, cleanupDays, limit int, tx db.DbConnector) (int64, error) {
 	return 0, nil
 }
 
-func (m *analysisRepositoryMock) DeleteOldAnalysisResults(ctx context.Context, cleanupDays, limit int) (int64, error) {
+func (m *analysisRepositoryMock) DeleteOldAnalysisResultsWithTx(ctx context.Context, cleanupDays, limit int, tx db.DbConnector) (int64, error) {
 	return 0, nil
 }
 

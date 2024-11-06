@@ -698,8 +698,20 @@ func (s *skeleton) cleanupCerberusQueueItems() {
 
 func (s *skeleton) cleanupAnalysisRequests() {
 	for {
-		deletedRows, err := s.analysisRepository.DeleteOldAnalysisRequests(s.ctx, s.config.CleanupDays, limit)
+		tx, err := s.analysisRepository.CreateTransaction()
 		if err != nil {
+			log.Error().Err(err).Msg("cleanup old analysis requests failed")
+			return
+		}
+		deletedRows, err := s.analysisRepository.DeleteOldAnalysisRequestsWithTx(s.ctx, s.config.CleanupDays, limit, tx)
+		if err != nil {
+			_ = tx.Rollback()
+			log.Error().Err(err).Msg("cleanup old analysis requests failed")
+			return
+		}
+		err = tx.Commit()
+		if err != nil {
+			_ = tx.Rollback()
 			log.Error().Err(err).Msg("cleanup old analysis requests failed")
 			return
 		}
@@ -711,8 +723,20 @@ func (s *skeleton) cleanupAnalysisRequests() {
 
 func (s *skeleton) cleanupAnalysisResults() {
 	for {
-		deletedRows, err := s.analysisRepository.DeleteOldAnalysisResults(s.ctx, s.config.CleanupDays, limit)
+		tx, err := s.analysisRepository.CreateTransaction()
 		if err != nil {
+			log.Error().Err(err).Msg("cleanup old analysis results failed")
+			return
+		}
+		deletedRows, err := s.analysisRepository.DeleteOldAnalysisResultsWithTx(s.ctx, s.config.CleanupDays, limit, tx)
+		if err != nil {
+			_ = tx.Rollback()
+			log.Error().Err(err).Msg("cleanup old analysis results failed")
+			return
+		}
+		err = tx.Commit()
+		if err != nil {
+			_ = tx.Rollback()
 			log.Error().Err(err).Msg("cleanup old analysis results failed")
 			return
 		}
