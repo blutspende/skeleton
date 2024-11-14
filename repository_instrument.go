@@ -302,9 +302,11 @@ type InstrumentRepository interface {
 	GetResultMappings(ctx context.Context, analyteMappingIDs []uuid.UUID) (map[uuid.UUID][]ResultMapping, error)
 	UpdateResultMapping(ctx context.Context, resultMapping ResultMapping) error
 	DeleteResultMappings(ctx context.Context, ids []uuid.UUID) error
-	CreateExpectedControlResults(ctx context.Context, expectedControlResultsMap map[uuid.UUID][]ExpectedControlResult) ([]uuid.UUID, error)
-	GetExpectedControlResultsByInstrumentId(ctx context.Context, instrumentId uuid.UUID) (map[uuid.UUID][]ExpectedControlResult, error)
-	GetExpectedControlResultsByAnalyteMappingIds(ctx context.Context, analyteMappingIds []uuid.UUID) (map[uuid.UUID][]ExpectedControlResult, error)
+	CreateExpectedControlResults(ctx context.Context, expectedControlResultsMap map[uuid.UUID]map[string]ExpectedControlResult) ([]uuid.UUID, error)
+	GetExpectedControlResultsByInstrumentId(ctx context.Context, instrumentId uuid.UUID) (map[uuid.UUID]map[string]ExpectedControlResult, error)
+	GetExpectedControlResultsByInstrumentIdAndSampleCodes(ctx context.Context, instrumentId uuid.UUID, sampleCodes []string) (map[uuid.UUID]map[string]ExpectedControlResult, error)
+	GetExpectedControlResultsByAnalyteMappingIds(ctx context.Context, analyteMappingIds []uuid.UUID) (map[uuid.UUID]map[string]ExpectedControlResult, error)
+	UpdateExpectedControlResults(ctx context.Context, expectedControlResultsMap map[uuid.UUID]map[string]ExpectedControlResult) error
 	DeleteExpectedControlResults(ctx context.Context, ids []uuid.UUID, deletedByUserId uuid.UUID) error
 	CreateRequestMappings(ctx context.Context, requestMappings []RequestMapping, instrumentID uuid.UUID) ([]uuid.UUID, error)
 	UpsertRequestMappingAnalytes(ctx context.Context, analyteIDsByRequestMappingID map[uuid.UUID][]uuid.UUID) error
@@ -934,14 +936,16 @@ func (r *instrumentRepository) DeleteResultMappings(ctx context.Context, ids []u
 	return nil
 }
 
-func (r *instrumentRepository) CreateExpectedControlResults(ctx context.Context, expectedControlResultsMap map[uuid.UUID][]ExpectedControlResult) ([]uuid.UUID, error) {
+func (r *instrumentRepository) CreateExpectedControlResults(ctx context.Context, expectedControlResultsMap map[uuid.UUID]map[string]ExpectedControlResult) ([]uuid.UUID, error) {
 	ids := make([]uuid.UUID, 0)
 	for analyteMappingId, expectedControlResults := range expectedControlResultsMap {
-		for i := range expectedControlResults {
-			if (expectedControlResultsMap[analyteMappingId][i].ID == uuid.UUID{}) || (expectedControlResultsMap[analyteMappingId][i].ID == uuid.Nil) {
-				expectedControlResultsMap[analyteMappingId][i].ID = uuid.New()
+		for sampleCode := range expectedControlResults {
+			if (expectedControlResultsMap[analyteMappingId][sampleCode].ID == uuid.UUID{}) || (expectedControlResultsMap[analyteMappingId][sampleCode].ID == uuid.Nil) {
+				expectedControlResult := expectedControlResultsMap[analyteMappingId][sampleCode]
+				expectedControlResult.ID = uuid.New()
+				expectedControlResultsMap[analyteMappingId][sampleCode] = expectedControlResult
 			}
-			ids = append(ids, expectedControlResultsMap[analyteMappingId][i].ID)
+			ids = append(ids, expectedControlResultsMap[analyteMappingId][sampleCode].ID)
 		}
 	}
 	if len(ids) == 0 {
@@ -949,7 +953,7 @@ func (r *instrumentRepository) CreateExpectedControlResults(ctx context.Context,
 	}
 
 	query := fmt.Sprintf(`INSERT INTO %s.sk_expected_control_result(id, analyte_mapping_id, sample_code, operator, expected_value, expected_value2, created_at, deleted_at, created_by, deleted_by) 
-		VALUES(:id, :analyte_mapping_id, :sample_code, :operator, :expected_value, :expected_value2, :created_at, :deleted_at, :created_by, :deleted_by);`, r.dbSchema)
+		VALUES(:id, :analyte_mapping_id, :sample_code, :operator, :expected_value, :expected_value2, timezone('utc', now()), :deleted_at, :created_by, :deleted_by);`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, convertExpectedControlResultsToDAOs(expectedControlResultsMap))
 	if err != nil {
 		log.Error().Err(err).Msg(msgCreateExpectedControlResultsFailed)
@@ -958,13 +962,44 @@ func (r *instrumentRepository) CreateExpectedControlResults(ctx context.Context,
 	return ids, nil
 }
 
-func (r *instrumentRepository) GetExpectedControlResultsByInstrumentId(ctx context.Context, instrumentId uuid.UUID) (map[uuid.UUID][]ExpectedControlResult, error) {
-	expectedControlResultMappingsByAnalyteMappingID := make(map[uuid.UUID][]ExpectedControlResult)
+func (r *instrumentRepository) UpdateExpectedControlResults(ctx context.Context, expectedControlResultsMap map[uuid.UUID]map[string]ExpectedControlResult) error {
+	if len(expectedControlResultsMap) == 0 {
+		return nil
+	}
+	expectedControlResultDAOs := convertExpectedControlResultsToDAOs(expectedControlResultsMap)
+	query := fmt.Sprintf(`UPDATE %s.sk_expected_control_result SET operator = :operator, expected_value = :expected_value, expected_value2 = :expected_value2 WHERE id = :id;`, r.dbSchema)
+	for i := range expectedControlResultDAOs {
+		_, err := r.db.NamedExecContext(ctx, query, expectedControlResultDAOs[i])
+		if err != nil {
+			log.Error().Err(err).Msg(msgCreateExpectedControlResultsFailed)
+			return ErrCreateExpectedControlResultsFailed
+		}
+	}
+	return nil
+}
+
+func (r *instrumentRepository) DeleteExpectedControlResults(ctx context.Context, ids []uuid.UUID, deletedByUserId uuid.UUID) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	query := fmt.Sprintf(`UPDATE %s.sk_expected_control_result SET deleted_at = timezone('utc', now()), deleted_by = ? WHERE id IN (?);`, r.dbSchema)
+	query, args, _ := sqlx.In(query, deletedByUserId, ids)
+	query = r.db.Rebind(query)
+	_, err := r.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		log.Error().Err(err).Msg(msgDeleteExpectedControlResultFailed)
+		return ErrDeleteExpectedControlResultFailed
+	}
+	return nil
+}
+
+func (r *instrumentRepository) GetExpectedControlResultsByInstrumentId(ctx context.Context, instrumentId uuid.UUID) (map[uuid.UUID]map[string]ExpectedControlResult, error) {
+	expectedControlResultMappingsByAnalyteMappingID := make(map[uuid.UUID]map[string]ExpectedControlResult)
 	if (instrumentId == uuid.UUID{}) || (instrumentId == uuid.Nil) {
 		return expectedControlResultMappingsByAnalyteMappingID, nil
 	}
 	query := fmt.Sprintf(`SELECT secr.* FROM %s.sk_expected_control_result secr
-         INNER JOIN %s.sk_analyte_mappings sam ON secr.analyte_mapping_id = sam.id WHERE sam.instrument_id = $1 AND secr.deleted_at IS NULL;`, r.dbSchema, r.dbSchema)
+         INNER JOIN %s.sk_analyte_mappings sam ON secr.analyte_mapping_id = sam.id WHERE sam.instrument_id = $1 AND secr.deleted_at IS NULL ORDER BY secr.sample_code;`, r.dbSchema, r.dbSchema)
 	rows, err := r.db.QueryxContext(ctx, query, instrumentId)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetExpectedControlResultsFailed)
@@ -978,13 +1013,46 @@ func (r *instrumentRepository) GetExpectedControlResultsByInstrumentId(ctx conte
 			log.Error().Err(err).Msg(msgGetExpectedControlResultsFailed)
 			return nil, ErrGetExpectedControlResultsFailed
 		}
-		expectedControlResultMappingsByAnalyteMappingID[dao.AnalyteMappingID] = append(expectedControlResultMappingsByAnalyteMappingID[dao.AnalyteMappingID], convertExpectedControlResultDaoToExpectedControlResult(dao))
+		if _, ok := expectedControlResultMappingsByAnalyteMappingID[dao.AnalyteMappingID]; !ok {
+			expectedControlResultMappingsByAnalyteMappingID[dao.AnalyteMappingID] = make(map[string]ExpectedControlResult)
+		}
+		expectedControlResultMappingsByAnalyteMappingID[dao.AnalyteMappingID][dao.SampleCode] = convertExpectedControlResultDaoToExpectedControlResult(dao)
 	}
 	return expectedControlResultMappingsByAnalyteMappingID, nil
 }
 
-func (r *instrumentRepository) GetExpectedControlResultsByAnalyteMappingIds(ctx context.Context, analyteMappingIds []uuid.UUID) (map[uuid.UUID][]ExpectedControlResult, error) {
-	expectedControlResultMappingsByAnalyteMappingID := make(map[uuid.UUID][]ExpectedControlResult)
+func (r *instrumentRepository) GetExpectedControlResultsByInstrumentIdAndSampleCodes(ctx context.Context, instrumentId uuid.UUID, sampleCodes []string) (map[uuid.UUID]map[string]ExpectedControlResult, error) {
+	expectedControlResultMappingsByAnalyteMappingID := make(map[uuid.UUID]map[string]ExpectedControlResult)
+	if (instrumentId == uuid.UUID{}) || (instrumentId == uuid.Nil) {
+		return expectedControlResultMappingsByAnalyteMappingID, nil
+	}
+	query := fmt.Sprintf(`SELECT secr.* FROM %s.sk_expected_control_result secr
+         INNER JOIN %s.sk_analyte_mappings sam ON secr.analyte_mapping_id = sam.id WHERE sam.instrument_id = ? AND secr.sample_code IN (?) AND secr.deleted_at IS NULL ORDER BY secr.sample_code;`, r.dbSchema, r.dbSchema)
+	query, args, _ := sqlx.In(query, instrumentId, sampleCodes)
+	query = r.db.Rebind(query)
+	rows, err := r.db.QueryxContext(ctx, query, args...)
+	if err != nil {
+		log.Error().Err(err).Msg(msgGetExpectedControlResultsFailed)
+		return nil, ErrGetExpectedControlResultsFailed
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var dao expectedControlResultDAO
+		err = rows.StructScan(&dao)
+		if err != nil {
+			log.Error().Err(err).Msg(msgGetExpectedControlResultsFailed)
+			return nil, ErrGetExpectedControlResultsFailed
+		}
+		if _, ok := expectedControlResultMappingsByAnalyteMappingID[dao.AnalyteMappingID]; !ok {
+			expectedControlResultMappingsByAnalyteMappingID[dao.AnalyteMappingID] = make(map[string]ExpectedControlResult)
+		}
+		expectedControlResultMappingsByAnalyteMappingID[dao.AnalyteMappingID][dao.SampleCode] = convertExpectedControlResultDaoToExpectedControlResult(dao)
+	}
+	return expectedControlResultMappingsByAnalyteMappingID, nil
+}
+
+func (r *instrumentRepository) GetExpectedControlResultsByAnalyteMappingIds(ctx context.Context, analyteMappingIds []uuid.UUID) (map[uuid.UUID]map[string]ExpectedControlResult, error) {
+	expectedControlResultMappingsByAnalyteMappingID := make(map[uuid.UUID]map[string]ExpectedControlResult)
 	if analyteMappingIds == nil || len(analyteMappingIds) == 0 {
 		return expectedControlResultMappingsByAnalyteMappingID, nil
 	}
@@ -1004,24 +1072,12 @@ func (r *instrumentRepository) GetExpectedControlResultsByAnalyteMappingIds(ctx 
 			log.Error().Err(err).Msg(msgGetExpectedControlResultsFailed)
 			return nil, ErrGetExpectedControlResultsFailed
 		}
-		expectedControlResultMappingsByAnalyteMappingID[dao.AnalyteMappingID] = append(expectedControlResultMappingsByAnalyteMappingID[dao.AnalyteMappingID], convertExpectedControlResultDaoToExpectedControlResult(dao))
+		if _, ok := expectedControlResultMappingsByAnalyteMappingID[dao.AnalyteMappingID]; !ok {
+			expectedControlResultMappingsByAnalyteMappingID[dao.AnalyteMappingID] = make(map[string]ExpectedControlResult)
+		}
+		expectedControlResultMappingsByAnalyteMappingID[dao.AnalyteMappingID][dao.SampleCode] = convertExpectedControlResultDaoToExpectedControlResult(dao)
 	}
 	return expectedControlResultMappingsByAnalyteMappingID, nil
-}
-
-func (r *instrumentRepository) DeleteExpectedControlResults(ctx context.Context, ids []uuid.UUID, deletedByUserId uuid.UUID) error {
-	if len(ids) == 0 {
-		return nil
-	}
-	query := fmt.Sprintf(`UPDATE %s.sk_expected_control_result SET deleted_at = timezone('utc', now()), deleted_by = ? WHERE id IN (?);`, r.dbSchema)
-	query, args, _ := sqlx.In(query, deletedByUserId, ids)
-	query = r.db.Rebind(query)
-	_, err := r.db.ExecContext(ctx, query, args...)
-	if err != nil {
-		log.Error().Err(err).Msg(msgDeleteExpectedControlResultFailed)
-		return ErrDeleteExpectedControlResultFailed
-	}
-	return nil
 }
 
 func (r *instrumentRepository) CreateRequestMappings(ctx context.Context, requestMappings []RequestMapping, instrumentID uuid.UUID) ([]uuid.UUID, error) {
@@ -1526,11 +1582,11 @@ func convertExpectedControlResultToDAO(expectedControlResult ExpectedControlResu
 	return dao
 }
 
-func convertExpectedControlResultsToDAOs(expectedControlResultsMap map[uuid.UUID][]ExpectedControlResult) []expectedControlResultDAO {
+func convertExpectedControlResultsToDAOs(expectedControlResultsMap map[uuid.UUID]map[string]ExpectedControlResult) []expectedControlResultDAO {
 	expectedControlResultsDAOs := make([]expectedControlResultDAO, 0)
 	for analyteMappingId, expectedControlResults := range expectedControlResultsMap {
-		for j := range expectedControlResults {
-			expectedControlResultsDAOs = append(expectedControlResultsDAOs, convertExpectedControlResultToDAO(expectedControlResultsMap[analyteMappingId][j], analyteMappingId))
+		for sampleCode := range expectedControlResults {
+			expectedControlResultsDAOs = append(expectedControlResultsDAOs, convertExpectedControlResultToDAO(expectedControlResultsMap[analyteMappingId][sampleCode], analyteMappingId))
 		}
 	}
 	return expectedControlResultsDAOs

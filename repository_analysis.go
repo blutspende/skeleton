@@ -4550,10 +4550,10 @@ func (r *analysisRepository) GetLatestControlResultIdByReagent(ctx context.Conte
 		"name":         reagent.Name,
 	}
 
-	query := `SELECT skcr.id FROM citm.sk_control_results skcr
-    			JOIN citm.sk_reagent_control_result_relations skrcrr ON skcr.id = skrcrr.control_result_id
-    			JOIN citm.sk_reagents skr ON skrcrr.reagent_id = skr.id
-				WHERE skr.manufacturer = :manufacturer AND skr.lot_no = :lot_no AND skr.serial = :serial AND skr.name = :name`
+	query := fmt.Sprintf(`SELECT skcr.id FROM %s.sk_control_results skcr
+    			JOIN %s.sk_reagent_control_result_relations skrcrr ON skcr.id = skrcrr.control_result_id
+    			JOIN %s.sk_reagents skr ON skrcrr.reagent_id = skr.id
+				WHERE skr.manufacturer = :manufacturer AND skr.lot_no = :lot_no AND skr.serial = :serial AND skr.name = :name`, r.dbSchema, r.dbSchema, r.dbSchema)
 	if resultYieldTime != nil {
 		preparedValues["result_yield_time"] = resultYieldTime
 		query += ` AND skcr.examined_at < :result_yield_time`

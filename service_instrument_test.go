@@ -718,8 +718,144 @@ func TestHidePassword(t *testing.T) {
 	assert.Equal(t, "", instrument.Settings[1].Value)
 }
 
+func TestUpdateExpectedControlResult(t *testing.T) {
+	sqlConn, _ := sqlx.Connect("postgres", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
+	schemaName := "expectedcontrolresult_test"
+	_, _ = sqlConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
+	_, _ = sqlConn.Exec(fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schemaName))
+	_, _ = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
+	migrator := migrator.NewSkeletonMigrator()
+	_ = migrator.Run(context.Background(), sqlConn, schemaName)
+	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
+
+	configuration := config.Configuration{
+		APIPort:                          5000,
+		Authorization:                    false,
+		PermittedOrigin:                  "*",
+		ApplicationName:                  "Register instrument retry test",
+		TCPListenerPort:                  5401,
+		InstrumentTransferRetryDelayInMs: 50,
+		ClientID:                         "clientID",
+		ClientSecret:                     "clientSecret",
+	}
+	dbConn := db.CreateDbConnector(sqlConn)
+	cerberusClientMock := &cerberusClientMock{
+		registerInstrumentFunc: func(instrument Instrument) error {
+			return nil
+		},
+	}
+	instrumentRepositoryMock := &instrumentRepositoryMock{
+		db: dbConn,
+	}
+
+	ctxWithCancel, cancel := context.WithCancel(context.Background())
+
+	defer cancel()
+	conditionRepository := NewConditionRepository(dbConn, schemaName)
+	conditionService := NewConditionService(conditionRepository)
+	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
+	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
+	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
+	instrumentService := NewInstrumentService(&configuration, sortingRuleService, instrumentRepositoryMock, NewSkeletonManager(ctxWithCancel), NewInstrumentCache(), cerberusClientMock)
+
+	analyteMappingId := uuid.MustParse("e97b3b33-6b2e-4da2-9883-11a3fe4a93bc")
+	expectedControlResultId1 := uuid.MustParse("a52737f4-a144-4842-8ce6-1ffa007f4ef1")
+	expectedControlResultId2Deleted := uuid.MustParse("9d6911a5-d399-4b5b-8268-cf834e764446")
+	expectedControlResultId2 := uuid.MustParse("0edf9c18-42e4-4ce0-ba4a-9c03ec1e775a")
+	expectedControlResultId3 := uuid.MustParse("3454ed41-b940-4a47-b9e7-88c8892c5d38")
+	expectedControlResultId4 := uuid.MustParse("982de611-8f2a-47c8-9c20-f9bc0a09610d")
+
+	userId := uuid.MustParse("f98c3d73-bc87-4dcf-b837-2dd9e87a4dae")
+	deletedAt := time.Now()
+
+	instrumentRepositoryMock.existingExpectedControlResults = make(map[uuid.UUID]map[string]ExpectedControlResult)
+	instrumentRepositoryMock.existingExpectedControlResults[analyteMappingId] = make(map[string]ExpectedControlResult)
+	instrumentRepositoryMock.existingExpectedControlResults[analyteMappingId]["sampleCode2"] = ExpectedControlResult{
+		ID:             expectedControlResultId2Deleted,
+		SampleCode:     "sampleCode2",
+		Operator:       "==",
+		ExpectedValue:  "1",
+		ExpectedValue2: nil,
+		CreatedAt:      time.Now(),
+		DeletedAt:      &deletedAt,
+		CreatedBy:      userId,
+		DeletedBy: uuid.NullUUID{
+			UUID:  userId,
+			Valid: true,
+		},
+	}
+	instrumentRepositoryMock.existingExpectedControlResults[analyteMappingId]["sampleCode2"] = ExpectedControlResult{
+		ID:             expectedControlResultId2,
+		SampleCode:     "sampleCode2",
+		Operator:       ">",
+		ExpectedValue:  "1",
+		ExpectedValue2: nil,
+	}
+	instrumentRepositoryMock.existingExpectedControlResults[analyteMappingId]["sampleCode3"] = ExpectedControlResult{
+		ID:             expectedControlResultId3,
+		SampleCode:     "sampleCode3",
+		Operator:       "==",
+		ExpectedValue:  "2",
+		ExpectedValue2: nil,
+	}
+	instrumentRepositoryMock.existingExpectedControlResults[analyteMappingId]["sampleCode4"] = ExpectedControlResult{
+		ID:             expectedControlResultId4,
+		SampleCode:     "sampleCode4",
+		Operator:       "<",
+		ExpectedValue:  "3",
+		ExpectedValue2: nil,
+	}
+
+	expectedControlResults := make(map[uuid.UUID]map[string]ExpectedControlResult)
+	expectedControlResults[analyteMappingId] = make(map[string]ExpectedControlResult)
+	expectedControlResults[analyteMappingId]["sampleCode1"] = ExpectedControlResult{
+		ID:             expectedControlResultId1,
+		SampleCode:     "sampleCode1",
+		Operator:       ">",
+		ExpectedValue:  "2",
+		ExpectedValue2: nil,
+	}
+	expectedControlResults[analyteMappingId]["sampleCode2"] = ExpectedControlResult{
+		ID:             expectedControlResultId2,
+		SampleCode:     "sampleCode2",
+		Operator:       "==",
+		ExpectedValue:  "3",
+		ExpectedValue2: nil,
+	}
+	expectedControlResults[analyteMappingId]["sampleCode3"] = ExpectedControlResult{
+		ID:             expectedControlResultId3,
+		SampleCode:     "sampleCode3",
+		Operator:       "<",
+		ExpectedValue:  "4",
+		ExpectedValue2: nil,
+	}
+
+	err := instrumentService.UpdateExpectedControlResults(ctxWithCancel, uuid.New(), expectedControlResults, uuid.New())
+	assert.Nil(t, err)
+
+	assert.Equal(t, 1, len(instrumentRepositoryMock.createdExpectedControlResultsMap))
+	assert.Equal(t, 1, len(instrumentRepositoryMock.createdExpectedControlResultsMap[analyteMappingId]))
+	assert.Equal(t, expectedControlResultId1, instrumentRepositoryMock.createdExpectedControlResultsMap[analyteMappingId]["sampleCode1"].ID)
+
+	assert.Equal(t, 1, len(instrumentRepositoryMock.updatedExpectedControlResultsMap))
+	assert.Equal(t, 2, len(instrumentRepositoryMock.updatedExpectedControlResultsMap[analyteMappingId]))
+	assert.Equal(t, expectedControlResultId2, instrumentRepositoryMock.updatedExpectedControlResultsMap[analyteMappingId]["sampleCode2"].ID)
+	assert.Equal(t, Equals, instrumentRepositoryMock.updatedExpectedControlResultsMap[analyteMappingId]["sampleCode2"].Operator)
+	assert.Equal(t, "3", instrumentRepositoryMock.updatedExpectedControlResultsMap[analyteMappingId]["sampleCode2"].ExpectedValue)
+	assert.Equal(t, expectedControlResultId3, instrumentRepositoryMock.updatedExpectedControlResultsMap[analyteMappingId]["sampleCode3"].ID)
+	assert.Equal(t, Less, instrumentRepositoryMock.updatedExpectedControlResultsMap[analyteMappingId]["sampleCode3"].Operator)
+	assert.Equal(t, "4", instrumentRepositoryMock.updatedExpectedControlResultsMap[analyteMappingId]["sampleCode3"].ExpectedValue)
+
+	assert.Equal(t, 1, len(instrumentRepositoryMock.deletedExpectedControlResultIds))
+	assert.Equal(t, expectedControlResultId4, instrumentRepositoryMock.deletedExpectedControlResultIds[0])
+}
+
 type instrumentRepositoryMock struct {
-	db db.DbConnector
+	existingExpectedControlResults   map[uuid.UUID]map[string]ExpectedControlResult
+	createdExpectedControlResultsMap map[uuid.UUID]map[string]ExpectedControlResult
+	updatedExpectedControlResultsMap map[uuid.UUID]map[string]ExpectedControlResult
+	deletedExpectedControlResultIds  []uuid.UUID
+	db                               db.DbConnector
 }
 
 func (r *instrumentRepositoryMock) CreateInstrument(ctx context.Context, instrument Instrument) (uuid.UUID, error) {
@@ -892,17 +1028,26 @@ func (r *instrumentRepositoryMock) UpdateResultMapping(ctx context.Context, resu
 func (r *instrumentRepositoryMock) DeleteResultMappings(ctx context.Context, ids []uuid.UUID) error {
 	return nil
 }
-func (r *instrumentRepositoryMock) CreateExpectedControlResults(ctx context.Context, expectedControlResultsMap map[uuid.UUID][]ExpectedControlResult) ([]uuid.UUID, error) {
+func (r *instrumentRepositoryMock) CreateExpectedControlResults(ctx context.Context, expectedControlResultsMap map[uuid.UUID]map[string]ExpectedControlResult) ([]uuid.UUID, error) {
+	r.createdExpectedControlResultsMap = expectedControlResultsMap
 	return nil, nil
 }
-func (r *instrumentRepositoryMock) GetExpectedControlResultsByInstrumentId(ctx context.Context, instrumentId uuid.UUID) (map[uuid.UUID][]ExpectedControlResult, error) {
-	return nil, nil
-}
-func (r *instrumentRepositoryMock) GetExpectedControlResultsByAnalyteMappingIds(ctx context.Context, analyteMappingIds []uuid.UUID) (map[uuid.UUID][]ExpectedControlResult, error) {
-	return nil, nil
+func (r *instrumentRepositoryMock) UpdateExpectedControlResults(ctx context.Context, expectedControlResultsMap map[uuid.UUID]map[string]ExpectedControlResult) error {
+	r.updatedExpectedControlResultsMap = expectedControlResultsMap
+	return nil
 }
 func (r *instrumentRepositoryMock) DeleteExpectedControlResults(ctx context.Context, ids []uuid.UUID, deletedByUserId uuid.UUID) error {
+	r.deletedExpectedControlResultIds = ids
 	return nil
+}
+func (r *instrumentRepositoryMock) GetExpectedControlResultsByInstrumentId(ctx context.Context, instrumentId uuid.UUID) (map[uuid.UUID]map[string]ExpectedControlResult, error) {
+	return nil, nil
+}
+func (r *instrumentRepositoryMock) GetExpectedControlResultsByInstrumentIdAndSampleCodes(ctx context.Context, instrumentId uuid.UUID, sampleCodes []string) (map[uuid.UUID]map[string]ExpectedControlResult, error) {
+	return r.existingExpectedControlResults, nil
+}
+func (r *instrumentRepositoryMock) GetExpectedControlResultsByAnalyteMappingIds(ctx context.Context, analyteMappingIds []uuid.UUID) (map[uuid.UUID]map[string]ExpectedControlResult, error) {
+	return nil, nil
 }
 func (r *instrumentRepositoryMock) CreateRequestMappings(ctx context.Context, requestMappings []RequestMapping, instrumentID uuid.UUID) ([]uuid.UUID, error) {
 	return make([]uuid.UUID, 0), nil

@@ -152,4 +152,6 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_expected_control_result(
     CONSTRAINT sk_pk_sk_expected_control_result PRIMARY KEY (id),
     CONSTRAINT sk_fk_sk_expected_control_result_analyte_mapping FOREIGN KEY (analyte_mapping_id) REFERENCES <SCHEMA_PLACEHOLDER>.sk_analyte_mappings(id)
 );
+CREATE INDEX sk_expected_control_result_analyte_mapping_id on <SCHEMA_PLACEHOLDER>.sk_expected_control_result (analyte_mapping_id);
+CREATE INDEX sk_expected_control_result_sample_code on <SCHEMA_PLACEHOLDER>.sk_expected_control_result (sample_code);
 `
