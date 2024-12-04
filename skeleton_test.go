@@ -1195,8 +1195,8 @@ func (m *analysisRepositoryMock) GetReagentsByIDs(ctx context.Context, reagentID
 	return make(map[uuid.UUID]Reagent), nil
 }
 
-func (m *analysisRepositoryMock) CreateControlResultBatch(ctx context.Context, controlResults []ControlResult) ([]uuid.UUID, error) {
-	return []uuid.UUID{}, nil
+func (m *analysisRepositoryMock) CreateControlResultBatch(ctx context.Context, controlResults []ControlResult) ([]ControlResult, error) {
+	return []ControlResult{}, nil
 }
 
 func (m *analysisRepositoryMock) GetControlResultsByIDs(ctx context.Context, controlResultIDs []uuid.UUID) (map[uuid.UUID]ControlResult, error) {
@@ -1302,6 +1302,9 @@ func (m *analysisRepositoryMock) SaveAnalysisRequestsInstrumentTransmissions(ctx
 	return nil
 }
 func (m *analysisRepositoryMock) CreateAnalysisResultsBatch(ctx context.Context, analysisResults []AnalysisResult) ([]AnalysisResult, error) {
+	for i := range analysisResults {
+		analysisResults[i].ID = uuid.New()
+	}
 	return analysisResults, nil
 }
 func (m *analysisRepositoryMock) UpdateStatusAnalysisResultsBatch(ctx context.Context, analysisResultsToUpdate []AnalysisResult) error {
@@ -1331,17 +1334,26 @@ func (m *analysisRepositoryMock) CreateChannelResultQuantitativeValues(ctx conte
 func (m *analysisRepositoryMock) CreateReagentsByAnalysisResultID(ctx context.Context, reagentsByAnalysisResultID map[uuid.UUID][]Reagent) (map[uuid.UUID]map[uuid.UUID][]ControlResult, map[uuid.UUID][]Reagent, error) {
 	reagentsMapWithIds := make(map[uuid.UUID][]Reagent)
 	controlResultsMap := make(map[uuid.UUID]map[uuid.UUID][]ControlResult)
+	uniqueReagentToIncomingIndexMap := make(map[string]uuid.UUID)
 	for analysisResultId, reagents := range reagentsByAnalysisResultID {
 		reagentArray := make([]Reagent, 0)
 		for i, reagent := range reagents {
-			reagentsByAnalysisResultID[analysisResultId][i].ID = uuid.New()
+			if _, ok := uniqueReagentToIncomingIndexMap[getUniqueReagentString(convertReagentToDAO(reagent))]; !ok {
+				newReagentId := uuid.New()
+				reagentsByAnalysisResultID[analysisResultId][i].ID = newReagentId
+				uniqueReagentToIncomingIndexMap[getUniqueReagentString(convertReagentToDAO(reagent))] = newReagentId
+			} else {
+				reagentsByAnalysisResultID[analysisResultId][i].ID = uniqueReagentToIncomingIndexMap[getUniqueReagentString(convertReagentToDAO(reagent))]
+			}
 			reagentArray = append(reagentArray, reagentsByAnalysisResultID[analysisResultId][i])
 			controlResults := make([]ControlResult, 0)
 			for j := range reagent.ControlResults {
 				reagentsByAnalysisResultID[analysisResultId][i].ControlResults[j].ID = uuid.New()
 				controlResults = append(controlResults, reagentsByAnalysisResultID[analysisResultId][i].ControlResults[j])
 			}
-			controlResultsMap[analysisResultId] = make(map[uuid.UUID][]ControlResult)
+			if _, ok := controlResultsMap[analysisResultId]; !ok {
+				controlResultsMap[analysisResultId] = make(map[uuid.UUID][]ControlResult)
+			}
 			controlResultsMap[analysisResultId][reagentsByAnalysisResultID[analysisResultId][i].ID] = controlResults
 		}
 		reagentsMapWithIds[analysisResultId] = reagentArray
@@ -1354,8 +1366,8 @@ func (m *analysisRepositoryMock) CreateReagentBatch(ctx context.Context, reagent
 func (m *analysisRepositoryMock) CreateControlResults(ctx context.Context, controlResultsMap map[uuid.UUID]map[uuid.UUID][]ControlResult) (map[uuid.UUID]map[uuid.UUID][]uuid.UUID, error) {
 	controlResultIdsMap := make(map[uuid.UUID]map[uuid.UUID][]uuid.UUID)
 	for analysisResultId, reagentMap := range controlResultsMap {
+		controlResultIdsMap[analysisResultId] = make(map[uuid.UUID][]uuid.UUID)
 		for reagentId, controlResults := range reagentMap {
-			controlResultIdsMap[analysisResultId] = make(map[uuid.UUID][]uuid.UUID)
 			controlResultIds := make([]uuid.UUID, 0)
 			for i := 0; i < len(controlResults); i++ {
 				controlResultIds = append(controlResultIds, uuid.New())

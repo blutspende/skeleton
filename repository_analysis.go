@@ -403,7 +403,7 @@ type AnalysisRepository interface {
 
 	CreateReagents(ctx context.Context, reagents []Reagent) ([]uuid.UUID, error)
 	GetReagentsByIDs(ctx context.Context, reagentIDs []uuid.UUID) (map[uuid.UUID]Reagent, error)
-	CreateControlResultBatch(ctx context.Context, controlResults []ControlResult) ([]uuid.UUID, error)
+	CreateControlResultBatch(ctx context.Context, controlResults []ControlResult) ([]ControlResult, error)
 	GetControlResultsByIDs(ctx context.Context, controlResultIDs []uuid.UUID) (map[uuid.UUID]ControlResult, error)
 	CreateReagentControlResultRelations(ctx context.Context, relationDAOs []reagentControlResultRelationDAO) error
 	CreateAnalysisResultControlResultRelations(ctx context.Context, relationDAOs []analysisResultControlResultRelationDAO) error
@@ -1142,7 +1142,7 @@ func (r *analysisRepository) CreateAnalysisResultReagentRelations(ctx context.Co
 
 	err := utils.Partition(len(relationDAOs), analysisResultRelationBatch, func(low int, high int) error {
 		query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_result_reagent_relations(analysis_result_id, reagent_id)
-		VALUES(:analysis_result_id, :reagent_id)`, r.dbSchema)
+		VALUES(:analysis_result_id, :reagent_id) ON CONFLICT DO NOTHING`, r.dbSchema)
 
 		_, err := r.db.NamedExecContext(ctx, query, relationDAOs[low:high])
 
@@ -1191,7 +1191,7 @@ func (r *analysisRepository) CreateAnalysisResultControlResultRelations(ctx cont
 
 	err := utils.Partition(len(relationDAOs), analysisResultRelationBatch, func(low int, high int) error {
 		query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_result_control_result_relations(analysis_result_id, control_result_id, is_processed)
-		VALUES(:analysis_result_id, :control_result_id, :is_processed)`, r.dbSchema)
+		VALUES(:analysis_result_id, :control_result_id, :is_processed) ON CONFLICT DO NOTHING`, r.dbSchema)
 
 		_, err := r.db.NamedExecContext(ctx, query, relationDAOs[low:high])
 
@@ -2682,8 +2682,8 @@ func (r *analysisRepository) createControlResults(ctx context.Context, controlRe
 	}
 
 	err := utils.Partition(len(controlResults), controlResultBatchSize, func(low int, high int) error {
-		query := fmt.Sprintf(`INSERT INTO %s.sk_control_results(id, sample_code, analyte_mapping_id, instrument_id, expected_control_result_id, is_valid, is_compared_to_expected_result, result, examined_at, created_at)
-		VALUES(:id, :sample_code, :analyte_mapping_id, :instrument_id, :expected_control_result_id, :is_valid, :is_compared_to_expected_result, :result, :examined_at, :created_at)`, r.dbSchema)
+		query := fmt.Sprintf(`INSERT INTO %s.sk_control_results(id, sample_code, analyte_mapping_id, instrument_id, expected_control_result_id, is_valid, is_compared_to_expected_result, result, examined_at)
+		VALUES(:id, :sample_code, :analyte_mapping_id, :instrument_id, :expected_control_result_id, :is_valid, :is_compared_to_expected_result, :result, :examined_at)`, r.dbSchema)
 
 		_, err := r.db.NamedExecContext(ctx, query, convertControlResultsToDAO(controlResults[low:high]))
 		if err != nil {
@@ -3918,9 +3918,9 @@ func (r *analysisRepository) GetReagentsByIDs(ctx context.Context, reagentIDs []
 	return reagents, err
 }
 
-func (r *analysisRepository) CreateControlResultBatch(ctx context.Context, controlResults []ControlResult) ([]uuid.UUID, error) {
+func (r *analysisRepository) CreateControlResultBatch(ctx context.Context, controlResults []ControlResult) ([]ControlResult, error) {
 	crs := make([]ControlResult, 0)
-	controlResultIds := make([]uuid.UUID, 0)
+	modifiedControlResults := make([]ControlResult, 0)
 	for i := range controlResults {
 		var crID uuid.UUID
 
@@ -3929,11 +3929,9 @@ func (r *analysisRepository) CreateControlResultBatch(ctx context.Context, contr
 			controlResults[i].ID = crID
 
 			crs = append(crs, controlResults[i])
-		} else {
-			crID = controlResults[i].ID
 		}
 
-		controlResultIds = append(controlResultIds, crID)
+		modifiedControlResults = append(modifiedControlResults, controlResults[i])
 	}
 
 	_, err := r.createControlResults(ctx, crs)
@@ -3941,7 +3939,7 @@ func (r *analysisRepository) CreateControlResultBatch(ctx context.Context, contr
 		return nil, err
 	}
 
-	return controlResultIds, nil
+	return modifiedControlResults, nil
 }
 
 func (r *analysisRepository) GetControlResultsByIDs(ctx context.Context, controlResultIDs []uuid.UUID) (map[uuid.UUID]ControlResult, error) {

@@ -219,7 +219,9 @@ func (as *analysisService) CreateAnalysisResultsBatch(ctx context.Context, analy
 				savedAnalysisResults[i].Reagents[j].ControlResults = make([]ControlResult, 0)
 			}
 			savedAnalysisResults[i].Reagents[j].ControlResults = append(savedAnalysisResults[i].Reagents[j].ControlResults, savedResultDataList.ControlResults...)
+			savedAnalysisResults[i].Reagents[j].ControlResults = append(savedAnalysisResults[i].Reagents[j].ControlResults, savedAnalysisResults[i].ControlResults...)
 		}
+		savedAnalysisResults[i].ControlResults = nil
 	}
 
 	return savedAnalysisResults, nil
@@ -237,7 +239,7 @@ func (as *analysisService) createAnalysisResultsBatch(ctx context.Context, tx db
 		if analysisResultSet.Results[i].ResultMode == "" {
 			analysisResultSet.Results[i].ResultMode = analysisResultSet.Results[i].Instrument.ResultMode
 		}
-		analysisResultSet.Results[i], err = setAnalysisResultStatusBasedOnControlResults(analysisResultSet.Results[i])
+		analysisResultSet.Results[i], err = setAnalysisResultStatusBasedOnControlResults(analysisResultSet.Results[i], analysisResultSet.ControlResults)
 		if err != nil {
 			return analysisResultSet, err
 		}
@@ -259,12 +261,9 @@ func (as *analysisService) createAnalysisResultsBatch(ctx context.Context, tx db
 		}
 	}
 
-	controlIds, err := as.analysisRepository.WithTransaction(tx).CreateControlResultBatch(ctx, analysisResultSet.ControlResults)
+	analysisResultSet.ControlResults, err = as.analysisRepository.WithTransaction(tx).CreateControlResultBatch(ctx, analysisResultSet.ControlResults)
 	if err != nil {
 		return analysisResultSet, err
-	}
-	for i := range analysisResultSet.ControlResults {
-		analysisResultSet.ControlResults[i].ID = controlIds[i]
 	}
 
 	extraValuesMap := make(map[uuid.UUID][]ExtraValue)
@@ -278,6 +277,11 @@ func (as *analysisService) createAnalysisResultsBatch(ctx context.Context, tx db
 	}
 
 	err = as.analysisRepository.WithTransaction(tx).CreateAnalysisResultExtraValues(ctx, extraValuesMap)
+	if err != nil {
+		return analysisResultSet, err
+	}
+
+	err = as.analysisRepository.WithTransaction(tx).CreateWarnings(ctx, warningsMap)
 	if err != nil {
 		return analysisResultSet, err
 	}
@@ -300,11 +304,11 @@ func (as *analysisService) createAnalysisResultsBatch(ctx context.Context, tx db
 		if err != nil {
 			return analysisResultSet, err
 		}
-	}
 
-	err = as.analysisRepository.WithTransaction(tx).CreateWarnings(ctx, warningsMap)
-	if err != nil {
-		return analysisResultSet, err
+		analysisResultSet.Results[i].ControlResults, err = as.analysisRepository.WithTransaction(tx).CreateControlResultBatch(ctx, analysisResultSet.Results[i].ControlResults)
+		if err != nil {
+			return analysisResultSet, err
+		}
 	}
 
 	controlResultsMap, reagentsMapWithIds, err := as.analysisRepository.WithTransaction(tx).CreateReagentsByAnalysisResultID(ctx, reagentsMap)
@@ -312,7 +316,7 @@ func (as *analysisService) createAnalysisResultsBatch(ctx context.Context, tx db
 		return analysisResultSet, err
 	}
 
-	relationsMap, err := as.analysisRepository.WithTransaction(tx).CreateControlResults(ctx, controlResultsMap)
+	resultRelationsMap, err := as.analysisRepository.WithTransaction(tx).CreateControlResults(ctx, controlResultsMap)
 	if err != nil {
 		return analysisResultSet, err
 	}
@@ -320,7 +324,7 @@ func (as *analysisService) createAnalysisResultsBatch(ctx context.Context, tx db
 		for j, reagent := range result.Reagents {
 			analysisResultSet.Results[i].Reagents[j].ID = reagentsMapWithIds[result.ID][j].ID
 			for k := range reagent.ControlResults {
-				analysisResultSet.Results[i].Reagents[j].ControlResults[k].ID = relationsMap[result.ID][reagent.ID][k]
+				analysisResultSet.Results[i].Reagents[j].ControlResults[k].ID = resultRelationsMap[result.ID][reagent.ID][k]
 			}
 		}
 	}
@@ -338,33 +342,53 @@ func (as *analysisService) createAnalysisResultsBatch(ctx context.Context, tx db
 		commonControlResultIds = append(commonControlResultIds, analysisResultSet.ControlResults[i].ID)
 	}
 
-	for analysisResultID := range relationsMap {
-
-		reagentsToLink := relationsMap[analysisResultID]
+	alreadyCreatedReagentControlRelationMap := make(map[uuid.UUID]map[uuid.UUID]bool)
+	alreadyCreatedAnalysisResultControlRelationMap := make(map[uuid.UUID]map[uuid.UUID]bool)
+	for _, analysisResult := range analysisResultSet.Results {
+		reagentsToLink := make(map[uuid.UUID][]uuid.UUID)
+		if _, ok := resultRelationsMap[analysisResult.ID]; ok {
+			reagentsToLink = resultRelationsMap[analysisResult.ID]
+		} else {
+			continue
+		}
 		for i := range commonReagentIds {
 			reagentsToLink[commonReagentIds[i]] = make([]uuid.UUID, 0)
 		}
 		for reagentID := range reagentsToLink {
 			analysisResultReagentRelationDAOs = append(analysisResultReagentRelationDAOs, analysisResultReagentRelationDAO{
-				AnalysisResultID: analysisResultID,
+				AnalysisResultID: analysisResult.ID,
 				ReagentID:        reagentID,
 			})
-			controlResultsToLink := relationsMap[analysisResultID][reagentID]
+			controlResultsToLink := resultRelationsMap[analysisResult.ID][reagentID]
 			controlResultsToLink = append(controlResultsToLink, commonControlResultIds...)
+			for _, controlResult := range analysisResult.ControlResults {
+				controlResultsToLink = append(controlResultsToLink, controlResult.ID)
+			}
 
 			for _, controlResultID := range controlResultsToLink {
-				reagentControlResultRelationDAOs = append(reagentControlResultRelationDAOs, reagentControlResultRelationDAO{
-					ReagentID:       reagentID,
-					ControlResultID: controlResultID,
-					IsProcessed:     true,
-				})
+				if !alreadyCreatedReagentControlRelationMap[reagentID][controlResultID] {
+					if _, ok := alreadyCreatedReagentControlRelationMap[reagentID]; !ok {
+						alreadyCreatedReagentControlRelationMap[reagentID] = make(map[uuid.UUID]bool)
+					}
+					reagentControlResultRelationDAOs = append(reagentControlResultRelationDAOs, reagentControlResultRelationDAO{
+						ReagentID:       reagentID,
+						ControlResultID: controlResultID,
+						IsProcessed:     true,
+					})
+					alreadyCreatedReagentControlRelationMap[reagentID][controlResultID] = true
+				}
 
-				analysisResultControlResultRelationDAOs = append(analysisResultControlResultRelationDAOs, analysisResultControlResultRelationDAO{
-					AnalysisResultID: analysisResultID,
-					ControlResultID:  controlResultID,
-					IsProcessed:      true,
-				})
-
+				if !alreadyCreatedAnalysisResultControlRelationMap[analysisResult.ID][controlResultID] {
+					if _, ok := alreadyCreatedAnalysisResultControlRelationMap[analysisResult.ID]; !ok {
+						alreadyCreatedAnalysisResultControlRelationMap[analysisResult.ID] = make(map[uuid.UUID]bool)
+					}
+					analysisResultControlResultRelationDAOs = append(analysisResultControlResultRelationDAOs, analysisResultControlResultRelationDAO{
+						AnalysisResultID: analysisResult.ID,
+						ControlResultID:  controlResultID,
+						IsProcessed:      true,
+					})
+					alreadyCreatedAnalysisResultControlRelationMap[analysisResult.ID][controlResultID] = true
+				}
 			}
 		}
 	}
@@ -387,7 +411,7 @@ func (as *analysisService) createAnalysisResultsBatch(ctx context.Context, tx db
 	return analysisResultSet, nil
 }
 
-func setAnalysisResultStatusBasedOnControlResults(analysisResult AnalysisResult) (AnalysisResult, error) {
+func setAnalysisResultStatusBasedOnControlResults(analysisResult AnalysisResult, commonControlResults []ControlResult) (AnalysisResult, error) {
 	analysisResult.Status = Preliminary
 	if analysisResult.AnalyteMapping.ControlResultRequired {
 		controlSampleCodeMap := make(map[string]bool)
@@ -416,6 +440,12 @@ func setAnalysisResultStatusBasedOnControlResults(analysisResult AnalysisResult)
 			analysisResult.ControlResults[j] = controlResult
 			if _, ok := controlSampleCodeMap[controlResult.SampleCode]; ok {
 				controlSampleCodeMap[controlResult.SampleCode] = true
+			}
+		}
+
+		for j := range commonControlResults {
+			if _, ok := controlSampleCodeMap[commonControlResults[j].SampleCode]; ok {
+				controlSampleCodeMap[commonControlResults[j].SampleCode] = true
 			}
 		}
 
@@ -500,35 +530,35 @@ func (as *analysisService) CreateControlResultBatch(ctx context.Context, control
 	return controlResults, analysisResultIds, nil
 }
 
-func (as *analysisService) createControlResultBatch(ctx context.Context, tx db.DbConnector, controlResults []StandaloneControlResult) ([]StandaloneControlResult, []uuid.UUID, error) {
-	crs := make([]ControlResult, len(controlResults))
+func (as *analysisService) createControlResultBatch(ctx context.Context, tx db.DbConnector, standaloneControlResults []StandaloneControlResult) ([]StandaloneControlResult, []uuid.UUID, error) {
+	crs := make([]ControlResult, len(standaloneControlResults))
 	analysisResultIDs := make([]uuid.UUID, 0)
 	reagents := make([]Reagent, 0)
 
 	var err error
-	for i, controlResult := range controlResults {
-		crs[i], err = setControlResultIsValidAndExpectedControlResultId(controlResults[i].ControlResult)
+	for i, controlResult := range standaloneControlResults {
+		crs[i], err = setControlResultIsValidAndExpectedControlResultId(standaloneControlResults[i].ControlResult)
 		if err != nil {
 			_ = tx.Rollback()
-			return controlResults, analysisResultIDs, err
+			return standaloneControlResults, analysisResultIDs, err
 		}
-		controlResults[i].ControlResult = crs[i]
+		standaloneControlResults[i].ControlResult = crs[i]
 		analysisResultIDs = append(analysisResultIDs, controlResult.ResultIDs...)
-		reagents = append(reagents, controlResults[i].Reagents...)
+		reagents = append(reagents, standaloneControlResults[i].Reagents...)
 	}
 
-	crIDs, err := as.analysisRepository.WithTransaction(tx).CreateControlResultBatch(ctx, crs)
+	controlResults, err := as.analysisRepository.WithTransaction(tx).CreateControlResultBatch(ctx, crs)
 	if err != nil {
-		return controlResults, analysisResultIDs, err
+		return standaloneControlResults, analysisResultIDs, err
 	}
 
 	reagentIDs, err := as.analysisRepository.WithTransaction(tx).CreateReagents(ctx, reagents)
 	if err != nil {
-		return controlResults, analysisResultIDs, err
+		return standaloneControlResults, analysisResultIDs, err
 	}
 
-	for i := range crIDs {
-		controlResults[i].ID = crIDs[i]
+	for i := range controlResults {
+		standaloneControlResults[i].ID = controlResults[i].ID
 	}
 
 	reagentControlResultRelationDAOs := make([]reagentControlResultRelationDAO, 0)
@@ -536,33 +566,33 @@ func (as *analysisService) createControlResultBatch(ctx context.Context, tx db.D
 
 	var reagentIndex = 0
 
-	for i := range crIDs {
-		controlResults[i].ID = crIDs[i]
+	for i := range controlResults {
+		standaloneControlResults[i].ID = controlResults[i].ID
 
-		for j := range controlResults[i].Reagents {
-			controlResults[i].Reagents[j].ID = reagentIDs[reagentIndex]
+		for j := range standaloneControlResults[i].Reagents {
+			standaloneControlResults[i].Reagents[j].ID = reagentIDs[reagentIndex]
 
-			reagentControlResultRelationDAOs = append(reagentControlResultRelationDAOs, reagentControlResultRelationDAO{ReagentID: reagentIDs[reagentIndex], ControlResultID: crIDs[i], IsProcessed: false})
+			reagentControlResultRelationDAOs = append(reagentControlResultRelationDAOs, reagentControlResultRelationDAO{ReagentID: reagentIDs[reagentIndex], ControlResultID: controlResults[i].ID, IsProcessed: false})
 
 			reagentIndex++
 		}
 
-		for _, resultID := range controlResults[i].ResultIDs {
-			analysisResultControlResultRelationDAOs = append(analysisResultControlResultRelationDAOs, analysisResultControlResultRelationDAO{AnalysisResultID: resultID, ControlResultID: crIDs[i], IsProcessed: false})
+		for _, resultID := range standaloneControlResults[i].ResultIDs {
+			analysisResultControlResultRelationDAOs = append(analysisResultControlResultRelationDAOs, analysisResultControlResultRelationDAO{AnalysisResultID: resultID, ControlResultID: controlResults[i].ID, IsProcessed: false})
 		}
 	}
 
 	err = as.analysisRepository.WithTransaction(tx).CreateReagentControlResultRelations(ctx, reagentControlResultRelationDAOs)
 	if err != nil {
-		return controlResults, analysisResultIDs, err
+		return standaloneControlResults, analysisResultIDs, err
 	}
 
 	err = as.analysisRepository.WithTransaction(tx).CreateAnalysisResultControlResultRelations(ctx, analysisResultControlResultRelationDAOs)
 	if err != nil {
-		return controlResults, analysisResultIDs, err
+		return standaloneControlResults, analysisResultIDs, err
 	}
 
-	return controlResults, analysisResultIDs, nil
+	return standaloneControlResults, analysisResultIDs, nil
 }
 
 func (as *analysisService) GetAnalysisResultsByIDsWithRecalculatedStatus(ctx context.Context, analysisResultIDs []uuid.UUID) ([]AnalysisResult, error) {
@@ -573,7 +603,7 @@ func (as *analysisService) GetAnalysisResultsByIDsWithRecalculatedStatus(ctx con
 	}
 
 	for i := range analysisResults {
-		analysisResults[i], err = setAnalysisResultStatusBasedOnControlResults(analysisResults[i])
+		analysisResults[i], err = setAnalysisResultStatusBasedOnControlResults(analysisResults[i], nil)
 		if err != nil {
 			return analysisResults, err
 		}
