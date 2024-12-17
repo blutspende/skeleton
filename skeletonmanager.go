@@ -41,9 +41,6 @@ type Manager interface {
 
 	SendResultForProcessing(analysisResult AnalysisResult)
 	GetResultChan() chan AnalysisResult
-
-	SendControlResultForProcessing(controlResult MappedStandaloneControlResult)
-	GetControlResultChan() chan MappedStandaloneControlResult
 }
 
 type instrumentEvent struct {
@@ -53,7 +50,6 @@ type instrumentEvent struct {
 
 type manager struct {
 	resultsChan                         chan AnalysisResult
-	controlResultsChan                  chan MappedStandaloneControlResult
 	processableAnalysisRequestBatchChan chan []AnalysisRequest
 	processableAnalysisRequestQueue     *utils.ConcurrentQueue[[]AnalysisRequest]
 	instrumentEventChan                 chan instrumentEvent
@@ -66,7 +62,6 @@ type manager struct {
 func NewSkeletonManager(ctx context.Context) Manager {
 	skeletonManager := &manager{
 		resultsChan:                         make(chan AnalysisResult, 500),
-		controlResultsChan:                  make(chan MappedStandaloneControlResult, 500),
 		processableAnalysisRequestBatchChan: make(chan []AnalysisRequest, 0),
 		processableAnalysisRequestQueue:     utils.NewConcurrentQueue[[]AnalysisRequest](ctx),
 		instrumentEventChan:                 make(chan instrumentEvent, 0),
@@ -125,14 +120,6 @@ func (sm *manager) SendResultForProcessing(analysisResult AnalysisResult) {
 
 func (sm *manager) GetResultChan() chan AnalysisResult {
 	return sm.resultsChan
-}
-
-func (sm *manager) SendControlResultForProcessing(controlResult MappedStandaloneControlResult) {
-	sm.controlResultsChan <- controlResult
-}
-
-func (sm *manager) GetControlResultChan() chan MappedStandaloneControlResult {
-	return sm.controlResultsChan
 }
 
 func (sm *manager) listenOnInstruments() {

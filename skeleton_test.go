@@ -814,6 +814,23 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 		},
 	}
 
+	analysisRequests := []AnalysisRequest{
+		{
+			ID:                          uuid.MustParse("4a7a8b97-59f5-46bc-9fab-0674504e4cc6"),
+			WorkItemID:                  uuid.UUID{},
+			AnalyteID:                   analyteMappings[0].AnalyteID,
+			SampleCode:                  "testSampleCode",
+			MaterialID:                  uuid.UUID{},
+			LaboratoryID:                uuid.UUID{},
+			ValidUntilTime:              time.Time{},
+			CreatedAt:                   time.Time{},
+			ModifiedAt:                  nil,
+			SubjectInfo:                 nil,
+			ExtraValues:                 nil,
+			ReexaminationRequestedCount: 0,
+		},
+	}
+
 	controlResult := ControlResult{
 		ID:             uuid.UUID{},
 		SampleCode:     "",
@@ -837,11 +854,12 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 	})
 	assert.Nil(t, err)
 
-	time.Sleep(4 * time.Second)
+	time.Sleep(6 * time.Second)
 
-	skeletonManagerMock.AnalysisRequestsForProcessing = make([]AnalysisResult, 0)
-	skeletonManagerMock.ControlResultForProcessing = make([]MappedStandaloneControlResult, 0)
+	skeletonManagerMock.AnalysisResultsForProcessing = make([]AnalysisResult, 0)
 
+	analysisRepositoryMock.analysisResultsById = analysisResults
+	analysisRepositoryMock.analysisRequests = analysisRequests
 	err = skeletonInstance.SubmitControlResults(context.TODO(), []StandaloneControlResult{
 		{
 			ControlResult: controlResult,
@@ -851,12 +869,12 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 	})
 	assert.Nil(t, err)
 
-	time.Sleep(4 * time.Second)
-	assert.Equal(t, 2, len(skeletonManagerMock.AnalysisRequestsForProcessing))
-	assert.Equal(t, 0, len(skeletonManagerMock.ControlResultForProcessing))
+	time.Sleep(6 * time.Second)
+	assert.Equal(t, 2, len(skeletonManagerMock.AnalysisResultsForProcessing))
 
-	skeletonManagerMock.AnalysisRequestsForProcessing = make([]AnalysisResult, 0)
-	skeletonManagerMock.ControlResultForProcessing = make([]MappedStandaloneControlResult, 0)
+	analysisRepositoryMock.analysisResultsById = make([]AnalysisResult, 0)
+	analysisRepositoryMock.analysisRequests = make([]AnalysisRequest, 0)
+	skeletonManagerMock.AnalysisResultsForProcessing = make([]AnalysisResult, 0)
 
 	err = skeletonInstance.SubmitControlResults(context.TODO(), []StandaloneControlResult{
 		{
@@ -867,12 +885,12 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 	})
 	assert.Nil(t, err)
 
-	time.Sleep(4 * time.Second)
-	assert.Equal(t, 0, len(skeletonManagerMock.AnalysisRequestsForProcessing))
-	assert.Equal(t, 1, len(skeletonManagerMock.ControlResultForProcessing))
+	time.Sleep(6 * time.Second)
+	assert.Equal(t, 0, len(skeletonManagerMock.AnalysisResultsForProcessing))
 
-	skeletonManagerMock.AnalysisRequestsForProcessing = make([]AnalysisResult, 0)
-	skeletonManagerMock.ControlResultForProcessing = make([]MappedStandaloneControlResult, 0)
+	analysisRepositoryMock.analysisResultsById = analysisResults
+	analysisRepositoryMock.analysisRequests = analysisRequests
+	skeletonManagerMock.AnalysisResultsForProcessing = make([]AnalysisResult, 0)
 	controlResultWithoutAnalysisResult := ControlResult{
 		ID:             uuid.UUID{},
 		SampleCode:     "",
@@ -905,9 +923,8 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 	})
 	assert.Nil(t, err)
 
-	time.Sleep(4 * time.Second)
-	assert.Equal(t, 2, len(skeletonManagerMock.AnalysisRequestsForProcessing))
-	assert.Equal(t, 1, len(skeletonManagerMock.ControlResultForProcessing))
+	time.Sleep(6 * time.Second)
+	assert.Equal(t, 2, len(skeletonManagerMock.AnalysisResultsForProcessing))
 }
 
 type skeletonCallbackHandlerV1Mock struct {
@@ -1083,18 +1100,7 @@ func generateAnalysisRequestsJson(count int) string {
 type analysisServiceMock struct {
 }
 
-func (m *analysisServiceMock) QueueControlResults(ctx context.Context, results []MappedStandaloneControlResult) error {
-	return nil
-}
-
-func (m *analysisServiceMock) SaveCerberusIDsForControlResultBatchItems(ctx context.Context, controlResults []ControlResultBatchItemInfo) {
-}
-
 func (m *analysisServiceMock) SaveCerberusIDsForAnalysisResultBatchItems(ctx context.Context, analysisResults []AnalysisResultBatchItemInfo) {
-}
-
-func (m *analysisServiceMock) GetUnprocessedMappedStandaloneControlResultsByIDs(ctx context.Context, controlResultIDs []uuid.UUID) ([]MappedStandaloneControlResult, error) {
-	return []MappedStandaloneControlResult{}, nil
 }
 
 func (m *analysisServiceMock) CreateAnalysisRequests(ctx context.Context, analysisRequests []AnalysisRequest) ([]AnalysisRequestStatus, error) {
@@ -1148,7 +1154,9 @@ func (m *analysisServiceMock) ProcessStuckImagesToCerberus(ctx context.Context) 
 }
 
 type analysisRepositoryMock struct {
-	callCount int
+	callCount           int
+	analysisResultsById []AnalysisResult
+	analysisRequests    []AnalysisRequest
 }
 
 func (m *analysisRepositoryMock) DeleteOldCerberusQueueItems(ctx context.Context, cleanupDays, limit int) (int64, error) {
@@ -1165,18 +1173,6 @@ func (m *analysisRepositoryMock) DeleteOldAnalysisResultsWithTx(ctx context.Cont
 
 func (m *analysisRepositoryMock) UpdateCerberusQueueItemStatus(ctx context.Context, queueItem CerberusQueueItem) error {
 	return nil
-}
-
-func (m *analysisRepositoryMock) GetControlResultQueueItems(ctx context.Context) ([]CerberusQueueItem, error) {
-	return []CerberusQueueItem{}, nil
-}
-
-func (m *analysisRepositoryMock) CreateControlResultQueueItem(ctx context.Context, controlResults []StandaloneControlResult) (uuid.UUID, error) {
-	return uuid.Nil, nil
-}
-
-func (m *analysisRepositoryMock) GetUnprocessedControlResultIDs(ctx context.Context) ([]uuid.UUID, error) {
-	return []uuid.UUID{}, nil
 }
 
 func (m *analysisRepositoryMock) GetUnprocessedAnalysisResultIDsByControlResultIDs(ctx context.Context, controlResultIDs []uuid.UUID) (map[uuid.UUID]map[uuid.UUID]uuid.UUID, error) {
@@ -1256,6 +1252,9 @@ func (m *analysisRepositoryMock) GetUnprocessedAnalysisResultIDs(ctx context.Con
 }
 
 func (m *analysisRepositoryMock) GetAnalysisResultsByIDs(ctx context.Context, ids []uuid.UUID) ([]AnalysisResult, error) {
+	if len(m.analysisResultsById) > 0 {
+		return m.analysisResultsById, nil
+	}
 	return make([]AnalysisResult, len(ids)), nil
 }
 
@@ -1263,6 +1262,9 @@ func (m *analysisRepositoryMock) CreateAnalysisRequestsBatch(ctx context.Context
 	return nil, nil, nil
 }
 func (m *analysisRepositoryMock) GetAnalysisRequestsBySampleCodeAndAnalyteID(ctx context.Context, sampleCodes string, analyteID uuid.UUID) ([]AnalysisRequest, error) {
+	if len(m.analysisRequests) > 0 {
+		return m.analysisRequests, nil
+	}
 	return nil, nil
 }
 func (m *analysisRepositoryMock) GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string, allowResending bool) (map[string][]AnalysisRequest, error) {

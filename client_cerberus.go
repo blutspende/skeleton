@@ -25,7 +25,6 @@ type CerberusClient interface {
 	RegisterInstrument(instrument Instrument) error
 	RegisterInstrumentDriver(name, apiVersion string, apiPort uint16, tlsEnabled bool, extraValueKeys []string, reagentManufacturers []string) error
 	SendAnalysisResultBatch(analysisResults []AnalysisResultTO) (AnalysisResultBatchResponse, error)
-	SendControlResultBatch(controlResults []StandaloneControlResultTO) (ControlResultBatchResponse, error)
 	SendAnalysisResultImageBatch(images []WorkItemResultImageTO) error
 }
 
@@ -53,16 +52,10 @@ type ExtraValueTO struct {
 	Value string `json:"value"`
 }
 
-type createAnalysisResultReagentID struct {
-	ID               uuid.UUID   `json:"id"`
-	ControlResultIDs []uuid.UUID `json:"controlResultIds"`
-}
-
 type createAnalysisResultResponseItemTO struct {
-	ID         uuid.NullUUID                   `json:"id"`
-	ReagentIDs []createAnalysisResultReagentID `json:"reagentIds"`
-	WorkItemID uuid.UUID                       `json:"workItemId"`
-	Error      *string                         `json:"error"`
+	ID         uuid.NullUUID `json:"id"`
+	WorkItemID uuid.UUID     `json:"workItemId"`
+	Error      *string       `json:"error"`
 }
 
 type createControlResultResponseItemTO struct {
@@ -118,10 +111,10 @@ type ImageTO struct {
 type ReagentTO struct {
 	ID             uuid.UUID         `json:"id"`
 	Manufacturer   string            `json:"manufacturer"`
-	SerialNumber   string            `json:"serialNo"`
-	LotNo          string            `json:"lotNo"`
 	Name           string            `json:"name"`
-	ReagentType    ReagentType       `json:"type"`
+	SerialNo       string            `json:"serialNo"`
+	LotNo          string            `json:"lotNo"`
+	Type           ReagentType       `json:"type"`
 	ControlResults []ControlResultTO `json:"controlResults"`
 }
 
@@ -283,13 +276,6 @@ func (c *cerberusClient) SendAnalysisResultBatch(analysisResults []AnalysisResul
 		for i, responseItem := range responseItems {
 			analysisResultBatchItemInfoList[i].ErrorMessage = stringPointerToString(responseItem.Error)
 			analysisResultBatchItemInfoList[i].CerberusAnalysisResultID = nullUUIDToUUIDPointer(responseItem.ID)
-
-			for _, reagent := range responseItem.ReagentIDs {
-				analysisResultBatchItemInfoList[i].CerberusReagentIDs = append(analysisResultBatchItemInfoList[i].CerberusReagentIDs, AnalysisResultBatchItemReagentInfo{
-					CerberusID:                reagent.ID,
-					CerberusControlResultsIDs: reagent.ControlResultIDs,
-				})
-			}
 		}
 
 		response := AnalysisResultBatchResponse{
@@ -327,103 +313,6 @@ func (c *cerberusClient) SendAnalysisResultBatch(analysisResults []AnalysisResul
 			HTTPStatusCode:                  resp.StatusCode(),
 			ErrorMessage:                    err.Error(),
 			RawResponse:                     string(resp.Body()),
-		}
-		return response, err
-	}
-}
-
-func (c *cerberusClient) SendControlResultBatch(controlResults []StandaloneControlResultTO) (ControlResultBatchResponse, error) {
-	if len(controlResults) < 1 {
-		log.Warn().Msg("Send control results batch called with empty array")
-		return ControlResultBatchResponse{}, nil
-	}
-
-	controlResultBatchItemInfoList := make([]ControlResultBatchItemInfo, len(controlResults))
-
-	var hasError bool
-	for i := range controlResults {
-		controlResultBatchItemInfoList[i] = ControlResultBatchItemInfo{
-			ControlResult: &controlResults[i],
-		}
-	}
-
-	if hasError {
-		response := ControlResultBatchResponse{
-			ControlResultBatchItemInfoList: controlResultBatchItemInfoList,
-			ErrorMessage:                   "Failed to prepare data for sending",
-		}
-		return response, nil
-	}
-
-	resp, err := c.client.R().
-		SetHeader("Content-Type", "application/json").
-		SetBody(controlResults).
-		Post(c.cerberusUrl + "/v1/control-results/batch")
-
-	if err != nil {
-		response := ControlResultBatchResponse{
-			ControlResultBatchItemInfoList: controlResultBatchItemInfoList,
-			ErrorMessage:                   err.Error(),
-		}
-
-		return response, fmt.Errorf("%s (%w)", ErrSendResultBatchFailed, err)
-	}
-
-	switch {
-	case resp.StatusCode() == http.StatusOK:
-		responseItems := make([]createControlResultResponseItemTO, 0)
-		err = json.Unmarshal(resp.Body(), &responseItems)
-		if err != nil {
-			response := ControlResultBatchResponse{
-				ControlResultBatchItemInfoList: controlResultBatchItemInfoList,
-				HTTPStatusCode:                 resp.StatusCode(),
-				ErrorMessage:                   err.Error(),
-				RawResponse:                    string(resp.Body()),
-			}
-
-			return response, err
-		}
-
-		for i, responseItem := range responseItems {
-			controlResultBatchItemInfoList[i].CerberusID = responseItem.ID
-			controlResultBatchItemInfoList[i].CerberusReagentIDs = responseItem.ReagentIDs
-		}
-
-		response := ControlResultBatchResponse{
-			ControlResultBatchItemInfoList: controlResultBatchItemInfoList,
-			HTTPStatusCode:                 resp.StatusCode(),
-			RawResponse:                    string(resp.Body()),
-		}
-
-		return response, nil
-	case resp.StatusCode() == http.StatusInternalServerError:
-		errReps := clientError{}
-		err = json.Unmarshal(resp.Body(), &errReps)
-		if err != nil {
-			err = fmt.Errorf("can not unmarshal error of response (%w)", err)
-			response := ControlResultBatchResponse{
-				ControlResultBatchItemInfoList: controlResultBatchItemInfoList,
-				HTTPStatusCode:                 resp.StatusCode(),
-				ErrorMessage:                   err.Error(),
-				RawResponse:                    string(resp.Body()),
-			}
-			return response, err
-		}
-		err = errors.New(errReps.Message)
-		response := ControlResultBatchResponse{
-			ControlResultBatchItemInfoList: controlResultBatchItemInfoList,
-			HTTPStatusCode:                 resp.StatusCode(),
-			ErrorMessage:                   err.Error(),
-			RawResponse:                    string(resp.Body()),
-		}
-		return response, err
-	default:
-		err = fmt.Errorf("unexpected error from cerberus %d", resp.StatusCode())
-		response := ControlResultBatchResponse{
-			ControlResultBatchItemInfoList: controlResultBatchItemInfoList,
-			HTTPStatusCode:                 resp.StatusCode(),
-			ErrorMessage:                   err.Error(),
-			RawResponse:                    string(resp.Body()),
 		}
 		return response, err
 	}

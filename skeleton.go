@@ -48,7 +48,7 @@ type skeleton struct {
 	unprocessedHandlingWaitGroup sync.WaitGroup
 }
 
-const waitGroupSize = 3
+const waitGroupSize = 2
 
 func (s *skeleton) SetCallbackHandler(eventHandler SkeletonCallbackHandlerV1) {
 	s.manager.SetCallbackHandler(eventHandler)
@@ -200,31 +200,26 @@ func (s *skeleton) SubmitControlResults(ctx context.Context, controlResults []St
 		return err
 	}
 
-	go func(controlResults []StandaloneControlResult, analysisResultIDs []uuid.UUID) {
-
-		for _, controlResult := range controlResults {
-			if controlResult.ResultIDs == nil || len(controlResult.ResultIDs) == 0 {
-				mappedControlResult := MappedStandaloneControlResult{
-					ControlResult: controlResult.ControlResult,
-					Reagents:      controlResult.Reagents,
-				}
-
-				s.manager.SendControlResultForProcessing(mappedControlResult)
-			}
+	go func(analysisResultIDs []uuid.UUID) {
+		analysisResults, err := s.analysisService.GetAnalysisResultsByIDsWithRecalculatedStatus(ctx, analysisResultIDs)
+		if err != nil {
+			log.Error().Err(err).Msg("get analysis results by analysisResultIds with recalculated status failed after saving control results")
+			return
 		}
 
-		if len(analysisResultIDs) > 0 {
-			analysisResults, err := s.analysisService.GetAnalysisResultsByIDsWithRecalculatedStatus(ctx, analysisResultIDs)
+		for i := range analysisResults {
+			analyteRequests, err := s.analysisRepository.GetAnalysisRequestsBySampleCodeAndAnalyteID(ctx, analysisResults[i].SampleCode, analysisResults[i].AnalyteMapping.AnalyteID)
 			if err != nil {
-				log.Error().Err(err).Msg("get analysis results by analysisResultIds with recalculated status failed after saving control results")
+				log.Error().Err(err).Msg("get analysis requests by sample code and analyteID failed after saving results")
 				return
 			}
 
-			for i := range analysisResults {
+			for j := range analyteRequests {
+				analysisResults[i].AnalysisRequest = analyteRequests[j]
 				s.manager.SendResultForProcessing(analysisResults[i])
 			}
 		}
-	}(controlResults, analysisResultIds)
+	}(analysisResultIds)
 
 	return nil
 }
@@ -554,16 +549,12 @@ func (s *skeleton) Start() error {
 	}
 	go s.processAnalysisResults(s.ctx)
 	go s.processAnalysisResultBatches(s.ctx)
-	go s.processControlResults(s.ctx)
-	go s.processControlResultBatches(s.ctx)
 	go s.submitAnalysisResultsToCerberus(s.ctx)
-	go s.submitControlResultsToCerberus(s.ctx)
 	go s.processStuckImagesToDEA(s.ctx)
 	go s.processStuckImagesToCerberus(s.ctx)
 
 	go s.enqueueUnprocessedAnalysisRequests(s.ctx)
 	go s.enqueueUnprocessedAnalysisResults(s.ctx)
-	go s.enqueueUnprocessedControlResults(s.ctx)
 
 	s.unprocessedHandlingWaitGroup.Wait()
 
@@ -703,47 +694,6 @@ func (s *skeleton) enqueueUnprocessedAnalysisResults(ctx context.Context) {
 	}
 }
 
-func (s *skeleton) enqueueUnprocessedControlResults(ctx context.Context) {
-	for {
-		resultIDs, err := s.analysisRepository.GetUnprocessedControlResultIDs(ctx)
-		if err != nil {
-			panic(err)
-		}
-
-		s.unprocessedHandlingWaitGroup.Done()
-
-		for {
-			failed := make([]uuid.UUID, 0)
-
-			err = utils.Partition(len(resultIDs), 500, func(low int, high int) error {
-				partition := resultIDs[low:high]
-
-				controlResults, err := s.analysisService.GetUnprocessedMappedStandaloneControlResultsByIDs(ctx, partition)
-				if err != nil {
-					failed = append(failed, partition...)
-					return err
-				}
-
-				for _, controlResult := range controlResults {
-					s.manager.SendControlResultForProcessing(controlResult)
-				}
-
-				return nil
-			})
-			if err != nil {
-				log.Error().Err(err).Msg("GetControlResultsByIDs failed")
-				resultIDs = failed
-				time.Sleep(5 * time.Minute)
-				continue
-			}
-
-			break
-		}
-
-		break
-	}
-}
-
 func (s *skeleton) processAnalysisRequests(ctx context.Context) {
 	log.Trace().Msg("Starting to process analysis requests")
 
@@ -813,50 +763,6 @@ func (s *skeleton) processAnalysisResultBatches(ctx context.Context) {
 		if err != nil {
 			time.AfterFunc(30*time.Second, func() {
 				s.resultBatchesChan <- resultsBatch
-			})
-			continue
-		}
-	}
-}
-
-func (s *skeleton) processControlResults(ctx context.Context) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case result, ok := <-s.manager.GetControlResultChan():
-			if !ok {
-				log.Fatal().Msg("processing control results stopped: control results channel closed")
-			}
-			s.controlResultsBuffer = append(s.controlResultsBuffer, result)
-			if len(s.controlResultsBuffer) >= 500 {
-				s.controlResultBatchesChan <- s.controlResultsBuffer
-				s.controlResultsBuffer = make([]MappedStandaloneControlResult, 0, 500)
-			}
-		case <-time.After(3 * time.Second):
-			if len(s.controlResultsBuffer) > 0 {
-				s.controlResultBatchesChan <- s.controlResultsBuffer
-				s.controlResultsBuffer = make([]MappedStandaloneControlResult, 0, 500)
-			}
-		}
-	}
-}
-
-func (s *skeleton) processControlResultBatches(ctx context.Context) {
-	for {
-		controlResultsBatch, ok := <-s.controlResultBatchesChan
-		if !ok {
-			log.Fatal().Msg("processing control result batches stopped: control result batches channel closed")
-		}
-
-		if len(controlResultsBatch) < 1 {
-			continue
-		}
-
-		err := s.analysisService.QueueControlResults(ctx, controlResultsBatch)
-		if err != nil {
-			time.AfterFunc(30*time.Second, func() {
-				s.controlResultBatchesChan <- controlResultsBatch
 			})
 			continue
 		}
@@ -991,8 +897,7 @@ func (s *skeleton) submitAnalysisResultsToCerberus(ctx context.Context) {
 					log.Error().Err(err).Msg("Failed to update the status of the cerberus queue item")
 				}
 
-				//TODO: commented out until quality management is in WIP state
-				//s.analysisService.SaveCerberusIDsForAnalysisResultBatchItems(ctx, response.AnalysisResultBatchItemInfoList)
+				s.analysisService.SaveCerberusIDsForAnalysisResultBatchItems(ctx, response.AnalysisResultBatchItemInfoList)
 			}
 
 			log.Trace().Int64("elapsedExecutionTime", time.Since(executionStarted).Milliseconds()).
@@ -1012,96 +917,6 @@ func (s *skeleton) submitAnalysisResultsToCerberus(ctx context.Context) {
 			}()
 		case <-ticker.C:
 			queueItems, err := s.analysisRepository.GetAnalysisResultQueueItems(ctx)
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to get cerberus queue items")
-				break
-			}
-			go func() {
-				time.Sleep(50 * time.Millisecond)
-				continuousTrigger <- queueItems
-			}()
-		}
-	}
-}
-
-func (s *skeleton) submitControlResultsToCerberus(ctx context.Context) {
-	tickerTriggerDuration := time.Duration(s.resultTransferFlushTimeout) * time.Second
-	ticker := time.NewTicker(tickerTriggerDuration)
-	continuousTrigger := make(chan []CerberusQueueItem)
-	for {
-		select {
-		case <-ctx.Done():
-			log.Debug().Msg("Stopping control result submit job")
-			ticker.Stop()
-			return
-		case queueItems := <-continuousTrigger:
-			if len(queueItems) == 0 {
-				continue
-			}
-			executionStarted := time.Now()
-			log.Trace().Msgf("Triggered control result sending to cerberus. Sending %d batches", len(queueItems))
-			ticker.Stop()
-
-			sentResultCount := 0
-			for _, queueItem := range queueItems {
-				var controlResults []StandaloneControlResultTO
-				if err := json.Unmarshal([]byte(queueItem.JsonMessage), &controlResults); err != nil {
-					log.Error().Err(err).Msg("Failed to unmarshal control results")
-					continue
-				}
-
-				response, err := s.cerberusClient.SendControlResultBatch(controlResults)
-				if err != nil {
-					log.Error().Err(err).Msg("Failed to send control results to cerberus")
-				}
-
-				if !response.HasResult() {
-					continue
-				}
-
-				sentResultCount += len(controlResults)
-
-				responseJsonMessage, _ := json.Marshal(response.ControlResultBatchItemInfoList)
-
-				cerberusQueueItem := CerberusQueueItem{
-					ID:                  queueItem.ID,
-					LastHTTPStatus:      response.HTTPStatusCode,
-					LastError:           response.ErrorMessage,
-					RawResponse:         response.RawResponse,
-					ResponseJsonMessage: string(responseJsonMessage),
-				}
-				if !response.IsSuccess() {
-					utcNow := time.Now().UTC()
-					cerberusQueueItem.LastErrorAt = &utcNow
-					cerberusQueueItem.RetryNotBefore = utcNow.Add(10 * time.Minute)
-				}
-
-				err = s.analysisRepository.UpdateCerberusQueueItemStatus(ctx, cerberusQueueItem)
-				if err != nil {
-					log.Error().Err(err).Msg("Failed to update the status of the cerberus queue item")
-				}
-
-				//TODO: commented out until quality management is in WIP state
-				//s.analysisService.SaveCerberusIDsForControlResultBatchItems(ctx, response.ControlResultBatchItemInfoList)
-			}
-
-			log.Trace().Int64("elapsedExecutionTime", time.Since(executionStarted).Milliseconds()).
-				Msgf("Sent (or tried to send) %d results to cerberus", sentResultCount)
-
-			queueItems, err := s.analysisRepository.GetControlResultQueueItems(ctx)
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to get cerberus queue items")
-			}
-			if len(queueItems) < 1 {
-				ticker.Reset(tickerTriggerDuration)
-				break
-			}
-			go func() {
-				time.Sleep(1 * time.Second)
-				continuousTrigger <- queueItems
-			}()
-		case <-ticker.C:
-			queueItems, err := s.analysisRepository.GetControlResultQueueItems(ctx)
 			if err != nil {
 				log.Error().Err(err).Msg("Failed to get cerberus queue items")
 				break

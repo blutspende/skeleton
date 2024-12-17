@@ -99,9 +99,8 @@ const (
 type ReagentType string
 
 const (
-	Standard  ReagentType = "Standard"
-	Diluent   ReagentType = "Diluent"
-	Composite ReagentType = "Composite"
+	Standard ReagentType = "reagent"
+	Diluent  ReagentType = "diluent"
 )
 
 type Reagent struct {
@@ -319,7 +318,6 @@ type AnalysisResultBatchItemReagentInfo struct {
 type AnalysisResultBatchItemInfo struct {
 	AnalysisResult           *AnalysisResultTO
 	CerberusAnalysisResultID *uuid.UUID
-	CerberusReagentIDs       []AnalysisResultBatchItemReagentInfo
 	ErrorMessage             string
 }
 

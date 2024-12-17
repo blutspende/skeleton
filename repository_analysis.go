@@ -376,8 +376,6 @@ type AnalysisRepository interface {
 	UpdateCerberusQueueItemStatus(ctx context.Context, queueItem CerberusQueueItem) error
 	GetAnalysisResultQueueItems(ctx context.Context) ([]CerberusQueueItem, error)
 	CreateAnalysisResultQueueItem(ctx context.Context, analysisResults []AnalysisResult) (uuid.UUID, error)
-	GetControlResultQueueItems(ctx context.Context) ([]CerberusQueueItem, error)
-	CreateControlResultQueueItem(ctx context.Context, controlResults []StandaloneControlResult) (uuid.UUID, error)
 
 	SaveImages(ctx context.Context, images []imageDAO) ([]uuid.UUID, error)
 	SaveControlResultImages(ctx context.Context, images []controlResultImageDAO) ([]uuid.UUID, error)
@@ -391,7 +389,6 @@ type AnalysisRepository interface {
 
 	GetUnprocessedAnalysisRequests(ctx context.Context) ([]AnalysisRequest, error)
 	GetUnprocessedAnalysisResultIDs(ctx context.Context) ([]uuid.UUID, error)
-	GetUnprocessedControlResultIDs(ctx context.Context) ([]uuid.UUID, error)
 	GetUnprocessedAnalysisResultIDsByControlResultIDs(ctx context.Context, controlResultIDs []uuid.UUID) (map[uuid.UUID]map[uuid.UUID]uuid.UUID, error)
 	GetUnprocessedReagentIDsByControlResultIDs(ctx context.Context, controlResultIDs []uuid.UUID) (map[uuid.UUID][]uuid.UUID, error)
 	MarkAnalysisRequestsAsProcessed(ctx context.Context, analysisRequestIDs []uuid.UUID) error
@@ -408,10 +405,7 @@ type AnalysisRepository interface {
 	CreateReagentControlResultRelations(ctx context.Context, relationDAOs []reagentControlResultRelationDAO) error
 	CreateAnalysisResultControlResultRelations(ctx context.Context, relationDAOs []analysisResultControlResultRelationDAO) error
 
-	GetCerberusIDForAnalysisResults(ctx context.Context, analysisResultIDs []uuid.UUID) (map[uuid.UUID]uuid.UUID, error)
 	SaveCerberusIDForAnalysisResult(ctx context.Context, analysisResultID uuid.UUID, cerberusID uuid.UUID) error
-	SaveCerberusIDForControlResult(ctx context.Context, controlResultID uuid.UUID, cerberusID uuid.UUID) error
-	SaveCerberusIDForReagent(ctx context.Context, reagentID uuid.UUID, cerberusID uuid.UUID) error
 
 	GetAnalysisResultIdsSinceLastControlByReagent(ctx context.Context, reagent Reagent, examinedAt time.Time) ([]uuid.UUID, error)
 	GetLatestControlResultIdByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time) (ControlResult, error)
@@ -1650,7 +1644,22 @@ func (r *analysisRepository) GetAnalysisResultsByIDs(ctx context.Context, ids []
 
 	for analysisResultID, controlResultIDs := range controlResultIDsByAnalysisResultIDMap {
 		for _, controlResultID := range controlResultIDs {
-			controlResultMap[analysisResultID] = append(controlResultMap[analysisResultID], controlResultsByIDs[controlResultID])
+			controlResultAlreadyAttachedByReagent := false
+			for _, reagentId := range reagentIDsMap[analysisResultID] {
+				for _, attachedControlResultId := range controlResultIDsByReagentIDMap[reagentId] {
+					if attachedControlResultId == controlResultID {
+						controlResultAlreadyAttachedByReagent = true
+						break
+					}
+				}
+				if controlResultAlreadyAttachedByReagent {
+					break
+				}
+			}
+
+			if !controlResultAlreadyAttachedByReagent {
+				controlResultMap[analysisResultID] = append(controlResultMap[analysisResultID], controlResultsByIDs[controlResultID])
+			}
 		}
 	}
 
@@ -3431,9 +3440,12 @@ func convertAnalysisResultToTO(ar AnalysisResult) (AnalysisResultTO, error) {
 
 	for _, ri := range ar.Reagents {
 		reagentTO := ReagentTO{
+			ID:           ri.ID,
 			Manufacturer: ri.Manufacturer,
-			SerialNumber: ri.SerialNumber,
+			SerialNo:     ri.SerialNumber,
 			LotNo:        ri.LotNo,
+			Name:         ri.Name,
+			Type:         ri.Type,
 		}
 
 		if len(ri.ControlResults) > 0 {
@@ -3718,37 +3730,6 @@ func (r *analysisRepository) GetUnprocessedAnalysisResultIDs(ctx context.Context
 	}
 
 	return analysisResultIDs, err
-}
-
-func (r *analysisRepository) GetUnprocessedControlResultIDs(ctx context.Context) ([]uuid.UUID, error) {
-	query := fmt.Sprintf(`SELECT srcrr.control_result_id FROM %s.sk_reagent_control_result_relations srcrr WHERE srcrr.is_processed IS FALSE
-							     UNION 
-								 SELECT sarcrr.control_result_id FROM %s.sk_analysis_result_control_result_relations sarcrr WHERE sarcrr.is_processed IS FALSE;`, r.dbSchema, r.dbSchema)
-
-	rows, err := r.db.QueryxContext(ctx, query)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			log.Trace().Msg("Unprocessed control results not found")
-			return []uuid.UUID{}, nil
-		}
-		log.Error().Err(err).Msg("Failed to get unprocessed control result ids")
-		return []uuid.UUID{}, err
-	}
-	defer rows.Close()
-
-	controlResultIDs := make([]uuid.UUID, 0)
-	for rows.Next() {
-		var id uuid.UUID
-		err := rows.Scan(&id)
-		if err != nil {
-			log.Error().Err(err).Msg("Can not scan unprocessed control result id")
-			return []uuid.UUID{}, err
-		}
-
-		controlResultIDs = append(controlResultIDs, id)
-	}
-
-	return controlResultIDs, err
 }
 
 func (r *analysisRepository) GetUnprocessedAnalysisResultIDsByControlResultIDs(ctx context.Context, controlResultIDs []uuid.UUID) (map[uuid.UUID]map[uuid.UUID]uuid.UUID, error) {
@@ -4224,6 +4205,33 @@ func (r *analysisRepository) getControlResultImages(ctx context.Context, control
 	return imagesMap, err
 }
 
+func (r *analysisRepository) getExpectedControlResultsByAnalyteMappingIds(ctx context.Context, analyteMappingIds []uuid.UUID) (map[uuid.UUID][]ExpectedControlResult, error) {
+	expectedControlResultsByAnalyteMappingID := make(map[uuid.UUID][]ExpectedControlResult)
+	if analyteMappingIds == nil || len(analyteMappingIds) == 0 {
+		return expectedControlResultsByAnalyteMappingID, nil
+	}
+	query := fmt.Sprintf(`SELECT secr.* FROM %s.sk_expected_control_result secr WHERE secr.analyte_mapping_id in (?) AND secr.deleted_at IS NULL;`, r.dbSchema)
+	query, args, _ := sqlx.In(query, analyteMappingIds)
+	query = r.db.Rebind(query)
+	rows, err := r.db.QueryxContext(ctx, query, args...)
+	if err != nil {
+		log.Error().Err(err).Msg(msgGetExpectedControlResultsFailed)
+		return nil, ErrGetExpectedControlResultsFailed
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var dao expectedControlResultDAO
+		err = rows.StructScan(&dao)
+		if err != nil {
+			log.Error().Err(err).Msg(msgGetExpectedControlResultsFailed)
+			return nil, ErrGetExpectedControlResultsFailed
+		}
+
+		expectedControlResultsByAnalyteMappingID[dao.AnalyteMappingID] = append(expectedControlResultsByAnalyteMappingID[dao.AnalyteMappingID], convertExpectedControlResultDaoToExpectedControlResult(dao))
+	}
+	return expectedControlResultsByAnalyteMappingID, nil
+}
+
 func (r *analysisRepository) CreateControlResultQueueItem(ctx context.Context, controlResults []StandaloneControlResult) (uuid.UUID, error) {
 	log.Trace().Int("controlResultCount", len(controlResults)).Msg("Creating control result queue item")
 
@@ -4330,10 +4338,10 @@ func convertReagentToTO(reagent Reagent) ReagentTO {
 	to := ReagentTO{
 		ID:             reagent.ID,
 		Manufacturer:   reagent.Manufacturer,
-		SerialNumber:   reagent.SerialNumber,
+		SerialNo:       reagent.SerialNumber,
 		LotNo:          reagent.LotNo,
 		Name:           reagent.Name,
-		ReagentType:    reagent.Type,
+		Type:           reagent.Type,
 		ControlResults: convertControlResultsToTOs(reagent.ControlResults),
 	}
 
@@ -4423,42 +4431,6 @@ func (r *analysisRepository) GetControlResultQueueItems(ctx context.Context) ([]
 	return cerberusQueueItems, err
 }
 
-func (r *analysisRepository) GetCerberusIDForAnalysisResults(ctx context.Context, analysisResultIDs []uuid.UUID) (map[uuid.UUID]uuid.UUID, error) {
-	analysisResultsMap := make(map[uuid.UUID]uuid.UUID)
-	if len(analysisResultIDs) == 0 {
-		return analysisResultsMap, nil
-	}
-	err := utils.Partition(len(analysisResultIDs), maxParams, func(low int, high int) error {
-		query := fmt.Sprintf(`SELECT id, cerberus_id FROM %s.sk_analysis_results WHERE id IN (?) AND cerberus_id IS NOT NULL;`, r.dbSchema)
-		query, args, _ := sqlx.In(query, analysisResultIDs[low:high])
-		query = r.db.Rebind(query)
-		rows, err := r.db.QueryxContext(ctx, query, args...)
-		if err != nil {
-			log.Error().Err(err).Msg("get cerberus id for analysis results failed")
-			return err
-		}
-
-		defer rows.Close()
-		for rows.Next() {
-			var (
-				analysisResultID uuid.UUID
-				cerberusID       uuid.UUID
-			)
-			err = rows.Scan(&analysisResultID, &cerberusID)
-			if err != nil {
-				log.Error().Err(err).Msg("scan analysis result failed")
-				return err
-			}
-
-			analysisResultsMap[analysisResultID] = cerberusID
-		}
-
-		return nil
-	})
-
-	return analysisResultsMap, err
-}
-
 func (r *analysisRepository) SaveCerberusIDForAnalysisResult(ctx context.Context, analysisResultID uuid.UUID, cerberusID uuid.UUID) error {
 	query := fmt.Sprintf(`UPDATE %s.sk_analysis_results SET cerberus_id = $2 WHERE id = $1;`, r.dbSchema)
 
@@ -4466,30 +4438,6 @@ func (r *analysisRepository) SaveCerberusIDForAnalysisResult(ctx context.Context
 	if err != nil {
 		log.Error().Err(err).Msg(msgFailedToSaveCerberusIdForAnalysisResult)
 		return ErrFailedToSaveCerberusIdForAnalysisResult
-	}
-
-	return nil
-}
-
-func (r *analysisRepository) SaveCerberusIDForControlResult(ctx context.Context, controlResultID uuid.UUID, cerberusID uuid.UUID) error {
-	query := fmt.Sprintf(`UPDATE %s.sk_control_results SET cerberus_id = $2 WHERE id = $1;`, r.dbSchema)
-
-	_, err := r.db.ExecContext(ctx, query, controlResultID, cerberusID)
-	if err != nil {
-		log.Error().Err(err).Msg(msgFailedToSaveCerberusIdForControlResult)
-		return ErrFailedToSaveCerberusIdForControlResult
-	}
-
-	return nil
-}
-
-func (r *analysisRepository) SaveCerberusIDForReagent(ctx context.Context, reagentID uuid.UUID, cerberusID uuid.UUID) error {
-	query := fmt.Sprintf(`UPDATE %s.sk_reagents SET cerberus_id = $2 WHERE id = $1;`, r.dbSchema)
-
-	_, err := r.db.ExecContext(ctx, query, reagentID, cerberusID)
-	if err != nil {
-		log.Error().Err(err).Msg(msgFailedToSaveCerberusIdForReagent)
-		return ErrFailedToSaveCerberusIdForReagent
 	}
 
 	return nil
@@ -4540,7 +4488,7 @@ func (r *analysisRepository) GetAnalysisResultIdsSinceLastControlByReagent(ctx c
 }
 
 func (r *analysisRepository) GetLatestControlResultIdByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time) (ControlResult, error) {
-	controlResult := ControlResult{}
+	//TODO: need to improve to get all the latest controls for each sampleCode that is available
 	preparedValues := map[string]interface{}{
 		"manufacturer": reagent.Manufacturer,
 		"lot_no":       reagent.LotNo,
@@ -4548,10 +4496,13 @@ func (r *analysisRepository) GetLatestControlResultIdByReagent(ctx context.Conte
 		"name":         reagent.Name,
 	}
 
-	query := fmt.Sprintf(`SELECT skcr.id FROM %s.sk_control_results skcr
-    			JOIN %s.sk_reagent_control_result_relations skrcrr ON skcr.id = skrcrr.control_result_id
-    			JOIN %s.sk_reagents skr ON skrcrr.reagent_id = skr.id
-				WHERE skr.manufacturer = :manufacturer AND skr.lot_no = :lot_no AND skr.serial = :serial AND skr.name = :name`, r.dbSchema, r.dbSchema, r.dbSchema)
+	query := fmt.Sprintf(`SELECT skcr.id, skcr.sample_code, skcr.analyte_mapping_id, skcr.instrument_id, skcr.expected_control_result_id, skcr.is_valid, skcr.is_compared_to_expected_result, skcr.result, skcr.examined_at, skcr.created_at,
+					sam.id AS "analyte_mapping.id", sam.instrument_id AS "analyte_mapping.instrument_id", sam.instrument_analyte AS "analyte_mapping.instrument_analyte", sam.analyte_id AS "analyte_mapping.analyte_id", sam.result_type AS "analyte_mapping.result_type", sam.created_at AS "analyte_mapping.created_at", sam.modified_at AS "analyte_mapping.modified_at"
+				FROM %s.sk_control_results skcr
+				INNER JOIN %s.sk_analyte_mappings sam ON skcr.analyte_mapping_id = sam.id
+    			INNER JOIN %s.sk_reagent_control_result_relations skrcrr ON skcr.id = skrcrr.control_result_id
+    			INNER JOIN %s.sk_reagents skr ON skrcrr.reagent_id = skr.id
+				WHERE skr.manufacturer = :manufacturer AND skr.lot_no = :lot_no AND skr.serial = :serial AND skr.name = :name`, r.dbSchema, r.dbSchema, r.dbSchema, r.dbSchema)
 	if resultYieldTime != nil {
 		preparedValues["result_yield_time"] = resultYieldTime
 		query += ` AND skcr.examined_at < :result_yield_time`
@@ -4560,23 +4511,87 @@ func (r *analysisRepository) GetLatestControlResultIdByReagent(ctx context.Conte
 	rows, err := r.db.NamedQueryContext(ctx, query, preparedValues)
 	if err != nil {
 		log.Error().Err(err).Msg(msgFailedToLoadLatestControlResultId)
-		return controlResult, ErrFailedToLoadLatestControlResultId
+		return ControlResult{}, ErrFailedToLoadLatestControlResultId
 	}
 
 	defer rows.Close()
 
+	var controlResult ControlResult
 	for rows.Next() {
-		var id uuid.UUID
-		err := rows.Scan(&id)
+		var controlResultDao controlResultDAO
+		err := rows.StructScan(&controlResultDao)
 		if err != nil {
 			log.Error().Err(err).Msg(msgFailedToLoadLatestControlResultId)
-			return controlResult, ErrFailedToLoadLatestControlResultId
+			return ControlResult{}, ErrFailedToLoadLatestControlResultId
 		}
-		controlResult.ID = id
+		controlResult = convertControlResultDAOToControlResult(controlResultDao)
+
+		extraValues, err := r.getControlResultExtraValues(ctx, []uuid.UUID{controlResult.ID})
+		if err != nil {
+			return ControlResult{}, err
+		}
+		controlResult.ExtraValues = convertControlResultExtraValueDAOsToExtraValues(extraValues[controlResult.ID])
+
+		imagesMap, err := r.getControlResultImages(ctx, []uuid.UUID{controlResult.ID})
+		if err != nil {
+			return ControlResult{}, err
+		}
+
+		warningsMap, err := r.getControlResultWarnings(ctx, []uuid.UUID{controlResult.ID})
+		if err != nil {
+			return ControlResult{}, err
+		}
+		controlResult.Warnings = convertControlResultWarningDAOsToWarnings(warningsMap[controlResult.ID])
+
+		channelResultsMap, err := r.getControlResultChannelResults(ctx, []uuid.UUID{controlResult.ID})
+		if err != nil {
+			return ControlResult{}, err
+		}
+
+		channelResultIDs := make([]uuid.UUID, len(channelResultsMap[controlResult.ID]))
+		for i := range channelResultsMap[controlResult.ID] {
+			channelResultIDs[i] = channelResultsMap[controlResult.ID][i].ID
+		}
+
+		quantitativeValuesByChannelResultID, err := r.getControlResultChannelResultQuantitativeValues(ctx, channelResultIDs)
+		if err != nil {
+			return ControlResult{}, err
+		}
+
+		for _, channelResult := range channelResultsMap[controlResult.ID] {
+			channelResult.QuantitativeResults = quantitativeValuesByChannelResultID[channelResult.ID]
+
+			for _, image := range imagesMap[controlResult.ID] {
+				if !image.ChannelResultID.Valid || (image.ChannelResultID.Valid && image.ChannelResultID.UUID != channelResult.ID) {
+					continue
+				}
+				channelResult.Images = append(channelResult.Images, image)
+			}
+
+			controlResult.ChannelResults = append(controlResult.ChannelResults, convertControlResultChannelResultDAOsToChannelResult(channelResult))
+		}
+
+		channelMappingsMap, err := r.getChannelMappings(ctx, []uuid.UUID{controlResult.AnalyteMapping.ID})
+		if err != nil {
+			return ControlResult{}, err
+		}
+		resultMappingsMap, err := r.getResultMappings(ctx, []uuid.UUID{controlResult.AnalyteMapping.ID})
+		if err != nil {
+			return ControlResult{}, err
+		}
+
+		expectedControlResultMappingsMap, err := r.getExpectedControlResultsByAnalyteMappingIds(ctx, []uuid.UUID{controlResult.AnalyteMapping.ID})
+		if err != nil {
+			return ControlResult{}, err
+		}
+
+		controlResult.AnalyteMapping.ChannelMappings = channelMappingsMap[controlResult.AnalyteMapping.ID]
+		controlResult.AnalyteMapping.ResultMappings = resultMappingsMap[controlResult.AnalyteMapping.ID]
+		controlResult.AnalyteMapping.ExpectedControlResults = expectedControlResultMappingsMap[controlResult.AnalyteMapping.ID]
 		return controlResult, nil
 	}
 
-	return controlResult, ErrNoControlResultIdFoundForReagent
+	return ControlResult{}, ErrNoControlResultIdFoundForReagent
 }
 
 func (r *analysisRepository) MarkReagentControlResultRelationsAsProcessed(ctx context.Context, controlResultID uuid.UUID, reagentIDs []uuid.UUID) error {
@@ -5065,26 +5080,23 @@ func convertCerberusQueueItemDAOToCerberusQueueItem(cerberusQueueItemDAO cerberu
 func convertReagentDAOsToReagentList(reagentDAOs []reagentDAO) []Reagent {
 	reagentList := make([]Reagent, len(reagentDAOs))
 	for i := range reagentDAOs {
-		reagentList[i] = Reagent{
-			Manufacturer: reagentDAOs[i].Manufacturer,
-			SerialNumber: reagentDAOs[i].SerialNumber,
-			LotNo:        reagentDAOs[i].LotNo,
-			Type:         reagentDAOs[i].Type,
-			Name:         reagentDAOs[i].Name,
-			CreatedAt:    reagentDAOs[i].CreatedAt,
-		}
+		reagentList[i] = convertReagentDAOToReagent(reagentDAOs[i])
 	}
 	return reagentList
 }
 
 func convertReagentDAOToReagent(reagentDAO reagentDAO) Reagent {
 	reagent := Reagent{
+		ID:           reagentDAO.ID,
 		Manufacturer: reagentDAO.Manufacturer,
 		SerialNumber: reagentDAO.SerialNumber,
 		LotNo:        reagentDAO.LotNo,
 		Type:         reagentDAO.Type,
 		Name:         reagentDAO.Name,
 		CreatedAt:    reagentDAO.CreatedAt,
+	}
+	if reagentDAO.ExpirationDate.Valid {
+		reagent.ExpirationDate = &reagentDAO.ExpirationDate.Time
 	}
 	return reagent
 }
@@ -5163,16 +5175,20 @@ func convertChannelResultDAOsToChannelResults(channelResultDAOs []channelResultD
 func convertControlResultChannelResultDAOsToChannelResults(channelResultDAOs []controlResultChannelResultDAO) []ChannelResult {
 	channelResults := make([]ChannelResult, len(channelResultDAOs))
 	for i, channelResultDAO := range channelResultDAOs {
-		channelResults[i] = ChannelResult{
-			ID:                    channelResultDAO.ID,
-			ChannelID:             channelResultDAO.ChannelID,
-			QualitativeResult:     channelResultDAO.QualitativeResult,
-			QualitativeResultEdit: channelResultDAO.QualitativeResultEdit,
-			QuantitativeResults:   convertQuantitativeResultDAOsToQuantitativeResults(channelResultDAO.QuantitativeResults),
-			Images:                convertControlResultImageDAOsToImages(channelResultDAO.Images),
-		}
+		channelResults[i] = convertControlResultChannelResultDAOsToChannelResult(channelResultDAO)
 	}
 	return channelResults
+}
+
+func convertControlResultChannelResultDAOsToChannelResult(channelResultDAO controlResultChannelResultDAO) ChannelResult {
+	return ChannelResult{
+		ID:                    channelResultDAO.ID,
+		ChannelID:             channelResultDAO.ChannelID,
+		QualitativeResult:     channelResultDAO.QualitativeResult,
+		QualitativeResultEdit: channelResultDAO.QualitativeResultEdit,
+		QuantitativeResults:   convertQuantitativeResultDAOsToQuantitativeResults(channelResultDAO.QuantitativeResults),
+		Images:                convertControlResultImageDAOsToImages(channelResultDAO.Images),
+	}
 }
 
 func convertQuantitativeResultDAOsToQuantitativeResults(quantitativeChannelResultDAOs []quantitativeChannelResultDAO) map[string]string {

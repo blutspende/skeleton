@@ -28,14 +28,11 @@ type AnalysisService interface {
 	CreateControlResultBatch(ctx context.Context, controlResults []StandaloneControlResult) ([]StandaloneControlResult, []uuid.UUID, error)
 	GetAnalysisResultsByIDsWithRecalculatedStatus(ctx context.Context, analysisResultIDs []uuid.UUID) ([]AnalysisResult, error)
 	QueueAnalysisResults(ctx context.Context, results []AnalysisResult) error
-	QueueControlResults(ctx context.Context, results []MappedStandaloneControlResult) error
 	RetransmitResult(ctx context.Context, resultID uuid.UUID) error
 	RetransmitResultBatches(ctx context.Context, batchIDs []uuid.UUID) error
 	ProcessStuckImagesToDEA(ctx context.Context)
 	ProcessStuckImagesToCerberus(ctx context.Context)
-	SaveCerberusIDsForControlResultBatchItems(ctx context.Context, controlResults []ControlResultBatchItemInfo)
 	SaveCerberusIDsForAnalysisResultBatchItems(ctx context.Context, analysisResults []AnalysisResultBatchItemInfo)
-	GetUnprocessedMappedStandaloneControlResultsByIDs(ctx context.Context, controlResultIDs []uuid.UUID) ([]MappedStandaloneControlResult, error)
 }
 
 type analysisService struct {
@@ -640,60 +637,20 @@ func (as *analysisService) QueueAnalysisResults(ctx context.Context, results []A
 		return err
 	}
 
-	analysisResultIDs := make([]uuid.UUID, 0)
-
-	for _, result := range results {
-		analysisResultIDs = append(analysisResultIDs, result.ID)
-	}
-
-	err = as.analysisRepository.WithTransaction(tx).MarkAnalysisResultsAsProcessed(ctx, analysisResultIDs)
-	if err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-
-	return nil
-}
-
-func (as *analysisService) QueueControlResults(ctx context.Context, controlResults []MappedStandaloneControlResult) error {
-	tx, err := as.analysisRepository.CreateTransaction()
-	if err != nil {
-		log.Error().Err(err).Msg("failed to create transaction")
-		return err
-	}
-
-	controlResultToQueue := make([]StandaloneControlResult, 0)
+	analysisResultIDsToMarkAsProcessed := make([]uuid.UUID, 0)
 	controlResultReagentRelationsToMarkAsProcessed := make(map[uuid.UUID][]uuid.UUID)
 	controlResultAnalysisResultRelationsToMarkAsProcessed := make(map[uuid.UUID][]uuid.UUID)
 
-	for _, controlResult := range controlResults {
-		standaloneControlResult := StandaloneControlResult{
-			ControlResult: controlResult.ControlResult,
-			Reagents:      controlResult.Reagents,
+	for _, result := range results {
+		analysisResultIDsToMarkAsProcessed = append(analysisResultIDsToMarkAsProcessed, result.ID)
+
+		for _, reagent := range result.Reagents {
+
+			for _, controlResult := range reagent.ControlResults {
+				controlResultReagentRelationsToMarkAsProcessed[controlResult.ID] = append(controlResultReagentRelationsToMarkAsProcessed[controlResult.ID], reagent.ID)
+				controlResultAnalysisResultRelationsToMarkAsProcessed[controlResult.ID] = append(controlResultAnalysisResultRelationsToMarkAsProcessed[controlResult.ID], result.ID)
+			}
 		}
-
-		for _, reagent := range controlResult.Reagents {
-			controlResultReagentRelationsToMarkAsProcessed[controlResult.ID] = append(controlResultReagentRelationsToMarkAsProcessed[controlResult.ID], reagent.ID)
-		}
-
-		for analysisResultID, cerberusID := range controlResult.ResultIDs {
-			standaloneControlResult.ResultIDs = append(standaloneControlResult.ResultIDs, cerberusID)
-			controlResultAnalysisResultRelationsToMarkAsProcessed[controlResult.ID] = append(controlResultAnalysisResultRelationsToMarkAsProcessed[controlResult.ID], analysisResultID)
-		}
-
-		controlResultToQueue = append(controlResultToQueue, standaloneControlResult)
-	}
-
-	_, err = as.analysisRepository.WithTransaction(tx).CreateControlResultQueueItem(ctx, controlResultToQueue)
-	if err != nil {
-		_ = tx.Rollback()
-		return err
 	}
 
 	for controlResultID, reagentIDs := range controlResultReagentRelationsToMarkAsProcessed {
@@ -710,6 +667,12 @@ func (as *analysisService) QueueControlResults(ctx context.Context, controlResul
 			_ = tx.Rollback()
 			return err
 		}
+	}
+
+	err = as.analysisRepository.WithTransaction(tx).MarkAnalysisResultsAsProcessed(ctx, analysisResultIDsToMarkAsProcessed)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
 	}
 
 	err = tx.Commit()
@@ -834,27 +797,9 @@ func (as *analysisService) ProcessStuckImagesToCerberus(ctx context.Context) {
 	})
 }
 
-func (as *analysisService) SaveCerberusIDsForControlResultBatchItems(ctx context.Context, controlResults []ControlResultBatchItemInfo) {
-	for _, controlResult := range controlResults {
-		_ = as.analysisRepository.SaveCerberusIDForControlResult(ctx, controlResult.ControlResult.ID, controlResult.CerberusID)
-
-		for i, reagent := range controlResult.ControlResult.Reagents {
-			_ = as.analysisRepository.SaveCerberusIDForReagent(ctx, reagent.ID, controlResult.CerberusReagentIDs[i])
-		}
-	}
-}
-
 func (as *analysisService) SaveCerberusIDsForAnalysisResultBatchItems(ctx context.Context, analysisResults []AnalysisResultBatchItemInfo) {
 	for _, analysisResult := range analysisResults {
 		_ = as.analysisRepository.SaveCerberusIDForAnalysisResult(ctx, analysisResult.AnalysisResult.ID, *analysisResult.CerberusAnalysisResultID)
-
-		for i, reagent := range analysisResult.AnalysisResult.Reagents {
-			_ = as.analysisRepository.SaveCerberusIDForReagent(ctx, reagent.ID, analysisResult.CerberusReagentIDs[i].CerberusID)
-
-			for j, controlResult := range reagent.ControlResults {
-				_ = as.analysisRepository.SaveCerberusIDForControlResult(ctx, controlResult.ID, analysisResult.CerberusReagentIDs[i].CerberusControlResultsIDs[j])
-			}
-		}
 	}
 }
 
