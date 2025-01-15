@@ -1,6 +1,7 @@
 package skeleton
 
 import (
+	"github.com/blutspende/skeleton/middleware"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
@@ -10,15 +11,7 @@ import (
 
 const (
 	MsgCanNotBindRequestBody = "can not bind request body"
-	keyBadRequest            = "badRequest"
 )
-
-type clientError struct {
-	MessageKey    string            `json:"messageKey"`
-	MessageParams map[string]string `json:"messageParams"`
-	Message       string            `json:"message"`
-	Errors        []clientError     `json:"errors"`
-}
 
 type subjectType string
 
@@ -103,8 +96,8 @@ func (api *api) CreateAnalysisRequestBatch(c *gin.Context) {
 	var analysisRequestTOs []analysisRequestTO
 	err := c.BindJSON(&analysisRequestTOs)
 	if err != nil {
-		log.Error().Err(err).Msg(ErrInvalidRequestBody.Message)
-		c.AbortWithStatusJSON(http.StatusBadRequest, ErrInvalidRequestBody)
+		log.Error().Err(err).Msg(middleware.ErrInvalidRequestBody.Message)
+		c.AbortWithStatusJSON(http.StatusBadRequest, middleware.ErrInvalidRequestBody)
 		return
 	}
 
@@ -158,7 +151,10 @@ func (api *api) CreateAnalysisRequestBatch(c *gin.Context) {
 	analysisRequestStatus, err := api.analysisService.CreateAnalysisRequests(c, analysisRequests)
 	if err != nil && err != ErrAnalysisRequestWithMatchingWorkItemIdFound {
 		log.Error().Err(err).Msg("CreateAnalysisRequestBatch failed")
-		c.JSON(http.StatusInternalServerError, ErrInternalServerError)
+		c.JSON(http.StatusInternalServerError, middleware.ClientError{
+			MessageKey: "CreateAnalysisRequestBatchFailed",
+			Message:    "Create Analysis Requests failed!",
+		})
 		return
 	}
 
@@ -195,15 +191,18 @@ func (api *api) RevokeAnalysisRequestBatch(c *gin.Context) {
 	var workItemIDs []uuid.UUID
 	err := c.ShouldBindJSON(&workItemIDs)
 	if err != nil {
-		log.Error().Err(err).Msg(ErrInvalidRequestBody.Message)
-		c.AbortWithStatusJSON(http.StatusBadRequest, ErrInvalidRequestBody)
+		log.Error().Err(err).Msg(middleware.ErrInvalidRequestBody.Message)
+		c.AbortWithStatusJSON(http.StatusBadRequest, middleware.ErrInvalidRequestBody)
 		return
 	}
 
 	err = api.analysisService.RevokeAnalysisRequests(c, workItemIDs)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to revoke analysis requests")
-		c.JSON(http.StatusInternalServerError, err.Error())
+		c.JSON(http.StatusInternalServerError, middleware.ClientError{
+			MessageKey: "RevokeAnalysisRequestBatchFailed",
+			Message:    "Revoke analysis request batch failed!",
+		})
 		return
 	}
 
@@ -214,15 +213,18 @@ func (api *api) ReexamineAnalysisRequestBatch(c *gin.Context) {
 	var workItemIDs []uuid.UUID
 	err := c.ShouldBindJSON(&workItemIDs)
 	if err != nil {
-		log.Error().Err(err).Msg(ErrInvalidRequestBody.Message)
-		c.AbortWithStatusJSON(http.StatusBadRequest, ErrInvalidRequestBody)
+		log.Error().Err(err).Msg(middleware.ErrInvalidRequestBody.Message)
+		c.AbortWithStatusJSON(http.StatusBadRequest, middleware.ErrInvalidRequestBody)
 		return
 	}
 
 	err = api.analysisService.ReexamineAnalysisRequestsBatch(c, workItemIDs)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to reexamine analysis requests")
-		c.JSON(http.StatusInternalServerError, err.Error())
+		c.JSON(http.StatusInternalServerError, middleware.ClientError{
+			MessageKey: "ReexamineAnalysisRequestBatchFailed",
+			Message:    "Reexamine analysis request batch failed!",
+		})
 		return
 	}
 
@@ -234,17 +236,17 @@ func (api *api) CheckAnalytesUsage(c *gin.Context) {
 	err := c.ShouldBindJSON(&ids)
 	if err != nil {
 		log.Error().Err(err).Msg(MsgCanNotBindRequestBody)
-		c.AbortWithStatusJSON(http.StatusBadRequest, clientError{
-			Message:    MsgCanNotBindRequestBody,
-			MessageKey: keyBadRequest,
-		})
+		c.AbortWithStatusJSON(http.StatusBadRequest, middleware.ErrUnableToParseRequestBody)
 		return
 	}
 
 	analyteUsage, err := api.instrumentService.CheckAnalytesUsage(c, ids)
 	if err != nil {
 		log.Error().Err(err).Send()
-		c.AbortWithStatusJSON(http.StatusInternalServerError, nil)
+		c.AbortWithStatusJSON(http.StatusInternalServerError, middleware.ClientError{
+			MessageKey: "CheckAnalytesUsageFailed",
+			Message:    "Checking analytes usage failed!",
+		})
 	}
 	response := make([]analyteUsageResponseItem, 0)
 	for analyteID, instruments := range analyteUsage {

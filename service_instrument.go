@@ -2,6 +2,9 @@ package skeleton
 
 import (
 	"context"
+	"errors"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/blutspende/logcom-api/logcom"
@@ -11,15 +14,31 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const (
+	msgValidationValueEmpty               = "Value is empty for"
+	msgValidationValueInvalid             = "Value invalid for"
+	msgValidationIntervalEndingValueEmpty = "Interval ending value is empty for"
+	msgValidationAnalyteMappingNotFound   = "AnalyteMapping not found!"
+)
+
+var (
+	ErrValidationValueEmpty               = errors.New(msgValidationValueEmpty)
+	ErrValidationValueInvalid             = errors.New(msgValidationValueInvalid)
+	ErrValidationIntervalEndingValueEmpty = errors.New(msgValidationIntervalEndingValueEmpty)
+	ErrValidationAnalyteMappingNotFound   = errors.New(msgValidationAnalyteMappingNotFound)
+)
+
 type InstrumentService interface {
 	CreateInstrument(ctx context.Context, instrument Instrument) (uuid.UUID, error)
 	GetInstruments(ctx context.Context) ([]Instrument, error)
 	GetInstrumentByID(ctx context.Context, tx db.DbConnector, id uuid.UUID, bypassCache bool) (Instrument, error)
 	GetInstrumentByIP(ctx context.Context, ip string) (Instrument, error)
-	UpdateInstrument(ctx context.Context, instrument Instrument) error
+	UpdateInstrument(ctx context.Context, instrument Instrument, userId uuid.UUID) error
 	DeleteInstrument(ctx context.Context, id uuid.UUID) error
-	GetExpectedControlResultsByInstrumentId(ctx context.Context, instrumentId uuid.UUID) (map[uuid.UUID]map[string]ExpectedControlResult, error)
-	UpdateExpectedControlResults(ctx context.Context, instrumentId uuid.UUID, expectedControlResultsMap map[uuid.UUID]map[string]ExpectedControlResult, userId uuid.UUID) error
+	GetExpectedControlResultsByInstrumentId(ctx context.Context, instrumentId uuid.UUID) ([]ExpectedControlResult, error)
+	CreateExpectedControlResults(ctx context.Context, instrumentId uuid.UUID, expectedControlResults []ExpectedControlResult, userId uuid.UUID) error
+	UpdateExpectedControlResults(ctx context.Context, instrumentId uuid.UUID, expectedControlResultMapByID []ExpectedControlResult, userId uuid.UUID) error
+	DeleteExpectedControlResult(ctx context.Context, expectedControlResultId uuid.UUID, userId uuid.UUID) error
 	GetSupportedProtocols(ctx context.Context) ([]SupportedProtocol, error)
 	GetProtocolAbilities(ctx context.Context, protocolID uuid.UUID) ([]ProtocolAbility, error)
 	GetManufacturerTests(ctx context.Context, instrumentID uuid.UUID, protocolID uuid.UUID) ([]SupportedManufacturerTests, error)
@@ -198,11 +217,7 @@ func (s *instrumentService) GetInstruments(ctx context.Context) ([]Instrument, e
 	if err != nil {
 		return nil, err
 	}
-	for analyteMappingID, expectedControlResultsMap := range expectedControlResultMappingsByAnalyteMappingID {
-		expectedControlResults := make([]ExpectedControlResult, 0)
-		for sampleCode := range expectedControlResultsMap {
-			expectedControlResults = append(expectedControlResults, expectedControlResultsMap[sampleCode])
-		}
+	for analyteMappingID, expectedControlResults := range expectedControlResultMappingsByAnalyteMappingID {
 		analyteMappingsByIDs[analyteMappingID].ExpectedControlResults = expectedControlResults
 	}
 
@@ -315,11 +330,7 @@ func (s *instrumentService) GetInstrumentByID(ctx context.Context, tx db.DbConne
 	if err != nil {
 		return instrument, err
 	}
-	for analyteMappingID, expectedControlResultsMap := range expectedControlResultMappingsByAnalyteMappingID {
-		expectedControlResults := make([]ExpectedControlResult, 0)
-		for sampleCode := range expectedControlResultsMap {
-			expectedControlResults = append(expectedControlResults, expectedControlResultsMap[sampleCode])
-		}
+	for analyteMappingID, expectedControlResults := range expectedControlResultMappingsByAnalyteMappingID {
 		analyteMappingsByIDs[analyteMappingID].ExpectedControlResults = expectedControlResults
 	}
 
@@ -430,11 +441,7 @@ func (s *instrumentService) GetInstrumentByIP(ctx context.Context, ip string) (I
 	if err != nil {
 		return instrument, err
 	}
-	for analyteMappingID, expectedControlResultsMap := range expectedControlResultMappingsByAnalyteMappingID {
-		expectedControlResults := make([]ExpectedControlResult, 0)
-		for sampleCode := range expectedControlResultsMap {
-			expectedControlResults = append(expectedControlResults, expectedControlResultsMap[sampleCode])
-		}
+	for analyteMappingID, expectedControlResults := range expectedControlResultMappingsByAnalyteMappingID {
 		analyteMappingsByIDs[analyteMappingID].ExpectedControlResults = expectedControlResults
 	}
 
@@ -480,7 +487,7 @@ func (s *instrumentService) GetInstrumentByIP(ctx context.Context, ip string) (I
 	return instrument, nil
 }
 
-func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Instrument) error {
+func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Instrument, userId uuid.UUID) error {
 	tx, err := s.instrumentRepository.CreateTransaction()
 	if err != nil {
 		return db.ErrBeginTransactionFailed
@@ -586,6 +593,11 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 		}
 	}
 	err = s.instrumentRepository.WithTransaction(tx).DeleteAnalyteMappings(ctx, deletedAnalyteMappingIDs)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	err = s.instrumentRepository.WithTransaction(tx).DeleteExpectedControlResultsByAnalyteMappingIDs(ctx, deletedAnalyteMappingIDs, userId)
 	if err != nil {
 		_ = tx.Rollback()
 		return err
@@ -839,81 +851,145 @@ func (s *instrumentService) DeleteInstrument(ctx context.Context, id uuid.UUID) 
 	return nil
 }
 
-func (s *instrumentService) GetExpectedControlResultsByInstrumentId(ctx context.Context, instrumentId uuid.UUID) (map[uuid.UUID]map[string]ExpectedControlResult, error) {
-	expectedControlResultsMapByAnalyteId, err := s.instrumentRepository.GetExpectedControlResultsByInstrumentId(ctx, instrumentId)
+func (s *instrumentService) GetExpectedControlResultsByInstrumentId(ctx context.Context, instrumentId uuid.UUID) ([]ExpectedControlResult, error) {
+	expectedControlResults, err := s.instrumentRepository.GetExpectedControlResultsByInstrumentId(ctx, instrumentId)
 	if err != nil {
 		return nil, err
 	}
 
-	return expectedControlResultsMapByAnalyteId, nil
+	return expectedControlResults, nil
 }
 
-func (s *instrumentService) UpdateExpectedControlResults(ctx context.Context, instrumentId uuid.UUID, expectedControlResultsMap map[uuid.UUID]map[string]ExpectedControlResult, userId uuid.UUID) error {
-	tx, err := s.instrumentRepository.CreateTransaction()
-
-	updateExpectedControlResultsMap := make(map[uuid.UUID]map[string]ExpectedControlResult)
-	expectedControlResultIdsToDelete := make([]uuid.UUID, 0)
-
-	expectedControlResultsMapBySampleCode := make(map[string]bool)
-	updatedSampleCodes := make([]string, 0)
-
-	for _, expectedControlResults := range expectedControlResultsMap {
-		for sampleCode := range expectedControlResults {
-			if _, ok := expectedControlResultsMapBySampleCode[sampleCode]; !ok {
-				expectedControlResultsMapBySampleCode[sampleCode] = true
-				updatedSampleCodes = append(updatedSampleCodes, sampleCode)
-			}
-		}
-	}
-
-	existingExpectedControlResultsMap, err := s.instrumentRepository.GetExpectedControlResultsByInstrumentIdAndSampleCodes(ctx, instrumentId, updatedSampleCodes)
+func (s *instrumentService) CreateExpectedControlResults(ctx context.Context, instrumentId uuid.UUID, expectedControlResults []ExpectedControlResult, userId uuid.UUID) error {
+	analyteMappings, err := s.getAnalyteMappingsWithResultMappings(ctx, instrumentId)
 	if err != nil {
 		return err
 	}
 
-	for analyteMappingId, expectedControlResults := range existingExpectedControlResultsMap {
-		for sampleCode := range expectedControlResults {
-			if _, ok := expectedControlResultsMap[analyteMappingId][sampleCode]; ok {
-				if _, ok := updateExpectedControlResultsMap[analyteMappingId]; !ok {
-					updateExpectedControlResultsMap[analyteMappingId] = make(map[string]ExpectedControlResult)
-				}
-				expectedControlResult := expectedControlResultsMap[analyteMappingId][sampleCode]
-				expectedControlResult.ID = existingExpectedControlResultsMap[analyteMappingId][sampleCode].ID
-				updateExpectedControlResultsMap[analyteMappingId][sampleCode] = expectedControlResult
+	tx, err := s.instrumentRepository.CreateTransaction()
 
-				delete(expectedControlResultsMap[analyteMappingId], sampleCode)
-				delete(existingExpectedControlResultsMap[analyteMappingId], sampleCode)
-			}
-		}
-	}
-
-	for analyteMappingId, expectedControlResults := range expectedControlResultsMap {
-		for sampleCode := range expectedControlResults {
-			expectedControlResult := expectedControlResultsMap[analyteMappingId][sampleCode]
-			expectedControlResult.CreatedBy = userId
-			expectedControlResultsMap[analyteMappingId][sampleCode] = expectedControlResult
-		}
-	}
-
-	for analyteMappingId, expectedControlResults := range existingExpectedControlResultsMap {
-		for sampleCode := range expectedControlResults {
-			expectedControlResultIdsToDelete = append(expectedControlResultIdsToDelete, existingExpectedControlResultsMap[analyteMappingId][sampleCode].ID)
-		}
-	}
-
-	_, err = s.instrumentRepository.WithTransaction(tx).CreateExpectedControlResults(ctx, expectedControlResultsMap)
+	err = validateExpectedControlResults(analyteMappings, expectedControlResults)
 	if err != nil {
 		_ = tx.Rollback()
 		return err
 	}
 
-	err = s.instrumentRepository.WithTransaction(tx).UpdateExpectedControlResults(ctx, updateExpectedControlResultsMap)
+	for i := range expectedControlResults {
+		expectedControlResults[i].CreatedBy = userId
+	}
+
+	_, err = s.instrumentRepository.WithTransaction(tx).CreateExpectedControlResults(ctx, expectedControlResults)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		_ = tx.Rollback()
+		return db.ErrCommitTransactionFailed
+	}
+
+	return nil
+}
+
+func (s *instrumentService) UpdateExpectedControlResults(ctx context.Context, instrumentId uuid.UUID, expectedControlResults []ExpectedControlResult, userId uuid.UUID) error {
+	analyteMappings, err := s.getAnalyteMappingsWithResultMappings(ctx, instrumentId)
+	if err != nil {
+		return err
+	}
+
+	tx, err := s.instrumentRepository.CreateTransaction()
+
+	createExpectedControlResults := make([]ExpectedControlResult, 0)
+	updateExpectedControlResults := make([]ExpectedControlResult, 0)
+	expectedControlResultsForValidation := make([]ExpectedControlResult, 0)
+	expectedControlResultIdsToDelete := make([]uuid.UUID, 0)
+
+	expectedControlResultsMapBySampleCode := make(map[string]bool)
+	updatedSampleCodes := make([]string, 0)
+
+	for _, expectedControlResult := range expectedControlResults {
+		if _, ok := expectedControlResultsMapBySampleCode[expectedControlResult.SampleCode]; !ok {
+			expectedControlResultsMapBySampleCode[expectedControlResult.SampleCode] = true
+			updatedSampleCodes = append(updatedSampleCodes, expectedControlResult.SampleCode)
+		}
+		expectedControlResultsForValidation = append(expectedControlResultsForValidation, expectedControlResult)
+	}
+
+	err = validateExpectedControlResults(analyteMappings, expectedControlResultsForValidation)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	existingExpectedControlResultMapByID, err := s.instrumentRepository.GetExpectedControlResultsByInstrumentIdAndSampleCodes(ctx, instrumentId, updatedSampleCodes)
+	if err != nil {
+		return err
+	}
+
+	for _, existingExpectedControlResult := range existingExpectedControlResultMapByID {
+		for _, expectedControlResult := range expectedControlResults {
+			if existingExpectedControlResult.ID == expectedControlResult.ID {
+				updateExpectedControlResults = append(updateExpectedControlResults, expectedControlResult)
+
+				delete(existingExpectedControlResultMapByID, existingExpectedControlResult.ID)
+			}
+		}
+	}
+
+	for _, expectedControlResult := range expectedControlResults {
+		if (expectedControlResult.ID == uuid.UUID{} || expectedControlResult.ID == uuid.Nil) {
+			alreadyExists := false
+			for _, existingExpectedControlResult := range existingExpectedControlResultMapByID {
+				if existingExpectedControlResult.SampleCode == expectedControlResult.SampleCode && existingExpectedControlResult.AnalyteMappingId == expectedControlResult.AnalyteMappingId {
+					alreadyExists = true
+					break
+				}
+			}
+
+			if !alreadyExists {
+				expectedControlResult.CreatedBy = userId
+				createExpectedControlResults = append(createExpectedControlResults, expectedControlResult)
+			}
+		}
+	}
+
+	for _, deleteExpectedControlResult := range existingExpectedControlResultMapByID {
+		expectedControlResultIdsToDelete = append(expectedControlResultIdsToDelete, deleteExpectedControlResult.ID)
+	}
+
+	_, err = s.instrumentRepository.WithTransaction(tx).CreateExpectedControlResults(ctx, createExpectedControlResults)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	err = s.instrumentRepository.WithTransaction(tx).UpdateExpectedControlResults(ctx, updateExpectedControlResults)
 	if err != nil {
 		_ = tx.Rollback()
 		return err
 	}
 
 	err = s.instrumentRepository.WithTransaction(tx).DeleteExpectedControlResults(ctx, expectedControlResultIdsToDelete, userId)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		_ = tx.Rollback()
+		return db.ErrCommitTransactionFailed
+	}
+
+	return nil
+}
+
+func (s *instrumentService) DeleteExpectedControlResult(ctx context.Context, expectedControlResultId uuid.UUID, userId uuid.UUID) error {
+	tx, err := s.instrumentRepository.CreateTransaction()
+
+	err = s.instrumentRepository.WithTransaction(tx).DeleteExpectedControlResults(ctx, []uuid.UUID{expectedControlResultId}, userId)
 	if err != nil {
 		_ = tx.Rollback()
 		return err
@@ -1163,4 +1239,148 @@ func (s *instrumentService) ReprocessInstrumentData(ctx context.Context, batchID
 
 func (s *instrumentService) ReprocessInstrumentDataBySampleCode(ctx context.Context, sampleCode string) error {
 	return s.manager.GetCallbackHandler().ReprocessInstrumentDataBySampleCode(sampleCode)
+}
+
+func (s *instrumentService) getAnalyteMappingsWithResultMappings(ctx context.Context, instrumentId uuid.UUID) ([]AnalyteMapping, error) {
+	analyteMappingsIDs := make([]uuid.UUID, 0)
+	analyteMappingsByIDs := make(map[uuid.UUID]*AnalyteMapping)
+	analyteMappings := make([]AnalyteMapping, 0)
+
+	analyteMappingsMap, err := s.instrumentRepository.GetAnalyteMappings(ctx, []uuid.UUID{instrumentId})
+	if err != nil {
+		return analyteMappings, err
+	}
+
+	for i := range analyteMappingsMap[instrumentId] {
+		analyteMappingsByIDs[analyteMappingsMap[instrumentId][i].ID] = &analyteMappingsMap[instrumentId][i]
+		analyteMappingsIDs = append(analyteMappingsIDs, analyteMappingsMap[instrumentId][i].ID)
+	}
+
+	resultMappingsByAnalyteMappingID, err := s.instrumentRepository.GetResultMappings(ctx, analyteMappingsIDs)
+	if err != nil {
+		return analyteMappings, err
+	}
+	for analyteMappingID, resultMappings := range resultMappingsByAnalyteMappingID {
+		analyteMappingsByIDs[analyteMappingID].ResultMappings = resultMappings
+	}
+
+	for _, analyteMapping := range analyteMappingsByIDs {
+		analyteMappings = append(analyteMappings, *analyteMapping)
+	}
+
+	return analyteMappings, nil
+}
+
+func validateExpectedControlResults(analyteMappings []AnalyteMapping, expectedControlResults []ExpectedControlResult) error {
+	var parameterizedErrors ParameterizedErrors
+	for _, expectedControlResult := range expectedControlResults {
+		var analyteMapping *AnalyteMapping = nil
+		for i := range analyteMappings {
+			if expectedControlResult.AnalyteMappingId == analyteMappings[i].ID {
+				analyteMapping = &analyteMappings[i]
+				break
+			}
+		}
+
+		if analyteMapping == nil {
+			parameterizedErrors = append(parameterizedErrors, ParameterizedError{
+				error: ErrValidationAnalyteMappingNotFound,
+			})
+			continue
+		}
+
+		err := validateExpectedValueBasedOnAnalyteMappingResultType(*analyteMapping, expectedControlResult.ExpectedValue)
+		if err != nil {
+			parameterizedErrors = append(parameterizedErrors, ParameterizedError{
+				error: err,
+				Params: map[string]string{
+					"analyte": analyteMapping.InstrumentAnalyte,
+				},
+			})
+		}
+
+		if expectedControlResult.Operator == InOpenInterval || expectedControlResult.Operator == InClosedInterval {
+			if expectedControlResult.ExpectedValue2 != nil {
+				err = validateExpectedValueBasedOnAnalyteMappingResultType(*analyteMapping, *expectedControlResult.ExpectedValue2)
+				if err != nil {
+					parameterizedErrors = append(parameterizedErrors, ParameterizedError{
+						error: err,
+						Params: map[string]string{
+							"analyte": analyteMapping.InstrumentAnalyte,
+						},
+					})
+				}
+			} else {
+				parameterizedErrors = append(parameterizedErrors, ParameterizedError{
+					error: ErrValidationIntervalEndingValueEmpty,
+					Params: map[string]string{
+						"analyte": analyteMapping.InstrumentAnalyte,
+					},
+				})
+			}
+		}
+	}
+	if parameterizedErrors == nil {
+		return nil
+	}
+	return parameterizedErrors
+}
+
+func validateExpectedValueBasedOnAnalyteMappingResultType(analyteMapping AnalyteMapping, expectedValue string) error {
+	if len(expectedValue) == 0 {
+		return ErrValidationValueEmpty
+	}
+
+	value := strings.TrimSpace(expectedValue)
+	isValid := false
+	var err error
+	switch analyteMapping.ResultType {
+	case DataType_Int:
+		_, err = strconv.Atoi(value)
+		if err == nil {
+			isValid = true
+		}
+	case DataType_Decimal:
+		_, err = strconv.ParseFloat(value, 64)
+		if err == nil {
+			isValid = true
+		}
+	case DataType_BoundedDecimal:
+		sanitizedResult := value
+		if strings.Contains(value, ">-") {
+			sanitizedResult = strings.Trim(value, ">-")
+		} else if strings.Contains(value, ">+") {
+			sanitizedResult = strings.Trim(value, ">+")
+		} else if strings.Contains(value, "<-") {
+			sanitizedResult = strings.Trim(value, "<-")
+		} else if strings.Contains(value, "<+") {
+			sanitizedResult = strings.Trim(value, "<+")
+		} else if strings.Contains(value, "<") {
+			sanitizedResult = strings.Trim(value, "<")
+		} else if strings.Contains(value, ">") {
+			sanitizedResult = strings.Trim(value, ">")
+		}
+		sanitizedResult = strings.Trim(sanitizedResult, " ")
+		_, err = strconv.ParseFloat(sanitizedResult, 64)
+		if err == nil {
+			isValid = true
+		}
+	case DataType_String:
+		if len(value) > 0 {
+			isValid = true
+		}
+	case DataType_Pein, DataType_React, DataType_InValid, DataType_Enum:
+		for _, resultMapping := range analyteMapping.ResultMappings {
+			if value == strings.TrimSpace(resultMapping.Key) {
+				isValid = true
+				break
+			}
+		}
+	}
+
+	if err != nil || !isValid {
+		return ErrValidationValueInvalid
+	}
+
+	return nil
 }

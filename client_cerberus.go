@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/blutspende/skeleton/middleware"
 	"net/http"
 	"time"
 
@@ -174,7 +175,7 @@ func (c *cerberusClient) RegisterInstrument(instrument Instrument) error {
 	}
 
 	if resp.StatusCode() != http.StatusNoContent {
-		errReps := clientError{}
+		errReps := middleware.ClientError{}
 		err = json.Unmarshal(resp.Body(), &errReps)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to unmarshal error of response")
@@ -205,7 +206,7 @@ func (c *cerberusClient) RegisterInstrumentDriver(name, apiVersion string, apiPo
 	}
 
 	if resp.IsError() {
-		errReps := clientError{}
+		errReps := middleware.ClientError{}
 		err = json.Unmarshal(resp.Body(), &errReps)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to unmarshal error of response")
@@ -286,7 +287,7 @@ func (c *cerberusClient) SendAnalysisResultBatch(analysisResults []AnalysisResul
 
 		return response, nil
 	case resp.StatusCode() == http.StatusInternalServerError:
-		errReps := clientError{}
+		errReps := middleware.ClientError{}
 		err = json.Unmarshal(resp.Body(), &errReps)
 		if err != nil {
 			err = fmt.Errorf("can not unmarshal error of response (%w)", err)

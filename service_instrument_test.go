@@ -193,7 +193,7 @@ func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
 			ResultFileSuffix: ".updated.TPL",
 			FtpServerType:    "sftp",
 		},
-	})
+	}, uuid.MustParse("9d5fb5e9-65a1-4479-8f82-25b04145bfe1"))
 	assert.Nil(t, err)
 
 	// test that the FTP config updated properly
@@ -310,7 +310,7 @@ func TestFtpConfigConnectionModeChange(t *testing.T) {
 			ResultFileSuffix: ".TPL",
 			FtpServerType:    "ftp",
 		},
-	})
+	}, uuid.MustParse("9d5fb5e9-65a1-4479-8f82-25b04145bfe1"))
 	assert.Nil(t, err)
 
 	// test that FTP config created after connection mode updated to FTP and config passed
@@ -343,7 +343,7 @@ func TestFtpConfigConnectionModeChange(t *testing.T) {
 		Timezone:       "Europe/Budapest",
 		Hostname:       "192.168.1.20",
 		ClientPort:     &clientPort,
-	})
+	}, uuid.MustParse("9d5fb5e9-65a1-4479-8f82-25b04145bfe1"))
 	assert.Nil(t, err)
 
 	// test that FTP config deleted after the instrument update
@@ -476,7 +476,7 @@ func TestUpdateInstrument(t *testing.T) {
 				},
 			},
 		},
-	})
+	}, uuid.MustParse("9d5fb5e9-65a1-4479-8f82-25b04145bfe1"))
 
 	assert.Nil(t, err)
 	instrument, err = instrumentService.GetInstrumentByID(ctx, nil, instrumentID, false)
@@ -585,7 +585,7 @@ func TestUpdateInstrument(t *testing.T) {
 				},
 			},
 		},
-	})
+	}, uuid.MustParse("9d5fb5e9-65a1-4479-8f82-25b04145bfe1"))
 
 	assert.Nil(t, err)
 	instrument, err = instrumentService.GetInstrumentByID(ctx, nil, instrumentID, false)
@@ -706,7 +706,7 @@ func TestHidePassword(t *testing.T) {
 			Value:             "ThisIsMyPassword",
 		},
 	}
-	_ = instrumentService.UpdateInstrument(ctx, instr)
+	_ = instrumentService.UpdateInstrument(ctx, instr, uuid.MustParse("9d5fb5e9-65a1-4479-8f82-25b04145bfe1"))
 	instrument, err := instrumentService.GetInstrumentByID(context.TODO(), dbConn, instr.ID, false)
 	assert.Nil(t, err)
 	assert.Equal(t, 2, len(instrument.Settings))
@@ -759,103 +759,748 @@ func TestUpdateExpectedControlResult(t *testing.T) {
 	instrumentService := NewInstrumentService(&configuration, sortingRuleService, instrumentRepositoryMock, NewSkeletonManager(ctxWithCancel), NewInstrumentCache(), cerberusClientMock)
 
 	analyteMappingId := uuid.MustParse("e97b3b33-6b2e-4da2-9883-11a3fe4a93bc")
-	expectedControlResultId1 := uuid.MustParse("a52737f4-a144-4842-8ce6-1ffa007f4ef1")
-	expectedControlResultId2Deleted := uuid.MustParse("9d6911a5-d399-4b5b-8268-cf834e764446")
 	expectedControlResultId2 := uuid.MustParse("0edf9c18-42e4-4ce0-ba4a-9c03ec1e775a")
 	expectedControlResultId3 := uuid.MustParse("3454ed41-b940-4a47-b9e7-88c8892c5d38")
 	expectedControlResultId4 := uuid.MustParse("982de611-8f2a-47c8-9c20-f9bc0a09610d")
+	instrumentId := uuid.MustParse("8dbf35f8-f029-4c28-bf60-42a9c6c24261")
 
-	userId := uuid.MustParse("f98c3d73-bc87-4dcf-b837-2dd9e87a4dae")
-	deletedAt := time.Now()
-
-	instrumentRepositoryMock.existingExpectedControlResults = make(map[uuid.UUID]map[string]ExpectedControlResult)
-	instrumentRepositoryMock.existingExpectedControlResults[analyteMappingId] = make(map[string]ExpectedControlResult)
-	instrumentRepositoryMock.existingExpectedControlResults[analyteMappingId]["sampleCode2"] = ExpectedControlResult{
-		ID:             expectedControlResultId2Deleted,
-		SampleCode:     "sampleCode2",
-		Operator:       "==",
-		ExpectedValue:  "1",
-		ExpectedValue2: nil,
-		CreatedAt:      time.Now(),
-		DeletedAt:      &deletedAt,
-		CreatedBy:      userId,
-		DeletedBy: uuid.NullUUID{
-			UUID:  userId,
-			Valid: true,
+	analyteMapping := AnalyteMapping{
+		InstrumentAnalyte: "TESTANALYTE",
+		ID:                analyteMappingId,
+		AnalyteID:         uuid.MustParse("5018bcf2-21c9-4e97-b595-4ae993497d8c"),
+		ChannelMappings: []ChannelMapping{
+			{
+				InstrumentChannel: "TestInstrumentChannel",
+				ChannelID:         uuid.MustParse("e5d9907f-3f48-4860-afb9-18ac12fcc87e"),
+			},
 		},
-	}
-	instrumentRepositoryMock.existingExpectedControlResults[analyteMappingId]["sampleCode2"] = ExpectedControlResult{
-		ID:             expectedControlResultId2,
-		SampleCode:     "sampleCode2",
-		Operator:       ">",
-		ExpectedValue:  "1",
-		ExpectedValue2: nil,
-	}
-	instrumentRepositoryMock.existingExpectedControlResults[analyteMappingId]["sampleCode3"] = ExpectedControlResult{
-		ID:             expectedControlResultId3,
-		SampleCode:     "sampleCode3",
-		Operator:       "==",
-		ExpectedValue:  "2",
-		ExpectedValue2: nil,
-	}
-	instrumentRepositoryMock.existingExpectedControlResults[analyteMappingId]["sampleCode4"] = ExpectedControlResult{
-		ID:             expectedControlResultId4,
-		SampleCode:     "sampleCode4",
-		Operator:       "<",
-		ExpectedValue:  "3",
-		ExpectedValue2: nil,
+		ResultType: "int",
 	}
 
-	expectedControlResults := make(map[uuid.UUID]map[string]ExpectedControlResult)
-	expectedControlResults[analyteMappingId] = make(map[string]ExpectedControlResult)
-	expectedControlResults[analyteMappingId]["sampleCode1"] = ExpectedControlResult{
-		ID:             expectedControlResultId1,
-		SampleCode:     "sampleCode1",
-		Operator:       ">",
-		ExpectedValue:  "2",
-		ExpectedValue2: nil,
-	}
-	expectedControlResults[analyteMappingId]["sampleCode2"] = ExpectedControlResult{
-		ID:             expectedControlResultId2,
-		SampleCode:     "sampleCode2",
-		Operator:       "==",
-		ExpectedValue:  "3",
-		ExpectedValue2: nil,
-	}
-	expectedControlResults[analyteMappingId]["sampleCode3"] = ExpectedControlResult{
-		ID:             expectedControlResultId3,
-		SampleCode:     "sampleCode3",
-		Operator:       "<",
-		ExpectedValue:  "4",
-		ExpectedValue2: nil,
-	}
+	resultMappings := make([]ResultMapping, 0)
+	resultMappings = append(resultMappings, ResultMapping{
+		Key:   "1",
+		Value: "1",
+		Index: 0,
+	})
+	resultMappings = append(resultMappings, ResultMapping{
+		Key:   "2",
+		Value: "2",
+		Index: 1,
+	})
+	resultMappings = append(resultMappings, ResultMapping{
+		Key:   "3",
+		Value: "3",
+		Index: 2,
+	})
+	resultMappings = append(resultMappings, ResultMapping{
+		Key:   "4",
+		Value: "4",
+		Index: 3,
+	})
+	instrumentRepositoryMock.analyteMappings = make(map[uuid.UUID][]AnalyteMapping)
+	instrumentRepositoryMock.analyteMappings[instrumentId] = []AnalyteMapping{analyteMapping}
+	instrumentRepositoryMock.resultMappings = make(map[uuid.UUID][]ResultMapping)
+	instrumentRepositoryMock.resultMappings[analyteMappingId] = resultMappings
 
-	err := instrumentService.UpdateExpectedControlResults(ctxWithCancel, uuid.New(), expectedControlResults, uuid.New())
+	instrumentRepositoryMock.existingExpectedControlResults = make([]ExpectedControlResult, 0)
+	instrumentRepositoryMock.existingExpectedControlResults = append(instrumentRepositoryMock.existingExpectedControlResults, ExpectedControlResult{
+		ID:               expectedControlResultId2,
+		AnalyteMappingId: analyteMappingId,
+		SampleCode:       "sampleCode2",
+		Operator:         ">",
+		ExpectedValue:    "1",
+		ExpectedValue2:   nil,
+	})
+	instrumentRepositoryMock.existingExpectedControlResults = append(instrumentRepositoryMock.existingExpectedControlResults, ExpectedControlResult{
+		ID:               expectedControlResultId3,
+		AnalyteMappingId: analyteMappingId,
+		SampleCode:       "sampleCode3",
+		Operator:         "==",
+		ExpectedValue:    "2",
+		ExpectedValue2:   nil,
+	})
+	instrumentRepositoryMock.existingExpectedControlResults = append(instrumentRepositoryMock.existingExpectedControlResults, ExpectedControlResult{
+		ID:               expectedControlResultId4,
+		AnalyteMappingId: analyteMappingId,
+		SampleCode:       "sampleCode4",
+		Operator:         "<",
+		ExpectedValue:    "3",
+		ExpectedValue2:   nil,
+	})
+
+	expectedControlResults := make([]ExpectedControlResult, 0)
+	expectedControlResults = append(expectedControlResults, ExpectedControlResult{
+		ID:               uuid.Nil,
+		AnalyteMappingId: analyteMappingId,
+		SampleCode:       "sampleCode0",
+		Operator:         ">",
+		ExpectedValue:    "2",
+		ExpectedValue2:   nil,
+	})
+	expectedControlResults = append(expectedControlResults, ExpectedControlResult{
+		ID:               uuid.Nil,
+		AnalyteMappingId: analyteMappingId,
+		SampleCode:       "sampleCode1",
+		Operator:         ">",
+		ExpectedValue:    "2",
+		ExpectedValue2:   nil,
+	})
+	expectedControlResults = append(expectedControlResults, ExpectedControlResult{
+		ID:               expectedControlResultId2,
+		AnalyteMappingId: analyteMappingId,
+		SampleCode:       "sampleCode2",
+		Operator:         "==",
+		ExpectedValue:    "3",
+		ExpectedValue2:   nil,
+	})
+	expectedControlResults = append(expectedControlResults, ExpectedControlResult{
+		ID:               expectedControlResultId3,
+		AnalyteMappingId: analyteMappingId,
+		SampleCode:       "sampleCode3",
+		Operator:         "<",
+		ExpectedValue:    "4",
+		ExpectedValue2:   nil,
+	})
+
+	err := instrumentService.UpdateExpectedControlResults(ctxWithCancel, instrumentId, expectedControlResults, uuid.New())
 	assert.Nil(t, err)
 
-	assert.Equal(t, 1, len(instrumentRepositoryMock.createdExpectedControlResultsMap))
-	assert.Equal(t, 1, len(instrumentRepositoryMock.createdExpectedControlResultsMap[analyteMappingId]))
-	assert.Equal(t, expectedControlResultId1, instrumentRepositoryMock.createdExpectedControlResultsMap[analyteMappingId]["sampleCode1"].ID)
+	assert.Equal(t, 2, len(instrumentRepositoryMock.createdExpectedControlResults))
+	assert.Equal(t, "sampleCode0", instrumentRepositoryMock.createdExpectedControlResults[0].SampleCode)
+	assert.Equal(t, "sampleCode1", instrumentRepositoryMock.createdExpectedControlResults[1].SampleCode)
 
-	assert.Equal(t, 1, len(instrumentRepositoryMock.updatedExpectedControlResultsMap))
-	assert.Equal(t, 2, len(instrumentRepositoryMock.updatedExpectedControlResultsMap[analyteMappingId]))
-	assert.Equal(t, expectedControlResultId2, instrumentRepositoryMock.updatedExpectedControlResultsMap[analyteMappingId]["sampleCode2"].ID)
-	assert.Equal(t, Equals, instrumentRepositoryMock.updatedExpectedControlResultsMap[analyteMappingId]["sampleCode2"].Operator)
-	assert.Equal(t, "3", instrumentRepositoryMock.updatedExpectedControlResultsMap[analyteMappingId]["sampleCode2"].ExpectedValue)
-	assert.Equal(t, expectedControlResultId3, instrumentRepositoryMock.updatedExpectedControlResultsMap[analyteMappingId]["sampleCode3"].ID)
-	assert.Equal(t, Less, instrumentRepositoryMock.updatedExpectedControlResultsMap[analyteMappingId]["sampleCode3"].Operator)
-	assert.Equal(t, "4", instrumentRepositoryMock.updatedExpectedControlResultsMap[analyteMappingId]["sampleCode3"].ExpectedValue)
+	assert.Equal(t, 2, len(instrumentRepositoryMock.updatedExpectedControlResults))
+	updatedExpectedControlsMap := make(map[uuid.UUID]ExpectedControlResult)
+	updatedExpectedControlsMap[instrumentRepositoryMock.updatedExpectedControlResults[0].ID] = instrumentRepositoryMock.updatedExpectedControlResults[0]
+	updatedExpectedControlsMap[instrumentRepositoryMock.updatedExpectedControlResults[1].ID] = instrumentRepositoryMock.updatedExpectedControlResults[1]
+	assert.Equal(t, expectedControlResultId2, updatedExpectedControlsMap[expectedControlResultId2].ID)
+	assert.Equal(t, Equals, updatedExpectedControlsMap[expectedControlResultId2].Operator)
+	assert.Equal(t, "3", updatedExpectedControlsMap[expectedControlResultId2].ExpectedValue)
+	assert.Equal(t, expectedControlResultId3, updatedExpectedControlsMap[expectedControlResultId3].ID)
+	assert.Equal(t, Less, updatedExpectedControlsMap[expectedControlResultId3].Operator)
+	assert.Equal(t, "4", updatedExpectedControlsMap[expectedControlResultId3].ExpectedValue)
 
 	assert.Equal(t, 1, len(instrumentRepositoryMock.deletedExpectedControlResultIds))
 	assert.Equal(t, expectedControlResultId4, instrumentRepositoryMock.deletedExpectedControlResultIds[0])
 }
 
+func TestUpdateExpectedControlResult2(t *testing.T) {
+	sqlConn, _ := sqlx.Connect("postgres", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
+	schemaName := "expectedcontrolresult_test"
+	_, _ = sqlConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
+	_, _ = sqlConn.Exec(fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schemaName))
+	_, _ = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
+	migrator := migrator.NewSkeletonMigrator()
+	_ = migrator.Run(context.Background(), sqlConn, schemaName)
+	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
+
+	configuration := config.Configuration{
+		APIPort:                          5000,
+		Authorization:                    false,
+		PermittedOrigin:                  "*",
+		ApplicationName:                  "Register instrument retry test",
+		TCPListenerPort:                  5401,
+		InstrumentTransferRetryDelayInMs: 50,
+		ClientID:                         "clientID",
+		ClientSecret:                     "clientSecret",
+	}
+	dbConn := db.CreateDbConnector(sqlConn)
+	cerberusClientMock := &cerberusClientMock{
+		registerInstrumentFunc: func(instrument Instrument) error {
+			return nil
+		},
+	}
+	instrumentRepositoryMock := &instrumentRepositoryMock{
+		db: dbConn,
+	}
+
+	ctxWithCancel, cancel := context.WithCancel(context.Background())
+
+	defer cancel()
+	conditionRepository := NewConditionRepository(dbConn, schemaName)
+	conditionService := NewConditionService(conditionRepository)
+	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
+	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
+	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
+	instrumentService := NewInstrumentService(&configuration, sortingRuleService, instrumentRepositoryMock, NewSkeletonManager(ctxWithCancel), NewInstrumentCache(), cerberusClientMock)
+
+	analyteMappingId := uuid.MustParse("e97b3b33-6b2e-4da2-9883-11a3fe4a93bc")
+	analyteMappingId2 := uuid.MustParse("f17cb1d4-b281-464f-a2d8-2e08dcfa76f8")
+	analyteMappingId3 := uuid.MustParse("475876c7-c676-4a30-9961-cc97751c77e2")
+	analyteMappingId4 := uuid.MustParse("1672764b-45b2-4f61-88a3-65d666b0b060")
+	analyteMappingId5 := uuid.MustParse("ec05da16-67ae-428c-a94f-da62657f619c")
+	expectedControlResultId2 := uuid.MustParse("0edf9c18-42e4-4ce0-ba4a-9c03ec1e775a")
+	expectedControlResultId3 := uuid.MustParse("3454ed41-b940-4a47-b9e7-88c8892c5d38")
+	expectedControlResultId4 := uuid.MustParse("982de611-8f2a-47c8-9c20-f9bc0a09610d")
+	instrumentId := uuid.MustParse("8dbf35f8-f029-4c28-bf60-42a9c6c24261")
+
+	analyteMappings := make([]AnalyteMapping, 0)
+	analyteMappings = append(analyteMappings, AnalyteMapping{
+		InstrumentAnalyte: "TESTANALYTE",
+		ID:                analyteMappingId,
+		AnalyteID:         uuid.MustParse("5018bcf2-21c9-4e97-b595-4ae993497d8c"),
+		ChannelMappings: []ChannelMapping{
+			{
+				InstrumentChannel: "TestInstrumentChannel",
+				ChannelID:         uuid.MustParse("e5d9907f-3f48-4860-afb9-18ac12fcc87e"),
+			},
+		},
+		ResultType: "int",
+	})
+	analyteMappings = append(analyteMappings, AnalyteMapping{
+		InstrumentAnalyte: "TESTANALYTE2",
+		ID:                analyteMappingId2,
+		AnalyteID:         uuid.MustParse("5018bcf2-21c9-4e97-b595-4ae993497d8c"),
+		ChannelMappings: []ChannelMapping{
+			{
+				InstrumentChannel: "TestInstrumentChannel",
+				ChannelID:         uuid.MustParse("e5d9907f-3f48-4860-afb9-18ac12fcc87e"),
+			},
+		},
+		ResultType: "int",
+	})
+	analyteMappings = append(analyteMappings, AnalyteMapping{
+		InstrumentAnalyte: "TESTANALYTE3",
+		ID:                analyteMappingId3,
+		AnalyteID:         uuid.MustParse("5018bcf2-21c9-4e97-b595-4ae993497d8c"),
+		ChannelMappings: []ChannelMapping{
+			{
+				InstrumentChannel: "TestInstrumentChannel",
+				ChannelID:         uuid.MustParse("e5d9907f-3f48-4860-afb9-18ac12fcc87e"),
+			},
+		},
+		ResultType: "int",
+	})
+	analyteMappings = append(analyteMappings, AnalyteMapping{
+		InstrumentAnalyte: "TESTANALYTE4",
+		ID:                analyteMappingId4,
+		AnalyteID:         uuid.MustParse("5018bcf2-21c9-4e97-b595-4ae993497d8c"),
+		ChannelMappings: []ChannelMapping{
+			{
+				InstrumentChannel: "TestInstrumentChannel",
+				ChannelID:         uuid.MustParse("e5d9907f-3f48-4860-afb9-18ac12fcc87e"),
+			},
+		},
+		ResultType: "int",
+	})
+	analyteMappings = append(analyteMappings, AnalyteMapping{
+		InstrumentAnalyte: "TESTANALYTE5",
+		ID:                analyteMappingId5,
+		AnalyteID:         uuid.MustParse("5018bcf2-21c9-4e97-b595-4ae993497d8c"),
+		ChannelMappings: []ChannelMapping{
+			{
+				InstrumentChannel: "TestInstrumentChannel",
+				ChannelID:         uuid.MustParse("e5d9907f-3f48-4860-afb9-18ac12fcc87e"),
+			},
+		},
+		ResultType: "int",
+	})
+
+	resultMappings := make([]ResultMapping, 0)
+	resultMappings = append(resultMappings, ResultMapping{
+		Key:   "1",
+		Value: "1",
+		Index: 0,
+	})
+	resultMappings = append(resultMappings, ResultMapping{
+		Key:   "2",
+		Value: "2",
+		Index: 1,
+	})
+	instrumentRepositoryMock.analyteMappings = make(map[uuid.UUID][]AnalyteMapping)
+	instrumentRepositoryMock.analyteMappings[instrumentId] = analyteMappings
+	instrumentRepositoryMock.resultMappings = make(map[uuid.UUID][]ResultMapping)
+	instrumentRepositoryMock.resultMappings[analyteMappingId] = resultMappings
+	instrumentRepositoryMock.resultMappings[analyteMappingId2] = resultMappings
+	instrumentRepositoryMock.resultMappings[analyteMappingId3] = resultMappings
+	instrumentRepositoryMock.resultMappings[analyteMappingId4] = resultMappings
+	instrumentRepositoryMock.resultMappings[analyteMappingId5] = resultMappings
+
+	instrumentRepositoryMock.existingExpectedControlResults = make([]ExpectedControlResult, 0)
+	instrumentRepositoryMock.existingExpectedControlResults = append(instrumentRepositoryMock.existingExpectedControlResults, ExpectedControlResult{
+		ID:               expectedControlResultId2,
+		AnalyteMappingId: analyteMappingId3,
+		SampleCode:       "sampleCode",
+		Operator:         ">",
+		ExpectedValue:    "1",
+		ExpectedValue2:   nil,
+	})
+	instrumentRepositoryMock.existingExpectedControlResults = append(instrumentRepositoryMock.existingExpectedControlResults, ExpectedControlResult{
+		ID:               expectedControlResultId3,
+		AnalyteMappingId: analyteMappingId4,
+		SampleCode:       "sampleCode",
+		Operator:         "==",
+		ExpectedValue:    "2",
+		ExpectedValue2:   nil,
+	})
+	instrumentRepositoryMock.existingExpectedControlResults = append(instrumentRepositoryMock.existingExpectedControlResults, ExpectedControlResult{
+		ID:               expectedControlResultId4,
+		AnalyteMappingId: analyteMappingId5,
+		SampleCode:       "sampleCode",
+		Operator:         "<",
+		ExpectedValue:    "3",
+		ExpectedValue2:   nil,
+	})
+
+	expectedControlResults := make([]ExpectedControlResult, 0)
+	expectedControlResults = append(expectedControlResults, ExpectedControlResult{
+		ID:               uuid.Nil,
+		AnalyteMappingId: analyteMappingId,
+		SampleCode:       "sampleCode",
+		Operator:         ">",
+		ExpectedValue:    "2",
+		ExpectedValue2:   nil,
+	})
+	expectedControlResults = append(expectedControlResults, ExpectedControlResult{
+		ID:               uuid.Nil,
+		AnalyteMappingId: analyteMappingId2,
+		SampleCode:       "sampleCode",
+		Operator:         ">",
+		ExpectedValue:    "2",
+		ExpectedValue2:   nil,
+	})
+	expectedControlResults = append(expectedControlResults, ExpectedControlResult{
+		ID:               expectedControlResultId2,
+		AnalyteMappingId: analyteMappingId3,
+		SampleCode:       "sampleCode",
+		Operator:         "==",
+		ExpectedValue:    "3",
+		ExpectedValue2:   nil,
+	})
+	expectedControlResults = append(expectedControlResults, ExpectedControlResult{
+		ID:               expectedControlResultId3,
+		AnalyteMappingId: analyteMappingId4,
+		SampleCode:       "sampleCode",
+		Operator:         "<",
+		ExpectedValue:    "4",
+		ExpectedValue2:   nil,
+	})
+
+	err := instrumentService.UpdateExpectedControlResults(ctxWithCancel, instrumentId, expectedControlResults, uuid.New())
+	assert.Nil(t, err)
+
+	assert.Equal(t, 2, len(instrumentRepositoryMock.createdExpectedControlResults))
+	assert.Equal(t, analyteMappingId, instrumentRepositoryMock.createdExpectedControlResults[0].AnalyteMappingId)
+	assert.Equal(t, analyteMappingId2, instrumentRepositoryMock.createdExpectedControlResults[1].AnalyteMappingId)
+
+	assert.Equal(t, 2, len(instrumentRepositoryMock.updatedExpectedControlResults))
+	updatedExpectedControlsMap := make(map[uuid.UUID]ExpectedControlResult)
+	updatedExpectedControlsMap[instrumentRepositoryMock.updatedExpectedControlResults[0].ID] = instrumentRepositoryMock.updatedExpectedControlResults[0]
+	updatedExpectedControlsMap[instrumentRepositoryMock.updatedExpectedControlResults[1].ID] = instrumentRepositoryMock.updatedExpectedControlResults[1]
+	assert.Equal(t, expectedControlResultId2, updatedExpectedControlsMap[expectedControlResultId2].ID)
+	assert.Equal(t, Equals, updatedExpectedControlsMap[expectedControlResultId2].Operator)
+	assert.Equal(t, "3", updatedExpectedControlsMap[expectedControlResultId2].ExpectedValue)
+	assert.Equal(t, expectedControlResultId3, updatedExpectedControlsMap[expectedControlResultId3].ID)
+	assert.Equal(t, Less, updatedExpectedControlsMap[expectedControlResultId3].Operator)
+	assert.Equal(t, "4", updatedExpectedControlsMap[expectedControlResultId3].ExpectedValue)
+
+	assert.Equal(t, 1, len(instrumentRepositoryMock.deletedExpectedControlResultIds))
+	assert.Equal(t, expectedControlResultId4, instrumentRepositoryMock.deletedExpectedControlResultIds[0])
+}
+
+func TestValidateExpectedControlResultsForIntervalValue(t *testing.T) {
+	analyteMapping := AnalyteMapping{
+		InstrumentAnalyte: "TESTANALYTE",
+		ID:                uuid.MustParse("e97b3b33-6b2e-4da2-9883-11a3fe4a93bc"),
+		AnalyteID:         uuid.MustParse("5018bcf2-21c9-4e97-b595-4ae993497d8c"),
+		ChannelMappings: []ChannelMapping{
+			{
+				InstrumentChannel: "TestInstrumentChannel",
+				ChannelID:         uuid.MustParse("e5d9907f-3f48-4860-afb9-18ac12fcc87e"),
+			},
+		},
+		ResultMappings: []ResultMapping{
+			{
+				Key:   "1",
+				Value: "1",
+				Index: 0,
+			},
+			{
+				Key:   "2",
+				Value: "2",
+				Index: 1,
+			},
+		},
+		ResultType: "int",
+	}
+
+	expectedControlResult := ExpectedControlResult{
+		ID:               uuid.MustParse("a52737f4-a144-4842-8ce6-1ffa007f4ef1"),
+		AnalyteMappingId: uuid.MustParse("e97b3b33-6b2e-4da2-9883-11a3fe4a93bc"),
+		SampleCode:       "sampleCode1",
+		Operator:         "inClosedInterval",
+		ExpectedValue:    "1",
+		ExpectedValue2:   nil,
+	}
+
+	err := validateExpectedControlResults([]AnalyteMapping{analyteMapping}, []ExpectedControlResult{expectedControlResult})
+	assert.NotNil(t, err)
+
+	parameterizedErrors := err.(ParameterizedErrors)
+	assert.Equal(t, 1, len(parameterizedErrors))
+	assert.Equal(t, ErrValidationIntervalEndingValueEmpty, parameterizedErrors[0].error)
+	assert.Equal(t, analyteMapping.InstrumentAnalyte, parameterizedErrors[0].Params["analyte"])
+
+	expectedValue2 := "2"
+	expectedControlResult = ExpectedControlResult{
+		ID:               uuid.MustParse("a52737f4-a144-4842-8ce6-1ffa007f4ef1"),
+		AnalyteMappingId: uuid.MustParse("e97b3b33-6b2e-4da2-9883-11a3fe4a93bc"),
+		SampleCode:       "sampleCode1",
+		Operator:         "inClosedInterval",
+		ExpectedValue:    "1",
+		ExpectedValue2:   &expectedValue2,
+	}
+
+	err = validateExpectedControlResults([]AnalyteMapping{analyteMapping}, []ExpectedControlResult{expectedControlResult})
+	assert.Nil(t, err)
+}
+
+func TestValidateExpectedValueBasedOnAnalyteMappingResultTypeInt(t *testing.T) {
+	analyteMapping := AnalyteMapping{
+		InstrumentAnalyte: "TESTANALYTE",
+		ID:                uuid.MustParse("e97b3b33-6b2e-4da2-9883-11a3fe4a93bc"),
+		AnalyteID:         uuid.MustParse("5018bcf2-21c9-4e97-b595-4ae993497d8c"),
+		ChannelMappings: []ChannelMapping{
+			{
+				InstrumentChannel: "TestInstrumentChannel",
+				ChannelID:         uuid.MustParse("e5d9907f-3f48-4860-afb9-18ac12fcc87e"),
+			},
+		},
+		ResultMappings: []ResultMapping{
+			{
+				Key:   "1",
+				Value: "1",
+				Index: 0,
+			},
+			{
+				Key:   "2",
+				Value: "2",
+				Index: 1,
+			},
+		},
+		ResultType: "int",
+	}
+
+	err := validateExpectedValueBasedOnAnalyteMappingResultType(analyteMapping, "")
+	assert.NotNil(t, err)
+	assert.Equal(t, ErrValidationValueEmpty, err)
+
+	err = validateExpectedValueBasedOnAnalyteMappingResultType(analyteMapping, " ")
+	assert.NotNil(t, err)
+	assert.Equal(t, ErrValidationValueInvalid, err)
+
+	err = validateExpectedValueBasedOnAnalyteMappingResultType(analyteMapping, "1")
+	assert.Nil(t, err)
+
+	err = validateExpectedValueBasedOnAnalyteMappingResultType(analyteMapping, "test")
+	assert.NotNil(t, err)
+	assert.Equal(t, ErrValidationValueInvalid, err)
+}
+
+func TestValidateExpectedValueBasedOnAnalyteMappingResultTypeDecimal(t *testing.T) {
+	analyteMapping := AnalyteMapping{
+		InstrumentAnalyte: "TESTANALYTE",
+		ID:                uuid.MustParse("e97b3b33-6b2e-4da2-9883-11a3fe4a93bc"),
+		AnalyteID:         uuid.MustParse("5018bcf2-21c9-4e97-b595-4ae993497d8c"),
+		ChannelMappings: []ChannelMapping{
+			{
+				InstrumentChannel: "TestInstrumentChannel",
+				ChannelID:         uuid.MustParse("e5d9907f-3f48-4860-afb9-18ac12fcc87e"),
+			},
+		},
+		ResultMappings: []ResultMapping{
+			{
+				Key:   "1.5",
+				Value: "1.5",
+				Index: 0,
+			},
+			{
+				Key:   "2.0",
+				Value: "2.0",
+				Index: 1,
+			},
+		},
+		ResultType: "decimal",
+	}
+
+	err := validateExpectedValueBasedOnAnalyteMappingResultType(analyteMapping, "")
+	assert.NotNil(t, err)
+	assert.Equal(t, ErrValidationValueEmpty, err)
+
+	err = validateExpectedValueBasedOnAnalyteMappingResultType(analyteMapping, " ")
+	assert.NotNil(t, err)
+	assert.Equal(t, ErrValidationValueInvalid, err)
+
+	err = validateExpectedValueBasedOnAnalyteMappingResultType(analyteMapping, "1.5")
+	assert.Nil(t, err)
+
+	err = validateExpectedValueBasedOnAnalyteMappingResultType(analyteMapping, "test")
+	assert.NotNil(t, err)
+	assert.Equal(t, ErrValidationValueInvalid, err)
+}
+
+func TestValidateExpectedValueBasedOnAnalyteMappingResultTypeBoundedDecimal(t *testing.T) {
+	analyteMapping := AnalyteMapping{
+		InstrumentAnalyte: "TESTANALYTE",
+		ID:                uuid.MustParse("e97b3b33-6b2e-4da2-9883-11a3fe4a93bc"),
+		AnalyteID:         uuid.MustParse("5018bcf2-21c9-4e97-b595-4ae993497d8c"),
+		ChannelMappings: []ChannelMapping{
+			{
+				InstrumentChannel: "TestInstrumentChannel",
+				ChannelID:         uuid.MustParse("e5d9907f-3f48-4860-afb9-18ac12fcc87e"),
+			},
+		},
+		ResultMappings: []ResultMapping{
+			{
+				Key:   "1.5",
+				Value: "1.5",
+				Index: 0,
+			},
+			{
+				Key:   "2.0",
+				Value: "2.0",
+				Index: 1,
+			},
+		},
+		ResultType: "boundedDecimal",
+	}
+
+	err := validateExpectedValueBasedOnAnalyteMappingResultType(analyteMapping, "")
+	assert.NotNil(t, err)
+	assert.Equal(t, ErrValidationValueEmpty, err)
+
+	err = validateExpectedValueBasedOnAnalyteMappingResultType(analyteMapping, " ")
+	assert.NotNil(t, err)
+	assert.Equal(t, ErrValidationValueInvalid, err)
+
+	err = validateExpectedValueBasedOnAnalyteMappingResultType(analyteMapping, "1.5<+")
+	assert.Nil(t, err)
+
+	err = validateExpectedValueBasedOnAnalyteMappingResultType(analyteMapping, "test")
+	assert.NotNil(t, err)
+	assert.Equal(t, ErrValidationValueInvalid, err)
+}
+
+func TestValidateExpectedValueBasedOnAnalyteMappingResultTypeString(t *testing.T) {
+	analyteMapping := AnalyteMapping{
+		InstrumentAnalyte: "TESTANALYTE",
+		ID:                uuid.MustParse("e97b3b33-6b2e-4da2-9883-11a3fe4a93bc"),
+		AnalyteID:         uuid.MustParse("5018bcf2-21c9-4e97-b595-4ae993497d8c"),
+		ChannelMappings: []ChannelMapping{
+			{
+				InstrumentChannel: "TestInstrumentChannel",
+				ChannelID:         uuid.MustParse("e5d9907f-3f48-4860-afb9-18ac12fcc87e"),
+			},
+		},
+		ResultMappings: []ResultMapping{
+			{
+				Key:   "1.5",
+				Value: "1.5",
+				Index: 0,
+			},
+			{
+				Key:   "2.0",
+				Value: "2.0",
+				Index: 1,
+			},
+		},
+		ResultType: "string",
+	}
+
+	err := validateExpectedValueBasedOnAnalyteMappingResultType(analyteMapping, "")
+	assert.NotNil(t, err)
+	assert.Equal(t, ErrValidationValueEmpty, err)
+
+	err = validateExpectedValueBasedOnAnalyteMappingResultType(analyteMapping, " ")
+	assert.NotNil(t, err)
+	assert.Equal(t, ErrValidationValueInvalid, err)
+
+	err = validateExpectedValueBasedOnAnalyteMappingResultType(analyteMapping, "test")
+	assert.Nil(t, err)
+}
+
+func TestValidateExpectedValueBasedOnAnalyteMappingResultTypePein(t *testing.T) {
+	analyteMapping := AnalyteMapping{
+		InstrumentAnalyte: "TESTANALYTE",
+		ID:                uuid.MustParse("e97b3b33-6b2e-4da2-9883-11a3fe4a93bc"),
+		AnalyteID:         uuid.MustParse("5018bcf2-21c9-4e97-b595-4ae993497d8c"),
+		ChannelMappings: []ChannelMapping{
+			{
+				InstrumentChannel: "TestInstrumentChannel",
+				ChannelID:         uuid.MustParse("e5d9907f-3f48-4860-afb9-18ac12fcc87e"),
+			},
+		},
+		ResultMappings: []ResultMapping{
+			{
+				Key:   "pos",
+				Value: "pos",
+				Index: 0,
+			},
+			{
+				Key:   "neg",
+				Value: "neg",
+				Index: 1,
+			},
+		},
+		ResultType: "pein",
+	}
+
+	err := validateExpectedValueBasedOnAnalyteMappingResultType(analyteMapping, "")
+	assert.NotNil(t, err)
+	assert.Equal(t, ErrValidationValueEmpty, err)
+
+	err = validateExpectedValueBasedOnAnalyteMappingResultType(analyteMapping, " ")
+	assert.NotNil(t, err)
+	assert.Equal(t, ErrValidationValueInvalid, err)
+
+	err = validateExpectedValueBasedOnAnalyteMappingResultType(analyteMapping, "pos")
+	assert.Nil(t, err)
+
+	err = validateExpectedValueBasedOnAnalyteMappingResultType(analyteMapping, "test")
+	assert.NotNil(t, err)
+	assert.Equal(t, ErrValidationValueInvalid, err)
+}
+
+func TestValidateExpectedValueBasedOnAnalyteMappingResultTypeReact(t *testing.T) {
+	analyteMapping := AnalyteMapping{
+		InstrumentAnalyte: "TESTANALYTE",
+		ID:                uuid.MustParse("e97b3b33-6b2e-4da2-9883-11a3fe4a93bc"),
+		AnalyteID:         uuid.MustParse("5018bcf2-21c9-4e97-b595-4ae993497d8c"),
+		ChannelMappings: []ChannelMapping{
+			{
+				InstrumentChannel: "TestInstrumentChannel",
+				ChannelID:         uuid.MustParse("e5d9907f-3f48-4860-afb9-18ac12fcc87e"),
+			},
+		},
+		ResultMappings: []ResultMapping{
+			{
+				Key:   "pos",
+				Value: "pos",
+				Index: 0,
+			},
+			{
+				Key:   "neg",
+				Value: "neg",
+				Index: 1,
+			},
+		},
+		ResultType: "react",
+	}
+
+	err := validateExpectedValueBasedOnAnalyteMappingResultType(analyteMapping, "")
+	assert.NotNil(t, err)
+	assert.Equal(t, ErrValidationValueEmpty, err)
+
+	err = validateExpectedValueBasedOnAnalyteMappingResultType(analyteMapping, " ")
+	assert.NotNil(t, err)
+	assert.Equal(t, ErrValidationValueInvalid, err)
+
+	err = validateExpectedValueBasedOnAnalyteMappingResultType(analyteMapping, "pos")
+	assert.Nil(t, err)
+
+	err = validateExpectedValueBasedOnAnalyteMappingResultType(analyteMapping, "test")
+	assert.NotNil(t, err)
+	assert.Equal(t, ErrValidationValueInvalid, err)
+}
+
+func TestValidateExpectedValueBasedOnAnalyteMappingResultTypeInvalid(t *testing.T) {
+	analyteMapping := AnalyteMapping{
+		InstrumentAnalyte: "TESTANALYTE",
+		ID:                uuid.MustParse("e97b3b33-6b2e-4da2-9883-11a3fe4a93bc"),
+		AnalyteID:         uuid.MustParse("5018bcf2-21c9-4e97-b595-4ae993497d8c"),
+		ChannelMappings: []ChannelMapping{
+			{
+				InstrumentChannel: "TestInstrumentChannel",
+				ChannelID:         uuid.MustParse("e5d9907f-3f48-4860-afb9-18ac12fcc87e"),
+			},
+		},
+		ResultMappings: []ResultMapping{
+			{
+				Key:   "pos",
+				Value: "pos",
+				Index: 0,
+			},
+			{
+				Key:   "neg",
+				Value: "neg",
+				Index: 1,
+			},
+		},
+		ResultType: "invalid",
+	}
+
+	err := validateExpectedValueBasedOnAnalyteMappingResultType(analyteMapping, "")
+	assert.NotNil(t, err)
+	assert.Equal(t, ErrValidationValueEmpty, err)
+
+	err = validateExpectedValueBasedOnAnalyteMappingResultType(analyteMapping, " ")
+	assert.NotNil(t, err)
+	assert.Equal(t, ErrValidationValueInvalid, err)
+
+	err = validateExpectedValueBasedOnAnalyteMappingResultType(analyteMapping, "pos")
+	assert.Nil(t, err)
+
+	err = validateExpectedValueBasedOnAnalyteMappingResultType(analyteMapping, "test")
+	assert.NotNil(t, err)
+	assert.Equal(t, ErrValidationValueInvalid, err)
+}
+
+func TestValidateExpectedValueBasedOnAnalyteMappingResultTypeEnum(t *testing.T) {
+	analyteMapping := AnalyteMapping{
+		InstrumentAnalyte: "TESTANALYTE",
+		ID:                uuid.MustParse("e97b3b33-6b2e-4da2-9883-11a3fe4a93bc"),
+		AnalyteID:         uuid.MustParse("5018bcf2-21c9-4e97-b595-4ae993497d8c"),
+		ChannelMappings: []ChannelMapping{
+			{
+				InstrumentChannel: "TestInstrumentChannel",
+				ChannelID:         uuid.MustParse("e5d9907f-3f48-4860-afb9-18ac12fcc87e"),
+			},
+		},
+		ResultMappings: []ResultMapping{
+			{
+				Key:   "test1",
+				Value: "test1",
+				Index: 0,
+			},
+			{
+				Key:   "test2",
+				Value: "test2",
+				Index: 1,
+			},
+			{
+				Key:   "test3",
+				Value: "test3",
+				Index: 2,
+			},
+		},
+		ResultType: "enum",
+	}
+
+	err := validateExpectedValueBasedOnAnalyteMappingResultType(analyteMapping, "")
+	assert.NotNil(t, err)
+	assert.Equal(t, ErrValidationValueEmpty, err)
+
+	err = validateExpectedValueBasedOnAnalyteMappingResultType(analyteMapping, " ")
+	assert.NotNil(t, err)
+	assert.Equal(t, ErrValidationValueInvalid, err)
+
+	err = validateExpectedValueBasedOnAnalyteMappingResultType(analyteMapping, "test2")
+	assert.Nil(t, err)
+
+	err = validateExpectedValueBasedOnAnalyteMappingResultType(analyteMapping, "test")
+	assert.NotNil(t, err)
+	assert.Equal(t, ErrValidationValueInvalid, err)
+}
+
 type instrumentRepositoryMock struct {
-	existingExpectedControlResults   map[uuid.UUID]map[string]ExpectedControlResult
-	createdExpectedControlResultsMap map[uuid.UUID]map[string]ExpectedControlResult
-	updatedExpectedControlResultsMap map[uuid.UUID]map[string]ExpectedControlResult
-	deletedExpectedControlResultIds  []uuid.UUID
-	db                               db.DbConnector
+	existingExpectedControlResults  []ExpectedControlResult
+	createdExpectedControlResults   []ExpectedControlResult
+	updatedExpectedControlResults   []ExpectedControlResult
+	deletedExpectedControlResultIds []uuid.UUID
+	analyteMappings                 map[uuid.UUID][]AnalyteMapping
+	resultMappings                  map[uuid.UUID][]ResultMapping
+	db                              db.DbConnector
 }
 
 func (r *instrumentRepositoryMock) CreateInstrument(ctx context.Context, instrument Instrument) (uuid.UUID, error) {
@@ -996,6 +1641,9 @@ func (r *instrumentRepositoryMock) CreateAnalyteMappings(ctx context.Context, an
 	return make([]uuid.UUID, 0), nil
 }
 func (r *instrumentRepositoryMock) GetAnalyteMappings(ctx context.Context, instrumentIDs []uuid.UUID) (map[uuid.UUID][]AnalyteMapping, error) {
+	if len(r.analyteMappings) > 0 {
+		return r.analyteMappings, nil
+	}
 	return make(map[uuid.UUID][]AnalyteMapping), nil
 }
 func (r *instrumentRepositoryMock) UpdateAnalyteMapping(ctx context.Context, analyteMapping AnalyteMapping) error {
@@ -1020,6 +1668,9 @@ func (r *instrumentRepositoryMock) CreateResultMappings(ctx context.Context, res
 	return make([]uuid.UUID, 0), nil
 }
 func (r *instrumentRepositoryMock) GetResultMappings(ctx context.Context, analyteMappingIDs []uuid.UUID) (map[uuid.UUID][]ResultMapping, error) {
+	if len(r.resultMappings) > 0 {
+		return r.resultMappings, nil
+	}
 	return make(map[uuid.UUID][]ResultMapping), nil
 }
 func (r *instrumentRepositoryMock) UpdateResultMapping(ctx context.Context, resultMapping ResultMapping) error {
@@ -1028,25 +1679,33 @@ func (r *instrumentRepositoryMock) UpdateResultMapping(ctx context.Context, resu
 func (r *instrumentRepositoryMock) DeleteResultMappings(ctx context.Context, ids []uuid.UUID) error {
 	return nil
 }
-func (r *instrumentRepositoryMock) CreateExpectedControlResults(ctx context.Context, expectedControlResultsMap map[uuid.UUID]map[string]ExpectedControlResult) ([]uuid.UUID, error) {
-	r.createdExpectedControlResultsMap = expectedControlResultsMap
+func (r *instrumentRepositoryMock) CreateExpectedControlResults(ctx context.Context, expectedControlResults []ExpectedControlResult) ([]uuid.UUID, error) {
+	r.createdExpectedControlResults = expectedControlResults
 	return nil, nil
 }
-func (r *instrumentRepositoryMock) UpdateExpectedControlResults(ctx context.Context, expectedControlResultsMap map[uuid.UUID]map[string]ExpectedControlResult) error {
-	r.updatedExpectedControlResultsMap = expectedControlResultsMap
+func (r *instrumentRepositoryMock) UpdateExpectedControlResults(ctx context.Context, expectedControlResults []ExpectedControlResult) error {
+	r.updatedExpectedControlResults = expectedControlResults
 	return nil
 }
 func (r *instrumentRepositoryMock) DeleteExpectedControlResults(ctx context.Context, ids []uuid.UUID, deletedByUserId uuid.UUID) error {
 	r.deletedExpectedControlResultIds = ids
 	return nil
 }
-func (r *instrumentRepositoryMock) GetExpectedControlResultsByInstrumentId(ctx context.Context, instrumentId uuid.UUID) (map[uuid.UUID]map[string]ExpectedControlResult, error) {
+func (r *instrumentRepositoryMock) DeleteExpectedControlResultsByAnalyteMappingIDs(ctx context.Context, ids []uuid.UUID, deletedByUserId uuid.UUID) error {
+	r.deletedExpectedControlResultIds = ids
+	return nil
+}
+func (r *instrumentRepositoryMock) GetExpectedControlResultsByInstrumentId(ctx context.Context, instrumentId uuid.UUID) ([]ExpectedControlResult, error) {
 	return nil, nil
 }
-func (r *instrumentRepositoryMock) GetExpectedControlResultsByInstrumentIdAndSampleCodes(ctx context.Context, instrumentId uuid.UUID, sampleCodes []string) (map[uuid.UUID]map[string]ExpectedControlResult, error) {
-	return r.existingExpectedControlResults, nil
+func (r *instrumentRepositoryMock) GetExpectedControlResultsByInstrumentIdAndSampleCodes(ctx context.Context, instrumentId uuid.UUID, sampleCodes []string) (map[uuid.UUID]ExpectedControlResult, error) {
+	existingExpectedControlResults := make(map[uuid.UUID]ExpectedControlResult)
+	for _, existingExpectedControlResult := range r.existingExpectedControlResults {
+		existingExpectedControlResults[existingExpectedControlResult.ID] = existingExpectedControlResult
+	}
+	return existingExpectedControlResults, nil
 }
-func (r *instrumentRepositoryMock) GetExpectedControlResultsByAnalyteMappingIds(ctx context.Context, analyteMappingIds []uuid.UUID) (map[uuid.UUID]map[string]ExpectedControlResult, error) {
+func (r *instrumentRepositoryMock) GetExpectedControlResultsByAnalyteMappingIds(ctx context.Context, analyteMappingIds []uuid.UUID) (map[uuid.UUID][]ExpectedControlResult, error) {
 	return nil, nil
 }
 func (r *instrumentRepositoryMock) CreateRequestMappings(ctx context.Context, requestMappings []RequestMapping, instrumentID uuid.UUID) ([]uuid.UUID, error) {

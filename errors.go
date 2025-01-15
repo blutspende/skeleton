@@ -1,8 +1,13 @@
 package skeleton
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"strings"
+
+	pgx "github.com/jackc/pgconn"
+	"github.com/lib/pq"
 )
 
 var (
@@ -17,6 +22,8 @@ var (
 )
 
 const (
+	ForeignKeyViolationErrorCode = pq.ErrorCode("23503")
+
 	ApiStartMsg           = "API server astm has been started"
 	ApiEndedGracefullyMsg = "API server astm ended gracefully"
 	ApiFailedToStartMsg   = "Failed to start API server astm"
@@ -75,25 +82,47 @@ var (
 	ErrFailedToAudit = errors.New(MsgFailedToAudit)
 )
 
-// TODO: Update new Error Structure
-type HTTPError struct {
-	MessageKey    string            `json:"messageKey"`
-	MessageParams map[string]string `json:"messageParams"`
-	Message       string            `json:"message"`
-	Errors        []HTTPError       `json:"errors"`
+type ParameterizedError struct {
+	error
+	Params map[string]string
 }
 
-var (
-	ErrInvalidRequestBody = HTTPError{
-		MessageKey: "41100",
-		Message:    "Invalid request body",
+func (pe ParameterizedError) Error() string {
+	buff := bytes.NewBufferString("")
+
+	buff.WriteString(pe.Error())
+	for key, value := range pe.Params {
+		buff.WriteString(" " + key + ": " + value)
 	}
-	ErrInvalidSubjectTypeProvidedInAnalysisRequest = HTTPError{
-		MessageKey: "41101",
-		Message:    "Invalid subject Type provided",
+	buff.WriteString("\n")
+
+	return strings.TrimSpace(buff.String())
+}
+
+type ParameterizedErrors []ParameterizedError
+
+func (e ParameterizedErrors) Error() string {
+
+	buff := bytes.NewBufferString("")
+
+	for i := range e {
+		buff.WriteString(e[i].Error() + "\n")
 	}
-	ErrInternalServerError = HTTPError{
-		MessageKey: "500",
-		Message:    "Internal Server Error",
+
+	return strings.TrimSpace(buff.String())
+}
+
+func IsErrorCode(err error, errcode pq.ErrorCode) bool {
+	pgErr, ok := err.(*pq.Error)
+	if ok {
+		return pgErr.Code == errcode
 	}
-)
+
+	pgxErr, ok := err.(*pgx.PgError)
+	if ok {
+		currentCode := pq.ErrorCode(pgxErr.Code)
+		return currentCode == errcode
+	}
+
+	return false
+}

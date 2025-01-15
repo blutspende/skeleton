@@ -203,15 +203,16 @@ type ChannelMapping struct {
 }
 
 type ExpectedControlResult struct {
-	ID             uuid.UUID
-	SampleCode     string
-	Operator       ConditionOperator
-	ExpectedValue  string
-	ExpectedValue2 *string
-	CreatedAt      time.Time
-	DeletedAt      *time.Time
-	CreatedBy      uuid.UUID
-	DeletedBy      uuid.NullUUID
+	ID               uuid.UUID
+	SampleCode       string
+	AnalyteMappingId uuid.UUID
+	Operator         ConditionOperator
+	ExpectedValue    string
+	ExpectedValue2   *string
+	CreatedAt        time.Time
+	DeletedAt        *time.Time
+	CreatedBy        uuid.UUID
+	DeletedBy        uuid.NullUUID
 }
 
 // ResultMapping - Maps a ManufacturerTestCode to an AnalyteId (cerberus)
