@@ -616,13 +616,6 @@ func (m *skeletonCallbackHandlerV1Mock) HandleAnalysisRequests(request []Analysi
 	return m.handleAnalysisRequestsFunc(request)
 }
 
-func (m *skeletonCallbackHandlerV1Mock) GetManufacturerTestList(instrumentId uuid.UUID, protocolId uuid.UUID) ([]SupportedManufacturerTests, error) {
-	if m.getManufacturerTestFunc == nil {
-		return nil, errors.New("not implemented")
-	}
-	return m.getManufacturerTestFunc(instrumentId, protocolId)
-}
-
 func (m *skeletonCallbackHandlerV1Mock) GetEncodingList(protocolId uuid.UUID) ([]string, error) {
 	if m.getEncodingList == nil {
 		return nil, errors.New("not implemented")

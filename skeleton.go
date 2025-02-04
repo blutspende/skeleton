@@ -40,6 +40,7 @@ type skeleton struct {
 	resultTransferFlushTimeout int
 	imageRetrySeconds          int
 	serviceName                string
+	displayName                string
 	extraValueKeys             []string
 }
 
@@ -431,6 +432,10 @@ func (s *skeleton) FindResultEntities(ctx context.Context, InstrumentID uuid.UUI
 	return instrument, analysisRequests, analyteMapping, nil
 }
 
+func (s *skeleton) RegisterManufacturerTests(ctx context.Context, manufacturerTests []SupportedManufacturerTests) error {
+	return s.instrumentService.UpsertManufacturerTests(ctx, manufacturerTests)
+}
+
 func (s *skeleton) RegisterProtocol(ctx context.Context, id uuid.UUID, name string, description string, abilities []ProtocolAbility, settings []ProtocolSetting) error {
 	return s.instrumentService.UpsertSupportedProtocol(ctx, id, name, description, abilities, settings)
 }
@@ -487,7 +492,21 @@ func (s *skeleton) Start() error {
 func (s *skeleton) registerDriverToCerberus(ctx context.Context) error {
 	retryCount := 0
 	for {
-		err := s.cerberusClient.RegisterInstrumentDriver(s.serviceName, apiVersion, s.config.APIPort, s.config.EnableTLS, s.extraValueKeys)
+		protocols, err := s.instrumentService.GetSupportedProtocols(ctx)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to get supported protocols")
+			return err
+		}
+		protocolsTos := convertSupportedProtocolsToSupportedProtocolTOs(protocols)
+
+		manufacturerTests, err := s.instrumentService.GetManufacturerTests(ctx)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to get manufacturer tests")
+			return err
+		}
+		manufacturerTestTOs := convertSupportedManufacturerTestsToSupportedManufacturerTestTOs(manufacturerTests)
+
+		err = s.cerberusClient.RegisterInstrumentDriver(s.serviceName, s.displayName, apiVersion, s.config.APIPort, s.config.EnableTLS, s.extraValueKeys, protocolsTos, manufacturerTestTOs)
 		if err != nil {
 			log.Warn().Err(err).Int("retryCount", retryCount).Msg("register instrument driver to cerberus failed")
 			retryCount++
@@ -871,10 +890,11 @@ func (s *skeleton) processStuckImagesToCerberus(ctx context.Context) {
 	}
 }
 
-func NewSkeleton(ctx context.Context, serviceName string, requestedExtraValueKeys []string, sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api GinApi, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService service.ConsoleLogService, sortingRuleService SortingRuleService, manager Manager, cerberusClient CerberusClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
+func NewSkeleton(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys []string, sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api GinApi, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService service.ConsoleLogService, sortingRuleService SortingRuleService, manager Manager, cerberusClient CerberusClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
 	skeleton := &skeleton{
 		ctx:                        ctx,
 		serviceName:                serviceName,
+		displayName:                displayName,
 		extraValueKeys:             requestedExtraValueKeys,
 		config:                     config,
 		sqlConn:                    sqlConn,

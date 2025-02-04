@@ -23,7 +23,7 @@ var (
 
 type CerberusClient interface {
 	RegisterInstrument(instrument Instrument) error
-	RegisterInstrumentDriver(name, apiVersion string, apiPort uint16, tlsEnabled bool, extraValueKeys []string) error
+	RegisterInstrumentDriver(name, displayName, apiVersion string, apiPort uint16, tlsEnabled bool, extraValueKeys []string, protocols []supportedProtocolTO, tests []supportedManufacturerTestTO) error
 	SendAnalysisResultBatch(analysisResults []AnalysisResultTO) (AnalysisResultBatchResponse, error)
 	SendAnalysisResultImageBatch(images []WorkItemResultImageTO) error
 }
@@ -39,11 +39,14 @@ type ciaInstrumentTO struct {
 }
 
 type registerInstrumentDriverTO struct {
-	Name           string   `json:"name" binding:"required"`
-	APIVersion     string   `json:"apiVersion" binding:"required"`
-	APIPort        uint16   `json:"apiPort" binding:"required"`
-	TLSEnabled     bool     `json:"tlsEnabled" default:"false"`
-	ExtraValueKeys []string `json:"extraValueKeys,omitempty"`
+	Name              string                        `json:"name" binding:"required"`
+	DisplayName       string                        `json:"display_name"`
+	APIVersion        string                        `json:"apiVersion" binding:"required"`
+	APIPort           uint16                        `json:"apiPort" binding:"required"`
+	TLSEnabled        bool                          `json:"tlsEnabled" default:"false"`
+	ExtraValueKeys    []string                      `json:"extraValueKeys,omitempty"`
+	Protocols         []supportedProtocolTO         `json:"protocols"`
+	ManufacturerTests []supportedManufacturerTestTO `json:"manufacturerTests"`
 }
 
 type ExtraValueTO struct {
@@ -156,15 +159,18 @@ func (c *cerberusClient) RegisterInstrument(instrument Instrument) error {
 	return nil
 }
 
-func (c *cerberusClient) RegisterInstrumentDriver(name, apiVersion string, apiPort uint16, tlsEnabled bool, extraValueKeys []string) error {
+func (c *cerberusClient) RegisterInstrumentDriver(name, displayName, apiVersion string, apiPort uint16, tlsEnabled bool, extraValueKeys []string, protocols []supportedProtocolTO, tests []supportedManufacturerTestTO) error {
 	resp, err := c.client.R().
 		SetHeader("Content-Type", "application/json").
 		SetBody(registerInstrumentDriverTO{
-			Name:           name,
-			APIVersion:     apiVersion,
-			APIPort:        apiPort,
-			TLSEnabled:     tlsEnabled,
-			ExtraValueKeys: extraValueKeys,
+			Name:              name,
+			DisplayName:       displayName,
+			APIVersion:        apiVersion,
+			APIPort:           apiPort,
+			TLSEnabled:        tlsEnabled,
+			ExtraValueKeys:    extraValueKeys,
+			Protocols:         protocols,
+			ManufacturerTests: tests,
 		}).
 		Post(c.cerberusUrl + "/v1/instrument-drivers")
 

@@ -330,32 +330,6 @@ func (api *api) GetProtocolAbilities(c *gin.Context) {
 	c.JSON(http.StatusOK, convertProtocolAbilitiesToProtocolAbilitiesTOs(protocolAbilities))
 }
 
-func (api *api) GetManufacturerTests(c *gin.Context) {
-	protocolID, err := uuid.Parse(c.Param("protocolVersionId"))
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, "GetProtocolAbilities Error")
-		return
-	}
-
-	instrumentID := uuid.Nil
-	instrumentIDString, ok := c.GetQuery("instrumentId")
-	if ok {
-		instrumentID, err = uuid.Parse(instrumentIDString)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, "malformed instrument ID")
-			return
-		}
-	}
-
-	tests, err := api.instrumentService.GetManufacturerTests(c, instrumentID, protocolID)
-	if err != nil {
-		c.AbortWithStatus(http.StatusBadRequest)
-		return
-	}
-
-	c.JSON(http.StatusOK, convertSupportedManufacturerTestsToSupportedManufacturerTestTOs(tests))
-}
-
 func (api *api) GetAnalysisRequestsInfo(c *gin.Context) {
 	instrumentID, err := uuid.Parse(c.Param("instrumentId"))
 	if err != nil {

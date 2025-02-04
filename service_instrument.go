@@ -20,9 +20,10 @@ type InstrumentService interface {
 	DeleteInstrument(ctx context.Context, id uuid.UUID) error
 	GetSupportedProtocols(ctx context.Context) ([]SupportedProtocol, error)
 	GetProtocolAbilities(ctx context.Context, protocolID uuid.UUID) ([]ProtocolAbility, error)
-	GetManufacturerTests(ctx context.Context, instrumentID uuid.UUID, protocolID uuid.UUID) ([]SupportedManufacturerTests, error)
+	GetManufacturerTests(ctx context.Context) ([]SupportedManufacturerTests, error)
 	GetEncodings(ctx context.Context, protocolID uuid.UUID) ([]string, error)
 	UpsertSupportedProtocol(ctx context.Context, id uuid.UUID, name string, description string, abilities []ProtocolAbility, settings []ProtocolSetting) error
+	UpsertManufacturerTests(ctx context.Context, manufacturerTests []SupportedManufacturerTests) error
 	UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error
 	EnqueueUnsentInstrumentsToCerberus(ctx context.Context)
 	CheckAnalytesUsage(ctx context.Context, analyteIDs []uuid.UUID) (map[uuid.UUID][]Instrument, error)
@@ -825,8 +826,8 @@ func (s *instrumentService) GetProtocolAbilities(ctx context.Context, protocolID
 	return s.instrumentRepository.GetProtocolAbilities(ctx, protocolID)
 }
 
-func (s *instrumentService) GetManufacturerTests(ctx context.Context, instrumentID uuid.UUID, protocolID uuid.UUID) ([]SupportedManufacturerTests, error) {
-	tests, err := s.manager.GetCallbackHandler().GetManufacturerTestList(instrumentID, protocolID)
+func (s *instrumentService) GetManufacturerTests(ctx context.Context) ([]SupportedManufacturerTests, error) {
+	tests, err := s.instrumentRepository.GetManufacturerTests(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -906,6 +907,27 @@ func (s *instrumentService) UpsertSupportedProtocol(ctx context.Context, id uuid
 		log.Error().Err(err).Msg(msgUpsertSupportedProtocolFailed)
 		_ = tx.Rollback()
 		return ErrUpsertProtocolAbilitiesFailed
+	}
+	return nil
+}
+
+func (s *instrumentService) UpsertManufacturerTests(ctx context.Context, manufacturerTests []SupportedManufacturerTests) error {
+	tx, err := s.instrumentRepository.CreateTransaction()
+	if err != nil {
+		return err
+	}
+
+	err = s.instrumentRepository.WithTransaction(tx).UpsertManufacturerTests(ctx, manufacturerTests)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		log.Error().Err(err).Msg(msgUpsertManufacturerTestsFailed)
+		_ = tx.Rollback()
+		return ErrUpsertManufacturerTestsFailed
 	}
 	return nil
 }

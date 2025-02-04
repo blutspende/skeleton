@@ -25,10 +25,6 @@ type SkeletonCallbackHandlerV1 interface {
 	// This method should be used e.g. to update standing caches regarding analysis requests whenever a request is received.
 	HandleAnalysisRequests(request []AnalysisRequest) error
 
-	// GetManufacturerTestList is called when the Skeleton requires a list of test names (strings)
-	// as known to be valid by the manufacturer of this instrument
-	GetManufacturerTestList(instrumentId uuid.UUID, protocolId uuid.UUID) ([]SupportedManufacturerTests, error)
-
 	// GetEncodingList is called when the Skeleton requires a list of supported encodings (strings)
 	// as known to be valid by the provided protocol
 	GetEncodingList(protocolId uuid.UUID) ([]string, error)
@@ -100,6 +96,9 @@ type SkeletonAPI interface {
 	// RegisterProtocol - Registers the supported protocols of a driver class
 	RegisterProtocol(ctx context.Context, id uuid.UUID, name string, description string, abilities []ProtocolAbility, settings []ProtocolSetting) error
 
+	// RegisterManufacturerTests - Registers the supported manufacturer tests of the driver
+	RegisterManufacturerTests(ctx context.Context, manufacturerTests []SupportedManufacturerTests) error
+
 	// SetOnlineStatus - Sets the current status of an instrument. Possible values:
 	// - ONLINE - instrument is actively connected
 	// - READY - instrument is not actively connected, but ready to connect
@@ -113,7 +112,7 @@ type SkeletonAPI interface {
 	Start() error
 }
 
-func New(ctx context.Context, serviceName string, requestedExtraValueKeys []string, sqlConn *sqlx.DB, dbSchema string) (SkeletonAPI, error) {
+func New(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys []string, sqlConn *sqlx.DB, dbSchema string) (SkeletonAPI, error) {
 	config, err := config2.ReadConfiguration()
 	if err != nil {
 		return nil, err
@@ -156,5 +155,5 @@ func New(ctx context.Context, serviceName string, requestedExtraValueKeys []stri
 		},
 	})
 
-	return NewSkeleton(ctx, serviceName, requestedExtraValueKeys, sqlConn, dbSchema, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, sortingRuleService, manager, cerberusClient, deaClient, config)
+	return NewSkeleton(ctx, serviceName, displayName, requestedExtraValueKeys, sqlConn, dbSchema, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, sortingRuleService, manager, cerberusClient, deaClient, config)
 }

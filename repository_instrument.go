@@ -36,6 +36,8 @@ const (
 	msgFtpConfigExistsFailed              = "failed to check whether ftp config exists"
 	msgGetProtocolByIDFailed              = "get protocol by ID failed"
 	msgUpsertSupportedProtocolFailed      = "upsert supported protocol failed"
+	msgUpsertManufacturerTestsFailed      = "upsert manufacturer tests failed"
+	msgGetManufacturerTestsFailed         = "get manufacturer tests failed"
 	msgUpsertProtocolAbilitiesFailed      = "upsert protocol abilities failed"
 	msgUpdateInstrumentStatusFailed       = "update instrument status failed"
 	msgCreateAnalyteMappingsFailed        = "create analyte mappings failed"
@@ -85,6 +87,8 @@ var (
 	ErrFtpConfigExistsFailed              = errors.New(msgFtpConfigExistsFailed)
 	ErrGetProtocolByIDFailed              = errors.New(msgGetProtocolByIDFailed)
 	ErrUpsertSupportedProtocolFailed      = errors.New(msgUpsertSupportedProtocolFailed)
+	ErrUpsertManufacturerTestsFailed      = errors.New(msgUpsertManufacturerTestsFailed)
+	ErrGetManufacturerTestsFailed         = errors.New(msgGetManufacturerTestsFailed)
 	ErrUpsertProtocolAbilitiesFailed      = errors.New(msgUpsertProtocolAbilitiesFailed)
 	ErrUpdateInstrumentStatusFailed       = errors.New(msgUpdateInstrumentStatusFailed)
 	ErrCreateAnalyteMappingsFailed        = errors.New(msgCreateAnalyteMappingsFailed)
@@ -220,6 +224,16 @@ type supportedProtocolDAO struct {
 	Description sql.NullString
 }
 
+type supportedManufacturerTestsDAO struct {
+	ID                uuid.UUID    `db:"id"`
+	TestName          string       `db:"test_name"`
+	Channels          string       `db:"channels"`
+	ValidResultValues string       `db:"valid_result_values"`
+	CreatedAt         time.Time    `db:"created_at"`
+	ModifiedAt        sql.NullTime `db:"modified_at"`
+	DeletedAt         sql.NullTime `db:"deleted_at"`
+}
+
 type protocolAbilityDAO struct {
 	ID                      uuid.UUID    `db:"id"`
 	ProtocolID              uuid.UUID    `db:"protocol_id"`
@@ -268,6 +282,8 @@ type InstrumentRepository interface {
 	GetProtocolSettings(ctx context.Context, protocolID uuid.UUID) ([]ProtocolSetting, error)
 	UpsertProtocolSetting(ctx context.Context, protocolID uuid.UUID, protocolSetting ProtocolSetting) error
 	DeleteProtocolSettings(ctx context.Context, protocolSettingIDs []uuid.UUID) error
+	UpsertManufacturerTests(ctx context.Context, manufacturerTests []SupportedManufacturerTests) error
+	GetManufacturerTests(ctx context.Context) ([]SupportedManufacturerTests, error)
 	UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error
 	CreateAnalyteMappings(ctx context.Context, analyteMappings []AnalyteMapping, instrumentID uuid.UUID) ([]uuid.UUID, error)
 	GetAnalyteMappings(ctx context.Context, instrumentIDs []uuid.UUID) (map[uuid.UUID][]AnalyteMapping, error)
@@ -673,6 +689,47 @@ func (r *instrumentRepository) DeleteProtocolSettings(ctx context.Context, proto
 		return ErrDeleteProtocolMappingFailed
 	}
 	return nil
+}
+
+func (r *instrumentRepository) UpsertManufacturerTests(ctx context.Context, manufacturerTests []SupportedManufacturerTests) error {
+	query := fmt.Sprintf(`INSERT INTO %s.sk_manufacturer_tests(test_name, channels, valid_result_values)
+		VALUES(:test_name, :channels, :valid_result_values)
+		ON CONFLICT (test_name) WHERE deleted_at IS NULL
+		DO UPDATE SET channels = :channels, valid_result_values = :valid_result_values, modified_at = timezone('utc', now());`, r.dbSchema)
+	manufacturerTestsDAOs := convertSupportedManufacturerTestsToDAOs(manufacturerTests)
+	for _, manufacturerTest := range manufacturerTestsDAOs {
+		_, err := r.db.NamedExecContext(ctx, query, manufacturerTest)
+		if err != nil {
+			log.Error().Err(err).Msg(msgUpsertManufacturerTestsFailed)
+			return ErrUpsertManufacturerTestsFailed
+		}
+	}
+	return nil
+}
+
+func (r *instrumentRepository) GetManufacturerTests(ctx context.Context) ([]SupportedManufacturerTests, error) {
+	query := fmt.Sprintf(`SELECT * FROM %s.sk_manufacturer_tests WHERE deleted_at IS NULL;`, r.dbSchema)
+	rows, err := r.db.QueryxContext(ctx, query)
+	if err != nil {
+		log.Error().Err(err).Msg(msgGetManufacturerTestsFailed)
+		return nil, ErrGetManufacturerTestsFailed
+	}
+	defer rows.Close()
+	manufacturerTests := make([]SupportedManufacturerTests, 0)
+	for rows.Next() {
+		var dao supportedManufacturerTestsDAO
+		err = rows.StructScan(&dao)
+		if err != nil {
+			log.Error().Err(err).Msg(msgGetManufacturerTestsFailed)
+			return nil, ErrGetManufacturerTestsFailed
+		}
+		manufacturerTest := convertDAOToSupportedManufacturerTest(dao)
+		if err != nil {
+			return nil, err
+		}
+		manufacturerTests = append(manufacturerTests, manufacturerTest)
+	}
+	return manufacturerTests, nil
 }
 
 func (r *instrumentRepository) UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error {
@@ -1410,6 +1467,30 @@ func convertProtocolAbilitiesToDAOs(protocolAbilities []ProtocolAbility, protoco
 		requestMappingDAOs[i] = convertProtocolAbilityToDAO(protocolAbilities[i], protocolID)
 	}
 	return requestMappingDAOs
+}
+
+func convertSupportedManufacturerTestToDAO(manufacturerTest SupportedManufacturerTests) supportedManufacturerTestsDAO {
+	return supportedManufacturerTestsDAO{
+		TestName:          manufacturerTest.TestName,
+		Channels:          strings.Join(manufacturerTest.Channels, ","),
+		ValidResultValues: strings.Join(manufacturerTest.ValidResultValues, ","),
+	}
+}
+
+func convertSupportedManufacturerTestsToDAOs(manufacturerTests []SupportedManufacturerTests) []supportedManufacturerTestsDAO {
+	manufacturerTestsDAOs := make([]supportedManufacturerTestsDAO, len(manufacturerTests))
+	for i := range manufacturerTests {
+		manufacturerTestsDAOs[i] = convertSupportedManufacturerTestToDAO(manufacturerTests[i])
+	}
+	return manufacturerTestsDAOs
+}
+
+func convertDAOToSupportedManufacturerTest(dao supportedManufacturerTestsDAO) SupportedManufacturerTests {
+	return SupportedManufacturerTests{
+		TestName:          dao.TestName,
+		Channels:          strings.Split(dao.Channels, ","),
+		ValidResultValues: strings.Split(dao.ValidResultValues, ","),
+	}
 }
 
 func convertProtocolAbilityDAOToProtocolAbility(dao protocolAbilityDAO) ProtocolAbility {
