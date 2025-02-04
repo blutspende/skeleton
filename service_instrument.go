@@ -3,15 +3,11 @@ package skeleton
 import (
 	"context"
 	"errors"
-	"strconv"
-	"strings"
-	"time"
-
-	"github.com/blutspende/logcom-api/logcom"
-	"github.com/blutspende/skeleton/config"
 	"github.com/blutspende/skeleton/db"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
+	"strconv"
+	"strings"
 )
 
 const (
@@ -41,44 +37,34 @@ type InstrumentService interface {
 	UpdateExpectedControlResults(ctx context.Context, instrumentId uuid.UUID, expectedControlResultMapByID []ExpectedControlResult, userId uuid.UUID) error
 	DeleteExpectedControlResult(ctx context.Context, expectedControlResultId uuid.UUID, userId uuid.UUID) error
 	GetSupportedProtocols(ctx context.Context) ([]SupportedProtocol, error)
-	GetProtocolAbilities(ctx context.Context, protocolID uuid.UUID) ([]ProtocolAbility, error)
-	GetManufacturerTests(ctx context.Context, instrumentID uuid.UUID, protocolID uuid.UUID) ([]SupportedManufacturerTests, error)
-	GetEncodings(ctx context.Context, protocolID uuid.UUID) ([]string, error)
+	GetManufacturerTests(ctx context.Context) ([]SupportedManufacturerTests, error)
 	UpsertSupportedProtocol(ctx context.Context, id uuid.UUID, name string, description string, abilities []ProtocolAbility, settings []ProtocolSetting) error
+	UpsertManufacturerTests(ctx context.Context, manufacturerTests []SupportedManufacturerTests) error
 	UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error
-	EnqueueUnsentInstrumentsToCerberus(ctx context.Context)
 	CheckAnalytesUsage(ctx context.Context, analyteIDs []uuid.UUID) (map[uuid.UUID][]Instrument, error)
-	HidePassword(ctx context.Context, instrument *Instrument) error
-	ReprocessInstrumentData(ctx context.Context, batchIDs []uuid.UUID) error
-	ReprocessInstrumentDataBySampleCode(ctx context.Context, sampleCode string) error
 }
 
 type instrumentService struct {
-	config               *config.Configuration
 	sortingRuleService   SortingRuleService
 	instrumentRepository InstrumentRepository
-	manager              Manager
 	instrumentCache      InstrumentCache
 	cerberusClient       CerberusClient
+	manager              Manager
 }
 
 func NewInstrumentService(
-	config *config.Configuration,
 	sortingRuleService SortingRuleService,
 	instrumentRepository InstrumentRepository,
 	manager Manager,
 	instrumentCache InstrumentCache,
 	cerberusClient CerberusClient) InstrumentService {
 	service := &instrumentService{
-		config:               config,
 		sortingRuleService:   sortingRuleService,
 		instrumentRepository: instrumentRepository,
 		manager:              manager,
 		instrumentCache:      instrumentCache,
 		cerberusClient:       cerberusClient,
 	}
-
-	manager.RegisterInstrumentQueueListener(service, InstrumentAddedEvent, InstrumentUpdatedEvent, InstrumentAddRetryEvent)
 
 	return service
 }
@@ -121,20 +107,50 @@ func (s *instrumentService) CreateInstrument(ctx context.Context, instrument Ins
 			return uuid.Nil, err
 		}
 	}
-	requestMappingIDs, err := s.instrumentRepository.WithTransaction(transaction).CreateRequestMappings(ctx, instrument.RequestMappings, id)
+	err = s.instrumentRepository.WithTransaction(transaction).UpsertRequestMappings(ctx, instrument.RequestMappings, id)
 	if err != nil {
 		_ = transaction.Rollback()
 		return uuid.Nil, err
 	}
 	analyteIDsByRequestMappingIDs := make(map[uuid.UUID][]uuid.UUID)
-	for i, requestMappingID := range requestMappingIDs {
-		analyteIDsByRequestMappingIDs[requestMappingID] = instrument.RequestMappings[i].AnalyteIDs
+	for _, mapping := range instrument.RequestMappings {
+		analyteIDsByRequestMappingIDs[mapping.ID] = mapping.AnalyteIDs
 	}
 	err = s.instrumentRepository.WithTransaction(transaction).UpsertRequestMappingAnalytes(ctx, analyteIDsByRequestMappingIDs)
 	if err != nil {
 		_ = transaction.Rollback()
 		return uuid.Nil, err
 	}
+
+	protocolSettings, err := s.instrumentRepository.GetProtocolSettings(ctx, instrument.ProtocolID)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	for i := range instrument.Settings {
+		isSettingUpdateExcluded := false
+		for _, protocolSetting := range protocolSettings {
+			if instrument.Settings[i].ProtocolSettingID != protocolSetting.ID {
+				continue
+			}
+			if protocolSetting.Type != Password {
+				break
+			}
+
+			if instrument.Settings[i].Value == "" {
+				isSettingUpdateExcluded = true
+			}
+			break
+		}
+		if isSettingUpdateExcluded {
+			continue
+		}
+		err = s.instrumentRepository.WithTransaction(transaction).UpsertInstrumentSetting(ctx, instrument.ID, instrument.Settings[i])
+		if err != nil {
+			_ = transaction.Rollback()
+			return uuid.Nil, err
+		}
+	}
+
 	for i := range instrument.SortingRules {
 		instrument.SortingRules[i].InstrumentID = id
 		err = s.sortingRuleService.WithTransaction(transaction).Create(ctx, &instrument.SortingRules[i])
@@ -143,11 +159,20 @@ func (s *instrumentService) CreateInstrument(ctx context.Context, instrument Ins
 			return uuid.Nil, err
 		}
 	}
+
+	instrumentHash := HashInstrument(instrument)
+	err = s.cerberusClient.VerifyInstrumentHash(instrumentHash)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to verify instrument hash")
+		_ = transaction.Rollback()
+		return uuid.Nil, err
+	}
+
 	err = transaction.Commit()
 	if err != nil {
 		return uuid.Nil, err
 	}
-	s.manager.EnqueueInstrument(id, InstrumentAddedEvent)
+	s.instrumentCache.Invalidate()
 	return id, nil
 }
 
@@ -688,33 +713,36 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 			return err
 		}
 	}
-	newRequestMappings := make([]RequestMapping, 0)
+	newRequestMappingAnalytes := make(map[uuid.UUID]any)
 	for _, requestMapping := range instrument.RequestMappings {
-		if requestMapping.ID == uuid.Nil {
-			newRequestMappings = append(newRequestMappings, requestMapping)
-		} else {
-			err = s.instrumentRepository.WithTransaction(tx).UpdateRequestMapping(ctx, requestMapping)
-			if err != nil {
-				_ = tx.Rollback()
-				return err
-			}
-			err = s.instrumentRepository.WithTransaction(tx).UpsertRequestMappingAnalytes(ctx, map[uuid.UUID][]uuid.UUID{
-				requestMapping.ID: requestMapping.AnalyteIDs,
-			})
-			if err != nil {
-				_ = tx.Rollback()
-				return err
-			}
+		for _, analyteID := range requestMapping.AnalyteIDs {
+			newRequestMappingAnalytes[analyteID] = requestMapping.ID
 		}
 	}
-	requestMappingIDs, err := s.instrumentRepository.WithTransaction(tx).CreateRequestMappings(ctx, newRequestMappings, instrument.ID)
+	deletedRequestMappingAnalyteIDsByRequestMappingsIDs := make(map[uuid.UUID][]uuid.UUID)
+	for _, requestMapping := range oldInstrument.RequestMappings {
+		for _, analyteID := range requestMapping.AnalyteIDs {
+			if _, ok := newRequestMappingAnalytes[analyteID]; ok {
+				continue
+			}
+			deletedRequestMappingAnalyteIDsByRequestMappingsIDs[requestMapping.ID] = append(deletedRequestMappingAnalyteIDsByRequestMappingsIDs[requestMapping.ID], analyteID)
+		}
+	}
+	for requestMappingID, deletedRequestMappingAnalyteIDs := range deletedRequestMappingAnalyteIDsByRequestMappingsIDs {
+		err = s.instrumentRepository.WithTransaction(tx).DeleteRequestMappingAnalytes(ctx, requestMappingID, deletedRequestMappingAnalyteIDs)
+		if err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+	}
+	err = s.instrumentRepository.WithTransaction(tx).UpsertRequestMappings(ctx, instrument.RequestMappings, instrument.ID)
 	if err != nil {
 		_ = tx.Rollback()
 		return err
 	}
 	requestMappingsAnalytes := make(map[uuid.UUID][]uuid.UUID)
-	for i := range requestMappingIDs {
-		requestMappingsAnalytes[requestMappingIDs[i]] = newRequestMappings[i].AnalyteIDs
+	for i := range instrument.RequestMappings {
+		requestMappingsAnalytes[instrument.RequestMappings[i].ID] = instrument.RequestMappings[i].AnalyteIDs
 	}
 	err = s.instrumentRepository.WithTransaction(tx).UpsertRequestMappingAnalytes(ctx, requestMappingsAnalytes)
 	if err != nil {
@@ -805,17 +833,12 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 		}
 	}
 
-	newInstrument, err := s.GetInstrumentByID(ctx, tx, instrument.ID, true)
+	instrumentHash := HashInstrument(instrument)
+	err = s.cerberusClient.VerifyInstrumentHash(instrumentHash)
 	if err != nil {
+		log.Error().Err(err).Msg("Failed to verify instrument hash")
 		_ = tx.Rollback()
 		return err
-	}
-
-	err = logcom.SendAuditLogWithModification(ctx, "INSTRUMENT", oldInstrument.Name+"("+oldInstrument.ID.String()+")", oldInstrument, newInstrument)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to audit instrument update")
-		_ = tx.Rollback()
-		return ErrFailedToAudit
 	}
 
 	err = tx.Commit()
@@ -825,7 +848,6 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 	}
 
 	s.instrumentCache.Invalidate()
-	s.manager.EnqueueInstrument(instrument.ID, InstrumentUpdatedEvent)
 	return nil
 }
 
@@ -838,6 +860,14 @@ func (s *instrumentService) DeleteInstrument(ctx context.Context, id uuid.UUID) 
 	}
 	err = s.instrumentRepository.WithTransaction(tx).DeleteInstrument(ctx, id)
 	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	deletionHash := HashDeletedInstrument(id)
+	err = s.cerberusClient.VerifyInstrumentHash(deletionHash)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to verify instrument hash")
 		_ = tx.Rollback()
 		return err
 	}
@@ -1039,12 +1069,8 @@ func (s *instrumentService) GetSupportedProtocols(ctx context.Context) ([]Suppor
 	return supportedProtocols, nil
 }
 
-func (s *instrumentService) GetProtocolAbilities(ctx context.Context, protocolID uuid.UUID) ([]ProtocolAbility, error) {
-	return s.instrumentRepository.GetProtocolAbilities(ctx, protocolID)
-}
-
-func (s *instrumentService) GetManufacturerTests(ctx context.Context, instrumentID uuid.UUID, protocolID uuid.UUID) ([]SupportedManufacturerTests, error) {
-	tests, err := s.manager.GetCallbackHandler().GetManufacturerTestList(instrumentID, protocolID)
+func (s *instrumentService) GetManufacturerTests(ctx context.Context) ([]SupportedManufacturerTests, error) {
+	tests, err := s.instrumentRepository.GetManufacturerTests(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -1060,17 +1086,6 @@ func (s *instrumentService) GetManufacturerTests(ctx context.Context, instrument
 		}
 	}
 	return tests, nil
-}
-
-func (s *instrumentService) GetEncodings(ctx context.Context, protocolID uuid.UUID) ([]string, error) {
-	encodings, err := s.manager.GetCallbackHandler().GetEncodingList(protocolID)
-	if err != nil {
-		return nil, err
-	}
-	if len(encodings) < 1 {
-		return s.instrumentRepository.GetEncodings(ctx)
-	}
-	return encodings, nil
 }
 
 func (s *instrumentService) UpsertSupportedProtocol(ctx context.Context, id uuid.UUID, name string, description string, abilities []ProtocolAbility, settings []ProtocolSetting) error {
@@ -1128,8 +1143,25 @@ func (s *instrumentService) UpsertSupportedProtocol(ctx context.Context, id uuid
 	return nil
 }
 
-func (s *instrumentService) UpsertProtocolAbilities(ctx context.Context, protocolID uuid.UUID, protocolAbilities []ProtocolAbility) error {
-	return s.instrumentRepository.UpsertProtocolAbilities(ctx, protocolID, protocolAbilities)
+func (s *instrumentService) UpsertManufacturerTests(ctx context.Context, manufacturerTests []SupportedManufacturerTests) error {
+	tx, err := s.instrumentRepository.CreateTransaction()
+	if err != nil {
+		return err
+	}
+
+	err = s.instrumentRepository.WithTransaction(tx).UpsertManufacturerTests(ctx, manufacturerTests)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		log.Error().Err(err).Msg(msgUpsertManufacturerTestsFailed)
+		_ = tx.Rollback()
+		return ErrUpsertManufacturerTestsFailed
+	}
+	return nil
 }
 
 func (s *instrumentService) UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error {
@@ -1143,117 +1175,8 @@ func (s *instrumentService) UpdateInstrumentStatus(ctx context.Context, id uuid.
 	return nil
 }
 
-func (s *instrumentService) EnqueueUnsentInstrumentsToCerberus(ctx context.Context) {
-	instrumentIDs, err := s.instrumentRepository.GetUnsentToCerberus(ctx)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to collect unsent instruments")
-	}
-
-	for i := range instrumentIDs {
-		s.manager.EnqueueInstrument(instrumentIDs[i], InstrumentAddRetryEvent)
-	}
-}
-
-func (s *instrumentService) ProcessInstrumentEvent(instrumentID uuid.UUID, event instrumentEventType) {
-	if event.IsOneOf(InstrumentAddedEvent | InstrumentUpdatedEvent) {
-		log.Debug().Msg("Invalidating instrument cache")
-		s.instrumentCache.Invalidate()
-		log.Trace().Msg("Invalidated instrument cache")
-
-		log.Debug().Str("instrumentID", instrumentID.String()).Msg("Registering instrument in Cerberus")
-		if retry, err := s.registerInstrument(context.Background(), instrumentID); err != nil {
-			if retry {
-				s.retryInstrumentRegistration(context.Background(), instrumentID)
-			}
-		}
-	} else if event.IsExactly(InstrumentAddRetryEvent) {
-		log.Debug().Str("instrumentID", instrumentID.String()).Msg("Retrying to register instrument in Cerberus")
-		_, _ = s.registerInstrument(context.Background(), instrumentID)
-	}
-}
-
 func (s *instrumentService) CheckAnalytesUsage(ctx context.Context, analyteIDs []uuid.UUID) (map[uuid.UUID][]Instrument, error) {
 	return s.instrumentRepository.CheckAnalytesUsage(ctx, analyteIDs)
-}
-
-func (s *instrumentService) registerInstrument(ctx context.Context, instrumentID uuid.UUID) (bool, error) {
-	instrument, err := s.instrumentRepository.GetInstrumentByID(ctx, instrumentID)
-	if err != nil {
-		log.Error().Err(err).Str("instrumentID", instrumentID.String()).Msg("failed to get instrument!")
-		return false, err
-	}
-
-	err = s.cerberusClient.RegisterInstrument(instrument)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to send instrument to cerberus: " + instrumentID.String())
-		return true, err
-	}
-
-	err = s.instrumentRepository.MarkAsSentToCerberus(ctx, instrumentID)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to mark instrument as sent to cerberus: " + instrumentID.String())
-		return false, err
-	}
-
-	return false, nil
-}
-
-func (s *instrumentService) retryInstrumentRegistration(ctx context.Context, id uuid.UUID) {
-	log.Debug().Msg("Starting instrument registration retry task")
-	timeoutContext, cancel := context.WithTimeout(ctx, 48*time.Hour)
-	ticker := time.NewTicker(time.Duration(s.config.InstrumentTransferRetryDelayInMs) * time.Millisecond)
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				ticker.Stop()
-				return
-			case <-timeoutContext.Done():
-				ticker.Stop()
-				return
-			case <-ticker.C:
-				if retry, err := s.registerInstrument(timeoutContext, id); err != nil {
-					if retry {
-						break
-					}
-				}
-				cancel()
-			}
-		}
-	}()
-}
-
-func (s *instrumentService) HidePassword(ctx context.Context, instrument *Instrument) error {
-	protocolSettings, err := s.instrumentRepository.GetProtocolSettings(ctx, instrument.ProtocolID)
-	if err != nil {
-		return err
-	}
-	passwordProtocolSettingsMap := make(map[uuid.UUID]any)
-	for _, protocolSetting := range protocolSettings {
-		if protocolSetting.Type == Password {
-			passwordProtocolSettingsMap[protocolSetting.ID] = nil
-		}
-	}
-
-	if len(passwordProtocolSettingsMap) == 0 {
-		return nil
-	}
-
-	for i := range instrument.Settings {
-		if _, ok := passwordProtocolSettingsMap[instrument.Settings[i].ProtocolSettingID]; ok {
-			instrument.Settings[i].Value = ""
-		}
-	}
-
-	return nil
-}
-
-func (s *instrumentService) ReprocessInstrumentData(ctx context.Context, batchIDs []uuid.UUID) error {
-	return s.manager.GetCallbackHandler().ReprocessInstrumentData(batchIDs)
-}
-
-func (s *instrumentService) ReprocessInstrumentDataBySampleCode(ctx context.Context, sampleCode string) error {
-	return s.manager.GetCallbackHandler().ReprocessInstrumentDataBySampleCode(sampleCode)
 }
 
 func (s *instrumentService) getAnalyteMappingsWithResultMappings(ctx context.Context, instrumentId uuid.UUID) ([]AnalyteMapping, error) {
