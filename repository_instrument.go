@@ -27,13 +27,14 @@ const (
 	msgInstrumentNotFound                          = "instrument not found"
 	msgUpdateInstrumentFailed                      = "update instrument failed"
 	msgDeleteInstrumentFailed                      = "delete instrument failed"
-	msgMarkInstrumentSentToCerberusFailed          = "mark instrument as sent to cerberus failed"
 	msgCreateFtpConfigFailed                       = "create FTP config failed"
 	msgDeleteFtpConfigFailed                       = "delete FTP config failed"
 	msgGetFtpConfigFailed                          = "get ftp config by instrument id failed"
 	msgFtpConfigNotFound                           = "ftp config not found"
 	msgGetProtocolByIDFailed                       = "get protocol by CerberusID failed"
 	msgUpsertSupportedProtocolFailed               = "upsert supported protocol failed"
+	msgUpsertManufacturerTestsFailed               = "upsert manufacturer tests failed"
+	msgGetManufacturerTestsFailed                  = "get manufacturer tests failed"
 	msgUpsertProtocolAbilitiesFailed               = "upsert protocol abilities failed"
 	msgUpdateInstrumentStatusFailed                = "update instrument status failed"
 	msgCreateAnalyteMappingsFailed                 = "create analyte mappings failed"
@@ -81,13 +82,14 @@ var (
 	ErrInstrumentNotFound                          = errors.New(msgInstrumentNotFound)
 	ErrUpdateInstrumentFailed                      = errors.New(msgUpdateInstrumentFailed)
 	ErrDeleteInstrumentFailed                      = errors.New(msgDeleteInstrumentFailed)
-	ErrMarkInstrumentSentToCerberusFailed          = errors.New(msgMarkInstrumentSentToCerberusFailed)
 	ErrCreateFtpConfigFailed                       = errors.New(msgCreateFtpConfigFailed)
 	ErrDeleteFtpConfigFailed                       = errors.New(msgDeleteFtpConfigFailed)
 	ErrGetFtpConfigFailed                          = errors.New(msgGetFtpConfigFailed)
 	ErrFtpConfigNotFound                           = errors.New(msgFtpConfigNotFound)
 	ErrGetProtocolByIDFailed                       = errors.New(msgGetProtocolByIDFailed)
 	ErrUpsertSupportedProtocolFailed               = errors.New(msgUpsertSupportedProtocolFailed)
+	ErrUpsertManufacturerTestsFailed               = errors.New(msgUpsertManufacturerTestsFailed)
+	ErrGetManufacturerTestsFailed                  = errors.New(msgGetManufacturerTestsFailed)
 	ErrUpsertProtocolAbilitiesFailed               = errors.New(msgUpsertProtocolAbilitiesFailed)
 	ErrUpdateInstrumentStatusFailed                = errors.New(msgUpdateInstrumentStatusFailed)
 	ErrCreateAnalyteMappingsFailed                 = errors.New(msgCreateAnalyteMappingsFailed)
@@ -137,7 +139,6 @@ type instrumentDAO struct {
 	CaptureDiagnostics bool           `db:"capturediagnostics"`
 	ReplyToQuery       bool           `db:"replytoquery"`
 	Status             string         `db:"status"`
-	SentToCerberus     bool           `db:"sent_to_cerberus"`
 	Timezone           string         `db:"timezone"`
 	FileEncoding       string         `db:"file_encoding"`
 	CreatedAt          time.Time      `db:"created_at"`
@@ -245,6 +246,16 @@ type supportedProtocolDAO struct {
 	Description sql.NullString
 }
 
+type supportedManufacturerTestsDAO struct {
+	ID                uuid.UUID    `db:"id"`
+	TestName          string       `db:"test_name"`
+	Channels          string       `db:"channels"`
+	ValidResultValues string       `db:"valid_result_values"`
+	CreatedAt         time.Time    `db:"created_at"`
+	ModifiedAt        sql.NullTime `db:"modified_at"`
+	DeletedAt         sql.NullTime `db:"deleted_at"`
+}
+
 type protocolAbilityDAO struct {
 	ID                      uuid.UUID    `db:"id"`
 	ProtocolID              uuid.UUID    `db:"protocol_id"`
@@ -283,8 +294,6 @@ type InstrumentRepository interface {
 	CreateFtpConfig(ctx context.Context, ftpConfig FTPConfig) error
 	GetFtpConfigByInstrumentId(ctx context.Context, instrumentId uuid.UUID) (FTPConfig, error)
 	DeleteFtpConfig(ctx context.Context, instrumentId uuid.UUID) error
-	MarkAsSentToCerberus(ctx context.Context, id uuid.UUID) error
-	GetUnsentToCerberus(ctx context.Context) ([]uuid.UUID, error)
 	GetProtocolByID(ctx context.Context, id uuid.UUID) (SupportedProtocol, error)
 	GetSupportedProtocols(ctx context.Context) ([]SupportedProtocol, error)
 	UpsertSupportedProtocol(ctx context.Context, id uuid.UUID, name string, description string) error
@@ -293,6 +302,8 @@ type InstrumentRepository interface {
 	GetProtocolSettings(ctx context.Context, protocolID uuid.UUID) ([]ProtocolSetting, error)
 	UpsertProtocolSetting(ctx context.Context, protocolID uuid.UUID, protocolSetting ProtocolSetting) error
 	DeleteProtocolSettings(ctx context.Context, protocolSettingIDs []uuid.UUID) error
+	UpsertManufacturerTests(ctx context.Context, manufacturerTests []SupportedManufacturerTests) error
+	GetManufacturerTests(ctx context.Context) ([]SupportedManufacturerTests, error)
 	UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error
 	CreateAnalyteMappings(ctx context.Context, analyteMappings []AnalyteMapping, instrumentID uuid.UUID) ([]uuid.UUID, error)
 	GetAnalyteMappings(ctx context.Context, instrumentIDs []uuid.UUID) (map[uuid.UUID][]AnalyteMapping, error)
@@ -314,9 +325,8 @@ type InstrumentRepository interface {
 	UpdateExpectedControlResults(ctx context.Context, expectedControlResults []ExpectedControlResult) error
 	DeleteExpectedControlResults(ctx context.Context, ids []uuid.UUID, deletedByUserId uuid.UUID) error
 	DeleteExpectedControlResultsByAnalyteMappingIDs(ctx context.Context, ids []uuid.UUID, deletedByUserId uuid.UUID) error
-	CreateRequestMappings(ctx context.Context, requestMappings []RequestMapping, instrumentID uuid.UUID) ([]uuid.UUID, error)
 	UpsertRequestMappingAnalytes(ctx context.Context, analyteIDsByRequestMappingID map[uuid.UUID][]uuid.UUID) error
-	UpdateRequestMapping(ctx context.Context, requestMapping RequestMapping) error
+	UpsertRequestMappings(ctx context.Context, requestMappings []RequestMapping, instrumentID uuid.UUID) error
 	GetRequestMappings(ctx context.Context, instrumentIDs []uuid.UUID) (map[uuid.UUID][]RequestMapping, error)
 	GetRequestMappingAnalytes(ctx context.Context, requestMappingIDs []uuid.UUID) (map[uuid.UUID][]uuid.UUID, error)
 	DeleteRequestMappings(ctx context.Context, requestMappingIDs []uuid.UUID) error
@@ -331,9 +341,8 @@ type InstrumentRepository interface {
 }
 
 func (r *instrumentRepository) CreateInstrument(ctx context.Context, instrument Instrument) (uuid.UUID, error) {
-	query := fmt.Sprintf(`INSERT INTO %s.sk_instruments(id, protocol_id, "type", "name", hostname, client_port, enabled, connection_mode, running_mode, captureresults, capturediagnostics, replytoquery, status, sent_to_cerberus, timezone, file_encoding)
-		VALUES(:id, :protocol_id, :type, :name, :hostname, :client_port, :enabled, :connection_mode, :running_mode, :captureresults, :capturediagnostics, :replytoquery, :status, :sent_to_cerberus, :timezone, :file_encoding);`, r.dbSchema)
-	instrument.ID = uuid.New()
+	query := fmt.Sprintf(`INSERT INTO %s.sk_instruments(id, protocol_id, "type", "name", hostname, client_port, enabled, connection_mode, running_mode, captureresults, capturediagnostics, replytoquery, status, timezone, file_encoding)
+		VALUES(:id, :protocol_id, :type, :name, :hostname, :client_port, :enabled, :connection_mode, :running_mode, :captureresults, :capturediagnostics, :replytoquery, :status, :timezone, :file_encoding);`, r.dbSchema)
 
 	dao, err := convertInstrumentToDAO(instrument)
 	if err != nil {
@@ -443,7 +452,7 @@ func (r *instrumentRepository) UpdateInstrument(ctx context.Context, instrument 
 	query := fmt.Sprintf(`UPDATE %s.sk_instruments SET protocol_id = :protocol_id, "name" = :name, hostname = :hostname, 
 		 	client_port = :client_port, enabled = :enabled, connection_mode = :connection_mode, running_mode = :running_mode, 
 		 	captureresults = :captureresults, capturediagnostics = :capturediagnostics, replytoquery = :replytoquery, status = :status,
-		 	sent_to_cerberus = :sent_to_cerberus, timezone = :timezone, file_encoding = :file_encoding, modified_at = timezone('utc',now()) 
+            timezone = :timezone, file_encoding = :file_encoding, modified_at = timezone('utc',now()) 
 		 WHERE id = :id`, r.dbSchema)
 	dao, err := convertInstrumentToDAO(instrument)
 	if err != nil {
@@ -510,39 +519,6 @@ func (r *instrumentRepository) DeleteFtpConfig(ctx context.Context, instrumentId
 		return ErrDeleteFtpConfigFailed
 	}
 	return nil
-}
-
-func (r *instrumentRepository) MarkAsSentToCerberus(ctx context.Context, id uuid.UUID) error {
-	query := fmt.Sprintf(`UPDATE %s.sk_instruments SET sent_to_cerberus = TRUE WHERE id = $1;`, r.dbSchema)
-	_, err := r.db.ExecContext(ctx, query, id)
-	if err != nil {
-		log.Error().Err(err).Msg(msgMarkInstrumentSentToCerberusFailed)
-		return ErrMarkInstrumentSentToCerberusFailed
-	}
-	return nil
-}
-
-func (r *instrumentRepository) GetUnsentToCerberus(ctx context.Context) ([]uuid.UUID, error) {
-	query := fmt.Sprintf(`SELECT id FROM %s.sk_instruments WHERE sent_to_cerberus = FALSE AND deleted_at IS NULL;`, r.dbSchema)
-	rows, err := r.db.QueryxContext(ctx, query)
-	if err != nil {
-		log.Error().Err(err).Msg(msgGetUnsentInstrumentIdsFailed)
-		return []uuid.UUID{}, ErrGetUnsentInstrumentIdsFailed
-	}
-	defer rows.Close()
-
-	instrumentIDs := make([]uuid.UUID, 0)
-	for rows.Next() {
-		instrumentID := uuid.UUID{}
-		err = rows.Scan(&instrumentID)
-		if err != nil {
-			log.Error().Err(err).Msg(msgGetUnsentInstrumentIdsFailed)
-			return nil, ErrGetUnsentInstrumentIdsFailed
-		}
-		instrumentIDs = append(instrumentIDs, instrumentID)
-	}
-
-	return instrumentIDs, nil
 }
 
 func (r *instrumentRepository) GetProtocolByID(ctx context.Context, id uuid.UUID) (SupportedProtocol, error) {
@@ -626,16 +602,14 @@ func (r *instrumentRepository) UpsertProtocolAbilities(ctx context.Context, prot
 	query := fmt.Sprintf(`INSERT INTO %s.sk_protocol_abilities(protocol_id, connection_mode, abilities, request_mapping_available)
 		VALUES(:protocol_id, :connection_mode, :abilities, :request_mapping_available)
 		ON CONFLICT (protocol_id, connection_mode) WHERE deleted_at IS NULL
-		DO UPDATE SET abilities = :abilities, request_mapping_available = :request_mapping_available, modified_at = timezone('utc', now());`, r.dbSchema)
+		DO UPDATE SET abilities = excluded.abilities, request_mapping_available = excluded.request_mapping_available, modified_at = timezone('utc', now());`, r.dbSchema)
 	protocolAbilityDAOs := convertProtocolAbilitiesToDAOs(protocolAbilities, protocolID)
-	// Todo - check and improve it cuz gives error with batch insert. Old and fixed(?): https://github.com/jmoiron/sqlx/issues/505
-	for _, protocolAbility := range protocolAbilityDAOs {
-		_, err := r.db.NamedExecContext(ctx, query, protocolAbility)
-		if err != nil {
-			log.Error().Err(err).Msg(msgUpsertProtocolAbilitiesFailed)
-			return ErrUpsertProtocolAbilitiesFailed
-		}
+	_, err := r.db.NamedExecContext(ctx, query, protocolAbilityDAOs)
+	if err != nil {
+		log.Error().Err(err).Msg(msgUpsertProtocolAbilitiesFailed)
+		return ErrUpsertProtocolAbilitiesFailed
 	}
+
 	return nil
 }
 
@@ -706,6 +680,45 @@ func (r *instrumentRepository) DeleteProtocolSettings(ctx context.Context, proto
 		return ErrDeleteProtocolMappingFailed
 	}
 	return nil
+}
+
+func (r *instrumentRepository) UpsertManufacturerTests(ctx context.Context, manufacturerTests []SupportedManufacturerTests) error {
+	query := fmt.Sprintf(`INSERT INTO %s.sk_manufacturer_tests(test_name, channels, valid_result_values)
+		VALUES(:test_name, :channels, :valid_result_values)
+		ON CONFLICT (test_name) WHERE deleted_at IS NULL
+		DO UPDATE SET channels = excluded.channels, valid_result_values = excluded.valid_result_values, modified_at = timezone('utc', now());`, r.dbSchema)
+	manufacturerTestsDAOs := convertSupportedManufacturerTestsToDAOs(manufacturerTests)
+	_, err := r.db.NamedExecContext(ctx, query, manufacturerTestsDAOs)
+	if err != nil {
+		log.Error().Err(err).Msg(msgUpsertManufacturerTestsFailed)
+		return ErrUpsertManufacturerTestsFailed
+	}
+	return nil
+}
+
+func (r *instrumentRepository) GetManufacturerTests(ctx context.Context) ([]SupportedManufacturerTests, error) {
+	query := fmt.Sprintf(`SELECT * FROM %s.sk_manufacturer_tests WHERE deleted_at IS NULL;`, r.dbSchema)
+	rows, err := r.db.QueryxContext(ctx, query)
+	if err != nil {
+		log.Error().Err(err).Msg(msgGetManufacturerTestsFailed)
+		return nil, ErrGetManufacturerTestsFailed
+	}
+	defer rows.Close()
+	manufacturerTests := make([]SupportedManufacturerTests, 0)
+	for rows.Next() {
+		var dao supportedManufacturerTestsDAO
+		err = rows.StructScan(&dao)
+		if err != nil {
+			log.Error().Err(err).Msg(msgGetManufacturerTestsFailed)
+			return nil, ErrGetManufacturerTestsFailed
+		}
+		manufacturerTest := convertDAOToSupportedManufacturerTest(dao)
+		if err != nil {
+			return nil, err
+		}
+		manufacturerTests = append(manufacturerTests, manufacturerTest)
+	}
+	return manufacturerTests, nil
 }
 
 func (r *instrumentRepository) UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error {
@@ -1150,25 +1163,6 @@ func (r *instrumentRepository) GetExpectedControlResultsByAnalyteMappingIds(ctx 
 	return expectedControlResultMappingsByAnalyteMappingID, nil
 }
 
-func (r *instrumentRepository) CreateRequestMappings(ctx context.Context, requestMappings []RequestMapping, instrumentID uuid.UUID) ([]uuid.UUID, error) {
-	ids := make([]uuid.UUID, len(requestMappings))
-	if len(requestMappings) == 0 {
-		return ids, nil
-	}
-	for i := range requestMappings {
-		requestMappings[i].ID = uuid.New()
-		ids[i] = requestMappings[i].ID
-	}
-	query := fmt.Sprintf(`INSERT INTO %s.sk_request_mappings(id, code, instrument_id, is_default) 
-		VALUES(:id, :code, :instrument_id, :is_default);`, r.dbSchema)
-	_, err := r.db.NamedExecContext(ctx, query, convertRequestMappingsToDAOs(requestMappings, instrumentID))
-	if err != nil {
-		log.Error().Err(err).Msg(msgCreateAnalyteMappingsFailed)
-		return ids, ErrCreateAnalyteMappingsFailed
-	}
-	return ids, nil
-}
-
 func (r *instrumentRepository) UpsertRequestMappingAnalytes(ctx context.Context, analyteIDsByRequestMappingID map[uuid.UUID][]uuid.UUID) error {
 	requestMappingAnalyteDAOs := make([]requestMappingAnalyteDAO, 0)
 	for requestMappingID, analyteIDs := range analyteIDsByRequestMappingID {
@@ -1196,10 +1190,18 @@ func (r *instrumentRepository) UpsertRequestMappingAnalytes(ctx context.Context,
 	return nil
 }
 
-func (r *instrumentRepository) UpdateRequestMapping(ctx context.Context, requestMapping RequestMapping) error {
-	query := fmt.Sprintf(`UPDATE %s.sk_request_mappings SET code = :code, is_default = :is_default, modified_at = timezone('utc', now()) WHERE id = :id;`, r.dbSchema)
-	dao := convertRequestMappingToDAO(requestMapping, uuid.Nil)
-	_, err := r.db.NamedExecContext(ctx, query, dao)
+func (r *instrumentRepository) UpsertRequestMappings(ctx context.Context, requestMappings []RequestMapping, instrumentID uuid.UUID) error {
+	if len(requestMappings) == 0 {
+		return nil
+	}
+	daos := make([]requestMappingDAO, len(requestMappings))
+	query := fmt.Sprintf(`INSERT INTO %s.sk_request_mappings (id, code, instrument_id, is_default)
+								VALUES (:id, :code, :instrument_id, :is_default)
+								ON CONFLICT (id) DO UPDATE SET code = excluded.code, is_default = excluded.is_default, modified_at = timezone('utc', now());`, r.dbSchema)
+	for i := range requestMappings {
+		daos[i] = convertRequestMappingToDAO(requestMappings[i], instrumentID)
+	}
+	_, err := r.db.NamedExecContext(ctx, query, daos)
 	if err != nil {
 		log.Error().Err(err).Msg(msgUpdateRequestMappingFailed)
 		return ErrUpdateRequestMappingFailed
@@ -1234,7 +1236,7 @@ func (r *instrumentRepository) GetRequestMappings(ctx context.Context, instrumen
 }
 
 func (r *instrumentRepository) GetRequestMappingAnalytes(ctx context.Context, requestMappingIDs []uuid.UUID) (map[uuid.UUID][]uuid.UUID, error) {
-	query := fmt.Sprintf(`SELECT request_mapping_id, analyte_id FROM %s.sk_request_mapping_analytes WHERE request_mapping_id IN (?);`, r.dbSchema)
+	query := fmt.Sprintf(`SELECT request_mapping_id, analyte_id FROM %s.sk_request_mapping_analytes WHERE request_mapping_id IN (?) AND deleted_at IS NULL;`, r.dbSchema)
 	query, args, _ := sqlx.In(query, requestMappingIDs)
 	query = r.db.Rebind(query)
 	rows, err := r.db.QueryxContext(ctx, query, args...)
@@ -1722,6 +1724,30 @@ func convertProtocolAbilitiesToDAOs(protocolAbilities []ProtocolAbility, protoco
 		requestMappingDAOs[i] = convertProtocolAbilityToDAO(protocolAbilities[i], protocolID)
 	}
 	return requestMappingDAOs
+}
+
+func convertSupportedManufacturerTestToDAO(manufacturerTest SupportedManufacturerTests) supportedManufacturerTestsDAO {
+	return supportedManufacturerTestsDAO{
+		TestName:          manufacturerTest.TestName,
+		Channels:          strings.Join(manufacturerTest.Channels, ","),
+		ValidResultValues: strings.Join(manufacturerTest.ValidResultValues, ","),
+	}
+}
+
+func convertSupportedManufacturerTestsToDAOs(manufacturerTests []SupportedManufacturerTests) []supportedManufacturerTestsDAO {
+	manufacturerTestsDAOs := make([]supportedManufacturerTestsDAO, len(manufacturerTests))
+	for i := range manufacturerTests {
+		manufacturerTestsDAOs[i] = convertSupportedManufacturerTestToDAO(manufacturerTests[i])
+	}
+	return manufacturerTestsDAOs
+}
+
+func convertDAOToSupportedManufacturerTest(dao supportedManufacturerTestsDAO) SupportedManufacturerTests {
+	return SupportedManufacturerTests{
+		TestName:          dao.TestName,
+		Channels:          strings.Split(dao.Channels, ","),
+		ValidResultValues: strings.Split(dao.ValidResultValues, ","),
+	}
 }
 
 func convertProtocolAbilityDAOToProtocolAbility(dao protocolAbilityDAO) ProtocolAbility {
