@@ -52,6 +52,10 @@ type Configuration struct {
 	InstrumentDriverRegistrationMaxRetry       int           `envconfig:"INSTRUMENT_DRIVER_REGISTRATION_MAX_RETRY" default:"20"`
 	CleanupDays                                int           `envconfig:"CLEANUP_DAYS" default:"90"`
 	CleanupJobRunIntervalHours                 int           `envconfig:"CLEANUP_JOB_RUN_INTERVAL_HOURS" default:"4"`
+	UnprocessedAnalysisRequestErrorRetryMinute int           `envconfig:"UNPROCESSED_ANALYSIS_REQUEST_ERROR_RETRY" default:"5"`
+	UnprocessedAnalysisResultErrorRetryMinute  int           `envconfig:"UNPROCESSED_ANALYSIS_RESULT_ERROR_RETRY" default:"5"`
+	GetUnprocessedAnalysisRequestRetryMinute   int           `envconfig:"GET_UNPROCESSED_ANALYSIS_REQUEST_RETRY" default:"5"`
+	GetUnprocessedAnalysisResultIDsRetryMinute int           `envconfig:"GET_UNPROCESSED_ANALYSIS_RESULT_IDS_RETRY" default:"5"`
 
 	ClientCredentialAuthHeaderValue string
 }

@@ -36,6 +36,7 @@ type InstrumentService interface {
 	UpdateInstrument(ctx context.Context, instrument Instrument, userId uuid.UUID) error
 	DeleteInstrument(ctx context.Context, id uuid.UUID) error
 	GetExpectedControlResultsByInstrumentId(ctx context.Context, instrumentId uuid.UUID) ([]ExpectedControlResult, error)
+	GetNotSpecifiedExpectedControlResultsByInstrumentId(ctx context.Context, instrumentId uuid.UUID) ([]NotSpecifiedExpectedControlResult, error)
 	CreateExpectedControlResults(ctx context.Context, instrumentId uuid.UUID, expectedControlResults []ExpectedControlResult, userId uuid.UUID) error
 	UpdateExpectedControlResults(ctx context.Context, instrumentId uuid.UUID, expectedControlResultMapByID []ExpectedControlResult, userId uuid.UUID) error
 	DeleteExpectedControlResult(ctx context.Context, expectedControlResultId uuid.UUID, userId uuid.UUID) error
@@ -860,6 +861,15 @@ func (s *instrumentService) GetExpectedControlResultsByInstrumentId(ctx context.
 	return expectedControlResults, nil
 }
 
+func (s *instrumentService) GetNotSpecifiedExpectedControlResultsByInstrumentId(ctx context.Context, instrumentId uuid.UUID) ([]NotSpecifiedExpectedControlResult, error) {
+	notSpecifiedExpectedControlResults, err := s.instrumentRepository.GetNotSpecifiedExpectedControlResultsByInstrumentId(ctx, instrumentId)
+	if err != nil {
+		return nil, err
+	}
+
+	return notSpecifiedExpectedControlResults, nil
+}
+
 func (s *instrumentService) CreateExpectedControlResults(ctx context.Context, instrumentId uuid.UUID, expectedControlResults []ExpectedControlResult, userId uuid.UUID) error {
 	analyteMappings, err := s.getAnalyteMappingsWithResultMappings(ctx, instrumentId)
 	if err != nil {
@@ -874,8 +884,11 @@ func (s *instrumentService) CreateExpectedControlResults(ctx context.Context, in
 		return err
 	}
 
+	analyteMappingIds := make([]uuid.UUID, 0)
+
 	for i := range expectedControlResults {
 		expectedControlResults[i].CreatedBy = userId
+		analyteMappingIds = append(analyteMappingIds, expectedControlResults[i].AnalyteMappingId)
 	}
 
 	_, err = s.instrumentRepository.WithTransaction(tx).CreateExpectedControlResults(ctx, expectedControlResults)
@@ -889,6 +902,8 @@ func (s *instrumentService) CreateExpectedControlResults(ctx context.Context, in
 		_ = tx.Rollback()
 		return db.ErrCommitTransactionFailed
 	}
+
+	s.manager.SendAnalyteMappingsToValidateControlResults(analyteMappingIds)
 
 	return nil
 }
@@ -1283,40 +1298,23 @@ func validateExpectedControlResults(analyteMappings []AnalyteMapping, expectedCo
 		}
 
 		if analyteMapping == nil {
-			parameterizedErrors = append(parameterizedErrors, ParameterizedError{
-				error: ErrValidationAnalyteMappingNotFound,
-			})
+			parameterizedErrors = append(parameterizedErrors, NewParameterizedError(ErrValidationAnalyteMappingNotFound, nil))
 			continue
 		}
 
 		err := validateExpectedValueBasedOnAnalyteMappingResultType(*analyteMapping, expectedControlResult.ExpectedValue)
 		if err != nil {
-			parameterizedErrors = append(parameterizedErrors, ParameterizedError{
-				error: err,
-				Params: map[string]string{
-					"analyte": analyteMapping.InstrumentAnalyte,
-				},
-			})
+			parameterizedErrors = append(parameterizedErrors, NewParameterizedError(err, map[string]string{"analyte": analyteMapping.InstrumentAnalyte}))
 		}
 
 		if expectedControlResult.Operator == InOpenInterval || expectedControlResult.Operator == InClosedInterval {
 			if expectedControlResult.ExpectedValue2 != nil {
 				err = validateExpectedValueBasedOnAnalyteMappingResultType(*analyteMapping, *expectedControlResult.ExpectedValue2)
 				if err != nil {
-					parameterizedErrors = append(parameterizedErrors, ParameterizedError{
-						error: err,
-						Params: map[string]string{
-							"analyte": analyteMapping.InstrumentAnalyte,
-						},
-					})
+					parameterizedErrors = append(parameterizedErrors, NewParameterizedError(err, map[string]string{"analyte": analyteMapping.InstrumentAnalyte}))
 				}
 			} else {
-				parameterizedErrors = append(parameterizedErrors, ParameterizedError{
-					error: ErrValidationIntervalEndingValueEmpty,
-					Params: map[string]string{
-						"analyte": analyteMapping.InstrumentAnalyte,
-					},
-				})
+				parameterizedErrors = append(parameterizedErrors, NewParameterizedError(ErrValidationIntervalEndingValueEmpty, map[string]string{"analyte": analyteMapping.InstrumentAnalyte}))
 			}
 		}
 	}
@@ -1340,28 +1338,8 @@ func validateExpectedValueBasedOnAnalyteMappingResultType(analyteMapping Analyte
 		if err == nil {
 			isValid = true
 		}
-	case DataType_Decimal:
+	case DataType_Decimal, DataType_BoundedDecimal:
 		_, err = strconv.ParseFloat(value, 64)
-		if err == nil {
-			isValid = true
-		}
-	case DataType_BoundedDecimal:
-		sanitizedResult := value
-		if strings.Contains(value, ">-") {
-			sanitizedResult = strings.Trim(value, ">-")
-		} else if strings.Contains(value, ">+") {
-			sanitizedResult = strings.Trim(value, ">+")
-		} else if strings.Contains(value, "<-") {
-			sanitizedResult = strings.Trim(value, "<-")
-		} else if strings.Contains(value, "<+") {
-			sanitizedResult = strings.Trim(value, "<+")
-		} else if strings.Contains(value, "<") {
-			sanitizedResult = strings.Trim(value, "<")
-		} else if strings.Contains(value, ">") {
-			sanitizedResult = strings.Trim(value, ">")
-		}
-		sanitizedResult = strings.Trim(sanitizedResult, " ")
-		_, err = strconv.ParseFloat(sanitizedResult, 64)
 		if err == nil {
 			isValid = true
 		}

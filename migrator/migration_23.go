@@ -39,7 +39,8 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_control_results(
     result VARCHAR NOT NULL,
 	examined_at TIMESTAMP NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT TIMEZONE('UTC', NOW()),
-    CONSTRAINT sk_pk_analysis_result_control_results PRIMARY KEY (id)
+    CONSTRAINT sk_pk_control_results PRIMARY KEY (id),
+    CONSTRAINT sk_fk_control_results_analyte_mapping FOREIGN KEY (analyte_mapping_id) REFERENCES <SCHEMA_PLACEHOLDER>.sk_analyte_mappings(id)
 );
 
 CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_analysis_result_reagent_relations(
@@ -67,11 +68,6 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_analysis_result_control_result_relations(
     CONSTRAINT sk_fk_analysis_result_control_result_relations_analysis_result FOREIGN KEY (analysis_result_id) REFERENCES <SCHEMA_PLACEHOLDER>.sk_analysis_results(id),
     CONSTRAINT sk_fk_analysis_result_control_result_relations_control_result FOREIGN KEY (control_result_id) REFERENCES <SCHEMA_PLACEHOLDER>.sk_control_results(id)
 );
-
-CREATE TYPE <SCHEMA_PLACEHOLDER>.CERBERUS_QUEUE_ITEM_TYPE AS ENUM ('ANALYSIS_RESULT', 'CONTROL_RESULT');
-ALTER TABLE <SCHEMA_PLACEHOLDER>.sk_cerberus_queue_items
-    ADD COLUMN type <SCHEMA_PLACEHOLDER>.CERBERUS_QUEUE_ITEM_TYPE NOT NULL DEFAULT 'ANALYSIS_RESULT';
-CREATE INDEX sk_idx_cerberus_queue_items_type ON <SCHEMA_PLACEHOLDER>.sk_cerberus_queue_items(type);
 
 CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_control_result_channel_results(
     id UUID NOT NULL DEFAULT UUID_GENERATE_V4(),

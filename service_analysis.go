@@ -26,7 +26,9 @@ type AnalysisService interface {
 	GetAnalysisBatches(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisBatch, int, error)
 	CreateAnalysisResultsBatch(ctx context.Context, analysisResults AnalysisResultSet) ([]AnalysisResult, error)
 	CreateControlResultBatch(ctx context.Context, controlResults []StandaloneControlResult) ([]StandaloneControlResult, []uuid.UUID, error)
-	GetAnalysisResultsByIDsWithRecalculatedStatus(ctx context.Context, analysisResultIDs []uuid.UUID) ([]AnalysisResult, error)
+	GetAnalysisResultsByIDsWithRecalculatedStatus(ctx context.Context, analysisResultIDs []uuid.UUID, reValidateControlResult bool) ([]AnalysisResult, error)
+	ValidateAndUpdatingExistingControlResults(ctx context.Context, analyteMappingIds []uuid.UUID) error
+	AnalysisResultStatusRecalculationAndSendForProcessingIfFinal(ctx context.Context, controlResultIds []uuid.UUID) error
 	QueueAnalysisResults(ctx context.Context, results []AnalysisResult) error
 	RetransmitResult(ctx context.Context, resultID uuid.UUID) error
 	RetransmitResultBatches(ctx context.Context, batchIDs []uuid.UUID) error
@@ -139,13 +141,13 @@ func (as *analysisService) RevokeAnalysisRequests(ctx context.Context, workItemI
 
 	analysisRequests, err := as.analysisRepository.GetAnalysisRequestsByWorkItemIDs(ctx, workItemIDs)
 	if err != nil {
-		return ErrFailedToRevokeAnalysisRequests
+		return ErrRevokeAnalysisRequestsFailed
 	}
 
 	as.manager.GetCallbackHandler().RevokeAnalysisRequests(analysisRequests)
 	err = as.analysisRepository.DeleteAnalysisRequestExtraValues(ctx, workItemIDs)
 	if err != nil {
-		return ErrFailedToRevokeAnalysisRequests
+		return ErrRevokeAnalysisRequestsFailed
 	}
 	return as.analysisRepository.RevokeAnalysisRequests(ctx, workItemIDs)
 }
@@ -236,7 +238,7 @@ func (as *analysisService) createAnalysisResultsBatch(ctx context.Context, tx db
 		if analysisResultSet.Results[i].ResultMode == "" {
 			analysisResultSet.Results[i].ResultMode = analysisResultSet.Results[i].Instrument.ResultMode
 		}
-		analysisResultSet.Results[i], err = setAnalysisResultStatusBasedOnControlResults(analysisResultSet.Results[i], analysisResultSet.ControlResults)
+		analysisResultSet.Results[i], err = setAnalysisResultStatusBasedOnControlResults(analysisResultSet.Results[i], analysisResultSet.ControlResults, true)
 		if err != nil {
 			return analysisResultSet, err
 		}
@@ -408,51 +410,78 @@ func (as *analysisService) createAnalysisResultsBatch(ctx context.Context, tx db
 	return analysisResultSet, nil
 }
 
-func setAnalysisResultStatusBasedOnControlResults(analysisResult AnalysisResult, commonControlResults []ControlResult) (AnalysisResult, error) {
+func setAnalysisResultStatusBasedOnControlResults(analysisResult AnalysisResult, commonControlResults []ControlResult, reValidateControlResult bool) (AnalysisResult, error) {
 	analysisResult.Status = Preliminary
 	if analysisResult.AnalyteMapping.ControlResultRequired {
 		controlSampleCodeMap := make(map[string]bool)
+		expectedControlSampleCodeMap := make(map[string]bool)
 		for j := range analysisResult.AnalyteMapping.ExpectedControlResults {
-			controlSampleCodeMap[analysisResult.AnalyteMapping.ExpectedControlResults[j].SampleCode] = false
+			expectedControlSampleCodeMap[analysisResult.AnalyteMapping.ExpectedControlResults[j].SampleCode] = false
 		}
 
 		for j := range analysisResult.Reagents {
 			for k := range analysisResult.Reagents[j].ControlResults {
-				controlResult, err := setControlResultIsValidAndExpectedControlResultId(analysisResult.Reagents[j].ControlResults[k])
-				if err != nil {
-					return analysisResult, err
+				var controlResult ControlResult
+				if reValidateControlResult {
+					var err error
+					controlResult, err = setControlResultIsValidAndExpectedControlResultId(analysisResult.Reagents[j].ControlResults[k])
+					if err != nil {
+						return analysisResult, err
+					}
+					analysisResult.Reagents[j].ControlResults[k] = controlResult
+				} else {
+					controlResult = analysisResult.Reagents[j].ControlResults[k]
 				}
-				analysisResult.Reagents[j].ControlResults[k] = controlResult
-				if _, ok := controlSampleCodeMap[controlResult.SampleCode]; ok {
-					controlSampleCodeMap[controlResult.SampleCode] = true
+
+				if _, ok := controlSampleCodeMap[controlResult.SampleCode]; !ok {
+					controlSampleCodeMap[controlResult.SampleCode] = false
 				}
 			}
 		}
 
 		for j := range analysisResult.ControlResults {
-			controlResult, err := setControlResultIsValidAndExpectedControlResultId(analysisResult.ControlResults[j])
-			if err != nil {
-				return analysisResult, err
+			var controlResult ControlResult
+			if reValidateControlResult {
+				var err error
+				controlResult, err = setControlResultIsValidAndExpectedControlResultId(analysisResult.ControlResults[j])
+				if err != nil {
+					return analysisResult, err
+				}
+				analysisResult.ControlResults[j] = controlResult
+			} else {
+				controlResult = analysisResult.ControlResults[j]
 			}
-			analysisResult.ControlResults[j] = controlResult
-			if _, ok := controlSampleCodeMap[controlResult.SampleCode]; ok {
-				controlSampleCodeMap[controlResult.SampleCode] = true
+
+			if _, ok := controlSampleCodeMap[controlResult.SampleCode]; !ok {
+				controlSampleCodeMap[controlResult.SampleCode] = false
 			}
 		}
 
 		for j := range commonControlResults {
-			if _, ok := controlSampleCodeMap[commonControlResults[j].SampleCode]; ok {
-				controlSampleCodeMap[commonControlResults[j].SampleCode] = true
+			if _, ok := controlSampleCodeMap[commonControlResults[j].SampleCode]; !ok {
+				controlSampleCodeMap[commonControlResults[j].SampleCode] = false
 			}
 		}
 
 		var allExpectedControlHasControlResults = true
-		for _, boolValue := range controlSampleCodeMap {
-			if !boolValue {
+
+		if len(expectedControlSampleCodeMap) != len(controlSampleCodeMap) {
+			return analysisResult, nil
+		}
+		for controlSampleCode := range controlSampleCodeMap {
+			for expectedControlSampleCode := range expectedControlSampleCodeMap {
+				if controlSampleCode == expectedControlSampleCode {
+					controlSampleCodeMap[controlSampleCode] = true
+					expectedControlSampleCodeMap[expectedControlSampleCode] = true
+					break
+				}
+			}
+			if !controlSampleCodeMap[controlSampleCode] {
 				allExpectedControlHasControlResults = false
 				break
 			}
 		}
+
 		if allExpectedControlHasControlResults {
 			analysisResult.Status = Final
 		}
@@ -592,7 +621,10 @@ func (as *analysisService) createControlResultBatch(ctx context.Context, tx db.D
 	return standaloneControlResults, analysisResultIDs, nil
 }
 
-func (as *analysisService) GetAnalysisResultsByIDsWithRecalculatedStatus(ctx context.Context, analysisResultIDs []uuid.UUID) ([]AnalysisResult, error) {
+func (as *analysisService) GetAnalysisResultsByIDsWithRecalculatedStatus(ctx context.Context, analysisResultIDs []uuid.UUID, reValidateControlResult bool) ([]AnalysisResult, error) {
+	if len(analysisResultIDs) == 0 {
+		return []AnalysisResult{}, nil
+	}
 	analysisResults, err := as.analysisRepository.GetAnalysisResultsByIDs(ctx, analysisResultIDs)
 	if err != nil {
 		log.Error().Err(err).Msg("get analysis results by ids failed after saving results")
@@ -600,7 +632,7 @@ func (as *analysisService) GetAnalysisResultsByIDsWithRecalculatedStatus(ctx con
 	}
 
 	for i := range analysisResults {
-		analysisResults[i], err = setAnalysisResultStatusBasedOnControlResults(analysisResults[i], nil)
+		analysisResults[i], err = setAnalysisResultStatusBasedOnControlResults(analysisResults[i], nil, reValidateControlResult)
 		if err != nil {
 			return analysisResults, err
 		}
@@ -622,6 +654,75 @@ func (as *analysisService) GetAnalysisResultsByIDsWithRecalculatedStatus(ctx con
 		return analysisResults, err
 	}
 	return analysisResults, nil
+}
+
+func (as *analysisService) ValidateAndUpdatingExistingControlResults(ctx context.Context, analyteMappingIds []uuid.UUID) error {
+	controlResults, err := as.analysisRepository.GetControlResultsToValidate(ctx, analyteMappingIds)
+	if err != nil {
+		return err
+	}
+
+	if len(controlResults) == 0 {
+		return nil
+	}
+
+	updatedControlResultIds := make([]uuid.UUID, 0)
+	for i := range controlResults {
+		cr, err := setControlResultIsValidAndExpectedControlResultId(controlResults[i])
+		if err == nil {
+			controlResults[i] = cr
+			updatedControlResultIds = append(updatedControlResultIds, controlResults[i].ID)
+		}
+	}
+
+	tx, err := as.analysisRepository.CreateTransaction()
+	if err != nil {
+		log.Error().Err(err).Msg("failed to create transaction")
+		return err
+	}
+
+	err = as.analysisRepository.WithTransaction(tx).UpdateControlResultBatch(ctx, controlResults)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	if err = tx.Commit(); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	as.manager.SendControlResultIdsToAnalysisResultStatusRecalculation(updatedControlResultIds)
+
+	return nil
+}
+
+func (as *analysisService) AnalysisResultStatusRecalculationAndSendForProcessingIfFinal(ctx context.Context, controlResultIds []uuid.UUID) error {
+	analysisResultIds, err := as.analysisRepository.GetAnalysisResultIdsForStatusRecalculationByControlIds(ctx, controlResultIds)
+	if err != nil {
+		return err
+	}
+
+	updatedAnalysisResults, err := as.GetAnalysisResultsByIDsWithRecalculatedStatus(ctx, analysisResultIds, false)
+	if err != nil {
+		return err
+	}
+
+	go func(analysisResults []AnalysisResult) {
+		for i := range analysisResults {
+			analyteRequests, err := as.analysisRepository.GetAnalysisRequestsBySampleCodeAndAnalyteID(ctx, analysisResults[i].SampleCode, analysisResults[i].AnalyteMapping.AnalyteID)
+			if err != nil {
+				log.Error().Err(err).Msg("get analysis requests by sample code and analyteID failed after saving results for resubmitting analysis results after recalculated status")
+				return
+			}
+
+			for j := range analyteRequests {
+				analysisResults[i].AnalysisRequest = analyteRequests[j]
+				as.manager.SendResultForProcessing(analysisResults[i])
+			}
+		}
+	}(updatedAnalysisResults)
+
+	return nil
 }
 
 func (as *analysisService) QueueAnalysisResults(ctx context.Context, results []AnalysisResult) error {
@@ -799,53 +900,11 @@ func (as *analysisService) ProcessStuckImagesToCerberus(ctx context.Context) {
 
 func (as *analysisService) SaveCerberusIDsForAnalysisResultBatchItems(ctx context.Context, analysisResults []AnalysisResultBatchItemInfo) {
 	for _, analysisResult := range analysisResults {
-		_ = as.analysisRepository.SaveCerberusIDForAnalysisResult(ctx, analysisResult.AnalysisResult.ID, *analysisResult.CerberusAnalysisResultID)
-	}
-}
-
-func (as *analysisService) GetUnprocessedMappedStandaloneControlResultsByIDs(ctx context.Context, controlResultIDs []uuid.UUID) ([]MappedStandaloneControlResult, error) {
-	mappedControlResults := make([]MappedStandaloneControlResult, 0)
-
-	unprocessedAnalysisResultIDsMappedByControlResultIDs, err := as.analysisRepository.GetUnprocessedAnalysisResultIDsByControlResultIDs(ctx, controlResultIDs)
-	if err != nil {
-		return mappedControlResults, err
-	}
-
-	unprocessedReagentIDsMappedByControlResultIDs, err := as.analysisRepository.GetUnprocessedReagentIDsByControlResultIDs(ctx, controlResultIDs)
-	if err != nil {
-		return mappedControlResults, err
-	}
-
-	reagentIDs := make([]uuid.UUID, 0)
-
-	for _, rIDs := range unprocessedReagentIDsMappedByControlResultIDs {
-		reagentIDs = append(reagentIDs, rIDs...)
-	}
-
-	reagentsMap, err := as.analysisRepository.GetReagentsByIDs(ctx, reagentIDs)
-	if err != nil {
-		return mappedControlResults, err
-	}
-
-	controlResults, err := as.analysisRepository.GetControlResultsByIDs(ctx, controlResultIDs)
-	if err != nil {
-		return mappedControlResults, err
-	}
-
-	for _, controlResult := range controlResults {
-		mappedControlResult := MappedStandaloneControlResult{
-			ControlResult: controlResult,
-			ResultIDs:     unprocessedAnalysisResultIDsMappedByControlResultIDs[controlResult.ID],
+		if len(analysisResult.ErrorMessage) != 0 {
+			log.Warn().Msgf("Possible error happened in Cerberus at saving AnalysisResult with ID: %s Error: %s", analysisResult.AnalysisResult.ID.String(), analysisResult.ErrorMessage)
 		}
-
-		for _, reagentID := range unprocessedReagentIDsMappedByControlResultIDs[controlResult.ID] {
-			mappedControlResult.Reagents = append(mappedControlResult.Reagents, reagentsMap[reagentID])
-		}
-
-		if len(mappedControlResult.Reagents) > 0 || len(mappedControlResult.ResultIDs) > 0 {
-			mappedControlResults = append(mappedControlResults, mappedControlResult)
+		if analysisResult.CerberusAnalysisResultID != nil {
+			_ = as.analysisRepository.SaveCerberusIDForAnalysisResult(ctx, analysisResult.AnalysisResult.ID, *analysisResult.CerberusAnalysisResultID)
 		}
 	}
-
-	return mappedControlResults, nil
 }

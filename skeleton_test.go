@@ -1133,8 +1133,14 @@ func (m *analysisServiceMock) CreateAnalysisResultsBatch(ctx context.Context, an
 func (m *analysisServiceMock) CreateControlResultBatch(ctx context.Context, controlResults []StandaloneControlResult) ([]StandaloneControlResult, []uuid.UUID, error) {
 	return nil, nil, nil
 }
-func (m *analysisServiceMock) GetAnalysisResultsByIDsWithRecalculatedStatus(ctx context.Context, analysisResultIDs []uuid.UUID) ([]AnalysisResult, error) {
+func (m *analysisServiceMock) GetAnalysisResultsByIDsWithRecalculatedStatus(ctx context.Context, analysisResultIDs []uuid.UUID, reValidateControlResult bool) ([]AnalysisResult, error) {
 	return nil, nil
+}
+func (m *analysisServiceMock) ValidateAndUpdatingExistingControlResults(ctx context.Context, analyteMappingIds []uuid.UUID) error {
+	return nil
+}
+func (m *analysisServiceMock) AnalysisResultStatusRecalculationAndSendForProcessingIfFinal(ctx context.Context, controlResultIds []uuid.UUID) error {
+	return nil
 }
 func (m *analysisServiceMock) QueueAnalysisResults(ctx context.Context, results []AnalysisResult) error {
 	return nil
@@ -1223,7 +1229,7 @@ func (m *analysisRepositoryMock) SaveCerberusIDForReagent(ctx context.Context, r
 	return nil
 }
 
-func (m *analysisRepositoryMock) GetAnalysisResultIdsSinceLastControlByReagent(ctx context.Context, reagent Reagent, examinedAt time.Time) ([]uuid.UUID, error) {
+func (m *analysisRepositoryMock) GetAnalysisResultIdsSinceLastControlByReagent(ctx context.Context, reagent Reagent, examinedAt time.Time, analyteMappingId uuid.UUID, instrumentId uuid.UUID) ([]uuid.UUID, error) {
 	return nil, nil
 }
 
@@ -1324,6 +1330,9 @@ func (m *analysisRepositoryMock) GetAnalysisResultByID(ctx context.Context, id u
 func (m *analysisRepositoryMock) GetAnalysisResultsByBatchIDs(ctx context.Context, batchIDs []uuid.UUID) ([]AnalysisResult, error) {
 	return nil, nil
 }
+func (m *analysisRepositoryMock) GetAnalysisResultIdsForStatusRecalculationByControlIds(ctx context.Context, controlResultIds []uuid.UUID) ([]uuid.UUID, error) {
+	return nil, nil
+}
 func (m *analysisRepositoryMock) CreateAnalysisResultExtraValues(ctx context.Context, extraValuesByAnalysisRequestIDs map[uuid.UUID][]ExtraValue) error {
 	return nil
 }
@@ -1379,6 +1388,9 @@ func (m *analysisRepositoryMock) CreateControlResults(ctx context.Context, contr
 	}
 	return controlResultIdsMap, nil
 }
+func (m *analysisRepositoryMock) UpdateControlResultBatch(ctx context.Context, controlResults []ControlResult) error {
+	return nil
+}
 func (m *analysisRepositoryMock) CreateWarnings(ctx context.Context, warningsByAnalysisResultID map[uuid.UUID][]string) error {
 	return nil
 }
@@ -1425,6 +1437,13 @@ func (m *analysisRepositoryMock) MarkImagesAsSyncedToCerberus(ctx context.Contex
 	return nil
 }
 func (m *analysisRepositoryMock) GetUnprocessedAnalysisRequests(ctx context.Context) ([]AnalysisRequest, error) {
+	return nil, nil
+}
+
+func (m *analysisRepositoryMock) GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMappingId uuid.UUID, instrumentId uuid.UUID) ([]ControlResult, error) {
+	return nil, nil
+}
+func (m *analysisRepositoryMock) GetControlResultsToValidate(ctx context.Context, analyteMappingIds []uuid.UUID) ([]ControlResult, error) {
 	return nil, nil
 }
 func (m *analysisRepositoryMock) MarkAnalysisRequestsAsProcessed(ctx context.Context, analysisRequestIDs []uuid.UUID) error {

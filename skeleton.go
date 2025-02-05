@@ -22,33 +22,35 @@ import (
 )
 
 type skeleton struct {
-	ctx                          context.Context
-	config                       config.Configuration
-	sqlConn                      *sqlx.DB
-	dbSchema                     string
-	migrator                     migrator.SkeletonMigrator
-	api                          GinApi
-	analysisRepository           AnalysisRepository
-	analysisService              AnalysisService
-	instrumentService            InstrumentService
-	consoleLogService            service.ConsoleLogService
-	sortingRuleService           SortingRuleService
-	resultsBuffer                []AnalysisResult
-	resultBatchesChan            chan []AnalysisResult
-	controlResultsBuffer         []MappedStandaloneControlResult
-	controlResultBatchesChan     chan []MappedStandaloneControlResult
-	cerberusClient               CerberusClient
-	deaClient                    DeaClientV1
-	manager                      Manager
-	resultTransferFlushTimeout   int
-	imageRetrySeconds            int
-	serviceName                  string
-	extraValueKeys               []string
-	reagentManufacturers         []string
-	unprocessedHandlingWaitGroup sync.WaitGroup
+	ctx                                        context.Context
+	config                                     config.Configuration
+	sqlConn                                    *sqlx.DB
+	dbSchema                                   string
+	migrator                                   migrator.SkeletonMigrator
+	api                                        GinApi
+	analysisRepository                         AnalysisRepository
+	analysisService                            AnalysisService
+	instrumentService                          InstrumentService
+	consoleLogService                          service.ConsoleLogService
+	sortingRuleService                         SortingRuleService
+	resultsBuffer                              []AnalysisResult
+	resultBatchesChan                          chan []AnalysisResult
+	controlValidationAnalyteMappingsBuffer     []uuid.UUID
+	controlValidationAnalyteMappingBatchesChan chan []uuid.UUID
+	analysisResultStatusControlIdsBuffer       []uuid.UUID
+	analysisResultStatusControlIdBatchesChan   chan []uuid.UUID
+	cerberusClient                             CerberusClient
+	deaClient                                  DeaClientV1
+	manager                                    Manager
+	resultTransferFlushTimeout                 int
+	imageRetrySeconds                          int
+	serviceName                                string
+	extraValueKeys                             []string
+	reagentManufacturers                       []string
+	unprocessedHandlingWaitGroup               sync.WaitGroup
 }
 
-const waitGroupSize = 2
+const waitGroupSize = 3
 
 func (s *skeleton) SetCallbackHandler(eventHandler SkeletonCallbackHandlerV1) {
 	s.manager.SetCallbackHandler(eventHandler)
@@ -201,7 +203,7 @@ func (s *skeleton) SubmitControlResults(ctx context.Context, controlResults []St
 	}
 
 	go func(analysisResultIDs []uuid.UUID) {
-		analysisResults, err := s.analysisService.GetAnalysisResultsByIDsWithRecalculatedStatus(ctx, analysisResultIDs)
+		analysisResults, err := s.analysisService.GetAnalysisResultsByIDsWithRecalculatedStatus(ctx, analysisResultIDs, true)
 		if err != nil {
 			log.Error().Err(err).Msg("get analysis results by analysisResultIds with recalculated status failed after saving control results")
 			return
@@ -376,12 +378,12 @@ func (s *skeleton) SaveControlResultImages(ctx context.Context, controlResult *C
 	return nil
 }
 
-func (s *skeleton) GetAnalysisResultIdsSinceLastControlByReagent(ctx context.Context, reagent Reagent, examinedAt time.Time) ([]uuid.UUID, error) {
-	return s.analysisRepository.GetAnalysisResultIdsSinceLastControlByReagent(ctx, reagent, examinedAt)
+func (s *skeleton) GetAnalysisResultIdsSinceLastControlByReagent(ctx context.Context, reagent Reagent, examinedAt time.Time, analyteMappingId uuid.UUID, instrumentId uuid.UUID) ([]uuid.UUID, error) {
+	return s.analysisRepository.GetAnalysisResultIdsSinceLastControlByReagent(ctx, reagent, examinedAt, analyteMappingId, instrumentId)
 }
 
-func (s *skeleton) GetLatestControlResultIdByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time) (ControlResult, error) {
-	return s.analysisRepository.GetLatestControlResultIdByReagent(ctx, reagent, resultYieldTime)
+func (s *skeleton) GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMappingId uuid.UUID, instrumentId uuid.UUID) ([]ControlResult, error) {
+	return s.analysisRepository.GetLatestControlResultsByReagent(ctx, reagent, resultYieldTime, analyteMappingId, instrumentId)
 }
 
 func (s *skeleton) GetInstrument(ctx context.Context, instrumentID uuid.UUID) (Instrument, error) {
@@ -552,9 +554,15 @@ func (s *skeleton) Start() error {
 	go s.submitAnalysisResultsToCerberus(s.ctx)
 	go s.processStuckImagesToDEA(s.ctx)
 	go s.processStuckImagesToCerberus(s.ctx)
+	go s.validateControlResultsByAnalyteMappings(s.ctx)
+	go s.validateControlResultsByAnalyteMappingBatches(s.ctx)
+	go s.analysisResultStatusRecalculationAndSendForProcessing(s.ctx)
+	go s.analysisResultStatusRecalculationAndSendForProcessingBatches(s.ctx)
 
 	go s.enqueueUnprocessedAnalysisRequests(s.ctx)
 	go s.enqueueUnprocessedAnalysisResults(s.ctx)
+	go s.processUnvalidatedControlResults(s.ctx)
+	go s.validateAnalysisResultStatusAndSend(s.ctx)
 
 	s.unprocessedHandlingWaitGroup.Wait()
 
@@ -606,7 +614,8 @@ func (s *skeleton) enqueueUnprocessedAnalysisRequests(ctx context.Context) {
 	for {
 		requests, err := s.analysisRepository.GetUnprocessedAnalysisRequests(ctx)
 		if err != nil {
-			panic(err)
+			time.Sleep(time.Duration(s.config.GetUnprocessedAnalysisRequestRetryMinute) * time.Minute)
+			continue
 		}
 
 		s.unprocessedHandlingWaitGroup.Done()
@@ -642,7 +651,7 @@ func (s *skeleton) enqueueUnprocessedAnalysisRequests(ctx context.Context) {
 
 			if err != nil {
 				requests = failed
-				time.Sleep(5 * time.Minute)
+				time.Sleep(time.Duration(s.config.UnprocessedAnalysisRequestErrorRetryMinute) * time.Minute)
 				continue
 			}
 
@@ -657,7 +666,8 @@ func (s *skeleton) enqueueUnprocessedAnalysisResults(ctx context.Context) {
 	for {
 		resultIDs, err := s.analysisRepository.GetUnprocessedAnalysisResultIDs(ctx)
 		if err != nil {
-			panic(err)
+			time.Sleep(time.Duration(s.config.GetUnprocessedAnalysisResultIDsRetryMinute) * time.Minute)
+			continue
 		}
 
 		s.unprocessedHandlingWaitGroup.Done()
@@ -683,7 +693,7 @@ func (s *skeleton) enqueueUnprocessedAnalysisResults(ctx context.Context) {
 			if err != nil {
 				log.Error().Err(err).Msg("GetAnalysisResultsByIDs failed")
 				resultIDs = failed
-				time.Sleep(5 * time.Minute)
+				time.Sleep(time.Duration(s.config.UnprocessedAnalysisResultErrorRetryMinute) * time.Minute)
 				continue
 			}
 
@@ -766,6 +776,117 @@ func (s *skeleton) processAnalysisResultBatches(ctx context.Context) {
 			})
 			continue
 		}
+	}
+}
+
+func (s *skeleton) analysisResultStatusRecalculationAndSendForProcessing(ctx context.Context) {
+	s.unprocessedHandlingWaitGroup.Wait()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case result, ok := <-s.manager.GetAnalysisResultStatusRecalculationChan():
+			if !ok {
+				log.Fatal().Msg("recalculating analysis result statuses stopped: results channel closed")
+			}
+			s.analysisResultStatusControlIdsBuffer = append(s.analysisResultStatusControlIdsBuffer, result...)
+			if len(s.analysisResultStatusControlIdsBuffer) >= 500 {
+				s.analysisResultStatusControlIdBatchesChan <- s.analysisResultStatusControlIdsBuffer
+				s.analysisResultStatusControlIdsBuffer = make([]uuid.UUID, 0, 500)
+			}
+		case <-time.After(3 * time.Second):
+			if len(s.analysisResultStatusControlIdsBuffer) > 0 {
+				s.analysisResultStatusControlIdBatchesChan <- s.analysisResultStatusControlIdsBuffer
+				s.analysisResultStatusControlIdsBuffer = make([]uuid.UUID, 0, 500)
+			}
+		}
+	}
+}
+
+func (s *skeleton) analysisResultStatusRecalculationAndSendForProcessingBatches(ctx context.Context) {
+	for {
+		resultsBatch, ok := <-s.analysisResultStatusControlIdBatchesChan
+		if !ok {
+			log.Fatal().Msg("recalculating analysis result status batches stopped: resultBatches channel closed")
+		}
+
+		if len(resultsBatch) < 1 {
+			continue
+		}
+
+		err := s.analysisService.AnalysisResultStatusRecalculationAndSendForProcessingIfFinal(ctx, resultsBatch)
+		if err != nil {
+			time.AfterFunc(30*time.Second, func() {
+				s.analysisResultStatusControlIdBatchesChan <- resultsBatch
+			})
+			continue
+		}
+	}
+}
+
+func (s *skeleton) validateControlResultsByAnalyteMappings(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case result, ok := <-s.manager.GetControlValidationChan():
+			if !ok {
+				log.Fatal().Msg("validating control results stopped: results channel closed")
+			}
+			s.controlValidationAnalyteMappingsBuffer = append(s.controlValidationAnalyteMappingsBuffer, result...)
+			if len(s.controlValidationAnalyteMappingsBuffer) >= 500 {
+				s.controlValidationAnalyteMappingBatchesChan <- s.controlValidationAnalyteMappingsBuffer
+				s.controlValidationAnalyteMappingsBuffer = make([]uuid.UUID, 0, 500)
+			}
+		case <-time.After(3 * time.Second):
+			if len(s.controlValidationAnalyteMappingsBuffer) > 0 {
+				s.controlValidationAnalyteMappingBatchesChan <- s.controlValidationAnalyteMappingsBuffer
+				s.controlValidationAnalyteMappingsBuffer = make([]uuid.UUID, 0, 500)
+			}
+		}
+	}
+}
+
+func (s *skeleton) validateControlResultsByAnalyteMappingBatches(ctx context.Context) {
+	for {
+		resultsBatch, ok := <-s.controlValidationAnalyteMappingBatchesChan
+		if !ok {
+			log.Fatal().Msg("validating control result batches stopped: resultBatches channel closed")
+		}
+
+		if len(resultsBatch) < 1 {
+			continue
+		}
+
+		err := s.analysisService.ValidateAndUpdatingExistingControlResults(ctx, resultsBatch)
+		if err != nil {
+			time.AfterFunc(30*time.Second, func() {
+				s.controlValidationAnalyteMappingBatchesChan <- resultsBatch
+			})
+			continue
+		}
+	}
+}
+
+func (s *skeleton) processUnvalidatedControlResults(ctx context.Context) {
+	for {
+		err := s.analysisService.ValidateAndUpdatingExistingControlResults(ctx, []uuid.UUID{})
+		if err != nil {
+			log.Error().Err(err).Msg("startup process of validating control results failed")
+		}
+		s.unprocessedHandlingWaitGroup.Done()
+		return
+	}
+}
+
+func (s *skeleton) validateAnalysisResultStatusAndSend(ctx context.Context) {
+	for {
+		s.unprocessedHandlingWaitGroup.Wait()
+		err := s.analysisService.AnalysisResultStatusRecalculationAndSendForProcessingIfFinal(ctx, []uuid.UUID{})
+		if err != nil {
+			log.Error().Err(err).Msg("startup process of recalculating analysis result statuses and send FINAL ones for processing")
+		}
+		return
 	}
 }
 
@@ -969,28 +1090,30 @@ func (s *skeleton) processStuckImagesToCerberus(ctx context.Context) {
 
 func NewSkeleton(ctx context.Context, serviceName string, requestedExtraValueKeys []string, reagentManufacturers []string, sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api GinApi, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService service.ConsoleLogService, sortingRuleService SortingRuleService, manager Manager, cerberusClient CerberusClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
 	skeleton := &skeleton{
-		ctx:                        ctx,
-		serviceName:                serviceName,
-		extraValueKeys:             requestedExtraValueKeys,
-		reagentManufacturers:       reagentManufacturers,
-		config:                     config,
-		sqlConn:                    sqlConn,
-		dbSchema:                   dbSchema,
-		migrator:                   migrator,
-		api:                        api,
-		analysisRepository:         analysisRepository,
-		analysisService:            analysisService,
-		instrumentService:          instrumentService,
-		consoleLogService:          consoleLogService,
-		manager:                    manager,
-		cerberusClient:             cerberusClient,
-		deaClient:                  deaClient,
-		resultsBuffer:              make([]AnalysisResult, 0, 500),
-		resultBatchesChan:          make(chan []AnalysisResult, 10),
-		controlResultsBuffer:       make([]MappedStandaloneControlResult, 0, 500),
-		controlResultBatchesChan:   make(chan []MappedStandaloneControlResult, 10),
-		resultTransferFlushTimeout: config.ResultTransferFlushTimeout,
-		imageRetrySeconds:          config.ImageRetrySeconds,
+		ctx:                                    ctx,
+		serviceName:                            serviceName,
+		extraValueKeys:                         requestedExtraValueKeys,
+		reagentManufacturers:                   reagentManufacturers,
+		config:                                 config,
+		sqlConn:                                sqlConn,
+		dbSchema:                               dbSchema,
+		migrator:                               migrator,
+		api:                                    api,
+		analysisRepository:                     analysisRepository,
+		analysisService:                        analysisService,
+		instrumentService:                      instrumentService,
+		consoleLogService:                      consoleLogService,
+		manager:                                manager,
+		cerberusClient:                         cerberusClient,
+		deaClient:                              deaClient,
+		resultsBuffer:                          make([]AnalysisResult, 0, 500),
+		resultBatchesChan:                      make(chan []AnalysisResult, 10),
+		controlValidationAnalyteMappingsBuffer: make([]uuid.UUID, 0, 500),
+		controlValidationAnalyteMappingBatchesChan: make(chan []uuid.UUID, 10),
+		analysisResultStatusControlIdsBuffer:       make([]uuid.UUID, 0, 500),
+		analysisResultStatusControlIdBatchesChan:   make(chan []uuid.UUID, 10),
+		resultTransferFlushTimeout:                 config.ResultTransferFlushTimeout,
+		imageRetrySeconds:                          config.ImageRetrySeconds,
 	}
 
 	skeleton.unprocessedHandlingWaitGroup.Add(waitGroupSize)

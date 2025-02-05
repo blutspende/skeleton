@@ -151,8 +151,8 @@ func (api *api) CreateAnalysisRequestBatch(c *gin.Context) {
 	analysisRequestStatus, err := api.analysisService.CreateAnalysisRequests(c, analysisRequests)
 	if err != nil && err != ErrAnalysisRequestWithMatchingWorkItemIdFound {
 		log.Error().Err(err).Msg("CreateAnalysisRequestBatch failed")
-		c.JSON(http.StatusInternalServerError, middleware.ClientError{
-			MessageKey: "CreateAnalysisRequestBatchFailed",
+		c.AbortWithStatusJSON(http.StatusInternalServerError, middleware.ClientError{
+			MessageKey: "createAnalysisRequestBatchFailed",
 			Message:    "Create Analysis Requests failed!",
 		})
 		return
@@ -199,8 +199,8 @@ func (api *api) RevokeAnalysisRequestBatch(c *gin.Context) {
 	err = api.analysisService.RevokeAnalysisRequests(c, workItemIDs)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to revoke analysis requests")
-		c.JSON(http.StatusInternalServerError, middleware.ClientError{
-			MessageKey: "RevokeAnalysisRequestBatchFailed",
+		c.AbortWithStatusJSON(http.StatusInternalServerError, middleware.ClientError{
+			MessageKey: "revokeAnalysisRequestBatchFailed",
 			Message:    "Revoke analysis request batch failed!",
 		})
 		return
@@ -221,8 +221,8 @@ func (api *api) ReexamineAnalysisRequestBatch(c *gin.Context) {
 	err = api.analysisService.ReexamineAnalysisRequestsBatch(c, workItemIDs)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to reexamine analysis requests")
-		c.JSON(http.StatusInternalServerError, middleware.ClientError{
-			MessageKey: "ReexamineAnalysisRequestBatchFailed",
+		c.AbortWithStatusJSON(http.StatusInternalServerError, middleware.ClientError{
+			MessageKey: "reexamineAnalysisRequestBatchFailed",
 			Message:    "Reexamine analysis request batch failed!",
 		})
 		return
@@ -244,7 +244,7 @@ func (api *api) CheckAnalytesUsage(c *gin.Context) {
 	if err != nil {
 		log.Error().Err(err).Send()
 		c.AbortWithStatusJSON(http.StatusInternalServerError, middleware.ClientError{
-			MessageKey: "CheckAnalytesUsageFailed",
+			MessageKey: "checkAnalytesUsageFailed",
 			Message:    "Checking analytes usage failed!",
 		})
 	}

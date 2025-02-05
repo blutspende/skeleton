@@ -215,6 +215,11 @@ type ExpectedControlResult struct {
 	DeletedBy        uuid.NullUUID
 }
 
+type NotSpecifiedExpectedControlResult struct {
+	SampleCode       string
+	AnalyteMappingId uuid.UUID
+}
+
 // ResultMapping - Maps a ManufacturerTestCode to an AnalyteId (cerberus)
 type ResultMapping struct {
 	ID    uuid.UUID

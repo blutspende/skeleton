@@ -38,15 +38,14 @@ operator                 string
 technicalReleaseDateTime *time.time
 instrumentId             uuid.UUID
 instrumentRunId          uuid.UUID
-reagents
-extraValues              []ExtraValues
 resultEdit               bool
 editReason               string
 isInvalid                bool
-channelResults           []ChannelResultTO
-extraValues              []ExtraValueTO
-reagentInfos             []ReagentInfoTO
-images                   []ImageTO
+channelResults           []ChannelResult
+extraValues              []ExtraValue
+reagents                 []Reagent
+controlResults           []ControlResult
+images                   []Image
 warnFlag                 bool
 warnings                 []string
 ```

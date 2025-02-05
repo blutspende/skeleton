@@ -15,7 +15,7 @@ type SkeletonTestRig struct {
 
 	storedInstrumentsMap              map[string]Instrument
 	StoredAnalysisResults             []AnalysisResultSet
-	ControlResults                    map[string]ControlResult
+	ControlResults                    map[string][]ControlResult
 	StoredStandaloneControlResultSets []StandaloneControlResult
 	AnalysisRequests                  []*AnalysisRequest
 	AnalysisRequestExtraValues        map[string]string
@@ -25,7 +25,7 @@ func NewTestRig() *SkeletonTestRig {
 	return &SkeletonTestRig{
 		storedInstrumentsMap:       make(map[string]Instrument),
 		StoredAnalysisResults:      []AnalysisResultSet{},
-		ControlResults:             make(map[string]ControlResult),
+		ControlResults:             make(map[string][]ControlResult),
 		AnalysisRequests:           []*AnalysisRequest{},
 		AnalysisRequestExtraValues: make(map[string]string),
 	}
@@ -93,11 +93,11 @@ func (sr *SkeletonTestRig) SubmitControlResults(ctx context.Context, controlResu
 	return nil
 }
 
-func (sr *SkeletonTestRig) GetAnalysisResultIdsSinceLastControlByReagent(ctx context.Context, reagent Reagent, examinedAt time.Time) ([]uuid.UUID, error) {
+func (sr *SkeletonTestRig) GetAnalysisResultIdsSinceLastControlByReagent(ctx context.Context, reagent Reagent, examinedAt time.Time, analyteMappingId uuid.UUID, instrumentId uuid.UUID) ([]uuid.UUID, error) {
 	return make([]uuid.UUID, 0), nil
 }
 
-func (sr *SkeletonTestRig) GetLatestControlResultIdByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time) (ControlResult, error) {
+func (sr *SkeletonTestRig) GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMappingId uuid.UUID, instrumentId uuid.UUID) ([]ControlResult, error) {
 	return sr.ControlResults[fmt.Sprintf("%s%s%s", reagent.Manufacturer, reagent.LotNo, reagent.SerialNumber)], nil
 }
 

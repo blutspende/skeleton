@@ -85,8 +85,8 @@ type SkeletonAPI interface {
 
 	SubmitControlResults(ctx context.Context, controlResults []StandaloneControlResult) error
 
-	GetAnalysisResultIdsSinceLastControlByReagent(ctx context.Context, reagent Reagent, examinedAt time.Time) ([]uuid.UUID, error)
-	GetLatestControlResultIdByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time) (ControlResult, error)
+	GetAnalysisResultIdsSinceLastControlByReagent(ctx context.Context, reagent Reagent, examinedAt time.Time, analyteMappingId uuid.UUID, instrumentId uuid.UUID) ([]uuid.UUID, error)
+	GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMappingId uuid.UUID, instrumentId uuid.UUID) ([]ControlResult, error)
 
 	// GetInstrument returns all the settings regarding an instrument
 	// contains AnalyteMappings[] and RequestMappings[]

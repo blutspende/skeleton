@@ -16,109 +16,107 @@ import (
 )
 
 const (
-	msgInvalidConnectionMode              = "invalid connection mode"
-	msgInvalidResultMode                  = "invalid result mode"
-	msgInvalidInstrumentType              = "invalid instrument type"
-	msgCreateInstrumentFailed             = "create instrument failed"
-	msgGetInstrumentsFailed               = "get instruments failed"
-	msgGetInstrumentChangesFailed         = "get changed instruments failed"
-	msgGetInstrumentByIDFailed            = "get instrument by id failed"
-	msgGetInstrumentByIPFailed            = "get instrument by IP failed"
-	msgInstrumentNotFound                 = "instrument not found"
-	msgUpdateInstrumentFailed             = "update instrument failed"
-	msgDeleteInstrumentFailed             = "delete instrument failed"
-	msgMarkInstrumentSentToCerberusFailed = "mark instrument as sent to cerberus failed"
-	msgCreateFtpConfigFailed              = "create FTP config failed"
-	msgUpdateFtpConfigFailed              = "update FTP config failed"
-	msgDeleteFtpConfigFailed              = "delete FTP config failed"
-	msgGetFtpConfigFailed                 = "get ftp config by instrument id failed"
-	msgFtpConfigNotFound                  = "ftp config not found"
-	msgFtpConfigExistsFailed              = "failed to check whether ftp config exists"
-	msgGetProtocolByIDFailed              = "get protocol by CerberusID failed"
-	msgUpsertSupportedProtocolFailed      = "upsert supported protocol failed"
-	msgUpsertProtocolAbilitiesFailed      = "upsert protocol abilities failed"
-	msgUpdateInstrumentStatusFailed       = "update instrument status failed"
-	msgCreateAnalyteMappingsFailed        = "create analyte mappings failed"
-	msgGetAnalyteMappingsFailed           = "get analyte mappings failed"
-	msgUpdateAnalyteMappingFailed         = "update analyte mapping failed"
-	msgDeleteAnalyteMappingFailed         = "delete analyte mapping failed"
-	msgCreateChannelMappingsFailed        = "create channel mappings failed"
-	msgGetChannelMappingsFailed           = "get channel mappings failed"
-	msgUpdateChannelMappingFailed         = "update channel mapping failed"
-	msgDeleteChannelMappingFailed         = "delete channel mapping failed"
-	msgGetResultMappingsFailed            = "get result mappings failed"
-	msgDeleteResultMappingFailed          = "delete result mapping failed"
-	msgUpdateResultMappingFailed          = "update result mapping failed"
-	msgCreateExpectedControlResultsFailed = "create expected control results failed"
-	msgGetExpectedControlResultsFailed    = "get expected control results failed"
-	msgDeleteExpectedControlResultFailed  = "delete expected control result failed"
-	msgGetRequestMappingsFailed           = "get request mappings failed"
-	msgGetRequestMappingAnalytesFailed    = "get request mapping analytes failed"
-	msgDeleteRequestMappingsFailed        = "delete request mappings failed"
-	msgUpdateRequestMappingFailed         = "update request mapping failed"
-	msgDeleteRequestMappingAnalytesFailed = "delete request mapping analytes failed"
-	msgGetEncodingsFailed                 = "get encodings failed"
-	msgGetProtocolSettingsFailed          = "get protocol settings failed"
-	msgUpsertProtocolSettingsFailed       = "upsert protocol settings failed"
-	msgDeleteProtocolMappingFailed        = "delete protocol settings failed"
-	msgGetInstrumentsSettingsFailed       = "get instruments settings failed"
-	msgUpsertInstrumentSettingsFailed     = "upsert instrument settings failed"
-	msgDeleteInstrumentSettingsFailed     = "delete instrument settings failed"
-	msgCheckAnalyteUsageFailed            = "check analyte usage failed"
-	msgForeignKeyViolation                = "foreign key violation error"
+	msgInvalidConnectionMode                       = "invalid connection mode"
+	msgInvalidResultMode                           = "invalid result mode"
+	msgInvalidInstrumentType                       = "invalid instrument type"
+	msgCreateInstrumentFailed                      = "create instrument failed"
+	msgGetInstrumentsFailed                        = "get instruments failed"
+	msgGetInstrumentChangesFailed                  = "get changed instruments failed"
+	msgGetInstrumentByIDFailed                     = "get instrument by id failed"
+	msgGetInstrumentByIPFailed                     = "get instrument by IP failed"
+	msgInstrumentNotFound                          = "instrument not found"
+	msgUpdateInstrumentFailed                      = "update instrument failed"
+	msgDeleteInstrumentFailed                      = "delete instrument failed"
+	msgMarkInstrumentSentToCerberusFailed          = "mark instrument as sent to cerberus failed"
+	msgCreateFtpConfigFailed                       = "create FTP config failed"
+	msgDeleteFtpConfigFailed                       = "delete FTP config failed"
+	msgGetFtpConfigFailed                          = "get ftp config by instrument id failed"
+	msgFtpConfigNotFound                           = "ftp config not found"
+	msgGetProtocolByIDFailed                       = "get protocol by CerberusID failed"
+	msgUpsertSupportedProtocolFailed               = "upsert supported protocol failed"
+	msgUpsertProtocolAbilitiesFailed               = "upsert protocol abilities failed"
+	msgUpdateInstrumentStatusFailed                = "update instrument status failed"
+	msgCreateAnalyteMappingsFailed                 = "create analyte mappings failed"
+	msgGetAnalyteMappingsFailed                    = "get analyte mappings failed"
+	msgUpdateAnalyteMappingFailed                  = "update analyte mapping failed"
+	msgDeleteAnalyteMappingFailed                  = "delete analyte mapping failed"
+	msgCreateChannelMappingsFailed                 = "create channel mappings failed"
+	msgGetChannelMappingsFailed                    = "get channel mappings failed"
+	msgUpdateChannelMappingFailed                  = "update channel mapping failed"
+	msgDeleteChannelMappingFailed                  = "delete channel mapping failed"
+	msgGetResultMappingsFailed                     = "get result mappings failed"
+	msgDeleteResultMappingFailed                   = "delete result mapping failed"
+	msgUpdateResultMappingFailed                   = "update result mapping failed"
+	msgCreateExpectedControlResultsFailed          = "create expected control results failed"
+	msgGetExpectedControlResultsFailed             = "get expected control results failed"
+	msgGetNotSpecifiedExpectedControlResultsFailed = "get not specified expected control results failed"
+	msgDeleteExpectedControlResultFailed           = "delete expected control result failed"
+	msgGetRequestMappingsFailed                    = "get request mappings failed"
+	msgGetRequestMappingAnalytesFailed             = "get request mapping analytes failed"
+	msgDeleteRequestMappingsFailed                 = "delete request mappings failed"
+	msgUpdateRequestMappingFailed                  = "update request mapping failed"
+	msgDeleteRequestMappingAnalytesFailed          = "delete request mapping analytes failed"
+	msgGetEncodingsFailed                          = "get encodings failed"
+	msgGetProtocolSettingsFailed                   = "get protocol settings failed"
+	msgUpsertProtocolSettingsFailed                = "upsert protocol settings failed"
+	msgDeleteProtocolMappingFailed                 = "delete protocol settings failed"
+	msgGetInstrumentsSettingsFailed                = "get instruments settings failed"
+	msgUpsertInstrumentSettingsFailed              = "upsert instrument settings failed"
+	msgDeleteInstrumentSettingsFailed              = "delete instrument settings failed"
+	msgCheckAnalyteUsageFailed                     = "check analyte usage failed"
+	msgGetUnsentInstrumentIdsFailed                = "get unsent instrument IDs failed"
 )
 
 var (
-	ErrInvalidConnectionMode              = errors.New(msgInvalidConnectionMode)
-	ErrInvalidResultMode                  = errors.New(msgInvalidResultMode)
-	ErrInvalidInstrumentType              = errors.New(msgInvalidInstrumentType)
-	ErrCreateInstrumentFailed             = errors.New(msgCreateInstrumentFailed)
-	ErrGetInstrumentsFailed               = errors.New(msgGetInstrumentsFailed)
-	ErrGetInstrumentChangesFailed         = errors.New(msgGetInstrumentChangesFailed)
-	ErrGetInstrumentByIDFailed            = errors.New(msgGetInstrumentByIDFailed)
-	ErrGetInstrumentByIPFailed            = errors.New(msgGetInstrumentByIPFailed)
-	ErrInstrumentNotFound                 = errors.New(msgInstrumentNotFound)
-	ErrUpdateInstrumentFailed             = errors.New(msgUpdateInstrumentFailed)
-	ErrDeleteInstrumentFailed             = errors.New(msgDeleteInstrumentFailed)
-	ErrMarkInstrumentSentToCerberusFailed = errors.New(msgMarkInstrumentSentToCerberusFailed)
-	ErrCreateFtpConfigFailed              = errors.New(msgCreateFtpConfigFailed)
-	ErrUpdateFtpConfigFailed              = errors.New(msgUpdateFtpConfigFailed)
-	ErrDeleteFtpConfigFailed              = errors.New(msgDeleteFtpConfigFailed)
-	ErrGetFtpConfigFailed                 = errors.New(msgGetFtpConfigFailed)
-	ErrFtpConfigNotFound                  = errors.New(msgFtpConfigNotFound)
-	ErrFtpConfigExistsFailed              = errors.New(msgFtpConfigExistsFailed)
-	ErrGetProtocolByIDFailed              = errors.New(msgGetProtocolByIDFailed)
-	ErrUpsertSupportedProtocolFailed      = errors.New(msgUpsertSupportedProtocolFailed)
-	ErrUpsertProtocolAbilitiesFailed      = errors.New(msgUpsertProtocolAbilitiesFailed)
-	ErrUpdateInstrumentStatusFailed       = errors.New(msgUpdateInstrumentStatusFailed)
-	ErrCreateAnalyteMappingsFailed        = errors.New(msgCreateAnalyteMappingsFailed)
-	ErrGetAnalyteMappingsFailed           = errors.New(msgGetAnalyteMappingsFailed)
-	ErrUpdateAnalyteMappingFailed         = errors.New(msgUpdateAnalyteMappingFailed)
-	ErrDeleteAnalyteMappingFailed         = errors.New(msgDeleteAnalyteMappingFailed)
-	ErrCreateChannelMappingsFailed        = errors.New(msgCreateChannelMappingsFailed)
-	ErrGetChannelMappingsFailed           = errors.New(msgGetChannelMappingsFailed)
-	ErrUpdateChannelMappingFailed         = errors.New(msgUpdateChannelMappingFailed)
-	ErrDeleteChannelMappingFailed         = errors.New(msgDeleteChannelMappingFailed)
-	ErrGetResultMappingsFailed            = errors.New(msgGetResultMappingsFailed)
-	ErrDeleteResultMappingFailed          = errors.New(msgDeleteResultMappingFailed)
-	ErrUpdateResultMappingFailed          = errors.New(msgUpdateResultMappingFailed)
-	ErrCreateExpectedControlResultsFailed = errors.New(msgCreateExpectedControlResultsFailed)
-	ErrGetExpectedControlResultsFailed    = errors.New(msgGetExpectedControlResultsFailed)
-	ErrDeleteExpectedControlResultFailed  = errors.New(msgDeleteExpectedControlResultFailed)
-	ErrGetRequestMappingsFailed           = errors.New(msgGetRequestMappingsFailed)
-	ErrGetRequestMappingAnalytesFailed    = errors.New(msgGetRequestMappingAnalytesFailed)
-	ErrDeleteRequestMappingsFailed        = errors.New(msgDeleteRequestMappingsFailed)
-	ErrUpdateRequestMappingFailed         = errors.New(msgUpdateRequestMappingFailed)
-	ErrDeleteRequestMappingAnalytesFailed = errors.New(msgDeleteRequestMappingAnalytesFailed)
-	ErrGetEncodingsFailed                 = errors.New(msgGetEncodingsFailed)
-	ErrGetProtocolSettingsFailed          = errors.New(msgGetProtocolSettingsFailed)
-	ErrUpsertProtocolSettingsFailed       = errors.New(msgUpsertProtocolSettingsFailed)
-	ErrDeleteProtocolMappingFailed        = errors.New(msgDeleteProtocolMappingFailed)
-	ErrGetInstrumentsSettingsFailed       = errors.New(msgGetInstrumentsSettingsFailed)
-	ErrUpsertInstrumentSettingsFailed     = errors.New(msgUpsertInstrumentSettingsFailed)
-	ErrDeleteInstrumentSettingsFailed     = errors.New(msgDeleteInstrumentSettingsFailed)
-	ErrCheckAnalyteUsageFailed            = errors.New(msgCheckAnalyteUsageFailed)
-	ErrForeignKeyViolation                = errors.New(msgForeignKeyViolation)
+	ErrInvalidConnectionMode                       = errors.New(msgInvalidConnectionMode)
+	ErrInvalidResultMode                           = errors.New(msgInvalidResultMode)
+	ErrInvalidInstrumentType                       = errors.New(msgInvalidInstrumentType)
+	ErrCreateInstrumentFailed                      = errors.New(msgCreateInstrumentFailed)
+	ErrGetInstrumentsFailed                        = errors.New(msgGetInstrumentsFailed)
+	ErrGetInstrumentChangesFailed                  = errors.New(msgGetInstrumentChangesFailed)
+	ErrGetInstrumentByIDFailed                     = errors.New(msgGetInstrumentByIDFailed)
+	ErrGetInstrumentByIPFailed                     = errors.New(msgGetInstrumentByIPFailed)
+	ErrInstrumentNotFound                          = errors.New(msgInstrumentNotFound)
+	ErrUpdateInstrumentFailed                      = errors.New(msgUpdateInstrumentFailed)
+	ErrDeleteInstrumentFailed                      = errors.New(msgDeleteInstrumentFailed)
+	ErrMarkInstrumentSentToCerberusFailed          = errors.New(msgMarkInstrumentSentToCerberusFailed)
+	ErrCreateFtpConfigFailed                       = errors.New(msgCreateFtpConfigFailed)
+	ErrDeleteFtpConfigFailed                       = errors.New(msgDeleteFtpConfigFailed)
+	ErrGetFtpConfigFailed                          = errors.New(msgGetFtpConfigFailed)
+	ErrFtpConfigNotFound                           = errors.New(msgFtpConfigNotFound)
+	ErrGetProtocolByIDFailed                       = errors.New(msgGetProtocolByIDFailed)
+	ErrUpsertSupportedProtocolFailed               = errors.New(msgUpsertSupportedProtocolFailed)
+	ErrUpsertProtocolAbilitiesFailed               = errors.New(msgUpsertProtocolAbilitiesFailed)
+	ErrUpdateInstrumentStatusFailed                = errors.New(msgUpdateInstrumentStatusFailed)
+	ErrCreateAnalyteMappingsFailed                 = errors.New(msgCreateAnalyteMappingsFailed)
+	ErrGetAnalyteMappingsFailed                    = errors.New(msgGetAnalyteMappingsFailed)
+	ErrUpdateAnalyteMappingFailed                  = errors.New(msgUpdateAnalyteMappingFailed)
+	ErrDeleteAnalyteMappingFailed                  = errors.New(msgDeleteAnalyteMappingFailed)
+	ErrCreateChannelMappingsFailed                 = errors.New(msgCreateChannelMappingsFailed)
+	ErrGetChannelMappingsFailed                    = errors.New(msgGetChannelMappingsFailed)
+	ErrUpdateChannelMappingFailed                  = errors.New(msgUpdateChannelMappingFailed)
+	ErrDeleteChannelMappingFailed                  = errors.New(msgDeleteChannelMappingFailed)
+	ErrGetResultMappingsFailed                     = errors.New(msgGetResultMappingsFailed)
+	ErrDeleteResultMappingFailed                   = errors.New(msgDeleteResultMappingFailed)
+	ErrUpdateResultMappingFailed                   = errors.New(msgUpdateResultMappingFailed)
+	ErrCreateExpectedControlResultsFailed          = errors.New(msgCreateExpectedControlResultsFailed)
+	ErrGetExpectedControlResultsFailed             = errors.New(msgGetExpectedControlResultsFailed)
+	ErrGetNotSpecifiedExpectedControlResultsFailed = errors.New(msgGetNotSpecifiedExpectedControlResultsFailed)
+	ErrDeleteExpectedControlResultFailed           = errors.New(msgDeleteExpectedControlResultFailed)
+	ErrGetRequestMappingsFailed                    = errors.New(msgGetRequestMappingsFailed)
+	ErrGetRequestMappingAnalytesFailed             = errors.New(msgGetRequestMappingAnalytesFailed)
+	ErrDeleteRequestMappingsFailed                 = errors.New(msgDeleteRequestMappingsFailed)
+	ErrUpdateRequestMappingFailed                  = errors.New(msgUpdateRequestMappingFailed)
+	ErrDeleteRequestMappingAnalytesFailed          = errors.New(msgDeleteRequestMappingAnalytesFailed)
+	ErrGetEncodingsFailed                          = errors.New(msgGetEncodingsFailed)
+	ErrGetProtocolSettingsFailed                   = errors.New(msgGetProtocolSettingsFailed)
+	ErrUpsertProtocolSettingsFailed                = errors.New(msgUpsertProtocolSettingsFailed)
+	ErrDeleteProtocolMappingFailed                 = errors.New(msgDeleteProtocolMappingFailed)
+	ErrGetInstrumentsSettingsFailed                = errors.New(msgGetInstrumentsSettingsFailed)
+	ErrUpsertInstrumentSettingsFailed              = errors.New(msgUpsertInstrumentSettingsFailed)
+	ErrDeleteInstrumentSettingsFailed              = errors.New(msgDeleteInstrumentSettingsFailed)
+	ErrCheckAnalyteUsageFailed                     = errors.New(msgCheckAnalyteUsageFailed)
+	ErrGetUnsentInstrumentIdsFailed                = errors.New(msgGetUnsentInstrumentIdsFailed)
 )
 
 type instrumentDAO struct {
@@ -306,6 +304,7 @@ type InstrumentRepository interface {
 	DeleteResultMappings(ctx context.Context, ids []uuid.UUID) error
 	CreateExpectedControlResults(ctx context.Context, expectedControlResults []ExpectedControlResult) ([]uuid.UUID, error)
 	GetExpectedControlResultsByInstrumentId(ctx context.Context, instrumentId uuid.UUID) ([]ExpectedControlResult, error)
+	GetNotSpecifiedExpectedControlResultsByInstrumentId(ctx context.Context, instrumentId uuid.UUID) ([]NotSpecifiedExpectedControlResult, error)
 	GetExpectedControlResultsByInstrumentIdAndSampleCodes(ctx context.Context, instrumentId uuid.UUID, sampleCodes []string) (map[uuid.UUID]ExpectedControlResult, error)
 	GetExpectedControlResultsByAnalyteMappingIds(ctx context.Context, analyteMappingIds []uuid.UUID) (map[uuid.UUID][]ExpectedControlResult, error)
 	UpdateExpectedControlResults(ctx context.Context, expectedControlResults []ExpectedControlResult) error
@@ -523,8 +522,8 @@ func (r *instrumentRepository) GetUnsentToCerberus(ctx context.Context) ([]uuid.
 	query := fmt.Sprintf(`SELECT id FROM %s.sk_instruments WHERE sent_to_cerberus = FALSE AND deleted_at IS NULL;`, r.dbSchema)
 	rows, err := r.db.QueryxContext(ctx, query)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to fetch unsent instrument IDs")
-		return []uuid.UUID{}, err
+		log.Error().Err(err).Msg(msgGetUnsentInstrumentIdsFailed)
+		return []uuid.UUID{}, ErrGetUnsentInstrumentIdsFailed
 	}
 	defer rows.Close()
 
@@ -533,8 +532,8 @@ func (r *instrumentRepository) GetUnsentToCerberus(ctx context.Context) ([]uuid.
 		instrumentID := uuid.UUID{}
 		err = rows.Scan(&instrumentID)
 		if err != nil {
-			log.Error().Err(err).Msg("Failed to scan row")
-			return nil, err
+			log.Error().Err(err).Msg(msgGetUnsentInstrumentIdsFailed)
+			return nil, ErrGetUnsentInstrumentIdsFailed
 		}
 		instrumentIDs = append(instrumentIDs, instrumentID)
 	}
@@ -957,7 +956,7 @@ func (r *instrumentRepository) CreateExpectedControlResults(ctx context.Context,
 	if err != nil {
 		log.Error().Err(err).Msg(msgCreateExpectedControlResultsFailed)
 		if IsErrorCode(err, ForeignKeyViolationErrorCode) {
-			return ids, ErrForeignKeyViolation
+			return ids, ErrAnalyteMappingNotFound
 		}
 		return ids, ErrCreateExpectedControlResultsFailed
 	}
@@ -975,7 +974,7 @@ func (r *instrumentRepository) UpdateExpectedControlResults(ctx context.Context,
 		if err != nil {
 			log.Error().Err(err).Msg(msgCreateExpectedControlResultsFailed)
 			if IsErrorCode(err, ForeignKeyViolationErrorCode) {
-				return ErrForeignKeyViolation
+				return ErrAnalyteMappingNotFound
 			}
 			return ErrCreateExpectedControlResultsFailed
 		}
@@ -1043,6 +1042,39 @@ func (r *instrumentRepository) GetExpectedControlResultsByInstrumentId(ctx conte
 		expectedControlResults = append(expectedControlResults, convertExpectedControlResultDaoToExpectedControlResult(dao))
 	}
 	return expectedControlResults, nil
+}
+
+func (r *instrumentRepository) GetNotSpecifiedExpectedControlResultsByInstrumentId(ctx context.Context, instrumentId uuid.UUID) ([]NotSpecifiedExpectedControlResult, error) {
+	notSpecifiedExpectedControlResults := make([]NotSpecifiedExpectedControlResult, 0)
+	if (instrumentId == uuid.UUID{}) || (instrumentId == uuid.Nil) {
+		return notSpecifiedExpectedControlResults, nil
+	}
+	query := fmt.Sprintf(`SELECT scr.sample_code, scr.analyte_mapping_id
+	FROM %s.sk_control_results scr
+    	INNER JOIN %s.sk_analyte_mappings sam ON scr.instrument_id = sam.instrument_id AND scr.analyte_mapping_id = sam.id
+    	LEFT JOIN %s.sk_expected_control_result secr ON sam.id = secr.analyte_mapping_id AND scr.sample_code = secr.sample_code
+	WHERE scr.instrument_id = $1 and secr.id is null
+	GROUP BY scr.sample_code, scr.analyte_mapping_id;`, r.dbSchema, r.dbSchema, r.dbSchema)
+	rows, err := r.db.QueryxContext(ctx, query, instrumentId)
+	if err != nil {
+		log.Error().Err(err).Msg(msgGetNotSpecifiedExpectedControlResultsFailed)
+		return nil, ErrGetNotSpecifiedExpectedControlResultsFailed
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var sampleCode string
+		var analyteMappingId uuid.UUID
+		err = rows.Scan(&sampleCode, &analyteMappingId)
+		if err != nil {
+			log.Error().Err(err).Msg(msgGetNotSpecifiedExpectedControlResultsFailed)
+			return nil, ErrGetNotSpecifiedExpectedControlResultsFailed
+		}
+		notSpecifiedExpectedControlResults = append(notSpecifiedExpectedControlResults, NotSpecifiedExpectedControlResult{
+			SampleCode:       sampleCode,
+			AnalyteMappingId: analyteMappingId,
+		})
+	}
+	return notSpecifiedExpectedControlResults, nil
 }
 
 func (r *instrumentRepository) GetExpectedControlResultsByInstrumentIdAndSampleCodes(ctx context.Context, instrumentId uuid.UUID, sampleCodes []string) (map[uuid.UUID]ExpectedControlResult, error) {

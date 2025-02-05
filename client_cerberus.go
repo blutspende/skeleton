@@ -59,23 +59,12 @@ type createAnalysisResultResponseItemTO struct {
 	Error      *string       `json:"error"`
 }
 
-type createControlResultResponseItemTO struct {
-	ID         uuid.UUID   `json:"id"`
-	ReagentIDs []uuid.UUID `json:"reagentIds"`
-}
-
 type ChannelResultTO struct {
 	ChannelID             uuid.UUID         `json:"channelId"`
 	QualitativeResult     string            `json:"qualitativeResult"`
 	QualitativeResultEdit bool              `json:"edited"`
 	QuantitativeResults   map[string]string `json:"quantitativeResults"`
 	Images                []ImageTO         `json:"images"`
-}
-
-type AnalysisResultSetTO struct {
-	Results        []AnalysisResultTO
-	Reagents       []ReagentTO
-	ControlResults []ControlResultTO
 }
 
 type AnalysisResultTO struct {

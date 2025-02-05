@@ -11,7 +11,7 @@ type ClientError struct {
 
 var (
 	InvalidTokenResponse = ClientError{
-		MessageKey: "InvalidTokenResponse",
+		MessageKey: "invalidTokenResponse",
 		Message:    "Invalid Token Response",
 	}
 	ErrOpenIDConfiguration = ClientError{
@@ -19,28 +19,28 @@ var (
 		Message:    "OIDC .well-known/configuration could not be retrieved",
 	}
 	TokenExpiredResponse = ClientError{
-		MessageKey: "TokenExpired",
+		MessageKey: "tokenExpired",
 		Message:    "Token expired",
 	}
 	ErrInvalidToken = ClientError{
-		MessageKey: "InvalidToken",
+		MessageKey: "invalidToken",
 		Message:    "Invalid Token",
 	}
 	ErrNoPrivileges = ClientError{
-		MessageKey: "Unauthorized",
+		MessageKey: "unauthorized",
 		Message:    "Not authorized",
 	}
 	ErrInvalidRequestBody = ClientError{
-		MessageKey: "InvalidRequestBody",
+		MessageKey: "invalidRequestBody",
 		Message:    "Invalid request body",
 	}
 	ErrUnableToParseRequestBody = ClientError{
-		MessageKey: "UnableToParseRequestBody",
+		MessageKey: "unableToParseRequestBody",
 		Message:    "Unable to parse request body",
 	}
 	ErrInvalidOrMissingRequestParameter = ClientError{
-		MessageKey: "InvalidOrMissingRequestParameter",
-		Message:    "Invalid or missing request parameter",
+		MessageKey: "invalidOrMissingRequestParameter",
+		Message:    "Invalid or missing request parameter: {{param}}",
 	}
 )
 

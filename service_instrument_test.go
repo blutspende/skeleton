@@ -1274,7 +1274,7 @@ func TestValidateExpectedValueBasedOnAnalyteMappingResultTypeBoundedDecimal(t *t
 	assert.NotNil(t, err)
 	assert.Equal(t, ErrValidationValueInvalid, err)
 
-	err = validateExpectedValueBasedOnAnalyteMappingResultType(analyteMapping, "1.5<+")
+	err = validateExpectedValueBasedOnAnalyteMappingResultType(analyteMapping, "1.5")
 	assert.Nil(t, err)
 
 	err = validateExpectedValueBasedOnAnalyteMappingResultType(analyteMapping, "test")
@@ -1696,6 +1696,9 @@ func (r *instrumentRepositoryMock) DeleteExpectedControlResultsByAnalyteMappingI
 	return nil
 }
 func (r *instrumentRepositoryMock) GetExpectedControlResultsByInstrumentId(ctx context.Context, instrumentId uuid.UUID) ([]ExpectedControlResult, error) {
+	return nil, nil
+}
+func (r *instrumentRepositoryMock) GetNotSpecifiedExpectedControlResultsByInstrumentId(ctx context.Context, instrumentId uuid.UUID) ([]NotSpecifiedExpectedControlResult, error) {
 	return nil, nil
 }
 func (r *instrumentRepositoryMock) GetExpectedControlResultsByInstrumentIdAndSampleCodes(ctx context.Context, instrumentId uuid.UUID, sampleCodes []string) (map[uuid.UUID]ExpectedControlResult, error) {

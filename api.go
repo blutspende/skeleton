@@ -117,6 +117,12 @@ func newAPI(engine *gin.Engine, config *config.Configuration, authManager AuthMa
 			middleware.MedLabDoc,
 			middleware.MedLabAssist,
 			middleware.ITSupport}, false, api.config.Authorization), api.GetExpectedControlResultsByInstrumentId)
+		expectedControlResultsGroup.GET("/not-specified/:instrumentId", middleware.RoleProtection([]middleware.UserRole{
+			middleware.Admin,
+			middleware.MedLabSuper,
+			middleware.MedLabHead,
+			middleware.MedLabDoc,
+			middleware.MedLabAssist}, false, api.config.Authorization), api.GetNotSpecifiedExpectedControlResultsByInstrumentId)
 		expectedControlResultsGroup.POST("/:instrumentId", middleware.RoleProtection([]middleware.UserRole{
 			middleware.Admin,
 			middleware.MedLabSuper,
