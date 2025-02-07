@@ -35,6 +35,7 @@ type skeleton struct {
 	resultsBuffer              []AnalysisResult
 	resultBatchesChan          chan []AnalysisResult
 	cerberusClient             CerberusClient
+	longPollClient             LongPollClient
 	deaClient                  DeaClientV1
 	manager                    Manager
 	resultTransferFlushTimeout int
@@ -478,6 +479,7 @@ func (s *skeleton) Start() error {
 	go s.processStuckImagesToCerberus(s.ctx)
 	go s.enqueueUnprocessedAnalysisRequests(s.ctx)
 	go s.enqueueUnprocessedAnalysisResults(s.ctx)
+	go s.longPollClient.StartLongPoll(s.ctx)
 
 	// Todo - use cancellable context what is passed to the routines above too
 	err = s.api.Run()
@@ -890,7 +892,7 @@ func (s *skeleton) processStuckImagesToCerberus(ctx context.Context) {
 	}
 }
 
-func NewSkeleton(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys []string, sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api GinApi, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService service.ConsoleLogService, sortingRuleService SortingRuleService, manager Manager, cerberusClient CerberusClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
+func NewSkeleton(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys []string, sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api GinApi, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService service.ConsoleLogService, sortingRuleService SortingRuleService, manager Manager, cerberusClient CerberusClient, longpollClient LongPollClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
 	skeleton := &skeleton{
 		ctx:                        ctx,
 		serviceName:                serviceName,
@@ -908,6 +910,7 @@ func NewSkeleton(ctx context.Context, serviceName, displayName string, requested
 		sortingRuleService:         sortingRuleService,
 		manager:                    manager,
 		cerberusClient:             cerberusClient,
+		longPollClient:             longpollClient,
 		deaClient:                  deaClient,
 		resultsBuffer:              make([]AnalysisResult, 0, 500),
 		resultBatchesChan:          make(chan []AnalysisResult, 10),

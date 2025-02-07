@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/blutspende/logcom-api/logcom"
 	"github.com/blutspende/skeleton/config"
 	"github.com/blutspende/skeleton/db"
 	"github.com/google/uuid"
@@ -126,7 +125,7 @@ func (s *instrumentService) CreateInstrument(ctx context.Context, instrument Ins
 	if err != nil {
 		return uuid.Nil, err
 	}
-	s.manager.EnqueueInstrument(id, InstrumentAddedEvent)
+	//s.manager.EnqueueInstrument(id, InstrumentAddedEvent) FIXME
 	return id, nil
 }
 
@@ -755,18 +754,19 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 		}
 	}
 
-	newInstrument, err := s.GetInstrumentByID(ctx, tx, instrument.ID, true)
-	if err != nil {
-		_ = tx.Rollback()
-		return err
-	}
+	// TODO logcom later (already done by cerberus?)
+	//newInstrument, err := s.GetInstrumentByID(ctx, tx, instrument.ID, true)
+	//if err != nil {
+	//	_ = tx.Rollback()
+	//	return err
+	//}
 
-	err = logcom.SendAuditLogWithModification(ctx, "INSTRUMENT", oldInstrument.Name+"("+oldInstrument.ID.String()+")", oldInstrument, newInstrument)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to audit instrument update")
-		_ = tx.Rollback()
-		return ErrFailedToAudit
-	}
+	//err = logcom.SendAuditLogWithModification(ctx, "INSTRUMENT", oldInstrument.Name+"("+oldInstrument.ID.String()+")", oldInstrument, newInstrument)
+	//if err != nil {
+	//	log.Error().Err(err).Msg("Failed to audit instrument update")
+	//	_ = tx.Rollback()
+	//	return ErrFailedToAudit
+	//}
 
 	err = tx.Commit()
 	if err != nil {
@@ -775,7 +775,7 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 	}
 
 	s.instrumentCache.Invalidate()
-	s.manager.EnqueueInstrument(instrument.ID, InstrumentUpdatedEvent)
+	//s.manager.EnqueueInstrument(instrument.ID, InstrumentUpdatedEvent) FIXME
 	return nil
 }
 

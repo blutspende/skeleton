@@ -144,6 +144,8 @@ func New(ctx context.Context, serviceName, displayName string, requestedExtraVal
 	consoleLogService := service.NewConsoleLogService(consoleLogRepository, consoleLogSSEServer)
 	api := NewAPI(&config, authManager, analysisService, instrumentService, consoleLogService, consoleLogSSEServer)
 
+	longpollClient := NewLongPollClient(internalApiRestyClient, instrumentService, serviceName, config.CerberusURL)
+
 	logcom.Init(logcom.Configuration{
 		ServiceName: config.LogComServiceName,
 		LogComURL:   config.LogComURL,
@@ -155,5 +157,5 @@ func New(ctx context.Context, serviceName, displayName string, requestedExtraVal
 		},
 	})
 
-	return NewSkeleton(ctx, serviceName, displayName, requestedExtraValueKeys, sqlConn, dbSchema, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, sortingRuleService, manager, cerberusClient, deaClient, config)
+	return NewSkeleton(ctx, serviceName, displayName, requestedExtraValueKeys, sqlConn, dbSchema, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, sortingRuleService, manager, cerberusClient, longpollClient, deaClient, config)
 }

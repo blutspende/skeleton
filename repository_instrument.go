@@ -316,7 +316,6 @@ type InstrumentRepository interface {
 func (r *instrumentRepository) CreateInstrument(ctx context.Context, instrument Instrument) (uuid.UUID, error) {
 	query := fmt.Sprintf(`INSERT INTO %s.sk_instruments(id, protocol_id, "type", "name", hostname, client_port, enabled, connection_mode, running_mode, captureresults, capturediagnostics, replytoquery, status, sent_to_cerberus, timezone, file_encoding)
 		VALUES(:id, :protocol_id, :type, :name, :hostname, :client_port, :enabled, :connection_mode, :running_mode, :captureresults, :capturediagnostics, :replytoquery, :status, :sent_to_cerberus, :timezone, :file_encoding);`, r.dbSchema)
-	instrument.ID = uuid.New()
 
 	dao, err := convertInstrumentToDAO(instrument)
 	if err != nil {
