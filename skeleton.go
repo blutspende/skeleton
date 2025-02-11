@@ -468,7 +468,6 @@ func (s *skeleton) Start() error {
 			}
 		}
 	}()
-	go s.sendUnsentInstrumentsToCerberus(s.ctx)
 	for i := 0; i < s.config.AnalysisRequestWorkerPoolSize; i++ {
 		go s.processAnalysisRequests(s.ctx)
 	}
@@ -521,22 +520,6 @@ func (s *skeleton) registerDriverToCerberus(ctx context.Context) error {
 		return nil
 	}
 	return errors.New("register instrument driver to cerberus failed too many times")
-}
-
-func (s *skeleton) sendUnsentInstrumentsToCerberus(ctx context.Context) {
-	ticker := time.NewTicker(10 * time.Minute)
-	for {
-		select {
-		case <-ctx.Done():
-			ticker.Stop()
-			return
-		case _, ok := <-ticker.C:
-			if !ok {
-				log.Error().Msg("Sending unsent instruments to Cerberus stopped")
-			}
-			s.instrumentService.EnqueueUnsentInstrumentsToCerberus(ctx)
-		}
-	}
 }
 
 func (s *skeleton) enqueueUnprocessedAnalysisRequests(ctx context.Context) {

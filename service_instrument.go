@@ -2,7 +2,6 @@ package skeleton
 
 import (
 	"context"
-	"time"
 
 	"github.com/blutspende/skeleton/config"
 	"github.com/blutspende/skeleton/db"
@@ -24,7 +23,6 @@ type InstrumentService interface {
 	UpsertSupportedProtocol(ctx context.Context, id uuid.UUID, name string, description string, abilities []ProtocolAbility, settings []ProtocolSetting) error
 	UpsertManufacturerTests(ctx context.Context, manufacturerTests []SupportedManufacturerTests) error
 	UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error
-	EnqueueUnsentInstrumentsToCerberus(ctx context.Context)
 	CheckAnalytesUsage(ctx context.Context, analyteIDs []uuid.UUID) (map[uuid.UUID][]Instrument, error)
 	HidePassword(ctx context.Context, instrument *Instrument) error
 	ReprocessInstrumentData(ctx context.Context, batchIDs []uuid.UUID) error
@@ -55,8 +53,6 @@ func NewInstrumentService(
 		instrumentCache:      instrumentCache,
 		cerberusClient:       cerberusClient,
 	}
-
-	manager.RegisterInstrumentQueueListener(service, InstrumentAddedEvent, InstrumentUpdatedEvent, InstrumentAddRetryEvent)
 
 	return service
 }
@@ -164,7 +160,7 @@ func (s *instrumentService) CreateInstrument(ctx context.Context, instrument Ins
 	if err != nil {
 		return uuid.Nil, err
 	}
-	//s.manager.EnqueueInstrument(id, InstrumentAddedEvent) FIXME
+	s.instrumentCache.Invalidate()
 	return id, nil
 }
 
@@ -793,7 +789,7 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 		}
 	}
 
-	// TODO logcom later (already done by cerberus?)
+	// TODO logcom later
 	//newInstrument, err := s.GetInstrumentByID(ctx, tx, instrument.ID, true)
 	//if err != nil {
 	//	_ = tx.Rollback()
@@ -822,7 +818,6 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 	}
 
 	s.instrumentCache.Invalidate()
-	//s.manager.EnqueueInstrument(instrument.ID, InstrumentUpdatedEvent) FIXME
 	return nil
 }
 
@@ -994,84 +989,8 @@ func (s *instrumentService) UpdateInstrumentStatus(ctx context.Context, id uuid.
 	return nil
 }
 
-func (s *instrumentService) EnqueueUnsentInstrumentsToCerberus(ctx context.Context) {
-	instrumentIDs, err := s.instrumentRepository.GetUnsentToCerberus(ctx)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to collect unsent instruments")
-	}
-
-	for i := range instrumentIDs {
-		s.manager.EnqueueInstrument(instrumentIDs[i], InstrumentAddRetryEvent)
-	}
-}
-
-func (s *instrumentService) ProcessInstrumentEvent(instrumentID uuid.UUID, event instrumentEventType) {
-	if event.IsOneOf(InstrumentAddedEvent | InstrumentUpdatedEvent) {
-		log.Debug().Msg("Invalidating instrument cache")
-		s.instrumentCache.Invalidate()
-		log.Trace().Msg("Invalidated instrument cache")
-
-		log.Debug().Str("instrumentID", instrumentID.String()).Msg("Registering instrument in Cerberus")
-		if retry, err := s.registerInstrument(context.Background(), instrumentID); err != nil {
-			if retry {
-				s.retryInstrumentRegistration(context.Background(), instrumentID)
-			}
-		}
-	} else if event.IsExactly(InstrumentAddRetryEvent) {
-		log.Debug().Str("instrumentID", instrumentID.String()).Msg("Retrying to register instrument in Cerberus")
-		_, _ = s.registerInstrument(context.Background(), instrumentID)
-	}
-}
-
 func (s *instrumentService) CheckAnalytesUsage(ctx context.Context, analyteIDs []uuid.UUID) (map[uuid.UUID][]Instrument, error) {
 	return s.instrumentRepository.CheckAnalytesUsage(ctx, analyteIDs)
-}
-
-func (s *instrumentService) registerInstrument(ctx context.Context, instrumentID uuid.UUID) (bool, error) {
-	instrument, err := s.instrumentRepository.GetInstrumentByID(ctx, instrumentID)
-	if err != nil {
-		log.Error().Err(err).Str("instrumentID", instrumentID.String()).Msg("failed to get instrument!")
-		return false, err
-	}
-
-	err = s.cerberusClient.RegisterInstrument(instrument)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to send instrument to cerberus: " + instrumentID.String())
-		return true, err
-	}
-
-	err = s.instrumentRepository.MarkAsSentToCerberus(ctx, instrumentID)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to mark instrument as sent to cerberus: " + instrumentID.String())
-		return false, err
-	}
-
-	return false, nil
-}
-
-func (s *instrumentService) retryInstrumentRegistration(ctx context.Context, id uuid.UUID) {
-	log.Debug().Msg("Starting instrument registration retry task")
-	timeoutContext, cancel := context.WithTimeout(ctx, 48*time.Hour)
-	ticker := time.NewTicker(time.Duration(s.config.InstrumentTransferRetryDelayInMs) * time.Millisecond)
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				ticker.Stop()
-				return
-			case <-timeoutContext.Done():
-				ticker.Stop()
-				return
-			case <-ticker.C:
-				if retry, err := s.registerInstrument(timeoutContext, id); err != nil {
-					if retry {
-						break
-					}
-				}
-				cancel()
-			}
-		}
-	}()
 }
 
 func (s *instrumentService) HidePassword(ctx context.Context, instrument *Instrument) error {

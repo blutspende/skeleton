@@ -28,7 +28,11 @@ type InstrumentMessageTO struct {
 	Instrument   *instrumentTO `json:"instrument,omitempty"`
 }
 
-type LongPollClient struct {
+type LongPollClient interface {
+	StartLongPoll(ctx context.Context)
+}
+
+type longPollClient struct {
 	restyClient       *resty.Client
 	instrumentService InstrumentService
 	serviceName       string
@@ -36,7 +40,7 @@ type LongPollClient struct {
 }
 
 func NewLongPollClient(restyClient *resty.Client, instrumentService InstrumentService, serviceName, cerberusUrl string) LongPollClient {
-	return LongPollClient{
+	return &longPollClient{
 		restyClient:       restyClient,
 		instrumentService: instrumentService,
 		serviceName:       serviceName,
@@ -44,7 +48,7 @@ func NewLongPollClient(restyClient *resty.Client, instrumentService InstrumentSe
 	}
 }
 
-func (l *LongPollClient) StartLongPoll(ctx context.Context) {
+func (l *longPollClient) StartLongPoll(ctx context.Context) {
 	longPollPath, err := url.JoinPath(l.cerberusUrl, "/v1/instruments/poll-config")
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to parse URL for long-poll")
@@ -89,7 +93,7 @@ func (l *LongPollClient) StartLongPoll(ctx context.Context) {
 	}()
 }
 
-func (l *LongPollClient) handleEvent(ctx context.Context, event *golongpoll.Event) {
+func (l *longPollClient) handleEvent(ctx context.Context, event *golongpoll.Event) {
 	// Assert event data as map[string]interface{}
 	data, ok := event.Data.(map[string]interface{})
 	if !ok {
@@ -120,7 +124,7 @@ func (l *LongPollClient) handleEvent(ctx context.Context, event *golongpoll.Even
 	l.processInstrumentMessage(ctx, messageTO)
 }
 
-func (l *LongPollClient) processInstrumentMessage(ctx context.Context, message InstrumentMessageTO) {
+func (l *longPollClient) processInstrumentMessage(ctx context.Context, message InstrumentMessageTO) {
 	switch message.MessageType {
 	case MessageTypeCreate:
 		log.Info().Msgf("Processing creation event for InstrumentId: %s", message.InstrumentId)

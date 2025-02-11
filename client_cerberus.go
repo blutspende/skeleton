@@ -22,7 +22,6 @@ var (
 )
 
 type CerberusClient interface {
-	RegisterInstrument(instrument Instrument) error
 	RegisterInstrumentDriver(name, displayName, apiVersion string, apiPort uint16, tlsEnabled bool, extraValueKeys []string, protocols []supportedProtocolTO, tests []supportedManufacturerTestTO) error
 	SendAnalysisResultBatch(analysisResults []AnalysisResultTO) (AnalysisResultBatchResponse, error)
 	SendAnalysisResultImageBatch(images []WorkItemResultImageTO) error
@@ -32,11 +31,6 @@ type CerberusClient interface {
 type cerberusClient struct {
 	client      *resty.Client
 	cerberusUrl string
-}
-
-type ciaInstrumentTO struct {
-	ID   uuid.UUID `json:"id"`
-	Name string    `json:"name"`
 }
 
 type registerInstrumentDriverTO struct {
@@ -132,36 +126,6 @@ func NewCerberusClient(cerberusUrl string, restyClient *resty.Client) (CerberusC
 		client:      restyClient,
 		cerberusUrl: cerberusUrl,
 	}, nil
-}
-
-// RegisterInstrument Update cerberus with changed instrument-information
-func (c *cerberusClient) RegisterInstrument(instrument Instrument) error {
-	ciaInstrumentTO := ciaInstrumentTO{
-		ID:   instrument.ID,
-		Name: instrument.Name,
-	}
-
-	resp, err := c.client.R().
-		SetHeader("Content-Type", "application/json").
-		SetBody(ciaInstrumentTO).
-		Post(c.cerberusUrl + "/v1/instruments")
-
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to call Cerberus API")
-		return err
-	}
-
-	if resp.StatusCode() != http.StatusNoContent {
-		errReps := clientError{}
-		err = json.Unmarshal(resp.Body(), &errReps)
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to unmarshal error of response")
-			return err
-		}
-		return errors.New(errReps.Message)
-	}
-
-	return nil
 }
 
 func (c *cerberusClient) RegisterInstrumentDriver(name, displayName, apiVersion string, apiPort uint16, tlsEnabled bool, extraValueKeys []string, protocols []supportedProtocolTO, tests []supportedManufacturerTestTO) error {

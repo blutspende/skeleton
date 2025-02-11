@@ -125,8 +125,7 @@ type analysisRequestInfoTO struct {
 	BatchCreatedAt   *time.Time `json:"transmissionDate"`
 	ResultCreatedAt  *time.Time `json:"resultCreatedAt"`
 	Status           string     `json:"status"`
-	//SentToCerberusAt  *time.Time `json:"-"`
-	SourceIP string `json:"sourceIP"` // Todo
+	SourceIP         string     `json:"sourceIP"` // Todo
 	//InstrumentID      *uuid.UUID `json:"-"`
 	MappingError bool `json:"mappingError"`
 }
