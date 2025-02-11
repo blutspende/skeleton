@@ -121,7 +121,6 @@ func (l *LongPollClient) handleEvent(ctx context.Context, event *golongpoll.Even
 }
 
 func (l *LongPollClient) processInstrumentMessage(ctx context.Context, message InstrumentMessageTO) {
-	// Implement business logic for received messages here
 	switch message.MessageType {
 	case MessageTypeCreate:
 		log.Info().Msgf("Processing creation event for InstrumentId: %s", message.InstrumentId)
@@ -132,7 +131,6 @@ func (l *LongPollClient) processInstrumentMessage(ctx context.Context, message I
 			//TODO: handle, failed chan or something
 		}
 		log.Info().Interface("UUID", id).Msg("Created instrument")
-		//TODO: notify cerberus
 	case MessageTypeUpdate:
 		log.Info().Msgf("Processing update event for InstrumentId: %s", message.InstrumentId)
 		instrument := convertInstrumentTOToInstrument(*message.Instrument)
@@ -142,7 +140,6 @@ func (l *LongPollClient) processInstrumentMessage(ctx context.Context, message I
 			//TODO: handle, failed chan or something
 		}
 		log.Info().Msg("Updated instrument")
-		//TODO notify cerberus
 	case MessageTypeDelete:
 		log.Info().Msgf("Processing deletion event for InstrumentId: %s", message.InstrumentId)
 		err := l.instrumentService.DeleteInstrument(ctx, message.InstrumentId)

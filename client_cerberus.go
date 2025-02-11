@@ -26,6 +26,7 @@ type CerberusClient interface {
 	RegisterInstrumentDriver(name, displayName, apiVersion string, apiPort uint16, tlsEnabled bool, extraValueKeys []string, protocols []supportedProtocolTO, tests []supportedManufacturerTestTO) error
 	SendAnalysisResultBatch(analysisResults []AnalysisResultTO) (AnalysisResultBatchResponse, error)
 	SendAnalysisResultImageBatch(images []WorkItemResultImageTO) error
+	VerifyInstrumentHash(hash string) error
 }
 
 type cerberusClient struct {
@@ -116,6 +117,10 @@ type WorkItemResultImageTO struct {
 	ResultYieldDateTime *time.Time `json:"resultYieldDateTime"`
 	ChannelID           *uuid.UUID `json:"channelId"`
 	Image               ImageTO    `json:"image"`
+}
+
+type VerifyInstrumentTO struct {
+	Hash string `json:"hash"`
 }
 
 func NewCerberusClient(cerberusUrl string, restyClient *resty.Client) (CerberusClient, error) {
@@ -301,6 +306,21 @@ func (c *cerberusClient) SendAnalysisResultImageBatch(images []WorkItemResultIma
 
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to call Cerberus API (/v1/analysis-results/image/batch)")
+		return err
+	}
+
+	return nil
+}
+
+func (c *cerberusClient) VerifyInstrumentHash(hash string) error {
+	verifyTO := VerifyInstrumentTO{Hash: hash}
+	_, err := c.client.R().
+		SetHeader("Content-Type", "application/json").
+		SetBody(verifyTO).
+		Post(c.cerberusUrl + "/v1/instruments/verify")
+
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to call Cerberus API (/v1/instrument/verify)")
 		return err
 	}
 

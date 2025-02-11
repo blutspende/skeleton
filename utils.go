@@ -1,8 +1,12 @@
 package skeleton
 
 import (
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
+	"fmt"
 	"github.com/google/uuid"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -134,4 +138,74 @@ func ConvertUUIDsToMap(ids []uuid.UUID) map[uuid.UUID]any {
 		idsMap[id] = nil
 	}
 	return idsMap
+}
+
+func HashInstrument(instrument Instrument) string {
+	var builder strings.Builder
+
+	// Hash basic fields
+	builder.WriteString(instrument.ID.String())
+	builder.WriteString(instrument.Name)
+	builder.WriteString(string(instrument.Type))
+	builder.WriteString(instrument.ProtocolID.String())
+	builder.WriteString(string(instrument.ProtocolName))
+	builder.WriteString(string(instrument.ConnectionMode))
+	builder.WriteString(string(instrument.ResultMode))
+	builder.WriteString(fmt.Sprintf("%t", instrument.CaptureResults))
+	builder.WriteString(fmt.Sprintf("%t", instrument.CaptureDiagnostics))
+	builder.WriteString(fmt.Sprintf("%t", instrument.ReplyToQuery))
+	builder.WriteString(instrument.Status)
+	builder.WriteString(instrument.FileEncoding)
+	builder.WriteString(instrument.Timezone)
+	builder.WriteString(instrument.Hostname)
+	if instrument.ClientPort != nil {
+		builder.WriteString(fmt.Sprintf("%d", *instrument.ClientPort))
+	}
+	builder.WriteString(instrument.CreatedAt.Format(time.RFC3339))
+	if instrument.ModifiedAt != nil {
+		builder.WriteString(instrument.ModifiedAt.Format(time.RFC3339))
+	}
+	if instrument.DeletedAt != nil {
+		builder.WriteString(instrument.DeletedAt.Format(time.RFC3339))
+	}
+
+	// Hash nested struct FTPConfig
+	if instrument.FTPConfig != nil {
+		builder.WriteString(instrument.FTPConfig.ID.String())
+		builder.WriteString(instrument.FTPConfig.Username)
+		builder.WriteString(instrument.FTPConfig.OrderPath)
+		builder.WriteString(instrument.FTPConfig.ResultPath)
+	}
+
+	// Hash slices AnalyteMappings, RequestMappings, SortingRules, and Settings
+	hashSlice(&builder, instrument.AnalyteMappings, func(a AnalyteMapping) string {
+		return a.ID.String() + a.InstrumentAnalyte
+	})
+
+	hashSlice(&builder, instrument.RequestMappings, func(r RequestMapping) string {
+		return r.ID.String() + r.Code
+	})
+
+	hashSlice(&builder, instrument.SortingRules, func(s SortingRule) string {
+		return s.ID.String() + s.Target
+	})
+
+	hashSlice(&builder, instrument.Settings, func(s InstrumentSetting) string {
+		return s.ID.String() + s.Value
+	})
+
+	// Create the hash
+	hasher := sha256.New()
+	hasher.Write([]byte(builder.String()))
+	return hex.EncodeToString(hasher.Sum(nil))
+}
+
+// Utility function to hash slices using a custom string generator
+func hashSlice[T any](builder *strings.Builder, slice []T, toString func(T) string) {
+	sort.SliceStable(slice, func(i, j int) bool {
+		return toString(slice[i]) < toString(slice[j])
+	})
+	for _, item := range slice {
+		builder.WriteString(toString(item))
+	}
 }

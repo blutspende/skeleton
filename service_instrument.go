@@ -113,6 +113,36 @@ func (s *instrumentService) CreateInstrument(ctx context.Context, instrument Ins
 		_ = transaction.Rollback()
 		return uuid.Nil, err
 	}
+
+	protocolSettings, err := s.instrumentRepository.GetProtocolSettings(ctx, instrument.ProtocolID)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	for i := range instrument.Settings {
+		isSettingUpdateExcluded := false
+		for _, protocolSetting := range protocolSettings {
+			if instrument.Settings[i].ProtocolSettingID != protocolSetting.ID {
+				continue
+			}
+			if protocolSetting.Type != Password {
+				break
+			}
+
+			if instrument.Settings[i].Value == "" {
+				isSettingUpdateExcluded = true
+			}
+			break
+		}
+		if isSettingUpdateExcluded {
+			continue
+		}
+		err = s.instrumentRepository.WithTransaction(transaction).UpsertInstrumentSetting(ctx, instrument.ID, instrument.Settings[i])
+		if err != nil {
+			_ = transaction.Rollback()
+			return uuid.Nil, err
+		}
+	}
+
 	for i := range instrument.SortingRules {
 		instrument.SortingRules[i].InstrumentID = id
 		err = s.sortingRuleService.WithTransaction(transaction).Create(ctx, &instrument.SortingRules[i])
@@ -121,6 +151,15 @@ func (s *instrumentService) CreateInstrument(ctx context.Context, instrument Ins
 			return uuid.Nil, err
 		}
 	}
+
+	instrumentHash := HashInstrument(instrument)
+	err = s.cerberusClient.VerifyInstrumentHash(instrumentHash)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to verify instrument hash")
+		_ = transaction.Rollback()
+		return uuid.Nil, err
+	}
+
 	err = transaction.Commit()
 	if err != nil {
 		return uuid.Nil, err
@@ -767,6 +806,14 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 	//	_ = tx.Rollback()
 	//	return ErrFailedToAudit
 	//}
+
+	instrumentHash := HashInstrument(instrument)
+	err = s.cerberusClient.VerifyInstrumentHash(instrumentHash)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to verify instrument hash")
+		_ = tx.Rollback()
+		return err
+	}
 
 	err = tx.Commit()
 	if err != nil {
