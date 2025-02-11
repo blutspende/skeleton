@@ -54,12 +54,6 @@ type mockManager struct {
 	AnalysisRequestsSentForProcessing []AnalysisRequest
 }
 
-func (m *mockManager) EnqueueInstrument(id uuid.UUID, event instrumentEventType) {
-
-}
-func (m *mockManager) RegisterInstrumentQueueListener(listener InstrumentQueueListener, events ...instrumentEventType) {
-
-}
 func (m *mockManager) SetCallbackHandler(eventHandler SkeletonCallbackHandlerV1) {
 
 }

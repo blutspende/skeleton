@@ -722,6 +722,14 @@ type instrumentRepositoryMock struct {
 	db db.DbConnector
 }
 
+func (r *instrumentRepositoryMock) UpsertManufacturerTests(ctx context.Context, manufacturerTests []SupportedManufacturerTests) error {
+	return nil
+}
+
+func (r *instrumentRepositoryMock) GetManufacturerTests(ctx context.Context) ([]SupportedManufacturerTests, error) {
+	return make([]SupportedManufacturerTests, 1), nil
+}
+
 func (r *instrumentRepositoryMock) CreateInstrument(ctx context.Context, instrument Instrument) (uuid.UUID, error) {
 	return uuid.Nil, nil
 }
@@ -812,12 +820,6 @@ func (r *instrumentRepositoryMock) DeleteFtpConfig(ctx context.Context, instrume
 	return nil
 }
 
-func (r *instrumentRepositoryMock) MarkAsSentToCerberus(ctx context.Context, id uuid.UUID) error {
-	return nil
-}
-func (r *instrumentRepositoryMock) GetUnsentToCerberus(ctx context.Context) ([]uuid.UUID, error) {
-	return make([]uuid.UUID, 0), nil
-}
 func (r *instrumentRepositoryMock) GetProtocolByID(ctx context.Context, id uuid.UUID) (SupportedProtocol, error) {
 	return SupportedProtocol{}, nil
 }
