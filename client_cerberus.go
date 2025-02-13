@@ -278,7 +278,7 @@ func (c *cerberusClient) SendAnalysisResultImageBatch(images []WorkItemResultIma
 
 func (c *cerberusClient) VerifyInstrumentHash(hash string) error {
 	verifyTO := VerifyInstrumentTO{Hash: hash}
-	_, err := c.client.R().
+	resp, err := c.client.R().
 		SetHeader("Content-Type", "application/json").
 		SetBody(verifyTO).
 		Post(c.cerberusUrl + "/v1/instruments/verify")
@@ -286,6 +286,11 @@ func (c *cerberusClient) VerifyInstrumentHash(hash string) error {
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to call Cerberus API (/v1/instrument/verify)")
 		return err
+	}
+
+	if resp.IsError() {
+		log.Error().Int("Code", resp.StatusCode()).Msg("Failed to call Cerberus API (/v1/instrument/verify)")
+		return fmt.Errorf("unexpected error from cerberus %d", resp.StatusCode())
 	}
 
 	return nil

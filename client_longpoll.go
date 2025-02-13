@@ -121,10 +121,14 @@ func (l *longPollClient) handleEvent(ctx context.Context, event *golongpoll.Even
 		Msg("Received event mapped to InstrumentMessageTO")
 
 	// Handle the received message
-	l.processInstrumentMessage(ctx, messageTO)
+	err = l.processInstrumentMessage(ctx, messageTO)
+	if err != nil {
+		log.Error().Err(err).Interface("Message", messageTO).Msg("Failed to process event")
+		// TODO handle, failed chan or something
+	}
 }
 
-func (l *longPollClient) processInstrumentMessage(ctx context.Context, message InstrumentMessageTO) {
+func (l *longPollClient) processInstrumentMessage(ctx context.Context, message InstrumentMessageTO) error {
 	switch message.MessageType {
 	case MessageTypeCreate:
 		log.Info().Msgf("Processing creation event for InstrumentId: %s", message.InstrumentId)
@@ -132,7 +136,7 @@ func (l *longPollClient) processInstrumentMessage(ctx context.Context, message I
 		id, err := l.instrumentService.CreateInstrument(ctx, instrument)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to create instrument")
-			//TODO: handle, failed chan or something
+			return err
 		}
 		log.Info().Interface("UUID", id).Msg("Created instrument")
 	case MessageTypeUpdate:
@@ -141,7 +145,7 @@ func (l *longPollClient) processInstrumentMessage(ctx context.Context, message I
 		err := l.instrumentService.UpdateInstrument(ctx, instrument)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to update instrument")
-			//TODO: handle, failed chan or something
+			return err
 		}
 		log.Info().Msg("Updated instrument")
 	case MessageTypeDelete:
@@ -149,9 +153,11 @@ func (l *longPollClient) processInstrumentMessage(ctx context.Context, message I
 		err := l.instrumentService.DeleteInstrument(ctx, message.InstrumentId)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to delete instrument")
-			//TODO: handle, failed chan or something
+			return err
 		}
+		log.Info().Msg("Deleted instrument")
 	default:
 		log.Warn().Msgf("Unknown message type for InstrumentId: %s", message.InstrumentId)
 	}
+	return nil
 }

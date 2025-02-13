@@ -179,19 +179,59 @@ func HashInstrument(instrument Instrument) string {
 
 	// Hash slices AnalyteMappings, RequestMappings, SortingRules, and Settings
 	hashSlice(&builder, instrument.AnalyteMappings, func(a AnalyteMapping) string {
-		return a.ID.String() + a.InstrumentAnalyte
+		var analyteBuilder strings.Builder
+		analyteBuilder.WriteString(a.AnalyteID.String())
+		analyteBuilder.WriteString(a.InstrumentAnalyte)
+		analyteBuilder.WriteString(string(a.ResultType))
+
+		// Hash nested ChannelMappings
+		hashSlice(&analyteBuilder, a.ChannelMappings, func(c ChannelMapping) string {
+			return c.ChannelID.String() + c.InstrumentChannel
+		})
+
+		// Hash nested ResultMappings
+		hashSlice(&analyteBuilder, a.ResultMappings, func(r ResultMapping) string {
+			return r.Key + r.Value + fmt.Sprintf("%d", r.Index)
+		})
+
+		return analyteBuilder.String()
 	})
 
 	hashSlice(&builder, instrument.RequestMappings, func(r RequestMapping) string {
-		return r.ID.String() + r.Code
+		var reqBuilder strings.Builder
+		reqBuilder.WriteString(r.Code)
+		reqBuilder.WriteString(fmt.Sprintf("%t", r.IsDefault))
+
+		// Hash AnalyteIDs (sorting ensures consistent order)
+		analyteIDs := make([]string, len(r.AnalyteIDs))
+		for i, id := range r.AnalyteIDs {
+			analyteIDs[i] = id.String()
+		}
+		sort.Strings(analyteIDs)
+		for _, id := range analyteIDs {
+			reqBuilder.WriteString(id)
+		}
+
+		return reqBuilder.String()
 	})
 
 	hashSlice(&builder, instrument.SortingRules, func(s SortingRule) string {
-		return s.ID.String() + s.Target
+		var ruleBuilder strings.Builder
+		ruleBuilder.WriteString(s.InstrumentID.String())
+		ruleBuilder.WriteString(s.Target)
+		ruleBuilder.WriteString(s.Programme)
+		ruleBuilder.WriteString(fmt.Sprintf("%d", s.Priority))
+
+		// Hash Condition if it exists
+		if s.Condition != nil {
+			ruleBuilder.WriteString(hashCondition(s.Condition))
+		}
+
+		return ruleBuilder.String()
 	})
 
 	hashSlice(&builder, instrument.Settings, func(s InstrumentSetting) string {
-		return s.ID.String() + s.Value
+		return s.ProtocolSettingID.String() + s.Value
 	})
 
 	// Create the hash
@@ -208,4 +248,50 @@ func hashSlice[T any](builder *strings.Builder, slice []T, toString func(T) stri
 	for _, item := range slice {
 		builder.WriteString(toString(item))
 	}
+}
+
+// Recursive function to hash Condition structs
+func hashCondition(cond *Condition) string {
+	if cond == nil {
+		return ""
+	}
+
+	var condBuilder strings.Builder
+	if cond.Name != nil {
+		condBuilder.WriteString(*cond.Name)
+	}
+	condBuilder.WriteString(string(cond.Operator))
+	condBuilder.WriteString(fmt.Sprintf("%t", cond.NegateSubCondition1))
+	condBuilder.WriteString(fmt.Sprintf("%t", cond.NegateSubCondition2))
+
+	// Recursively hash subconditions
+	condBuilder.WriteString(hashCondition(cond.SubCondition1))
+	condBuilder.WriteString(hashCondition(cond.SubCondition2))
+
+	// Hash operands if present
+	condBuilder.WriteString(hashOperand(cond.Operand1))
+	condBuilder.WriteString(hashOperand(cond.Operand2))
+
+	return condBuilder.String()
+}
+
+// Function to hash ConditionOperand structs
+func hashOperand(operand *ConditionOperand) string {
+	if operand == nil {
+		return ""
+	}
+
+	var operandBuilder strings.Builder
+	if operand.Name != nil {
+		operandBuilder.WriteString(*operand.Name)
+	}
+	operandBuilder.WriteString(string(operand.Type))
+	if operand.ConstantValue != nil {
+		operandBuilder.WriteString(*operand.ConstantValue)
+	}
+	if operand.ExtraValueKey != nil {
+		operandBuilder.WriteString(*operand.ExtraValueKey)
+	}
+
+	return operandBuilder.String()
 }
