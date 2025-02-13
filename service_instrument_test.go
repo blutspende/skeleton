@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/blutspende/skeleton/config"
 	"github.com/blutspende/skeleton/db"
 	"github.com/blutspende/skeleton/migrator"
 	"github.com/google/uuid"
@@ -25,14 +24,6 @@ func TestRegisterCreatedInstrument(t *testing.T) {
 	_ = migrator.Run(context.Background(), sqlConn, schemaName)
 	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
 
-	config := config.Configuration{
-		APIPort:                          5000,
-		Authorization:                    false,
-		PermittedOrigin:                  "*",
-		ApplicationName:                  "Register instrument retry test",
-		TCPListenerPort:                  5401,
-		InstrumentTransferRetryDelayInMs: 50,
-	}
 	testDoneCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	registerInstrumentAfterTrialCount := 3
 	dbConn := db.CreateDbConnector(sqlConn)
@@ -48,15 +39,12 @@ func TestRegisterCreatedInstrument(t *testing.T) {
 	}
 	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
 
-	ctx, cancelSkeleton := context.WithCancel(context.Background())
-
-	defer cancelSkeleton()
 	conditionRepository := NewConditionRepository(dbConn, schemaName)
 	conditionService := NewConditionService(conditionRepository)
 	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
 	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
 	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
-	instrumentService := NewInstrumentService(&config, sortingRuleService, instrumentRepository, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
+	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, NewInstrumentCache(), cerberusClientMock)
 
 	_, _ = instrumentService.CreateInstrument(context.Background(), Instrument{
 		ID:             uuid.MustParse("68f34e1d-1faa-4101-9e79-a743b420ab4e"),
@@ -89,16 +77,6 @@ func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
 	_ = migrator.Run(context.Background(), sqlConn, schemaName)
 	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
 
-	configuration := config.Configuration{
-		APIPort:                          5000,
-		Authorization:                    false,
-		PermittedOrigin:                  "*",
-		ApplicationName:                  "Register instrument retry test",
-		TCPListenerPort:                  5401,
-		InstrumentTransferRetryDelayInMs: 50,
-		ClientID:                         "clientID",
-		ClientSecret:                     "clientSecret",
-	}
 	dbConn := db.CreateDbConnector(sqlConn)
 	cerberusClientMock := &cerberusClientMock{
 		registerInstrumentFunc: func(instrument Instrument) error {
@@ -107,16 +85,12 @@ func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
 	}
 	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
 
-	ctxWithCancel, cancel := context.WithCancel(context.Background())
-
-	defer cancel()
-
 	conditionRepository := NewConditionRepository(dbConn, schemaName)
 	conditionService := NewConditionService(conditionRepository)
 	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
 	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
 	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
-	instrumentService := NewInstrumentService(&configuration, sortingRuleService, instrumentRepository, NewSkeletonManager(ctxWithCancel), NewInstrumentCache(), cerberusClientMock)
+	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, NewInstrumentCache(), cerberusClientMock)
 
 	clientPort := 22
 	instrumentWithFtp := Instrument{
@@ -229,16 +203,6 @@ func TestFtpConfigConnectionModeChange(t *testing.T) {
 	_ = migrator.Run(context.Background(), sqlConn, schemaName)
 	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
 
-	configuration := config.Configuration{
-		APIPort:                          5000,
-		Authorization:                    false,
-		PermittedOrigin:                  "*",
-		ApplicationName:                  "Register instrument retry test",
-		TCPListenerPort:                  5401,
-		InstrumentTransferRetryDelayInMs: 50,
-		ClientID:                         "clientID",
-		ClientSecret:                     "clientSecret",
-	}
 	dbConn := db.CreateDbConnector(sqlConn)
 	cerberusClientMock := &cerberusClientMock{
 		registerInstrumentFunc: func(instrument Instrument) error {
@@ -247,15 +211,12 @@ func TestFtpConfigConnectionModeChange(t *testing.T) {
 	}
 	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
 
-	ctxWithCancel, cancel := context.WithCancel(context.Background())
-
-	defer cancel()
 	conditionRepository := NewConditionRepository(dbConn, schemaName)
 	conditionService := NewConditionService(conditionRepository)
 	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
 	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
 	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
-	instrumentService := NewInstrumentService(&configuration, sortingRuleService, instrumentRepository, NewSkeletonManager(ctxWithCancel), NewInstrumentCache(), cerberusClientMock)
+	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, NewInstrumentCache(), cerberusClientMock)
 
 	clientPort := 22
 	ctx := context.Background()
@@ -361,16 +322,6 @@ func TestUpdateInstrument(t *testing.T) {
 	_ = skeletonMigrator.Run(context.Background(), sqlConn, schemaName)
 	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
 
-	configuration := config.Configuration{
-		APIPort:                          5000,
-		Authorization:                    false,
-		PermittedOrigin:                  "*",
-		ApplicationName:                  "Register instrument retry test",
-		TCPListenerPort:                  5401,
-		InstrumentTransferRetryDelayInMs: 50,
-		ClientID:                         "clientID",
-		ClientSecret:                     "clientSecret",
-	}
 	dbConn := db.CreateDbConnector(sqlConn)
 	cerberusClientMock := &cerberusClientMock{
 		registerInstrumentFunc: func(instrument Instrument) error {
@@ -379,15 +330,12 @@ func TestUpdateInstrument(t *testing.T) {
 	}
 	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
 
-	ctxWithCancel, cancel := context.WithCancel(context.Background())
-
-	defer cancel()
 	conditionRepository := NewConditionRepository(dbConn, schemaName)
 	conditionService := NewConditionService(conditionRepository)
 	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
 	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
 	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
-	instrumentService := NewInstrumentService(&configuration, sortingRuleService, instrumentRepository, NewSkeletonManager(ctxWithCancel), NewInstrumentCache(), cerberusClientMock)
+	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, NewInstrumentCache(), cerberusClientMock)
 
 	var protocolID uuid.UUID
 	err := dbConn.QueryRowx(`INSERT INTO instrument_test.sk_supported_protocols (name, description) VALUES('Test Protocol', 'Test Protocol Description') RETURNING id;`).Scan(&protocolID)
@@ -645,14 +593,6 @@ func TestUpdateInstrument(t *testing.T) {
 }
 
 func TestHidePassword(t *testing.T) {
-	configuration := config.Configuration{
-		APIPort:                          5000,
-		Authorization:                    false,
-		PermittedOrigin:                  "*",
-		ApplicationName:                  "Register instrument retry test",
-		TCPListenerPort:                  5401,
-		InstrumentTransferRetryDelayInMs: 50,
-	}
 	cerberusClientMock := &cerberusClientMock{
 		registerInstrumentFunc: func(instrument Instrument) error {
 			return nil
@@ -679,7 +619,7 @@ func TestHidePassword(t *testing.T) {
 	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
 	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
 	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
-	instrumentService := NewInstrumentService(&configuration, sortingRuleService, instrumentRepository, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
+	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, NewInstrumentCache(), cerberusClientMock)
 	instr := Instrument{
 		Name:           "test",
 		ProtocolID:     uuid.MustParse("abb539a3-286f-4c15-a7b7-2e9adf6eab91"),
@@ -712,7 +652,6 @@ func TestHidePassword(t *testing.T) {
 	assert.Equal(t, 2, len(instrument.Settings))
 	assert.Equal(t, "ThisIsMyPassword", instrument.Settings[1].Value)
 	assert.Equal(t, uuid.MustParse("c81c77cf-f17a-402d-a44b-a0194eb00a29"), instrument.Settings[1].ProtocolSettingID)
-	instrumentService.HidePassword(context.TODO(), &instrument)
 	assert.Equal(t, "SomeSetting", instrument.Settings[0].Value)
 	assert.Equal(t, uuid.MustParse("1f663361-3f2d-4c43-8cf6-65cec3fc88ab"), instrument.Settings[0].ProtocolSettingID)
 	assert.Equal(t, "", instrument.Settings[1].Value)

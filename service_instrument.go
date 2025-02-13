@@ -2,8 +2,6 @@ package skeleton
 
 import (
 	"context"
-
-	"github.com/blutspende/skeleton/config"
 	"github.com/blutspende/skeleton/db"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
@@ -17,39 +15,28 @@ type InstrumentService interface {
 	UpdateInstrument(ctx context.Context, instrument Instrument) error
 	DeleteInstrument(ctx context.Context, id uuid.UUID) error
 	GetSupportedProtocols(ctx context.Context) ([]SupportedProtocol, error)
-	GetProtocolAbilities(ctx context.Context, protocolID uuid.UUID) ([]ProtocolAbility, error)
 	GetManufacturerTests(ctx context.Context) ([]SupportedManufacturerTests, error)
-	GetEncodings(ctx context.Context, protocolID uuid.UUID) ([]string, error)
 	UpsertSupportedProtocol(ctx context.Context, id uuid.UUID, name string, description string, abilities []ProtocolAbility, settings []ProtocolSetting) error
 	UpsertManufacturerTests(ctx context.Context, manufacturerTests []SupportedManufacturerTests) error
 	UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error
 	CheckAnalytesUsage(ctx context.Context, analyteIDs []uuid.UUID) (map[uuid.UUID][]Instrument, error)
-	HidePassword(ctx context.Context, instrument *Instrument) error
-	ReprocessInstrumentData(ctx context.Context, batchIDs []uuid.UUID) error
-	ReprocessInstrumentDataBySampleCode(ctx context.Context, sampleCode string) error
 }
 
 type instrumentService struct {
-	config               *config.Configuration
 	sortingRuleService   SortingRuleService
 	instrumentRepository InstrumentRepository
-	manager              Manager
 	instrumentCache      InstrumentCache
 	cerberusClient       CerberusClient
 }
 
 func NewInstrumentService(
-	config *config.Configuration,
 	sortingRuleService SortingRuleService,
 	instrumentRepository InstrumentRepository,
-	manager Manager,
 	instrumentCache InstrumentCache,
 	cerberusClient CerberusClient) InstrumentService {
 	service := &instrumentService{
-		config:               config,
 		sortingRuleService:   sortingRuleService,
 		instrumentRepository: instrumentRepository,
-		manager:              manager,
 		instrumentCache:      instrumentCache,
 		cerberusClient:       cerberusClient,
 	}
@@ -789,20 +776,6 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 		}
 	}
 
-	// TODO logcom later
-	//newInstrument, err := s.GetInstrumentByID(ctx, tx, instrument.ID, true)
-	//if err != nil {
-	//	_ = tx.Rollback()
-	//	return err
-	//}
-
-	//err = logcom.SendAuditLogWithModification(ctx, "INSTRUMENT", oldInstrument.Name+"("+oldInstrument.ID.String()+")", oldInstrument, newInstrument)
-	//if err != nil {
-	//	log.Error().Err(err).Msg("Failed to audit instrument update")
-	//	_ = tx.Rollback()
-	//	return ErrFailedToAudit
-	//}
-
 	instrumentHash := HashInstrument(instrument)
 	err = s.cerberusClient.VerifyInstrumentHash(instrumentHash)
 	if err != nil {
@@ -864,10 +837,6 @@ func (s *instrumentService) GetSupportedProtocols(ctx context.Context) ([]Suppor
 	return supportedProtocols, nil
 }
 
-func (s *instrumentService) GetProtocolAbilities(ctx context.Context, protocolID uuid.UUID) ([]ProtocolAbility, error) {
-	return s.instrumentRepository.GetProtocolAbilities(ctx, protocolID)
-}
-
 func (s *instrumentService) GetManufacturerTests(ctx context.Context) ([]SupportedManufacturerTests, error) {
 	tests, err := s.instrumentRepository.GetManufacturerTests(ctx)
 	if err != nil {
@@ -885,17 +854,6 @@ func (s *instrumentService) GetManufacturerTests(ctx context.Context) ([]Support
 		}
 	}
 	return tests, nil
-}
-
-func (s *instrumentService) GetEncodings(ctx context.Context, protocolID uuid.UUID) ([]string, error) {
-	encodings, err := s.manager.GetCallbackHandler().GetEncodingList(protocolID)
-	if err != nil {
-		return nil, err
-	}
-	if len(encodings) < 1 {
-		return s.instrumentRepository.GetEncodings(ctx)
-	}
-	return encodings, nil
 }
 
 func (s *instrumentService) UpsertSupportedProtocol(ctx context.Context, id uuid.UUID, name string, description string, abilities []ProtocolAbility, settings []ProtocolSetting) error {
@@ -974,10 +932,6 @@ func (s *instrumentService) UpsertManufacturerTests(ctx context.Context, manufac
 	return nil
 }
 
-func (s *instrumentService) UpsertProtocolAbilities(ctx context.Context, protocolID uuid.UUID, protocolAbilities []ProtocolAbility) error {
-	return s.instrumentRepository.UpsertProtocolAbilities(ctx, protocolID, protocolAbilities)
-}
-
 func (s *instrumentService) UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error {
 	err := s.instrumentRepository.UpdateInstrumentStatus(ctx, id, status)
 	if err != nil {
@@ -991,37 +945,4 @@ func (s *instrumentService) UpdateInstrumentStatus(ctx context.Context, id uuid.
 
 func (s *instrumentService) CheckAnalytesUsage(ctx context.Context, analyteIDs []uuid.UUID) (map[uuid.UUID][]Instrument, error) {
 	return s.instrumentRepository.CheckAnalytesUsage(ctx, analyteIDs)
-}
-
-func (s *instrumentService) HidePassword(ctx context.Context, instrument *Instrument) error {
-	protocolSettings, err := s.instrumentRepository.GetProtocolSettings(ctx, instrument.ProtocolID)
-	if err != nil {
-		return err
-	}
-	passwordProtocolSettingsMap := make(map[uuid.UUID]any)
-	for _, protocolSetting := range protocolSettings {
-		if protocolSetting.Type == Password {
-			passwordProtocolSettingsMap[protocolSetting.ID] = nil
-		}
-	}
-
-	if len(passwordProtocolSettingsMap) == 0 {
-		return nil
-	}
-
-	for i := range instrument.Settings {
-		if _, ok := passwordProtocolSettingsMap[instrument.Settings[i].ProtocolSettingID]; ok {
-			instrument.Settings[i].Value = ""
-		}
-	}
-
-	return nil
-}
-
-func (s *instrumentService) ReprocessInstrumentData(ctx context.Context, batchIDs []uuid.UUID) error {
-	return s.manager.GetCallbackHandler().ReprocessInstrumentData(batchIDs)
-}
-
-func (s *instrumentService) ReprocessInstrumentDataBySampleCode(ctx context.Context, sampleCode string) error {
-	return s.manager.GetCallbackHandler().ReprocessInstrumentDataBySampleCode(sampleCode)
 }

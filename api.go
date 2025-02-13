@@ -85,35 +85,6 @@ func newAPI(engine *gin.Engine, config *config.Configuration, authManager AuthMa
 		v1Group.Use(authMiddleWare)
 	}
 
-	instrumentsGroup := v1Group.Group("/instruments")
-	{
-		instrumentsGroup.GET("", api.GetInstruments)
-		instrumentsGroup.POST("", middleware.RoleProtection([]middleware.UserRole{middleware.Admin}, true, api.config.Authorization), api.CreateInstrument)
-		instrumentsGroup.GET("/:instrumentId", api.GetInstrumentByID)
-		instrumentsGroup.GET("/:instrumentId/requests", api.GetAnalysisRequestsInfo)
-		instrumentsGroup.GET("/:instrumentId/results", api.GetAnalysisResultsInfo)
-		instrumentsGroup.GET("/:instrumentId/list/transmissions", api.GetAnalysisBatches)
-		instrumentsGroup.PUT("/:instrumentId", middleware.RoleProtection([]middleware.UserRole{middleware.Admin}, true, api.config.Authorization), api.UpdateInstrument)
-		instrumentsGroup.DELETE("/:instrumentId", middleware.RoleProtection([]middleware.UserRole{middleware.Admin}, true, api.config.Authorization), api.DeleteInstrument)
-		instrumentsGroup.POST("/result/:resultID/retransmit", api.RetransmitResult)
-		instrumentsGroup.POST("/result/retransmit/batches", api.RetransmitResultBatches)
-		instrumentsGroup.POST("/reprocess", api.ReprocessInstrumentData)
-		instrumentsGroup.POST("/reprocess/sample-code", api.ReprocessInstrumentDataBySampleCode)
-		instrumentsGroup.GET("/protocol/:protocolId/encodings", api.GetEncodings)
-		instrumentsGroup.GET("/:instrumentId/console/handshake", middleware.SSEHeadersMiddleware(), api.consoleLogSSEServer.ServeHTTP())
-
-		messagesGroup := instrumentsGroup.Group("/:instrumentId/messages")
-		{
-			messagesGroup.GET("", api.GetMessages)
-		}
-	}
-
-	protocolVersions := v1Group.Group("/protocol-versions")
-	{
-		protocolVersions.GET("", api.GetSupportedProtocols)
-		protocolVersions.GET("/:protocolVersionId/abilities", api.GetProtocolAbilities)
-	}
-
 	analysisRequests := v1Group.Group("analysis-requests")
 	{
 		analysisRequests.POST("/batch", api.CreateAnalysisRequestBatch)

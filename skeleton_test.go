@@ -132,7 +132,7 @@ func TestSubmitAnalysisRequestsParallel(t *testing.T) {
 	conditionService := NewConditionService(conditionRepository)
 	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
 	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
-	instrumentService := NewInstrumentService(&configuration, sortingRuleService, instrumentRepository, skeletonManager, NewInstrumentCache(), cerberusClientMock)
+	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, NewInstrumentCache(), cerberusClientMock)
 	consoleLogService := service.NewConsoleLogService(consoleLogRepository, nil)
 
 	ginEngine := gin.New()
@@ -248,7 +248,7 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 	conditionService := NewConditionService(conditionRepository)
 	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
 	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
-	instrumentService := NewInstrumentService(&configuration, sortingRuleService, instrumentRepository, skeletonManager, NewInstrumentCache(), cerberusClientMock)
+	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, NewInstrumentCache(), cerberusClientMock)
 	consoleLogService := service.NewConsoleLogService(consoleLogRepository, nil)
 
 	responseRecorder := &httptest.ResponseRecorder{}
@@ -368,7 +368,7 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 	conditionService := NewConditionService(conditionRepository)
 	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
 	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
-	instrumentService := NewInstrumentService(&configuration, sortingRuleService, instrumentRepository, skeletonManager, NewInstrumentCache(), cerberusClientMock)
+	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, NewInstrumentCache(), cerberusClientMock)
 	consoleLogService := service.NewConsoleLogService(consoleLogRepository, nil)
 
 	api := NewAPI(&configuration, &authManager, analysisService, instrumentService, consoleLogService, nil)
@@ -589,7 +589,7 @@ func TestAnalysisResultsReprocessing(t *testing.T) {
 	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
 	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
 	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
-	instrumentService := NewInstrumentService(&configuration, sortingRuleService, instrumentRepository, skeletonManager, NewInstrumentCache(), cerberusClientMock)
+	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, NewInstrumentCache(), cerberusClientMock)
 	consoleLogService := service.NewConsoleLogService(consoleLogRepository, nil)
 	ginEngine := gin.New()
 
