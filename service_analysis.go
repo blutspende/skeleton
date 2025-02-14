@@ -12,7 +12,7 @@ import (
 var ErrAnalysisRequestWithMatchingWorkItemIdFound = errors.New("analysis request with matching workitem id found")
 
 type AnalysisService interface {
-	CreateAnalysisRequests(ctx context.Context, analysisRequests []AnalysisRequest) ([]AnalysisRequestStatus, error)
+	CreateAnalysisRequests(ctx context.Context, analysisRequests []AnalysisRequest) error
 	ProcessAnalysisRequests(ctx context.Context, analysisRequests []AnalysisRequest) error
 	RevokeAnalysisRequests(ctx context.Context, workItemIDs []uuid.UUID) error
 	ReexamineAnalysisRequestsBatch(ctx context.Context, workItemIDs []uuid.UUID) error
@@ -42,54 +42,51 @@ func NewAnalysisService(analysisRepository AnalysisRepository, deaClient DeaClie
 	}
 }
 
-func (as *analysisService) CreateAnalysisRequests(ctx context.Context, analysisRequests []AnalysisRequest) ([]AnalysisRequestStatus, error) {
+func (as *analysisService) CreateAnalysisRequests(ctx context.Context, analysisRequests []AnalysisRequest) error {
 	ts := time.Now().UTC()
 	for i := range analysisRequests {
+		if analysisRequests[i].ID == uuid.Nil {
+			analysisRequests[i].ID = uuid.New()
+		}
 		analysisRequests[i].CreatedAt = ts
 	}
 	tx, err := as.analysisRepository.CreateTransaction()
 	if err != nil {
-		return nil, err
+		return err
 	}
-	_, savedAnalysisRequestWorkItemIDs, err := as.analysisRepository.WithTransaction(tx).CreateAnalysisRequestsBatch(ctx, analysisRequests)
+	savedIDs, err := as.analysisRepository.WithTransaction(tx).CreateAnalysisRequestsBatch(ctx, analysisRequests)
 	if err != nil {
 		_ = tx.Rollback()
-		return nil, err
+		return err
 	}
-
-	savedWorkItemIDsMap := ConvertUUIDsToMap(savedAnalysisRequestWorkItemIDs)
+	savedIDsMap := make(map[uuid.UUID]any)
+	for i := range savedIDs {
+		savedIDsMap[savedIDs[i]] = nil
+	}
 	extraValuesMap := make(map[uuid.UUID][]ExtraValue)
 	analysisRequestsToProcess := make([]AnalysisRequest, 0)
-	analysisRequestStatuses := make([]AnalysisRequestStatus, len(analysisRequests))
 	for i := range analysisRequests {
-		analysisRequestStatuses[i] = AnalysisRequestStatus{
-			WorkItemID: analysisRequests[i].WorkItemID,
-			Error:      nil,
-		}
-		if _, ok := savedWorkItemIDsMap[analysisRequests[i].WorkItemID]; !ok {
-			err = ErrAnalysisRequestWithMatchingWorkItemIdFound
-			analysisRequestStatuses[i].Error = err
+		if _, ok := savedIDsMap[analysisRequests[i].ID]; !ok {
 			continue
 		}
-
 		extraValuesMap[analysisRequests[i].ID] = analysisRequests[i].ExtraValues
 		analysisRequestsToProcess = append(analysisRequestsToProcess, analysisRequests[i])
 	}
 
-	extraValuesErr := as.analysisRepository.WithTransaction(tx).CreateAnalysisRequestExtraValues(ctx, extraValuesMap)
-	if extraValuesErr != nil {
+	err = as.analysisRepository.WithTransaction(tx).CreateAnalysisRequestExtraValues(ctx, extraValuesMap)
+	if err != nil {
 		_ = tx.Rollback()
-		return nil, extraValuesErr
+		return err
 	}
 
-	commitErr := tx.Commit()
-	if commitErr != nil {
+	err = tx.Commit()
+	if err != nil {
 		_ = tx.Rollback()
-		return nil, commitErr
+		return err
 	}
-
 	as.manager.SendAnalysisRequestsForProcessing(analysisRequestsToProcess)
-	return analysisRequestStatuses, err
+
+	return nil
 }
 
 func (as *analysisService) ProcessAnalysisRequests(ctx context.Context, analysisRequests []AnalysisRequest) error {

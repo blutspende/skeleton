@@ -115,7 +115,8 @@ func New(ctx context.Context, serviceName, displayName string, requestedExtraVal
 	}
 	authManager := NewAuthManager(&config,
 		NewRestyClient(context.Background(), &config, true))
-	internalApiRestyClient := NewRestyClientWithAuthManager(context.Background(), &config, authManager)
+	internalApiRestyClient := NewRestyClientWithAuthManager(context.Background(), &config, authManager, config.StandardAPIClientTimeoutSeconds)
+	longPollingApiRestyClient := NewRestyClientWithAuthManager(context.Background(), &config, authManager, 0) // do not set timeout for resty client, it is handled by longpollClient (prevents unnecessary context deadline exceeded errors)
 	cerberusClient, err := NewCerberusClient(config.CerberusURL, internalApiRestyClient)
 	if err != nil {
 		return nil, err
@@ -138,9 +139,8 @@ func New(ctx context.Context, serviceName, displayName string, requestedExtraVal
 	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, instrumentCache, cerberusClient)
 	consoleLogSSEServer := server.NewConsoleLogSSEServer(service.NewConsoleLogSSEClientListener())
 	consoleLogService := service.NewConsoleLogService(consoleLogRepository, consoleLogSSEServer)
-	api := NewAPI(&config, authManager, analysisService, instrumentService, consoleLogService, consoleLogSSEServer)
 
-	longpollClient := NewLongPollClient(internalApiRestyClient, instrumentService, serviceName, config.CerberusURL)
+	longpollClient := NewLongPollClient(longPollingApiRestyClient, instrumentService, serviceName, config.CerberusURL, config.LongPollingAPIClientTimeoutSeconds)
 
 	logcom.Init(logcom.Configuration{
 		ServiceName: config.LogComServiceName,
@@ -153,5 +153,5 @@ func New(ctx context.Context, serviceName, displayName string, requestedExtraVal
 		},
 	})
 
-	return NewSkeleton(ctx, serviceName, displayName, requestedExtraValueKeys, encodings, sqlConn, dbSchema, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, sortingRuleService, manager, cerberusClient, longpollClient, deaClient, config)
+	return NewSkeleton(ctx, serviceName, displayName, requestedExtraValueKeys, encodings, sqlConn, dbSchema, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, sortingRuleService, manager, cerberusClient, longpollClient, deaClient, config)
 }

@@ -15,12 +15,6 @@ type GinApi interface {
 	Run() error
 }
 
-// AnalysisRequestResponseItemV1 - Response of the AnalysisService to indicate the status of the requests
-type AnalysisRequestStatus struct {
-	WorkItemID uuid.UUID
-	Error      error
-}
-
 // AnalysisRequest - Analysis Request as processed by our AnalysisService
 // Do not use in implementation directly
 type AnalysisRequest struct {

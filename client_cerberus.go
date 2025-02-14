@@ -14,32 +14,32 @@ import (
 )
 
 const (
-	MsgSendResultBatchFailed = "send result batch failed"
+	MsgSendResultBatchFailed      = "send result batch failed"
+	MsgSyncAnalysisRequestsFailed = "sync analysis requests failed"
 )
 
 var (
-	ErrSendResultBatchFailed = errors.New(MsgSendResultBatchFailed)
+	ErrSendResultBatchFailed      = errors.New(MsgSendResultBatchFailed)
+	ErrSyncAnalysisRequestsFailed = errors.New(MsgSyncAnalysisRequestsFailed)
 )
 
 type CerberusClient interface {
-	RegisterInstrumentDriver(name, displayName, apiVersion string, apiPort uint16, tlsEnabled bool, extraValueKeys []string,
-		protocols []supportedProtocolTO, tests []supportedManufacturerTestTO, encodings []string) error
+	RegisterInstrumentDriver(name, displayName string, extraValueKeys []string, protocols []supportedProtocolTO, tests []supportedManufacturerTestTO, encodings []string) error
 	SendAnalysisResultBatch(analysisResults []AnalysisResultTO) (AnalysisResultBatchResponse, error)
 	SendAnalysisResultImageBatch(images []WorkItemResultImageTO) error
 	VerifyInstrumentHash(hash string) error
+	SyncAnalysisRequests(workItemIDs []uuid.UUID, syncType string) error
 }
 
 type cerberusClient struct {
 	client      *resty.Client
 	cerberusUrl string
+	driverName  string
 }
 
 type registerInstrumentDriverTO struct {
 	Name              string                        `json:"name" binding:"required"`
 	DisplayName       string                        `json:"display_name"`
-	APIVersion        string                        `json:"apiVersion" binding:"required"`
-	APIPort           uint16                        `json:"apiPort" binding:"required"`
-	TLSEnabled        bool                          `json:"tlsEnabled" default:"false"`
 	ExtraValueKeys    []string                      `json:"extraValueKeys,omitempty"`
 	Protocols         []supportedProtocolTO         `json:"protocols"`
 	ManufacturerTests []supportedManufacturerTestTO `json:"manufacturerTests"`
@@ -130,16 +130,13 @@ func NewCerberusClient(cerberusUrl string, restyClient *resty.Client) (CerberusC
 	}, nil
 }
 
-func (c *cerberusClient) RegisterInstrumentDriver(name, displayName, apiVersion string, apiPort uint16, tlsEnabled bool, extraValueKeys []string,
+func (c *cerberusClient) RegisterInstrumentDriver(name, displayName string, extraValueKeys []string,
 	protocols []supportedProtocolTO, tests []supportedManufacturerTestTO, encodings []string) error {
 	resp, err := c.client.R().
 		SetHeader("Content-Type", "application/json").
 		SetBody(registerInstrumentDriverTO{
 			Name:              name,
 			DisplayName:       displayName,
-			APIVersion:        apiVersion,
-			APIPort:           apiPort,
-			TLSEnabled:        tlsEnabled,
 			ExtraValueKeys:    extraValueKeys,
 			Protocols:         protocols,
 			ManufacturerTests: tests,
@@ -161,7 +158,7 @@ func (c *cerberusClient) RegisterInstrumentDriver(name, displayName, apiVersion 
 		}
 		return errors.New(errReps.Message)
 	}
-
+	c.driverName = name
 	return nil
 }
 
@@ -279,7 +276,6 @@ func (c *cerberusClient) SendAnalysisResultImageBatch(images []WorkItemResultIma
 
 	return nil
 }
-
 func (c *cerberusClient) VerifyInstrumentHash(hash string) error {
 	verifyTO := VerifyInstrumentTO{Hash: hash}
 	resp, err := c.client.R().
@@ -294,6 +290,23 @@ func (c *cerberusClient) VerifyInstrumentHash(hash string) error {
 
 	if resp.IsError() {
 		log.Error().Int("Code", resp.StatusCode()).Msg("Failed to call Cerberus API (/v1/instrument/verify)")
+		return fmt.Errorf("unexpected error from cerberus %d", resp.StatusCode())
+	}
+
+	return nil
+}
+func (c *cerberusClient) SyncAnalysisRequests(workItemIDs []uuid.UUID, syncType string) error {
+	queryParams := make(map[string]string)
+	queryParams["driverName"] = c.driverName
+	queryParams["syncType"] = syncType
+	resp, err := c.client.R().
+		SetHeader("Content-Type", "application/json").
+		SetBody(workItemIDs).
+		SetQueryParams(queryParams).
+		Post(c.cerberusUrl + "/v1/instrument-drivers/analysis-requests/sync")
+
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to call Cerberus API (/v1/instrument-drivers/analysis-requests/sync)")
 		return fmt.Errorf("unexpected error from cerberus %d", resp.StatusCode())
 	}
 
