@@ -140,6 +140,16 @@ func ConvertUUIDsToMap(ids []uuid.UUID) map[uuid.UUID]any {
 	return idsMap
 }
 
+func HashDeletedInstrument(instrumentID uuid.UUID) string {
+	const deletedMarker = "DELETED"
+
+	hasher := sha256.New()
+	hasher.Write([]byte(deletedMarker))
+	hasher.Write([]byte(instrumentID.String()))
+
+	return hex.EncodeToString(hasher.Sum(nil))
+}
+
 func HashInstrument(instrument Instrument) string {
 	var builder strings.Builder
 

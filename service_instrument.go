@@ -807,6 +807,14 @@ func (s *instrumentService) DeleteInstrument(ctx context.Context, id uuid.UUID) 
 		return err
 	}
 
+	deletionHash := HashDeletedInstrument(id)
+	err = s.cerberusClient.VerifyInstrumentHash(deletionHash)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to verify instrument hash")
+		_ = tx.Rollback()
+		return err
+	}
+
 	err = tx.Commit()
 	if err != nil {
 		_ = tx.Rollback()
