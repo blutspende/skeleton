@@ -25,10 +25,6 @@ type SkeletonCallbackHandlerV1 interface {
 	// This method should be used e.g. to update standing caches regarding analysis requests whenever a request is received.
 	HandleAnalysisRequests(request []AnalysisRequest) error
 
-	// GetEncodingList is called when the Skeleton requires a list of supported encodings (strings)
-	// as known to be valid by the provided protocol
-	GetEncodingList(protocolId uuid.UUID) ([]string, error)
-
 	RevokeAnalysisRequests(request []AnalysisRequest)
 
 	ReexamineAnalysisRequests(request []AnalysisRequest)
@@ -112,7 +108,7 @@ type SkeletonAPI interface {
 	Start() error
 }
 
-func New(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys []string, sqlConn *sqlx.DB, dbSchema string) (SkeletonAPI, error) {
+func New(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, sqlConn *sqlx.DB, dbSchema string) (SkeletonAPI, error) {
 	config, err := config2.ReadConfiguration()
 	if err != nil {
 		return nil, err
@@ -157,5 +153,5 @@ func New(ctx context.Context, serviceName, displayName string, requestedExtraVal
 		},
 	})
 
-	return NewSkeleton(ctx, serviceName, displayName, requestedExtraValueKeys, sqlConn, dbSchema, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, sortingRuleService, manager, cerberusClient, longpollClient, deaClient, config)
+	return NewSkeleton(ctx, serviceName, displayName, requestedExtraValueKeys, encodings, sqlConn, dbSchema, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, sortingRuleService, manager, cerberusClient, longpollClient, deaClient, config)
 }

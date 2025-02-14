@@ -22,7 +22,8 @@ var (
 )
 
 type CerberusClient interface {
-	RegisterInstrumentDriver(name, displayName, apiVersion string, apiPort uint16, tlsEnabled bool, extraValueKeys []string, protocols []supportedProtocolTO, tests []supportedManufacturerTestTO) error
+	RegisterInstrumentDriver(name, displayName, apiVersion string, apiPort uint16, tlsEnabled bool, extraValueKeys []string,
+		protocols []supportedProtocolTO, tests []supportedManufacturerTestTO, encodings []string) error
 	SendAnalysisResultBatch(analysisResults []AnalysisResultTO) (AnalysisResultBatchResponse, error)
 	SendAnalysisResultImageBatch(images []WorkItemResultImageTO) error
 	VerifyInstrumentHash(hash string) error
@@ -42,6 +43,7 @@ type registerInstrumentDriverTO struct {
 	ExtraValueKeys    []string                      `json:"extraValueKeys,omitempty"`
 	Protocols         []supportedProtocolTO         `json:"protocols"`
 	ManufacturerTests []supportedManufacturerTestTO `json:"manufacturerTests"`
+	Encodings         []string                      `json:"encodings"`
 }
 
 type ExtraValueTO struct {
@@ -128,7 +130,8 @@ func NewCerberusClient(cerberusUrl string, restyClient *resty.Client) (CerberusC
 	}, nil
 }
 
-func (c *cerberusClient) RegisterInstrumentDriver(name, displayName, apiVersion string, apiPort uint16, tlsEnabled bool, extraValueKeys []string, protocols []supportedProtocolTO, tests []supportedManufacturerTestTO) error {
+func (c *cerberusClient) RegisterInstrumentDriver(name, displayName, apiVersion string, apiPort uint16, tlsEnabled bool, extraValueKeys []string,
+	protocols []supportedProtocolTO, tests []supportedManufacturerTestTO, encodings []string) error {
 	resp, err := c.client.R().
 		SetHeader("Content-Type", "application/json").
 		SetBody(registerInstrumentDriverTO{
@@ -140,6 +143,7 @@ func (c *cerberusClient) RegisterInstrumentDriver(name, displayName, apiVersion 
 			ExtraValueKeys:    extraValueKeys,
 			Protocols:         protocols,
 			ManufacturerTests: tests,
+			Encodings:         encodings,
 		}).
 		Post(c.cerberusUrl + "/v1/instrument-drivers")
 

@@ -43,6 +43,7 @@ type skeleton struct {
 	serviceName                string
 	displayName                string
 	extraValueKeys             []string
+	encodings                  []string
 }
 
 func (s *skeleton) SetCallbackHandler(eventHandler SkeletonCallbackHandlerV1) {
@@ -507,7 +508,7 @@ func (s *skeleton) registerDriverToCerberus(ctx context.Context) error {
 		}
 		manufacturerTestTOs := convertSupportedManufacturerTestsToSupportedManufacturerTestTOs(manufacturerTests)
 
-		err = s.cerberusClient.RegisterInstrumentDriver(s.serviceName, s.displayName, apiVersion, s.config.APIPort, s.config.EnableTLS, s.extraValueKeys, protocolsTos, manufacturerTestTOs)
+		err = s.cerberusClient.RegisterInstrumentDriver(s.serviceName, s.displayName, apiVersion, s.config.APIPort, s.config.EnableTLS, s.extraValueKeys, protocolsTos, manufacturerTestTOs, s.encodings)
 		if err != nil {
 			log.Warn().Err(err).Int("retryCount", retryCount).Msg("register instrument driver to cerberus failed")
 			retryCount++
@@ -875,12 +876,13 @@ func (s *skeleton) processStuckImagesToCerberus(ctx context.Context) {
 	}
 }
 
-func NewSkeleton(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys []string, sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api GinApi, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService service.ConsoleLogService, sortingRuleService SortingRuleService, manager Manager, cerberusClient CerberusClient, longpollClient LongPollClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
+func NewSkeleton(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api GinApi, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService service.ConsoleLogService, sortingRuleService SortingRuleService, manager Manager, cerberusClient CerberusClient, longpollClient LongPollClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
 	skeleton := &skeleton{
 		ctx:                        ctx,
 		serviceName:                serviceName,
 		displayName:                displayName,
 		extraValueKeys:             requestedExtraValueKeys,
+		encodings:                  encodings,
 		config:                     config,
 		sqlConn:                    sqlConn,
 		dbSchema:                   dbSchema,
