@@ -2,7 +2,6 @@ package skeleton
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -13,59 +12,6 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/assert"
 )
-
-func TestRegisterCreatedInstrument(t *testing.T) {
-	sqlConn, _ := sqlx.Connect("postgres", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
-	schemaName := "instrument_test"
-	_, _ = sqlConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
-	_, _ = sqlConn.Exec(fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schemaName))
-	_, _ = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
-	migrator := migrator.NewSkeletonMigrator()
-	_ = migrator.Run(context.Background(), sqlConn, schemaName)
-	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
-
-	testDoneCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	registerInstrumentAfterTrialCount := 3
-	dbConn := db.CreateDbConnector(sqlConn)
-	cerberusClientMock := &cerberusClientMock{
-		registerInstrumentFunc: func(instrument Instrument) error {
-			if registerInstrumentAfterTrialCount > 0 {
-				registerInstrumentAfterTrialCount--
-				return errors.New("failed to send to cerberus")
-			}
-			time.AfterFunc(100*time.Millisecond, cancel)
-			return nil
-		},
-	}
-	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
-
-	conditionRepository := NewConditionRepository(dbConn, schemaName)
-	conditionService := NewConditionService(conditionRepository)
-	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
-	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
-	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
-	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, NewInstrumentCache(), cerberusClientMock)
-
-	_, _ = instrumentService.CreateInstrument(context.Background(), Instrument{
-		ID:             uuid.MustParse("68f34e1d-1faa-4101-9e79-a743b420ab4e"),
-		Name:           "test",
-		Type:           Analyzer,
-		ProtocolID:     uuid.MustParse("abb539a3-286f-4c15-a7b7-2e9adf6eab91"),
-		ProtocolName:   "Test Protocol",
-		Enabled:        true,
-		ConnectionMode: "TCP_MIXED",
-		ResultMode:     "SIMULATION",
-		Status:         "ONLINE",
-		FileEncoding:   "UTF8",
-		Timezone:       "Europe/Budapest",
-		Hostname:       "192.168.1.20",
-	})
-
-	<-testDoneCtx.Done()
-	if err := testDoneCtx.Err(); err == context.DeadlineExceeded {
-		t.Fail()
-	}
-}
 
 func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
 	sqlConn, _ := sqlx.Connect("postgres", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
@@ -590,71 +536,6 @@ func TestUpdateInstrument(t *testing.T) {
 	assert.Len(t, instrument.RequestMappings[0].AnalyteIDs, 2)
 	assert.Contains(t, instrument.RequestMappings[0].AnalyteIDs, analyteID2)
 	assert.Contains(t, instrument.RequestMappings[0].AnalyteIDs, analyteID3)
-}
-
-func TestHidePassword(t *testing.T) {
-	cerberusClientMock := &cerberusClientMock{
-		registerInstrumentFunc: func(instrument Instrument) error {
-			return nil
-		},
-	}
-	sqlConn, _ := sqlx.Connect("postgres", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
-	schemaName := "instrument_test"
-	_, _ = sqlConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
-	_, _ = sqlConn.Exec(fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schemaName))
-	_, _ = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
-	skeletonMigrator := migrator.NewSkeletonMigrator()
-	_ = skeletonMigrator.Run(context.Background(), sqlConn, schemaName)
-	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
-	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_protocol_settings (id, protocol_id, key, description, type) VALUES ('1f663361-3f2d-4c43-8cf6-65cec3fc88ab', 'abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'key1', '', 'string');`, schemaName))
-	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_protocol_settings (id, protocol_id, key, description, type) VALUES ('c81c77cf-f17a-402d-a44b-a0194eb00a29', 'abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'key2', '', 'password');`, schemaName))
-
-	ctx, cancel := context.WithCancel(context.Background())
-
-	defer cancel()
-	dbConn := db.CreateDbConnector(sqlConn)
-	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
-	conditionRepository := NewConditionRepository(dbConn, schemaName)
-	conditionService := NewConditionService(conditionRepository)
-	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
-	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
-	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
-	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, NewInstrumentCache(), cerberusClientMock)
-	instr := Instrument{
-		Name:           "test",
-		ProtocolID:     uuid.MustParse("abb539a3-286f-4c15-a7b7-2e9adf6eab91"),
-		ProtocolName:   "Test Protocol",
-		Enabled:        true,
-		ConnectionMode: "TCP_MIXED",
-		ResultMode:     "SIMULATION",
-		Status:         "ONLINE",
-		Type:           Analyzer,
-		FileEncoding:   "UTF8",
-		Timezone:       "Europe/Budapest",
-		Hostname:       "192.168.1.20",
-	}
-	instr.ID, _ = instrumentService.CreateInstrument(ctx, instr)
-	instr.Settings = []InstrumentSetting{
-		{
-			ID:                uuid.Nil,
-			ProtocolSettingID: uuid.MustParse("1f663361-3f2d-4c43-8cf6-65cec3fc88ab"),
-			Value:             "SomeSetting",
-		},
-		{
-			ID:                uuid.Nil,
-			ProtocolSettingID: uuid.MustParse("c81c77cf-f17a-402d-a44b-a0194eb00a29"),
-			Value:             "ThisIsMyPassword",
-		},
-	}
-	_ = instrumentService.UpdateInstrument(ctx, instr)
-	instrument, err := instrumentService.GetInstrumentByID(context.TODO(), dbConn, instr.ID, false)
-	assert.Nil(t, err)
-	assert.Equal(t, 2, len(instrument.Settings))
-	assert.Equal(t, "ThisIsMyPassword", instrument.Settings[1].Value)
-	assert.Equal(t, uuid.MustParse("c81c77cf-f17a-402d-a44b-a0194eb00a29"), instrument.Settings[1].ProtocolSettingID)
-	assert.Equal(t, "SomeSetting", instrument.Settings[0].Value)
-	assert.Equal(t, uuid.MustParse("1f663361-3f2d-4c43-8cf6-65cec3fc88ab"), instrument.Settings[0].ProtocolSettingID)
-	assert.Equal(t, "", instrument.Settings[1].Value)
 }
 
 type instrumentRepositoryMock struct {

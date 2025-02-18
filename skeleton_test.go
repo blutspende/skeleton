@@ -699,7 +699,7 @@ type cerberusClientMock struct {
 	BatchResponse   AnalysisResultBatchResponse
 }
 
-func (m *cerberusClientMock) RegisterInstrumentDriver(name, displayName, apiVersion string, apiPort uint16, tlsEnabled bool, extraValueKeys []string, protocols []supportedProtocolTO, tests []supportedManufacturerTestTO) error {
+func (m *cerberusClientMock) RegisterInstrumentDriver(name, displayName, apiVersion string, apiPort uint16, tlsEnabled bool, extraValueKeys []string, protocols []supportedProtocolTO, tests []supportedManufacturerTestTO, encodings []string) error {
 	if m.registerInstrumentDriverFunc == nil {
 		return nil
 	}

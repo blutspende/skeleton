@@ -2155,7 +2155,7 @@ func (r *analysisRepository) DeleteOldCerberusQueueItems(ctx context.Context, cl
 func (r *analysisRepository) DeleteOldAnalysisRequestsWithTx(ctx context.Context, cleanupDays, limit int, tx db.DbConnector) (int64, error) {
 	txR := *r
 	txR.db = tx
-	query := fmt.Sprintf(`SELECT id, sample_code FROM %s.sk_analysis_requests WHERE valid_until_time < (current_date - ($1 ||' DAY')::INTERVAL) AND is_processed LIMIT $2;`, r.dbSchema)
+	query := fmt.Sprintf(`SELECT id, sample_code FROM %s.sk_analysis_requests WHERE valid_until_time < (current_date - make_interval(days := $1)) AND is_processed LIMIT $2;`, r.dbSchema)
 	rows, err := txR.db.QueryxContext(ctx, query, cleanupDays, limit)
 	if err != nil {
 		log.Error().Err(err).Msg("delete old analysis requests failed")
@@ -2293,7 +2293,7 @@ func (r *analysisRepository) DeleteOldAnalysisResultsWithTx(ctx context.Context,
 	txR := *r
 	txR.db = tx
 
-	query := fmt.Sprintf(`SELECT id FROM %s.sk_analysis_results WHERE GREATEST(valid_until, created_at + INTERVAL '14 DAYS') < (current_date - ($1 ||' DAY')::INTERVAL) AND is_processed LIMIT $2;`, r.dbSchema)
+	query := fmt.Sprintf(`SELECT id FROM %s.sk_analysis_results WHERE GREATEST(valid_until, created_at + INTERVAL '14 DAYS') < (current_date - make_interval(days := $1))  AND is_processed LIMIT $2;`, r.dbSchema)
 	rows, err := txR.db.QueryxContext(ctx, query, cleanupDays, limit)
 	if err != nil {
 		log.Error().Err(err).Msg("delete old analysis results failed")
