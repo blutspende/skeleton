@@ -479,7 +479,7 @@ func (s *skeleton) Start() error {
 	go s.processStuckImagesToCerberus(s.ctx)
 	go s.enqueueUnprocessedAnalysisRequests(s.ctx)
 	go s.enqueueUnprocessedAnalysisResults(s.ctx)
-	go s.longPollClient.StartLongPoll(s.ctx)
+	go s.longPollClient.StartInstrumentLongPoll(s.ctx)
 
 	// Todo - use cancellable context what is passed to the routines above too
 	err = s.api.Run()

@@ -679,7 +679,7 @@ func (m *authManagerMock) InvalidateClientCredential() {
 type longPollClientMock struct {
 }
 
-func (l longPollClientMock) StartLongPoll(ctx context.Context) {
+func (l longPollClientMock) StartInstrumentLongPoll(ctx context.Context) {
 }
 
 type deaClientMock struct {

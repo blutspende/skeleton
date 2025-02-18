@@ -29,7 +29,7 @@ type InstrumentMessageTO struct {
 }
 
 type LongPollClient interface {
-	StartLongPoll(ctx context.Context)
+	StartInstrumentLongPoll(ctx context.Context)
 }
 
 type longPollClient struct {
@@ -48,16 +48,14 @@ func NewLongPollClient(restyClient *resty.Client, instrumentService InstrumentSe
 	}
 }
 
-func (l *longPollClient) StartLongPoll(ctx context.Context) {
+func (l *longPollClient) StartInstrumentLongPoll(ctx context.Context) {
 	longPollPath, err := url.JoinPath(l.cerberusUrl, "/v1/instruments/poll-config")
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to parse URL for long-poll")
-		return
 	}
 	u, err := url.Parse(longPollPath)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to parse URL for long-poll")
-		return
 	}
 
 	log.Info().Msg("Sending long-poll request...")
