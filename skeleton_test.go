@@ -28,6 +28,7 @@ import (
 )
 
 const serviceName = "testInstrumentDriver"
+const displayName = "testDisplayName"
 
 func TestSkeletonStart(t *testing.T) {
 	sqlConn, err := sqlx.Connect("pgx", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
@@ -37,7 +38,7 @@ func TestSkeletonStart(t *testing.T) {
 
 	defer cancel()
 
-	skeletonApi, err := New(ctx, serviceName, []string{}, sqlConn, "skeleton")
+	skeletonApi, err := New(ctx, serviceName, displayName, []string{}, []string{}, sqlConn, "skeleton")
 	if err != nil {
 		return
 	}
@@ -123,6 +124,7 @@ func TestSubmitAnalysisRequestsParallel(t *testing.T) {
 			}, nil
 		},
 	}
+	longPollClientMock := &longPollClientMock{}
 	deaClientMock := &deaClientMock{}
 
 	analysisService := NewAnalysisService(analysisRepository, deaClientMock, cerberusClientMock, skeletonManager)
@@ -130,7 +132,7 @@ func TestSubmitAnalysisRequestsParallel(t *testing.T) {
 	conditionService := NewConditionService(conditionRepository)
 	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
 	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
-	instrumentService := NewInstrumentService(&configuration, sortingRuleService, instrumentRepository, skeletonManager, NewInstrumentCache(), cerberusClientMock)
+	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, NewInstrumentCache(), cerberusClientMock)
 	consoleLogService := service.NewConsoleLogService(consoleLogRepository, nil)
 
 	ginEngine := gin.New()
@@ -139,7 +141,7 @@ func TestSubmitAnalysisRequestsParallel(t *testing.T) {
 
 	api := newAPI(ginEngine, &configuration, &authManager, analysisService, instrumentService, consoleLogService, nil)
 
-	skeletonInstance, _ := NewSkeleton(ctx, serviceName, []string{}, sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, sortingRuleService, skeletonManager, cerberusClientMock, deaClientMock, configuration)
+	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, sortingRuleService, skeletonManager, cerberusClientMock, longPollClientMock, deaClientMock, configuration)
 
 	go func() {
 		_ = skeletonInstance.Start()
@@ -238,6 +240,7 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 			}, nil
 		},
 	}
+	longPollClientMock := &longPollClientMock{}
 	deaClientMock := &deaClientMock{}
 
 	analysisService := NewAnalysisService(analysisRepository, deaClientMock, cerberusClientMock, skeletonManager)
@@ -245,7 +248,7 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 	conditionService := NewConditionService(conditionRepository)
 	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
 	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
-	instrumentService := NewInstrumentService(&configuration, sortingRuleService, instrumentRepository, skeletonManager, NewInstrumentCache(), cerberusClientMock)
+	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, NewInstrumentCache(), cerberusClientMock)
 	consoleLogService := service.NewConsoleLogService(consoleLogRepository, nil)
 
 	responseRecorder := &httptest.ResponseRecorder{}
@@ -253,12 +256,12 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 
 	api := newAPI(ginEngine, &configuration, &authManager, analysisService, instrumentService, consoleLogService, nil)
 
-	skeletonInstance, _ := NewSkeleton(ctx, serviceName, []string{}, sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, sortingRuleService, skeletonManager, cerberusClientMock, deaClientMock, configuration)
+	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, sortingRuleService, skeletonManager, cerberusClientMock, longPollClientMock, deaClientMock, configuration)
 
 	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description)
 		VALUES ('abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
-	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_instruments(id, protocol_id, "name", hostname, client_port, enabled, connection_mode, running_mode, captureresults, capturediagnostics, replytoquery, status, sent_to_cerberus, timezone, file_encoding) 
-		VALUES ('93f36696-5ff0-45a9-87eb-ca5c064c5890', 'abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'TestInstrument', '192.168.1.13', NULL, TRUE, 'TCP_SERVER_ONLY', 'PRODUCTION', TRUE, TRUE, TRUE, 'ONLINE', TRUE, 'Europe/Budapest', 'UTF8');`, schemaName))
+	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_instruments(id, protocol_id, "name", hostname, client_port, enabled, connection_mode, running_mode, captureresults, capturediagnostics, replytoquery, status, timezone, file_encoding) 
+		VALUES ('93f36696-5ff0-45a9-87eb-ca5c064c5890', 'abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'TestInstrument', '192.168.1.13', NULL, TRUE, 'TCP_SERVER_ONLY', 'PRODUCTION', TRUE, TRUE, TRUE, 'ONLINE', 'Europe/Budapest', 'UTF8');`, schemaName))
 	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_analyte_mappings(id, instrument_id, instrument_analyte, analyte_id, result_type)
 		VALUES ('8facbaeb-368f-482a-9169-4b128632f9e0', '93f36696-5ff0-45a9-87eb-ca5c064c5890', 'TESTANALYTE', '51bfea41-1b7e-48f7-8b35-46d930216de7', 'pein');`, schemaName))
 	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_channel_mappings(id, instrument_channel, channel_id, analyte_mapping_id) 
@@ -357,6 +360,7 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 		},
 	}
 
+	longPollClientMock := &longPollClientMock{}
 	deaClientMock := &deaClientMock{}
 
 	analysisService := NewAnalysisService(analysisRepository, deaClientMock, cerberusClientMock, skeletonManager)
@@ -364,12 +368,12 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 	conditionService := NewConditionService(conditionRepository)
 	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
 	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
-	instrumentService := NewInstrumentService(&configuration, sortingRuleService, instrumentRepository, skeletonManager, NewInstrumentCache(), cerberusClientMock)
+	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, NewInstrumentCache(), cerberusClientMock)
 	consoleLogService := service.NewConsoleLogService(consoleLogRepository, nil)
 
 	api := NewAPI(&configuration, &authManager, analysisService, instrumentService, consoleLogService, nil)
 
-	skeletonInstance, _ := NewSkeleton(ctx, serviceName, []string{}, sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, sortingRuleService, skeletonManager, cerberusClientMock, deaClientMock, configuration)
+	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, sortingRuleService, skeletonManager, cerberusClientMock, longPollClientMock, deaClientMock, configuration)
 
 	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('9bec3063-435d-490f-bec0-88a6633ef4c2', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
 
@@ -576,6 +580,7 @@ func TestAnalysisResultsReprocessing(t *testing.T) {
 			return AnalysisResultBatchResponse{}, nil
 		},
 	}
+	longPollClient := &longPollClientMock{}
 	deaClientMock := &deaClientMock{}
 
 	analysisServiceMock := &analysisServiceMock{}
@@ -584,7 +589,7 @@ func TestAnalysisResultsReprocessing(t *testing.T) {
 	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
 	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
 	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
-	instrumentService := NewInstrumentService(&configuration, sortingRuleService, instrumentRepository, skeletonManager, NewInstrumentCache(), cerberusClientMock)
+	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, NewInstrumentCache(), cerberusClientMock)
 	consoleLogService := service.NewConsoleLogService(consoleLogRepository, nil)
 	ginEngine := gin.New()
 
@@ -592,7 +597,7 @@ func TestAnalysisResultsReprocessing(t *testing.T) {
 
 	api := newAPI(ginEngine, &configuration, &authManager, analysisServiceMock, instrumentService, consoleLogService, nil)
 
-	skeletonInstance, _ := NewSkeleton(ctx, serviceName, []string{}, sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepositoryMock, analysisServiceMock, instrumentService, consoleLogService, sortingRuleService, skeletonManager, cerberusClientMock, deaClientMock, configuration)
+	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepositoryMock, analysisServiceMock, instrumentService, consoleLogService, sortingRuleService, skeletonManager, cerberusClientMock, longPollClient, deaClientMock, configuration)
 
 	go func() {
 		_ = skeletonInstance.Start()
@@ -614,20 +619,6 @@ func (m *skeletonCallbackHandlerV1Mock) HandleAnalysisRequests(request []Analysi
 		return errors.New("not implemented")
 	}
 	return m.handleAnalysisRequestsFunc(request)
-}
-
-func (m *skeletonCallbackHandlerV1Mock) GetManufacturerTestList(instrumentId uuid.UUID, protocolId uuid.UUID) ([]SupportedManufacturerTests, error) {
-	if m.getManufacturerTestFunc == nil {
-		return nil, errors.New("not implemented")
-	}
-	return m.getManufacturerTestFunc(instrumentId, protocolId)
-}
-
-func (m *skeletonCallbackHandlerV1Mock) GetEncodingList(protocolId uuid.UUID) ([]string, error) {
-	if m.getEncodingList == nil {
-		return nil, errors.New("not implemented")
-	}
-	return m.getEncodingList(protocolId)
 }
 
 func (m *skeletonCallbackHandlerV1Mock) ReexamineAnalysisRequests(request []AnalysisRequest) {
@@ -685,6 +676,12 @@ func (m *authManagerMock) InvalidateClientCredential() {
 	m.invalidateClientCredentialFunc()
 }
 
+type longPollClientMock struct {
+}
+
+func (l longPollClientMock) StartInstrumentLongPoll(ctx context.Context) {
+}
+
 type deaClientMock struct {
 }
 
@@ -702,18 +699,22 @@ type cerberusClientMock struct {
 	BatchResponse   AnalysisResultBatchResponse
 }
 
+func (m *cerberusClientMock) RegisterInstrumentDriver(name, displayName, apiVersion string, apiPort uint16, tlsEnabled bool, extraValueKeys []string, protocols []supportedProtocolTO, tests []supportedManufacturerTestTO, encodings []string) error {
+	if m.registerInstrumentDriverFunc == nil {
+		return nil
+	}
+	return m.registerInstrumentDriverFunc(serviceName, apiVersion, apiPort, tlsEnabled, extraValueKeys)
+}
+
+func (m *cerberusClientMock) VerifyInstrumentHash(hash string) error {
+	return nil
+}
+
 func (m *cerberusClientMock) RegisterInstrument(instrument Instrument) error {
 	if m.registerInstrumentFunc == nil {
 		return errors.New("not implemented")
 	}
 	return m.registerInstrumentFunc(instrument)
-}
-
-func (m *cerberusClientMock) RegisterInstrumentDriver(serviceName string, apiVersion string, apiPort uint16, tlsEnabled bool, extraValueKeys []string) error {
-	if m.registerInstrumentDriverFunc == nil {
-		return nil
-	}
-	return m.registerInstrumentDriverFunc(serviceName, apiVersion, apiPort, tlsEnabled, extraValueKeys)
 }
 
 func (m *cerberusClientMock) SendAnalysisResultBatch(analysisResults []AnalysisResultTO) (AnalysisResultBatchResponse, error) {

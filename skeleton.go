@@ -35,12 +35,15 @@ type skeleton struct {
 	resultsBuffer              []AnalysisResult
 	resultBatchesChan          chan []AnalysisResult
 	cerberusClient             CerberusClient
+	longPollClient             LongPollClient
 	deaClient                  DeaClientV1
 	manager                    Manager
 	resultTransferFlushTimeout int
 	imageRetrySeconds          int
 	serviceName                string
+	displayName                string
 	extraValueKeys             []string
+	encodings                  []string
 }
 
 func (s *skeleton) SetCallbackHandler(eventHandler SkeletonCallbackHandlerV1) {
@@ -431,6 +434,10 @@ func (s *skeleton) FindResultEntities(ctx context.Context, InstrumentID uuid.UUI
 	return instrument, analysisRequests, analyteMapping, nil
 }
 
+func (s *skeleton) RegisterManufacturerTests(ctx context.Context, manufacturerTests []SupportedManufacturerTests) error {
+	return s.instrumentService.UpsertManufacturerTests(ctx, manufacturerTests)
+}
+
 func (s *skeleton) RegisterProtocol(ctx context.Context, id uuid.UUID, name string, description string, abilities []ProtocolAbility, settings []ProtocolSetting) error {
 	return s.instrumentService.UpsertSupportedProtocol(ctx, id, name, description, abilities, settings)
 }
@@ -462,7 +469,6 @@ func (s *skeleton) Start() error {
 			}
 		}
 	}()
-	go s.sendUnsentInstrumentsToCerberus(s.ctx)
 	for i := 0; i < s.config.AnalysisRequestWorkerPoolSize; i++ {
 		go s.processAnalysisRequests(s.ctx)
 	}
@@ -473,6 +479,7 @@ func (s *skeleton) Start() error {
 	go s.processStuckImagesToCerberus(s.ctx)
 	go s.enqueueUnprocessedAnalysisRequests(s.ctx)
 	go s.enqueueUnprocessedAnalysisResults(s.ctx)
+	go s.longPollClient.StartInstrumentLongPoll(s.ctx)
 
 	// Todo - use cancellable context what is passed to the routines above too
 	err = s.api.Run()
@@ -487,7 +494,21 @@ func (s *skeleton) Start() error {
 func (s *skeleton) registerDriverToCerberus(ctx context.Context) error {
 	retryCount := 0
 	for {
-		err := s.cerberusClient.RegisterInstrumentDriver(s.serviceName, apiVersion, s.config.APIPort, s.config.EnableTLS, s.extraValueKeys)
+		protocols, err := s.instrumentService.GetSupportedProtocols(ctx)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to get supported protocols")
+			return err
+		}
+		protocolsTos := convertSupportedProtocolsToSupportedProtocolTOs(protocols)
+
+		manufacturerTests, err := s.instrumentService.GetManufacturerTests(ctx)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to get manufacturer tests")
+			return err
+		}
+		manufacturerTestTOs := convertSupportedManufacturerTestsToSupportedManufacturerTestTOs(manufacturerTests)
+
+		err = s.cerberusClient.RegisterInstrumentDriver(s.serviceName, s.displayName, apiVersion, s.config.APIPort, s.config.EnableTLS, s.extraValueKeys, protocolsTos, manufacturerTestTOs, s.encodings)
 		if err != nil {
 			log.Warn().Err(err).Int("retryCount", retryCount).Msg("register instrument driver to cerberus failed")
 			retryCount++
@@ -500,22 +521,6 @@ func (s *skeleton) registerDriverToCerberus(ctx context.Context) error {
 		return nil
 	}
 	return errors.New("register instrument driver to cerberus failed too many times")
-}
-
-func (s *skeleton) sendUnsentInstrumentsToCerberus(ctx context.Context) {
-	ticker := time.NewTicker(10 * time.Minute)
-	for {
-		select {
-		case <-ctx.Done():
-			ticker.Stop()
-			return
-		case _, ok := <-ticker.C:
-			if !ok {
-				log.Error().Msg("Sending unsent instruments to Cerberus stopped")
-			}
-			s.instrumentService.EnqueueUnsentInstrumentsToCerberus(ctx)
-		}
-	}
 }
 
 func (s *skeleton) enqueueUnprocessedAnalysisRequests(ctx context.Context) {
@@ -871,11 +876,13 @@ func (s *skeleton) processStuckImagesToCerberus(ctx context.Context) {
 	}
 }
 
-func NewSkeleton(ctx context.Context, serviceName string, requestedExtraValueKeys []string, sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api GinApi, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService service.ConsoleLogService, sortingRuleService SortingRuleService, manager Manager, cerberusClient CerberusClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
+func NewSkeleton(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api GinApi, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService service.ConsoleLogService, sortingRuleService SortingRuleService, manager Manager, cerberusClient CerberusClient, longpollClient LongPollClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
 	skeleton := &skeleton{
 		ctx:                        ctx,
 		serviceName:                serviceName,
+		displayName:                displayName,
 		extraValueKeys:             requestedExtraValueKeys,
+		encodings:                  encodings,
 		config:                     config,
 		sqlConn:                    sqlConn,
 		dbSchema:                   dbSchema,
@@ -888,6 +895,7 @@ func NewSkeleton(ctx context.Context, serviceName string, requestedExtraValueKey
 		sortingRuleService:         sortingRuleService,
 		manager:                    manager,
 		cerberusClient:             cerberusClient,
+		longPollClient:             longpollClient,
 		deaClient:                  deaClient,
 		resultsBuffer:              make([]AnalysisResult, 0, 500),
 		resultBatchesChan:          make(chan []AnalysisResult, 10),

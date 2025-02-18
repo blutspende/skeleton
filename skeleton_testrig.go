@@ -18,6 +18,10 @@ type SkeletonTestRig struct {
 	AnalysisRequestExtraValues map[string]string
 }
 
+func (sr *SkeletonTestRig) RegisterManufacturerTests(ctx context.Context, manufacturerTests []SupportedManufacturerTests) error {
+	return nil
+}
+
 func NewTestRig() *SkeletonTestRig {
 	return &SkeletonTestRig{
 		storedInstrumentsMap:       make(map[string]Instrument),
