@@ -65,13 +65,21 @@ type SkeletonAPI interface {
 	MarkSortingTargetAsApplied(ctx context.Context, instrumentIP, sampleCode, programme, target string) error
 	// SubmitAnalysisResult - Submit result to Skeleton and Cerberus,
 	// By default this function batches the transmissions by collecting them and
-	// use the batch-endpoint of cerberus for performance reasons
+	// use the batch-endpoint of cerberus for performance reasons.
+	// Analysis results must have their DEARawMessageID set, therefore calling UploadRawMessageToDEA
+	// on the raw instrument message is a prerequisite to submitting analysis results.
 	SubmitAnalysisResult(ctx context.Context, resultData AnalysisResult) error
 
 	// SubmitAnalysisResultBatch - Submit result batch to Skeleton and Cerberus,
 	// By default this function batches the transmissions by collecting them and
-	// use the batch-endpoint of cerberus for performance reasons
+	// use the batch-endpoint of cerberus for performance reasons.
+	// Analysis results must have their DEARawMessageID set, therefore calling UploadRawMessageToDEA
+	// on the raw instrument message is a prerequisite to submitting analysis results.
 	SubmitAnalysisResultBatch(ctx context.Context, resultBatch []AnalysisResult) error
+
+	// UploadRawMessageToDEA - Uploads raw instrument message to DEA, and returns its ID. Must be called before
+	// submitting analysis result, as every analysis result must have a reference to it.
+	UploadRawMessageToDEA(rawMessage []byte) (uuid.UUID, error)
 
 	// GetInstrument returns all the settings regarding an instrument
 	// contains AnalyteMappings[] and RequestMappings[]

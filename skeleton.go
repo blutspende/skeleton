@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -112,7 +113,22 @@ func (s *skeleton) SaveAnalysisRequestsInstrumentTransmissions(ctx context.Conte
 	return nil
 }
 
+var nonSpecialCharactersRegex = regexp.MustCompile("[^A-Za-z0-9]+")
+
+func (s *skeleton) UploadRawMessageToDEA(rawMessageBytes []byte) (uuid.UUID, error) {
+	return s.deaClient.UploadFile(rawMessageBytes, generateRawMessageFileName(s.serviceName, time.Now().UTC()))
+}
+
+func generateRawMessageFileName(serviceName string, ts time.Time) string {
+	strippedServiceName := nonSpecialCharactersRegex.ReplaceAllString(serviceName, "_")
+	formattedTs := strings.ReplaceAll(ts.Format("2006-01-02-15-04-05.000000"), ".", "_")
+	return fmt.Sprintf("%s_%s", strippedServiceName, formattedTs)
+}
+
 func (s *skeleton) SubmitAnalysisResult(ctx context.Context, resultData AnalysisResult) error {
+	if resultData.DEARawMessageID == uuid.Nil {
+		return errors.New("DEA raw message ID is missing")
+	}
 	if resultData.AnalyteMapping.ID == uuid.Nil {
 		return errors.New("analyte mapping ID is missing")
 	}

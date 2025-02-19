@@ -67,6 +67,7 @@ type ChannelResultTO struct {
 
 type AnalysisResultTO struct {
 	WorkingItemID            uuid.UUID         `json:"workItemId"`
+	DEARawMessageID          uuid.UUID         `json:"deaRawMessageId"`
 	ValidUntil               time.Time         `json:"validUntil"`
 	Status                   string            `json:"status"`
 	Mode                     string            `json:"mode"` // ResultMode

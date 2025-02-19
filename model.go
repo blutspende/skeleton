@@ -229,13 +229,12 @@ const (
 // AnalysisResult - The final result on 'per-workitem' basis to return the result to cerberus.
 // Call v1.SubmitAnalysisResult for submission.
 type AnalysisResult struct {
-	ID              uuid.UUID
-	AnalysisRequest AnalysisRequest
-	AnalyteMapping  AnalyteMapping
-	Instrument      Instrument
-	SampleCode      string
-	// ResultRecordID - reference to raw result record stored in an implementation-created table
-	ResultRecordID           uuid.UUID
+	ID                       uuid.UUID
+	AnalysisRequest          AnalysisRequest
+	AnalyteMapping           AnalyteMapping
+	Instrument               Instrument
+	SampleCode               string
+	DEARawMessageID          uuid.UUID
 	BatchID                  uuid.UUID
 	Result                   string
 	ResultMode               ResultMode
