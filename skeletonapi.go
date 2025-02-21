@@ -2,10 +2,9 @@ package skeleton
 
 import (
 	"context"
+	"fmt"
 	"github.com/blutspende/logcom-api/logcom"
-	"github.com/blutspende/skeleton/consolelog/repository"
 	"github.com/blutspende/skeleton/consolelog/service"
-	"github.com/blutspende/skeleton/server"
 	"github.com/gin-gonic/gin"
 	"net/http"
 
@@ -130,15 +129,14 @@ func New(ctx context.Context, serviceName, displayName string, requestedExtraVal
 	instrumentCache := NewInstrumentCache()
 	analysisRepository := NewAnalysisRepository(dbConn, dbSchema)
 	instrumentRepository := NewInstrumentRepository(dbConn, dbSchema)
-	consoleLogRepository := repository.NewConsoleLogRepository(500)
 	analysisService := NewAnalysisService(analysisRepository, deaClient, cerberusClient, manager)
 	conditionRepository := NewConditionRepository(dbConn, dbSchema)
 	conditionService := NewConditionService(conditionRepository)
 	sortingRuleRepository := NewSortingRuleRepository(dbConn, dbSchema)
 	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
 	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, instrumentCache, cerberusClient)
-	consoleLogSSEServer := server.NewConsoleLogSSEServer(service.NewConsoleLogSSEClientListener())
-	consoleLogService := service.NewConsoleLogService(consoleLogRepository, consoleLogSSEServer)
+
+	consoleLogService := service.NewConsoleLogService(fmt.Sprintf("%s:%d", config.RedisUrl, config.RedisPort))
 
 	longpollClient := NewLongPollClient(longPollingApiRestyClient, instrumentService, serviceName, config.CerberusURL, config.LongPollingAPIClientTimeoutSeconds)
 

@@ -36,7 +36,6 @@ type skeleton struct {
 	cerberusClient             CerberusClient
 	longPollClient             LongPollClient
 	deaClient                  DeaClientV1
-	longpollClient             LongPollClient
 	manager                    Manager
 	resultTransferFlushTimeout int
 	imageRetrySeconds          int
@@ -881,14 +880,14 @@ const (
 )
 
 func (s *skeleton) startAnalysisRequestFetchJob(ctx context.Context) {
-	go s.longpollClient.StartAnalysisRequestLongPolling(ctx)
+	go s.longPollClient.StartAnalysisRequestLongPolling(ctx)
 	for {
 		select {
-		case analysisRequests := <-s.longpollClient.GetAnalysisRequestsChan():
+		case analysisRequests := <-s.longPollClient.GetAnalysisRequestsChan():
 			err := s.analysisService.CreateAnalysisRequests(ctx, analysisRequests)
 			if err != nil {
 				time.AfterFunc(time.Second*time.Duration(s.config.LongPollingRetrySeconds), func() {
-					s.longpollClient.GetAnalysisRequestsChan() <- analysisRequests
+					s.longPollClient.GetAnalysisRequestsChan() <- analysisRequests
 				})
 				continue
 			}
@@ -904,14 +903,14 @@ func (s *skeleton) startAnalysisRequestFetchJob(ctx context.Context) {
 	}
 }
 func (s *skeleton) startAnalysisRequestRevocationFetchJob(ctx context.Context) {
-	go s.longpollClient.StartRevokedWorkItemIDsLongPolling(ctx)
+	go s.longPollClient.StartRevokedWorkItemIDsLongPolling(ctx)
 	for {
 		select {
-		case revokedWorkItemIDs := <-s.longpollClient.GetRevokedWorkItemIDsChan():
+		case revokedWorkItemIDs := <-s.longPollClient.GetRevokedWorkItemIDsChan():
 			err := s.analysisService.RevokeAnalysisRequests(ctx, revokedWorkItemIDs)
 			if err != nil {
 				time.AfterFunc(time.Second*time.Duration(s.config.LongPollingRetrySeconds), func() {
-					s.longpollClient.GetRevokedWorkItemIDsChan() <- revokedWorkItemIDs
+					s.longPollClient.GetRevokedWorkItemIDsChan() <- revokedWorkItemIDs
 				})
 				continue
 			}
@@ -923,14 +922,14 @@ func (s *skeleton) startAnalysisRequestRevocationFetchJob(ctx context.Context) {
 }
 
 func (s *skeleton) startAnalysisRequestReexamineFetchJob(ctx context.Context) {
-	go s.longpollClient.StartReexaminedWorkItemIDsLongPolling(ctx)
+	go s.longPollClient.StartReexaminedWorkItemIDsLongPolling(ctx)
 	for {
 		select {
-		case reexaminedWorkItemIDs := <-s.longpollClient.GetReexaminedWorkItemIDsChan():
+		case reexaminedWorkItemIDs := <-s.longPollClient.GetReexaminedWorkItemIDsChan():
 			err := s.analysisService.ReexamineAnalysisRequestsBatch(ctx, reexaminedWorkItemIDs)
 			if err != nil {
 				time.AfterFunc(time.Second*time.Duration(s.config.LongPollingRetrySeconds), func() {
-					s.longpollClient.GetReexaminedWorkItemIDsChan() <- reexaminedWorkItemIDs
+					s.longPollClient.GetReexaminedWorkItemIDsChan() <- reexaminedWorkItemIDs
 				})
 				continue
 			}
@@ -941,7 +940,7 @@ func (s *skeleton) startAnalysisRequestReexamineFetchJob(ctx context.Context) {
 	}
 }
 
-func NewSkeleton(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService service.ConsoleLogService, sortingRuleService SortingRuleService, manager Manager, cerberusClient CerberusClient, longpollClient LongPollClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
+func NewSkeleton(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService service.ConsoleLogService, sortingRuleService SortingRuleService, manager Manager, cerberusClient CerberusClient, longPollClient LongPollClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
 	skeleton := &skeleton{
 		ctx:                        ctx,
 		serviceName:                serviceName,
@@ -959,9 +958,8 @@ func NewSkeleton(ctx context.Context, serviceName, displayName string, requested
 		sortingRuleService:         sortingRuleService,
 		manager:                    manager,
 		cerberusClient:             cerberusClient,
-		longPollClient:             longpollClient,
+		longPollClient:             longPollClient,
 		deaClient:                  deaClient,
-		longpollClient:             longpollClient,
 		resultsBuffer:              make([]AnalysisResult, 0, 500),
 		resultBatchesChan:          make(chan []AnalysisResult, 10),
 		resultTransferFlushTimeout: config.ResultTransferFlushTimeout,
