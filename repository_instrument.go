@@ -65,6 +65,8 @@ const (
 	msgDeleteInstrumentSettingsFailed              = "delete instrument settings failed"
 	msgCheckAnalyteUsageFailed                     = "check analyte usage failed"
 	msgGetUnsentInstrumentIdsFailed                = "get unsent instrument IDs failed"
+	msgUniqueViolationInstrumentControlAnalyte     = "Instrument Control Analyte already set to an Analyte Mapping for this instrument"
+	msgUniqueViolationInstrumentAnalyte            = "Instrument Analyte already set to an Analyte Mapping for this instrument"
 )
 
 var (
@@ -117,6 +119,8 @@ var (
 	ErrDeleteInstrumentSettingsFailed              = errors.New(msgDeleteInstrumentSettingsFailed)
 	ErrCheckAnalyteUsageFailed                     = errors.New(msgCheckAnalyteUsageFailed)
 	ErrGetUnsentInstrumentIdsFailed                = errors.New(msgGetUnsentInstrumentIdsFailed)
+	ErrUniqueViolationInstrumentControlAnalyte     = errors.New(msgUniqueViolationInstrumentControlAnalyte)
+	ErrUniqueViolationInstrumentAnalyte            = errors.New(msgUniqueViolationInstrumentAnalyte)
 )
 
 type instrumentDAO struct {
@@ -730,6 +734,12 @@ func (r *instrumentRepository) CreateAnalyteMappings(ctx context.Context, analyt
 	_, err := r.db.NamedExecContext(ctx, query, convertAnalyteMappingsToDAOs(analyteMappings, instrumentID))
 	if err != nil {
 		log.Error().Err(err).Msg(msgCreateAnalyteMappingsFailed)
+		if IsErrorCode(err, UniqueViolationErrorCode) {
+			if strings.Contains(err.Error(), "sk_un_analyte_mapping_instrument_id_control_instrument_analyte") {
+				return []uuid.UUID{}, ErrUniqueViolationInstrumentControlAnalyte
+			}
+			return []uuid.UUID{}, ErrUniqueViolationInstrumentAnalyte
+		}
 		return []uuid.UUID{}, ErrCreateAnalyteMappingsFailed
 	}
 	return ids, nil
@@ -762,11 +772,18 @@ func (r *instrumentRepository) GetAnalyteMappings(ctx context.Context, instrumen
 }
 
 func (r *instrumentRepository) UpdateAnalyteMapping(ctx context.Context, analyteMapping AnalyteMapping) error {
-	query := fmt.Sprintf(`UPDATE %s.sk_analyte_mappings SET instrument_analyte = :instrument_analyte, analyte_id = :analyte_id, result_type = :result_type, modified_at = timezone('utc', now()) WHERE id = :id;`, r.dbSchema)
+	query := fmt.Sprintf(`UPDATE %s.sk_analyte_mappings SET instrument_analyte = :instrument_analyte, analyte_id = :analyte_id, result_type = :result_type, 
+        control_result_required = :control_result_required, control_instrument_analyte = :control_instrument_analyte, modified_at = timezone('utc', now()) WHERE id = :id;`, r.dbSchema)
 	dao := convertAnalyteMappingToDAO(analyteMapping, uuid.Nil)
 	_, err := r.db.NamedExecContext(ctx, query, dao)
 	if err != nil {
 		log.Error().Err(err).Msg(msgUpdateAnalyteMappingFailed)
+		if IsErrorCode(err, UniqueViolationErrorCode) {
+			if strings.Contains(err.Error(), "sk_un_analyte_mapping_instrument_id_control_instrument_analyte") {
+				return ErrUniqueViolationInstrumentControlAnalyte
+			}
+			return ErrUniqueViolationInstrumentAnalyte
+		}
 		return ErrUpdateAnalyteMappingFailed
 	}
 	return nil

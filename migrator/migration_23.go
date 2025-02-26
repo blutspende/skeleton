@@ -150,4 +150,6 @@ CREATE TABLE <SCHEMA_PLACEHOLDER>.sk_expected_control_result(
 );
 CREATE INDEX sk_expected_control_result_analyte_mapping_id on <SCHEMA_PLACEHOLDER>.sk_expected_control_result (analyte_mapping_id);
 CREATE INDEX sk_expected_control_result_sample_code on <SCHEMA_PLACEHOLDER>.sk_expected_control_result (sample_code);
+
+CREATE UNIQUE INDEX sk_un_analyte_mapping_instrument_id_control_instrument_analyte ON <SCHEMA_PLACEHOLDER>.sk_analyte_mappings USING btree (instrument_id, control_instrument_analyte) WHERE (deleted_at IS NULL);
 `

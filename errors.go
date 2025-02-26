@@ -11,6 +11,7 @@ import (
 
 const (
 	ForeignKeyViolationErrorCode = pq.ErrorCode("23503")
+	UniqueViolationErrorCode     = pq.ErrorCode("23505")
 	MsgFailedToAudit             = "failed to audit"
 )
 

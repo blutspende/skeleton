@@ -53,12 +53,14 @@ type listInstrumentTO struct {
 }
 
 type analyteMappingTO struct {
-	ID                uuid.UUID          `json:"id"`
-	InstrumentAnalyte string             `json:"instrumentAnalyte"`
-	AnalyteID         uuid.UUID          `json:"analyteId"`
-	ChannelMappings   []channelMappingTO `json:"channelMappings"`
-	ResultMappings    []resultMappingTO  `json:"resultMappings"`
-	ResultType        ResultType         `json:"resultType"`
+	ID                       uuid.UUID          `json:"id"`
+	InstrumentAnalyte        string             `json:"instrumentAnalyte"`
+	AnalyteID                uuid.UUID          `json:"analyteId"`
+	ChannelMappings          []channelMappingTO `json:"channelMappings"`
+	ResultMappings           []resultMappingTO  `json:"resultMappings"`
+	ResultType               ResultType         `json:"resultType"`
+	ControlRequired          bool               `json:"controlRequired"`
+	InstrumentControlAnalyte *string            `json:"instrumentControlAnalyte"`
 }
 
 type requestMappingTO struct {
@@ -188,6 +190,10 @@ const (
 	msgAnalyteNotFoundForExpectedControlResult = "Unexpected analyte for expected control result!"
 	keyGetInstrumentByIdFailed                 = "getInstrumentByIdFailed"
 	msgGetInstrumentByIdFailed                 = "Get specific instrument data failed!"
+	keyInstrumentControlAnalyteAlreadyInUse    = "instrumentControlAnalyteAlreadyInUse"
+	msgInstrumentControlAnalyteAlreadyInUse    = "Control testcode already in use!"
+	keyInstrumentAnalyteAlreadyInUse           = "instrumentAnalyteAlreadyInUse"
+	msgInstrumentAnalyteAlreadyInUse           = "Manufacturer's testcode already in use!"
 )
 
 type sortingRuleGroupTO struct {
@@ -300,11 +306,25 @@ func (api *api) CreateInstrument(c *gin.Context) {
 	savedInstrumentID, err := api.instrumentService.CreateInstrument(c, instrument)
 	if err != nil {
 		log.Error().Err(err).Interface("instrument", instrumentTO).Msg("CreateInstrument failed")
-		c.AbortWithStatusJSON(http.StatusInternalServerError, middleware.ClientError{
-			MessageKey: "createInstrumentFailed",
-			Message:    "Instrument creation failed!",
-		})
-		return
+		if errors.Is(err, ErrUniqueViolationInstrumentControlAnalyte) {
+			c.AbortWithStatusJSON(http.StatusBadRequest, middleware.ClientError{
+				MessageKey: keyInstrumentControlAnalyteAlreadyInUse,
+				Message:    msgInstrumentControlAnalyteAlreadyInUse,
+			})
+			return
+		} else if errors.Is(err, ErrUniqueViolationInstrumentAnalyte) {
+			c.AbortWithStatusJSON(http.StatusBadRequest, middleware.ClientError{
+				MessageKey: keyInstrumentAnalyteAlreadyInUse,
+				Message:    msgInstrumentAnalyteAlreadyInUse,
+			})
+			return
+		} else {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, middleware.ClientError{
+				MessageKey: "createInstrumentFailed",
+				Message:    "Instrument creation failed!",
+			})
+			return
+		}
 	}
 
 	c.JSON(http.StatusOK, savedInstrumentID)
@@ -331,11 +351,25 @@ func (api *api) UpdateInstrument(c *gin.Context) {
 
 	err = api.instrumentService.UpdateInstrument(c, instrument, userId)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, middleware.ClientError{
-			MessageKey: "updateInstrumentFailed",
-			Message:    "Instrument update failed!",
-		})
-		return
+		if errors.Is(err, ErrUniqueViolationInstrumentControlAnalyte) {
+			c.AbortWithStatusJSON(http.StatusBadRequest, middleware.ClientError{
+				MessageKey: keyInstrumentControlAnalyteAlreadyInUse,
+				Message:    msgInstrumentControlAnalyteAlreadyInUse,
+			})
+			return
+		} else if errors.Is(err, ErrUniqueViolationInstrumentAnalyte) {
+			c.AbortWithStatusJSON(http.StatusBadRequest, middleware.ClientError{
+				MessageKey: keyInstrumentAnalyteAlreadyInUse,
+				Message:    msgInstrumentAnalyteAlreadyInUse,
+			})
+			return
+		} else {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, middleware.ClientError{
+				MessageKey: "updateInstrumentFailed",
+				Message:    "Instrument update failed!",
+			})
+			return
+		}
 	}
 
 	c.Status(http.StatusNoContent)
@@ -975,12 +1009,14 @@ func convertInstrumentSettingTOToInstrumentSetting(settingTO instrumentSettingTO
 
 func convertAnalyteMappingTOToAnalyteMapping(analyteMappingTO analyteMappingTO) AnalyteMapping {
 	model := AnalyteMapping{
-		ID:                analyteMappingTO.ID,
-		InstrumentAnalyte: analyteMappingTO.InstrumentAnalyte,
-		AnalyteID:         analyteMappingTO.AnalyteID,
-		ChannelMappings:   make([]ChannelMapping, len(analyteMappingTO.ChannelMappings)),
-		ResultMappings:    make([]ResultMapping, len(analyteMappingTO.ResultMappings)),
-		ResultType:        analyteMappingTO.ResultType,
+		ID:                       analyteMappingTO.ID,
+		InstrumentAnalyte:        analyteMappingTO.InstrumentAnalyte,
+		AnalyteID:                analyteMappingTO.AnalyteID,
+		ChannelMappings:          make([]ChannelMapping, len(analyteMappingTO.ChannelMappings)),
+		ResultMappings:           make([]ResultMapping, len(analyteMappingTO.ResultMappings)),
+		ResultType:               analyteMappingTO.ResultType,
+		ControlResultRequired:    analyteMappingTO.ControlRequired,
+		ControlInstrumentAnalyte: analyteMappingTO.InstrumentControlAnalyte,
 	}
 
 	for i, channelMapping := range analyteMappingTO.ChannelMappings {
@@ -996,12 +1032,14 @@ func convertAnalyteMappingTOToAnalyteMapping(analyteMappingTO analyteMappingTO) 
 
 func convertAnalyteMappingToAnalyteMappingTO(analyteMapping AnalyteMapping) analyteMappingTO {
 	model := analyteMappingTO{
-		ID:                analyteMapping.ID,
-		InstrumentAnalyte: analyteMapping.InstrumentAnalyte,
-		AnalyteID:         analyteMapping.AnalyteID,
-		ChannelMappings:   make([]channelMappingTO, len(analyteMapping.ChannelMappings)),
-		ResultMappings:    make([]resultMappingTO, len(analyteMapping.ResultMappings)),
-		ResultType:        analyteMapping.ResultType,
+		ID:                       analyteMapping.ID,
+		InstrumentAnalyte:        analyteMapping.InstrumentAnalyte,
+		AnalyteID:                analyteMapping.AnalyteID,
+		ChannelMappings:          make([]channelMappingTO, len(analyteMapping.ChannelMappings)),
+		ResultMappings:           make([]resultMappingTO, len(analyteMapping.ResultMappings)),
+		ResultType:               analyteMapping.ResultType,
+		ControlRequired:          analyteMapping.ControlResultRequired,
+		InstrumentControlAnalyte: analyteMapping.ControlInstrumentAnalyte,
 	}
 
 	for i, channelMapping := range analyteMapping.ChannelMappings {

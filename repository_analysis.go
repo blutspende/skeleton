@@ -1303,6 +1303,7 @@ func (r *analysisRepository) GetAnalysisResultsBySampleCodeAndAnalyteID(ctx cont
        				sar.valid_until, sar.operator, sar.edited, sar.edit_reason, sam.id AS "analyte_mapping.id",
        				sam.instrument_id AS "analyte_mapping.instrument_id", sam.instrument_analyte AS "analyte_mapping.instrument_analyte",
 					sam.analyte_id AS "analyte_mapping.analyte_id", sam.result_type AS "analyte_mapping.result_type",
+					sam.control_instrument_analyte AS "analyte_mapping.control_instrument_analyte", sam.control_result_required AS "analyte_mapping.control_result_required",
 					sam.created_at AS "analyte_mapping.created_at", sam.modified_at AS "analyte_mapping.modified_at"
 			FROM %schema_name%.sk_analysis_results sar
 			INNER JOIN %schema_name%.sk_analyte_mappings sam ON sar.analyte_mapping_id = sam.id AND sam.deleted_at IS NULL
@@ -1339,7 +1340,8 @@ func (r *analysisRepository) GetAnalysisResultsBySampleCodeAndAnalyteID(ctx cont
 
 func (r *analysisRepository) GetAnalysisResultByID(ctx context.Context, id uuid.UUID, allowDeletedAnalyteMapping bool) (AnalysisResult, error) {
 	query := `SELECT sar.id, sar.analyte_mapping_id, sar.instrument_id, sar.sample_code, sar.instrument_run_id, sar.result_record_id, sar.batch_id, sar."result", sar.status, sar.result_mode, sar.yielded_at, sar.valid_until, sar.operator, sar.edited, sar.edit_reason, sar.is_invalid,
-					sam.id AS "analyte_mapping.id", sam.instrument_id AS "analyte_mapping.instrument_id", sam.instrument_analyte AS "analyte_mapping.instrument_analyte", sam.analyte_id AS "analyte_mapping.analyte_id", sam.result_type AS "analyte_mapping.result_type", sam.created_at AS "analyte_mapping.created_at", sam.modified_at AS "analyte_mapping.modified_at"
+					sam.id AS "analyte_mapping.id", sam.instrument_id AS "analyte_mapping.instrument_id", sam.instrument_analyte AS "analyte_mapping.instrument_analyte", sam.analyte_id AS "analyte_mapping.analyte_id", sam.result_type AS "analyte_mapping.result_type", 
+					sam.control_instrument_analyte AS "analyte_mapping.control_instrument_analyte", sam.control_result_required AS "analyte_mapping.control_result_required", sam.created_at AS "analyte_mapping.created_at", sam.modified_at AS "analyte_mapping.modified_at"
 			FROM %schema_name%.sk_analysis_results sar
 			INNER JOIN %schema_name%.sk_analyte_mappings sam ON sar.analyte_mapping_id = sam.id`
 
@@ -1385,7 +1387,8 @@ func (r *analysisRepository) GetAnalysisResultsByIDs(ctx context.Context, ids []
 	}
 
 	query := `SELECT sar.id, sar.analyte_mapping_id, sar.instrument_id, sar.sample_code, sar.instrument_run_id, sar.result_record_id, sar.batch_id, sar."result", sar.status, sar.result_mode, sar.yielded_at, sar.valid_until, sar.operator, sar.edited, sar.edit_reason, sar.is_invalid,
-					sam.id AS "analyte_mapping.id", sam.instrument_id AS "analyte_mapping.instrument_id", sam.instrument_analyte AS "analyte_mapping.instrument_analyte", sam.analyte_id AS "analyte_mapping.analyte_id", sam.result_type AS "analyte_mapping.result_type", sam.created_at AS "analyte_mapping.created_at", sam.modified_at AS "analyte_mapping.modified_at"
+					sam.id AS "analyte_mapping.id", sam.instrument_id AS "analyte_mapping.instrument_id", sam.instrument_analyte AS "analyte_mapping.instrument_analyte", sam.analyte_id AS "analyte_mapping.analyte_id", sam.result_type AS "analyte_mapping.result_type", 
+					sam.control_instrument_analyte AS "analyte_mapping.control_instrument_analyte", sam.control_result_required AS "analyte_mapping.control_result_required", sam.created_at AS "analyte_mapping.created_at", sam.modified_at AS "analyte_mapping.modified_at"
 			FROM %schema_name%.sk_analysis_results sar
 			INNER JOIN %schema_name%.sk_analyte_mappings sam ON sar.analyte_mapping_id = sam.id
 			WHERE sar.id IN (?);`
@@ -1429,7 +1432,8 @@ func (r *analysisRepository) GetAnalysisResultsByBatchIDs(ctx context.Context, b
 
 	err := utils.Partition(len(batchIDs), maxParams, func(low int, high int) error {
 		query := `SELECT sar.id, sar.analyte_mapping_id, sar.instrument_id, sar.sample_code, sar.instrument_run_id, sar.result_record_id, sar.batch_id, sar."result", sar.status, sar.result_mode, sar.yielded_at, sar.valid_until, sar.operator, sar.edited, sar.edit_reason, sar.is_invalid,
-					sam.id AS "analyte_mapping.id", sam.instrument_id AS "analyte_mapping.instrument_id", sam.instrument_analyte AS "analyte_mapping.instrument_analyte", sam.analyte_id AS "analyte_mapping.analyte_id", sam.result_type AS "analyte_mapping.result_type", sam.created_at AS "analyte_mapping.created_at", sam.modified_at AS "analyte_mapping.modified_at"
+					sam.id AS "analyte_mapping.id", sam.instrument_id AS "analyte_mapping.instrument_id", sam.instrument_analyte AS "analyte_mapping.instrument_analyte", sam.analyte_id AS "analyte_mapping.analyte_id", sam.result_type AS "analyte_mapping.result_type", 
+					sam.control_instrument_analyte AS "analyte_mapping.control_instrument_analyte", sam.control_result_required AS "analyte_mapping.control_result_required", sam.created_at AS "analyte_mapping.created_at", sam.modified_at AS "analyte_mapping.modified_at"
 			FROM %schema_name%.sk_analysis_results sar
 			INNER JOIN %schema_name%.sk_analyte_mappings sam ON sar.analyte_mapping_id = sam.id AND sam.deleted_at IS NULL
 			WHERE sar.batch_id IN (?);`
@@ -2019,7 +2023,7 @@ func (r *analysisRepository) createControlResultChannelResults(ctx context.Conte
 	err := utils.Partition(len(channelResults), channelResultBatchSize, func(low int, high int) error {
 		query := fmt.Sprintf(`INSERT INTO %s.sk_control_result_channel_results(id, control_result_id, channel_id, qualitative_result, qualitative_result_edited)
 		VALUES(:id, :control_result_id, :channel_id, :qualitative_result, :qualitative_result_edited);`, r.dbSchema)
-		_, err := r.db.NamedExecContext(ctx, query, convertChannelResultsToDAOs(channelResults[low:high], controlResultID))
+		_, err := r.db.NamedExecContext(ctx, query, convertChannelResultsToControlResultChannelResultDAOs(channelResults[low:high], controlResultID))
 		if err != nil {
 			log.Error().Err(err).Msg(msgCreateControlResultChannelResultBatchFailed)
 			return ErrCreateControlResultChannelResultBatchFailed
@@ -3605,7 +3609,8 @@ func (r *analysisRepository) GetControlResultsByIDs(ctx context.Context, control
 	}
 
 	query := `SELECT scr.id, scr.analyte_mapping_id, scr.instrument_id, scr.sample_code, scr.expected_control_result_id, scr.is_valid, scr."result", scr.examined_at, scr.created_at,
-					sam.id AS "analyte_mapping.id", sam.instrument_id AS "analyte_mapping.instrument_id", sam.instrument_analyte AS "analyte_mapping.instrument_analyte", sam.analyte_id AS "analyte_mapping.analyte_id", sam.result_type AS "analyte_mapping.result_type", sam.created_at AS "analyte_mapping.created_at", sam.modified_at AS "analyte_mapping.modified_at"
+					sam.id AS "analyte_mapping.id", sam.instrument_id AS "analyte_mapping.instrument_id", sam.instrument_analyte AS "analyte_mapping.instrument_analyte", sam.analyte_id AS "analyte_mapping.analyte_id", sam.result_type AS "analyte_mapping.result_type", 
+					sam.control_instrument_analyte AS "analyte_mapping.control_instrument_analyte", sam.control_result_required AS "analyte_mapping.control_result_required", sam.created_at AS "analyte_mapping.created_at", sam.modified_at AS "analyte_mapping.modified_at"
 			FROM %schema_name%.sk_control_results scr
 			INNER JOIN %schema_name%.sk_analyte_mappings sam ON scr.analyte_mapping_id = sam.id
 			WHERE scr.id IN (?);`
@@ -4051,7 +4056,7 @@ func (r *analysisRepository) GetLatestControlResultsByReagent(ctx context.Contex
 	}
 
 	query := `WITH groupping AS (
-    SELECT skcr.sample_code, skcr.analyte_mapping_id, max(skcr.examined_at) as last_examination, max(skcr.created_at) as latest
+    SELECT skcr.sample_code, skcr.analyte_mapping_id, max(skcr.examined_at) as last_examination
     FROM %schema_name%.sk_control_results skcr
         INNER JOIN %schema_name%.sk_reagent_control_result_relations skrcrr ON skcr.id = skrcrr.control_result_id
         INNER JOIN %schema_name%.sk_reagents skr ON skrcrr.reagent_id = skr.id
@@ -4062,9 +4067,10 @@ func (r *analysisRepository) GetLatestControlResultsByReagent(ctx context.Contex
 	}
 	query += ` GROUP BY skcr.sample_code, skcr.analyte_mapping_id)
 	SELECT skcr.id, skcr.sample_code, skcr.analyte_mapping_id, skcr.instrument_id, skcr.expected_control_result_id, skcr.is_valid, skcr.is_compared_to_expected_result, skcr.result, skcr.examined_at, skcr.created_at,
-		sam.id AS "analyte_mapping.id", sam.instrument_id AS "analyte_mapping.instrument_id", sam.instrument_analyte AS "analyte_mapping.instrument_analyte", sam.analyte_id AS "analyte_mapping.analyte_id", sam.result_type AS "analyte_mapping.result_type", sam.created_at AS "analyte_mapping.created_at", sam.modified_at AS "analyte_mapping.modified_at"
+		sam.id AS "analyte_mapping.id", sam.instrument_id AS "analyte_mapping.instrument_id", sam.instrument_analyte AS "analyte_mapping.instrument_analyte", sam.analyte_id AS "analyte_mapping.analyte_id", sam.result_type AS "analyte_mapping.result_type", 
+		sam.control_instrument_analyte AS "analyte_mapping.control_instrument_analyte", sam.control_result_required AS "analyte_mapping.control_result_required", sam.created_at AS "analyte_mapping.created_at", sam.modified_at AS "analyte_mapping.modified_at"
 	FROM %schema_name%.sk_control_results skcr
-		INNER JOIN groupping g ON skcr.sample_code = g.sample_code AND skcr.analyte_mapping_id = g.analyte_mapping_id AND skcr.examined_at = g.last_examination AND skcr.created_at = g.latest
+		INNER JOIN groupping g ON skcr.sample_code = g.sample_code AND skcr.analyte_mapping_id = g.analyte_mapping_id AND skcr.examined_at = g.last_examination
 		INNER JOIN %schema_name%.sk_analyte_mappings sam ON skcr.analyte_mapping_id = sam.id
 		INNER JOIN %schema_name%.sk_reagent_control_result_relations skrcrr ON skcr.id = skrcrr.control_result_id
 		INNER JOIN %schema_name%.sk_reagents skr ON skrcrr.reagent_id = skr.id
@@ -4107,7 +4113,8 @@ func (r *analysisRepository) GetControlResultsToValidate(ctx context.Context, an
 
 	query += fmt.Sprintf(` GROUP BY scr.id)
 	SELECT skcr.id, skcr.sample_code, skcr.analyte_mapping_id, skcr.instrument_id, skcr.expected_control_result_id, skcr.is_valid, skcr.is_compared_to_expected_result, skcr.result, skcr.examined_at, skcr.created_at,
-		sam.id AS "analyte_mapping.id", sam.instrument_id AS "analyte_mapping.instrument_id", sam.instrument_analyte AS "analyte_mapping.instrument_analyte", sam.analyte_id AS "analyte_mapping.analyte_id", sam.result_type AS "analyte_mapping.result_type", sam.created_at AS "analyte_mapping.created_at", sam.modified_at AS "analyte_mapping.modified_at"
+		sam.id AS "analyte_mapping.id", sam.instrument_id AS "analyte_mapping.instrument_id", sam.instrument_analyte AS "analyte_mapping.instrument_analyte", sam.analyte_id AS "analyte_mapping.analyte_id", sam.result_type AS "analyte_mapping.result_type", 
+		sam.control_instrument_analyte AS "analyte_mapping.control_instrument_analyte", sam.control_result_required AS "analyte_mapping.control_result_required", sam.created_at AS "analyte_mapping.created_at", sam.modified_at AS "analyte_mapping.modified_at"
 	FROM %s.sk_control_results skcr
 	INNER JOIN controlResultsToValidate g ON skcr.id = g.id
 	INNER JOIN %s.sk_analyte_mappings sam ON skcr.analyte_mapping_id = sam.id;`, r.dbSchema, r.dbSchema)
@@ -4712,6 +4719,24 @@ func convertControlResultChannelResultDAOsToChannelResult(channelResultDAO contr
 		QuantitativeResults:   convertQuantitativeResultDAOsToQuantitativeResults(channelResultDAO.QuantitativeResults),
 		Images:                convertControlResultImageDAOsToImages(channelResultDAO.Images),
 	}
+}
+
+func convertChannelResultToControlResultChannelResultDAO(channelResult ChannelResult, controlResultID uuid.UUID) controlResultChannelResultDAO {
+	return controlResultChannelResultDAO{
+		ID:                    channelResult.ID,
+		ControlResultId:       controlResultID,
+		ChannelID:             channelResult.ChannelID,
+		QualitativeResult:     channelResult.QualitativeResult,
+		QualitativeResultEdit: channelResult.QualitativeResultEdit,
+	}
+}
+
+func convertChannelResultsToControlResultChannelResultDAOs(channelResults []ChannelResult, controlResultID uuid.UUID) []controlResultChannelResultDAO {
+	channelResultDAOs := make([]controlResultChannelResultDAO, len(channelResults))
+	for i := range channelResults {
+		channelResultDAOs[i] = convertChannelResultToControlResultChannelResultDAO(channelResults[i], controlResultID)
+	}
+	return channelResultDAOs
 }
 
 func convertQuantitativeResultDAOsToQuantitativeResults(quantitativeChannelResultDAOs []quantitativeChannelResultDAO) map[string]string {

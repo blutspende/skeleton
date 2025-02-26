@@ -465,7 +465,7 @@ func setAnalysisResultStatusBasedOnControlResults(analysisResult AnalysisResult,
 
 		var allExpectedControlHasControlResults = true
 
-		if len(expectedControlSampleCodeMap) != len(controlSampleCodeMap) {
+		if len(expectedControlSampleCodeMap) == 0 || len(expectedControlSampleCodeMap) != len(controlSampleCodeMap) {
 			return analysisResult, nil
 		}
 		for controlSampleCode := range controlSampleCodeMap {
