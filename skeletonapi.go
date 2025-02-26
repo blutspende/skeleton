@@ -138,7 +138,7 @@ func New(ctx context.Context, serviceName, displayName string, requestedExtraVal
 
 	consoleLogService := service.NewConsoleLogService(fmt.Sprintf("%s:%d", config.RedisUrl, config.RedisPort))
 
-	longpollClient := NewLongPollClient(longPollingApiRestyClient, instrumentService, serviceName, config.CerberusURL, config.LongPollingAPIClientTimeoutSeconds)
+	longpollClient := NewLongPollClient(longPollingApiRestyClient, instrumentService, analysisService, manager, serviceName, config.CerberusURL, config.LongPollingAPIClientTimeoutSeconds)
 
 	logcom.Init(logcom.Configuration{
 		ServiceName: config.LogComServiceName,

@@ -477,6 +477,7 @@ func (s *skeleton) Start() error {
 	go s.enqueueUnprocessedAnalysisRequests(s.ctx)
 	go s.enqueueUnprocessedAnalysisResults(s.ctx)
 	go s.longPollClient.StartInstrumentLongPoll(s.ctx)
+	go s.longpollClient.StartReprocessLongPoll(s.ctx)
 	go s.startAnalysisRequestFetchJob(s.ctx)
 	go s.startAnalysisRequestRevocationFetchJob(s.ctx)
 	go s.startAnalysisRequestReexamineFetchJob(s.ctx)
@@ -874,9 +875,11 @@ func (s *skeleton) processStuckImagesToCerberus(ctx context.Context) {
 }
 
 const (
+	syncTypeInstrument  = "instrument"
 	syncTypeNewWorkItem = "newWorkItem"
 	syncTypeRevocation  = "revocation"
 	syncTypeReexamine   = "reexamine"
+	syncTypeReprocess   = "reprocess"
 )
 
 func (s *skeleton) startAnalysisRequestFetchJob(ctx context.Context) {

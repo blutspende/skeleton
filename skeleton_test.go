@@ -519,6 +519,9 @@ type longPollClientMock struct {
 func (m *longPollClientMock) StartInstrumentLongPoll(ctx context.Context) {
 }
 
+func (m *longPollClientMock) StartReprocessLongPoll(ctx context.Context) {
+}
+
 func (m *longPollClientMock) GetAnalysisRequestsChan() chan []AnalysisRequest {
 	if m.analysisRequestChan == nil {
 		m.analysisRequestChan = make(chan []AnalysisRequest, 10)

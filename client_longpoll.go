@@ -14,22 +14,36 @@ import (
 	"time"
 )
 
-type MessageType string
+type InstrumentMessageType string
 
 const (
-	MessageTypeCreate MessageType = "CREATE"
-	MessageTypeUpdate MessageType = "UPDATE"
-	MessageTypeDelete MessageType = "DELETE"
+	MessageTypeCreate InstrumentMessageType = "CREATE"
+	MessageTypeUpdate InstrumentMessageType = "UPDATE"
+	MessageTypeDelete InstrumentMessageType = "DELETE"
 )
 
 type InstrumentMessageTO struct {
-	MessageType  MessageType   `json:"messageType" binding:"required"`
-	InstrumentId uuid.UUID     `json:"instrumentId" binding:"required"`
-	Instrument   *instrumentTO `json:"instrument,omitempty"`
+	MessageType  InstrumentMessageType `json:"messageType" binding:"required"`
+	InstrumentId uuid.UUID             `json:"instrumentId" binding:"required"`
+	Instrument   *instrumentTO         `json:"instrument,omitempty"`
+}
+
+type ReprocessMessageType string
+
+const (
+	MessageTypeRetransmitResult      ReprocessMessageType = "RETRANSMIT_RESULT"
+	MessageTypeReprocessBySampleCode ReprocessMessageType = "REPROCESS_BY_SAMPLE_CODE"
+	MessageTypeReprocessByBatchIds   ReprocessMessageType = "REPROCESS_BY_BATCH_IDS"
+)
+
+type ReprocessMessageTO struct {
+	MessageType ReprocessMessageType `json:"messageType" binding:"required"`
+	ReprocessId interface{}          `json:"id" binding:"required"`
 }
 
 type LongPollClient interface {
 	StartInstrumentLongPoll(ctx context.Context)
+	StartReprocessLongPoll(ctx context.Context)
 	GetAnalysisRequestsChan() chan []AnalysisRequest
 	GetRevokedWorkItemIDsChan() chan []uuid.UUID
 	GetReexaminedWorkItemIDsChan() chan []uuid.UUID
@@ -41,6 +55,8 @@ type LongPollClient interface {
 type longPollClient struct {
 	restyClient               *resty.Client
 	instrumentService         InstrumentService
+	analysisService           AnalysisService
+	manager                   Manager
 	serviceName               string
 	cerberusUrl               string
 	timeoutSeconds            uint
@@ -49,10 +65,12 @@ type longPollClient struct {
 	reexaminedWorkItemIDsChan chan []uuid.UUID
 }
 
-func NewLongPollClient(restyClient *resty.Client, instrumentService InstrumentService, serviceName, cerberusUrl string, timeoutSeconds uint) LongPollClient {
+func NewLongPollClient(restyClient *resty.Client, instrumentService InstrumentService, analysisService AnalysisService, manager Manager, serviceName, cerberusUrl string, timeoutSeconds uint) LongPollClient {
 	return &longPollClient{
 		restyClient:               restyClient,
 		instrumentService:         instrumentService,
+		analysisService:           analysisService,
+		manager:                   manager,
 		serviceName:               serviceName,
 		cerberusUrl:               cerberusUrl,
 		analysisRequestsChan:      make(chan []AnalysisRequest),
@@ -72,8 +90,6 @@ func (l *longPollClient) StartInstrumentLongPoll(ctx context.Context) {
 		log.Fatal().Err(err).Msg("Failed to parse URL for long-poll")
 	}
 
-	log.Info().Msg("Sending long-poll request...")
-
 	// Create an HTTP client for long polling
 	httpClient := &http.Client{
 		Transport: &RestyRoundTripper{restyClient: l.restyClient},
@@ -81,8 +97,7 @@ func (l *longPollClient) StartInstrumentLongPoll(ctx context.Context) {
 
 	c, err := longpollclient.NewClient(longpollclient.ClientOptions{
 		SubscribeUrl:       *u,
-		Category:           l.serviceName,
-		LoggingEnabled:     true,
+		Category:           fmt.Sprintf("%s:%s", l.serviceName, syncTypeInstrument),
 		PollTimeoutSeconds: l.timeoutSeconds,
 		HttpClient:         httpClient,
 	})
@@ -91,22 +106,54 @@ func (l *longPollClient) StartInstrumentLongPoll(ctx context.Context) {
 		return
 	}
 
-	// Poll events in a separate goroutine with context for graceful shutdown
 	go func() {
-		for event := range c.Start(time.Now()) {
+		for event := range c.Start(time.Now().UTC().AddDate(0, 0, -1)) {
 			select {
 			case <-ctx.Done():
 				log.Info().Msg("Long poll gracefully stopped")
 				return
 			default:
-				l.handleEvent(ctx, event)
+				l.handleInstrumentEvent(ctx, event)
 			}
 		}
 	}()
 }
 
-func (l *longPollClient) handleEvent(ctx context.Context, event *golongpoll.Event) {
-	// Assert event data as map[string]interface{}
+func (l *longPollClient) StartReprocessLongPoll(ctx context.Context) {
+	u, err := url.Parse(l.cerberusUrl + "/v1/instruments/poll-reprocess")
+	if err != nil {
+		log.Fatal().Err(err).Msg("start reprocess long polling failed")
+	}
+
+	httpClient := &http.Client{
+		Transport: &RestyRoundTripper{restyClient: l.restyClient},
+	}
+
+	c, err := longpollclient.NewClient(longpollclient.ClientOptions{
+		SubscribeUrl:       *u,
+		Category:           fmt.Sprintf("%s:%s", l.serviceName, syncTypeReprocess),
+		PollTimeoutSeconds: l.timeoutSeconds,
+		HttpClient:         httpClient,
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to create long-poll client")
+		return
+	}
+
+	go func() {
+		for event := range c.Start(time.Now().UTC().AddDate(0, 0, -1)) {
+			select {
+			case <-ctx.Done():
+				log.Info().Msg("Long poll gracefully stopped")
+				return
+			default:
+				l.handleReprocessEvent(ctx, event)
+			}
+		}
+	}()
+}
+
+func (l *longPollClient) handleReprocessEvent(ctx context.Context, event *golongpoll.Event) {
 	data, ok := event.Data.(map[string]interface{})
 	if !ok {
 		log.Error().Msg("Unexpected event data type")
@@ -120,24 +167,106 @@ func (l *longPollClient) handleEvent(ctx context.Context, event *golongpoll.Even
 		return
 	}
 
-	var messageTO InstrumentMessageTO
-	// Deserialize JSON to InstrumentMessageTO struct
-	if err := json.Unmarshal(jsonData, &messageTO); err != nil {
+	var reprocessMessageTO ReprocessMessageTO
+	if err := json.Unmarshal(jsonData, &reprocessMessageTO); err != nil {
+		log.Error().Err(err).Msg("Failed to unmarshal event data to ReprocessMessageTO")
+		return
+	}
+
+	log.Debug().
+		Str("MessageType", string(reprocessMessageTO.MessageType)).
+		Interface("ReprocessId", reprocessMessageTO.ReprocessId).
+		Msg("Received event mapped to ReprocessMessageTO")
+
+	err = l.processReprocessMessage(ctx, reprocessMessageTO)
+	if err != nil {
+		log.Error().Err(err).Interface("Message", reprocessMessageTO).Msg("Failed to process event")
+		// TODO handle, failed chan or something
+	}
+}
+
+func (l *longPollClient) handleInstrumentEvent(ctx context.Context, event *golongpoll.Event) {
+	data, ok := event.Data.(map[string]interface{})
+	if !ok {
+		log.Error().Msg("Unexpected event data type")
+		return
+	}
+
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to marshal event data")
+		return
+	}
+
+	var instrumentMessageTO InstrumentMessageTO
+	if err := json.Unmarshal(jsonData, &instrumentMessageTO); err != nil {
 		log.Error().Err(err).Msg("Failed to unmarshal event data to InstrumentMessageTO")
 		return
 	}
 
 	log.Debug().
-		Str("MessageType", string(messageTO.MessageType)).
-		Str("InstrumentId", messageTO.InstrumentId.String()).
+		Str("MessageType", string(instrumentMessageTO.MessageType)).
+		Str("InstrumentId", instrumentMessageTO.InstrumentId.String()).
 		Msg("Received event mapped to InstrumentMessageTO")
 
-	// Handle the received message
-	err = l.processInstrumentMessage(ctx, messageTO)
+	err = l.processInstrumentMessage(ctx, instrumentMessageTO)
 	if err != nil {
-		log.Error().Err(err).Interface("Message", messageTO).Msg("Failed to process event")
+		log.Error().Err(err).Interface("Message", instrumentMessageTO).Msg("Failed to process event")
 		// TODO handle, failed chan or something
 	}
+}
+
+func (l *longPollClient) processReprocessMessage(ctx context.Context, message ReprocessMessageTO) error {
+	switch message.MessageType {
+	case MessageTypeRetransmitResult:
+		if str, ok := message.ReprocessId.(string); ok {
+			resultId, err := uuid.Parse(str)
+			if err != nil {
+				return fmt.Errorf("invalid UUID format for message type: %s", MessageTypeRetransmitResult)
+			}
+			err = l.analysisService.RetransmitResult(ctx, resultId)
+			if err != nil {
+				return err
+			}
+		} else {
+			return fmt.Errorf("unexpected reprocess id type for message type: %s", MessageTypeRetransmitResult)
+		}
+	case MessageTypeReprocessBySampleCode:
+		if sampleCode, ok := message.ReprocessId.(string); ok {
+			err := l.manager.GetCallbackHandler().ReprocessInstrumentDataBySampleCode(sampleCode)
+			if err != nil {
+				return err
+			}
+		} else {
+			return fmt.Errorf("unexpected reprocess id type for message type: %s", MessageTypeReprocessBySampleCode)
+		}
+	case MessageTypeReprocessByBatchIds:
+		if slice, ok := message.ReprocessId.([]interface{}); ok {
+			var batchIds []uuid.UUID
+			for _, item := range slice {
+				if str, ok := item.(string); ok {
+					parsedUUID, err := uuid.Parse(str)
+					if err != nil {
+						log.Error().Err(err).Msgf("Invalid UUID in batch list for message type: %s", MessageTypeReprocessByBatchIds)
+						continue
+					}
+					batchIds = append(batchIds, parsedUUID)
+				} else {
+					log.Error().Msgf("Unexpected batch ID type for message type: %s", MessageTypeReprocessByBatchIds)
+					continue
+				}
+			}
+			err := l.manager.GetCallbackHandler().ReprocessInstrumentData(batchIds)
+			if err != nil {
+				return err
+			}
+		} else {
+			return fmt.Errorf("unexpected reprocess id type for message type: %s", MessageTypeReprocessByBatchIds)
+		}
+	default:
+		log.Warn().Interface("Received message", message).Msg("Unknown message type for Reprocess")
+	}
+	return nil
 }
 
 func (l *longPollClient) processInstrumentMessage(ctx context.Context, message InstrumentMessageTO) error {
@@ -147,7 +276,6 @@ func (l *longPollClient) processInstrumentMessage(ctx context.Context, message I
 		instrument := convertInstrumentTOToInstrument(*message.Instrument)
 		id, err := l.instrumentService.CreateInstrument(ctx, instrument)
 		if err != nil {
-			log.Error().Err(err).Msg("Failed to create instrument")
 			return err
 		}
 		log.Info().Interface("UUID", id).Msg("Created instrument")
@@ -156,7 +284,6 @@ func (l *longPollClient) processInstrumentMessage(ctx context.Context, message I
 		instrument := convertInstrumentTOToInstrument(*message.Instrument)
 		err := l.instrumentService.UpdateInstrument(ctx, instrument)
 		if err != nil {
-			log.Error().Err(err).Msg("Failed to update instrument")
 			return err
 		}
 		log.Info().Msg("Updated instrument")
@@ -164,7 +291,6 @@ func (l *longPollClient) processInstrumentMessage(ctx context.Context, message I
 		log.Info().Msgf("Processing deletion event for InstrumentId: %s", message.InstrumentId)
 		err := l.instrumentService.DeleteInstrument(ctx, message.InstrumentId)
 		if err != nil {
-			log.Error().Err(err).Msg("Failed to delete instrument")
 			return err
 		}
 		log.Info().Msg("Deleted instrument")
@@ -181,6 +307,7 @@ func (l *longPollClient) GetAnalysisRequestsChan() chan []AnalysisRequest {
 func (l *longPollClient) GetRevokedWorkItemIDsChan() chan []uuid.UUID {
 	return l.revokedWorkItemIDsChan
 }
+
 func (l *longPollClient) GetReexaminedWorkItemIDsChan() chan []uuid.UUID {
 	return l.reexaminedWorkItemIDsChan
 }
