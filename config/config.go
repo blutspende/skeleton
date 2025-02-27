@@ -55,6 +55,8 @@ type Configuration struct {
 	StandardAPIClientTimeoutSeconds            uint          `envconfig:"STANDARD_API_CLIENT_TIMEOUT_SECONDS" default:"10"`
 	LongPollingAPIClientTimeoutSeconds         uint          `envconfig:"LONG_POLLING_API_CLIENT_TIMEOUT_SECONDS" default:"80"`
 	LongPollingRetrySeconds                    int           `envconfig:"LONG_POLLING_RETRY_SECONDS" default:"30"`
+	RedisUrl                                   string        `envconfig:"REDIS_URL" required:"true"`
+	RedisPort                                  int           `envconfig:"REDIS_PORT" default:"6379"`
 	ClientCredentialAuthHeaderValue            string
 }
 

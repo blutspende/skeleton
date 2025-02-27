@@ -7,7 +7,6 @@ require (
 	github.com/blutspende/logcom-api v1.3.12
 	github.com/fergusstrange/embedded-postgres v1.19.0
 	github.com/gin-contrib/cors v1.7.2
-	github.com/gin-contrib/sse v0.1.0
 	github.com/gin-gonic/gin v1.10.0
 	github.com/go-playground/assert/v2 v2.2.0
 	github.com/go-resty/resty/v2 v2.13.1
@@ -20,6 +19,7 @@ require (
 	github.com/lib/pq v1.10.9
 	github.com/pkg/errors v0.9.1
 	github.com/proullon/ramsql v0.0.0-20220719091513-bf3c20043516
+	github.com/redis/go-redis/v9 v9.7.0
 	github.com/rs/zerolog v1.32.0
 	github.com/shopspring/decimal v1.2.0
 	github.com/stretchr/testify v1.9.0
@@ -29,10 +29,13 @@ require (
 require (
 	github.com/bytedance/sonic v1.11.6 // indirect
 	github.com/bytedance/sonic/loader v0.1.1 // indirect
+	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/cloudwego/base64x v0.1.4 // indirect
 	github.com/cloudwego/iasm v0.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/gabriel-vasile/mimetype v1.4.3 // indirect
+	github.com/gin-contrib/sse v0.1.0 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-playground/validator/v10 v10.20.0 // indirect
