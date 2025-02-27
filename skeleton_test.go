@@ -508,15 +508,30 @@ func (m *authManagerMock) InvalidateClientCredential() {
 }
 
 type longPollClientMock struct {
+	InstrumentMessage         InstrumentMessageTO
+	ReprocessMessage          ReprocessMessageTO
 	AnalysisRequests          []AnalysisRequest
 	ReexaminedWorkItemIDs     []uuid.UUID
 	RevokedWorkItemIDs        []uuid.UUID
+	instrumentConfigsChan     chan InstrumentMessageTO
+	reprocessEventChan        chan ReprocessMessageTO
 	analysisRequestChan       chan []AnalysisRequest
 	reexaminedWorkItemIDsChan chan []uuid.UUID
 	revokedWorkItemIDsChan    chan []uuid.UUID
 }
 
-func (m *longPollClientMock) StartInstrumentLongPoll(ctx context.Context) {
+func (m *longPollClientMock) GetInstrumentConfigsChan() chan InstrumentMessageTO {
+	if m.instrumentConfigsChan == nil {
+		m.instrumentConfigsChan = make(chan InstrumentMessageTO)
+	}
+	return m.instrumentConfigsChan
+}
+
+func (m *longPollClientMock) GetReprocessEventsChan() chan ReprocessMessageTO {
+	if m.reprocessEventChan == nil {
+		m.reprocessEventChan = make(chan ReprocessMessageTO)
+	}
+	return m.reprocessEventChan
 }
 
 func (m *longPollClientMock) GetAnalysisRequestsChan() chan []AnalysisRequest {
@@ -536,6 +551,14 @@ func (m *longPollClientMock) GetReexaminedWorkItemIDsChan() chan []uuid.UUID {
 		m.reexaminedWorkItemIDsChan = make(chan []uuid.UUID, 10)
 	}
 	return m.reexaminedWorkItemIDsChan
+}
+
+func (m *longPollClientMock) StartInstrumentConfigsLongPolling(ctx context.Context) {
+	m.GetInstrumentConfigsChan() <- m.InstrumentMessage
+}
+
+func (m *longPollClientMock) StartReprocessEventsLongPolling(ctx context.Context) {
+	m.GetReprocessEventsChan() <- m.ReprocessMessage
 }
 
 func (m *longPollClientMock) StartAnalysisRequestLongPolling(ctx context.Context) {

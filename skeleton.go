@@ -476,7 +476,8 @@ func (s *skeleton) Start() error {
 	go s.processStuckImagesToCerberus(s.ctx)
 	go s.enqueueUnprocessedAnalysisRequests(s.ctx)
 	go s.enqueueUnprocessedAnalysisResults(s.ctx)
-	go s.longPollClient.StartInstrumentLongPoll(s.ctx)
+	go s.startInstrumentConfigsFetchJob(s.ctx)
+	go s.startReprocessEventsFetchJob(s.ctx)
 	go s.startAnalysisRequestFetchJob(s.ctx)
 	go s.startAnalysisRequestRevocationFetchJob(s.ctx)
 	go s.startAnalysisRequestReexamineFetchJob(s.ctx)
@@ -874,10 +875,130 @@ func (s *skeleton) processStuckImagesToCerberus(ctx context.Context) {
 }
 
 const (
+	syncTypeInstrument  = "instrument"
 	syncTypeNewWorkItem = "newWorkItem"
 	syncTypeRevocation  = "revocation"
 	syncTypeReexamine   = "reexamine"
+	syncTypeReprocess   = "reprocess"
 )
+
+func (s *skeleton) startInstrumentConfigsFetchJob(ctx context.Context) {
+	go s.longPollClient.StartInstrumentConfigsLongPolling(ctx)
+	for {
+		select {
+		case instrumentMessage := <-s.longPollClient.GetInstrumentConfigsChan():
+			err := s.processInstrumentMessage(ctx, instrumentMessage)
+			if err != nil {
+				log.Warn().Err(err).Interface("Message", instrumentMessage).Msg("Failed to process instrument message from Cerberus")
+				continue
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (s *skeleton) processInstrumentMessage(ctx context.Context, message InstrumentMessageTO) error {
+	switch message.MessageType {
+	case MessageTypeCreate:
+		log.Info().Msgf("Processing creation event for InstrumentId: %s", message.InstrumentId)
+		instrument := convertInstrumentTOToInstrument(*message.Instrument)
+		id, err := s.instrumentService.CreateInstrument(ctx, instrument)
+		if err != nil {
+			return err
+		}
+		log.Info().Interface("UUID", id).Msg("Created instrument")
+	case MessageTypeUpdate:
+		log.Info().Msgf("Processing update event for InstrumentId: %s", message.InstrumentId)
+		instrument := convertInstrumentTOToInstrument(*message.Instrument)
+		err := s.instrumentService.UpdateInstrument(ctx, instrument)
+		if err != nil {
+			return err
+		}
+		log.Info().Msg("Updated instrument")
+	case MessageTypeDelete:
+		log.Info().Msgf("Processing deletion event for InstrumentId: %s", message.InstrumentId)
+		err := s.instrumentService.DeleteInstrument(ctx, message.InstrumentId)
+		if err != nil {
+			return err
+		}
+		log.Info().Msg("Deleted instrument")
+	default:
+		log.Warn().Msgf("Unknown message type for InstrumentId: %s", message.InstrumentId)
+	}
+	return nil
+}
+
+func (s *skeleton) startReprocessEventsFetchJob(ctx context.Context) {
+	go s.longPollClient.StartReprocessEventsLongPolling(ctx)
+	for {
+		select {
+		case reprocessMessage := <-s.longPollClient.GetReprocessEventsChan():
+			err := s.processReprocessMessage(ctx, reprocessMessage)
+			if err != nil {
+				time.AfterFunc(time.Second*time.Duration(s.config.LongPollingRetrySeconds), func() {
+					s.longpollClient.GetReprocessEventsChan() <- reprocessMessage
+				})
+				continue
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (s *skeleton) processReprocessMessage(ctx context.Context, message ReprocessMessageTO) error {
+	switch message.MessageType {
+	case MessageTypeRetransmitResult:
+		if str, ok := message.ReprocessId.(string); ok {
+			resultId, err := uuid.Parse(str)
+			if err != nil {
+				return fmt.Errorf("invalid UUID format for message type: %s", MessageTypeRetransmitResult)
+			}
+			err = s.analysisService.RetransmitResult(ctx, resultId)
+			if err != nil {
+				return err
+			}
+		} else {
+			return fmt.Errorf("unexpected reprocess id type for message type: %s", MessageTypeRetransmitResult)
+		}
+	case MessageTypeReprocessBySampleCode:
+		if sampleCode, ok := message.ReprocessId.(string); ok {
+			err := s.manager.GetCallbackHandler().ReprocessInstrumentDataBySampleCode(sampleCode)
+			if err != nil {
+				return err
+			}
+		} else {
+			return fmt.Errorf("unexpected reprocess id type for message type: %s", MessageTypeReprocessBySampleCode)
+		}
+	case MessageTypeReprocessByBatchIds:
+		if slice, ok := message.ReprocessId.([]interface{}); ok {
+			var batchIds []uuid.UUID
+			for _, item := range slice {
+				if str, ok := item.(string); ok {
+					parsedUUID, err := uuid.Parse(str)
+					if err != nil {
+						log.Error().Err(err).Msgf("Invalid UUID in batch list for message type: %s", MessageTypeReprocessByBatchIds)
+						continue
+					}
+					batchIds = append(batchIds, parsedUUID)
+				} else {
+					log.Error().Msgf("Unexpected batch ID type for message type: %s", MessageTypeReprocessByBatchIds)
+					continue
+				}
+			}
+			err := s.manager.GetCallbackHandler().ReprocessInstrumentData(batchIds)
+			if err != nil {
+				return err
+			}
+		} else {
+			return fmt.Errorf("unexpected reprocess id type for message type: %s", MessageTypeReprocessByBatchIds)
+		}
+	default:
+		log.Warn().Interface("Received message", message).Msg("Unknown message type for Reprocess")
+	}
+	return nil
+}
 
 func (s *skeleton) startAnalysisRequestFetchJob(ctx context.Context) {
 	go s.longPollClient.StartAnalysisRequestLongPolling(ctx)

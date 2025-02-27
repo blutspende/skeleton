@@ -2508,6 +2508,7 @@ func convertAnalysisResultToTO(ar AnalysisResult) (AnalysisResultTO, error) {
 		ValidUntil:               ar.ValidUntil,
 		ResultYieldDateTime:      ar.ResultYieldDateTime,
 		ExaminedMaterial:         ar.AnalysisRequest.MaterialID,
+		BatchId:                  ar.BatchID,
 		Result:                   ar.Result,
 		Mode:                     string(ar.ResultMode),
 		Status:                   string(ar.Status),
