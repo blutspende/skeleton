@@ -3,12 +3,12 @@ package skeleton
 import (
 	"context"
 	"crypto/tls"
-	"net/http"
-
 	"github.com/blutspende/skeleton/config"
 	"github.com/go-resty/resty/v2"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"net/http"
+	"time"
 )
 
 func NewRestyClient(ctx context.Context, configuration *config.Configuration, useProxy bool) *resty.Client {
@@ -27,13 +27,15 @@ func NewRestyClient(ctx context.Context, configuration *config.Configuration, us
 	return client
 }
 
-func NewRestyClientWithAuthManager(ctx context.Context, configuration *config.Configuration, authManager AuthManager) *resty.Client {
+func NewRestyClientWithAuthManager(ctx context.Context, configuration *config.Configuration, authManager AuthManager, timeoutSeconds uint) *resty.Client {
 	client := resty.New().
 		SetRetryCount(2).
 		AddRetryCondition(configureRetryMechanismForService2ServiceCalls(authManager)).
 		OnBeforeRequest(configureRequest(ctx, configuration)).
 		OnBeforeRequest(setService2ServiceAuthToken(authManager))
-
+	if timeoutSeconds > 0 {
+		client = client.SetTimeout(time.Second * time.Duration(timeoutSeconds))
+	}
 	if configuration.Development {
 		client = client.SetTLSClientConfig(&tls.Config{
 			InsecureSkipVerify: true,

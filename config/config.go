@@ -52,8 +52,10 @@ type Configuration struct {
 	InstrumentDriverRegistrationMaxRetry       int           `envconfig:"INSTRUMENT_DRIVER_REGISTRATION_MAX_RETRY" default:"20"`
 	CleanupDays                                int           `envconfig:"CLEANUP_DAYS" default:"90"`
 	CleanupJobRunIntervalHours                 int           `envconfig:"CLEANUP_JOB_RUN_INTERVAL_HOURS" default:"4"`
-
-	ClientCredentialAuthHeaderValue string
+	StandardAPIClientTimeoutSeconds            uint          `envconfig:"STANDARD_API_CLIENT_TIMEOUT_SECONDS" default:"10"`
+	LongPollingAPIClientTimeoutSeconds         uint          `envconfig:"LONG_POLLING_API_CLIENT_TIMEOUT_SECONDS" default:"80"`
+	LongPollingRetrySeconds                    int           `envconfig:"LONG_POLLING_RETRY_SECONDS" default:"30"`
+	ClientCredentialAuthHeaderValue            string
 }
 
 var Settings Configuration

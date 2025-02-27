@@ -240,7 +240,7 @@ type cerberusQueueItemDAO struct {
 }
 
 type AnalysisRepository interface {
-	CreateAnalysisRequestsBatch(ctx context.Context, analysisRequests []AnalysisRequest) ([]uuid.UUID, []uuid.UUID, error)
+	CreateAnalysisRequestsBatch(ctx context.Context, analysisRequests []AnalysisRequest) ([]uuid.UUID, error)
 	CreateAnalysisRequestExtraValues(ctx context.Context, extraValuesByAnalysisRequestIDs map[uuid.UUID][]ExtraValue) error
 	GetAnalysisRequestsBySampleCodeAndAnalyteID(ctx context.Context, sampleCodes string, analyteID uuid.UUID) ([]AnalysisRequest, error)
 	GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string, allowResending bool) (map[string][]AnalysisRequest, error)
@@ -308,61 +308,55 @@ func NewAnalysisRepository(db db.DbConnector, dbSchema string) AnalysisRepositor
 const analysisRequestsBatchSize = 9000
 
 // CreateAnalysisRequestsBatch
-// Returns the ID and work item IDs of saved requests
-func (r *analysisRepository) CreateAnalysisRequestsBatch(ctx context.Context, analysisRequests []AnalysisRequest) ([]uuid.UUID, []uuid.UUID, error) {
+// Returns the IDs of saved requests
+func (r *analysisRepository) CreateAnalysisRequestsBatch(ctx context.Context, analysisRequests []AnalysisRequest) ([]uuid.UUID, error) {
 	ids := make([]uuid.UUID, 0, len(analysisRequests))
-	workItemIDs := make([]uuid.UUID, 0, len(analysisRequests))
 	var err error
-	var idsPart, workItemIDsPart []uuid.UUID
+	var idsPart []uuid.UUID
 	for i := 0; i < len(analysisRequests); i += analysisRequestsBatchSize {
 		if len(analysisRequests) >= i+analysisRequestsBatchSize {
-			idsPart, workItemIDsPart, err = r.createAnalysisRequestsBatch(ctx, analysisRequests[i:i+analysisRequestsBatchSize])
+			idsPart, err = r.createAnalysisRequestsBatch(ctx, analysisRequests[i:i+analysisRequestsBatchSize])
 		} else {
-			idsPart, workItemIDsPart, err = r.createAnalysisRequestsBatch(ctx, analysisRequests[i:])
+			idsPart, err = r.createAnalysisRequestsBatch(ctx, analysisRequests[i:])
 		}
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		ids = append(ids, idsPart...)
-		workItemIDs = append(workItemIDs, workItemIDsPart...)
 	}
-	return ids, workItemIDs, nil
+	return ids, nil
 }
 
-func (r *analysisRepository) createAnalysisRequestsBatch(ctx context.Context, analysisRequests []AnalysisRequest) ([]uuid.UUID, []uuid.UUID, error) {
+func (r *analysisRepository) createAnalysisRequestsBatch(ctx context.Context, analysisRequests []AnalysisRequest) ([]uuid.UUID, error) {
 	if len(analysisRequests) == 0 {
-		return []uuid.UUID{}, []uuid.UUID{}, nil
+		return nil, nil
 	}
-	ids := make([]uuid.UUID, len(analysisRequests))
-	for i := range analysisRequests {
-		if (analysisRequests[i].ID == uuid.UUID{}) || (analysisRequests[i].ID == uuid.Nil) {
-			analysisRequests[i].ID = uuid.New()
-		}
-		ids[i] = analysisRequests[i].ID
-	}
-
-	query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_requests(id, work_item_id, analyte_id, sample_code, material_id, laboratory_id, valid_until_time, created_at)
+	ids := make([]uuid.UUID, 0)
+	err := utils.Partition(len(analysisRequests), maxParams/8, func(low int, high int) error {
+		query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_requests(id, work_item_id, analyte_id, sample_code, material_id, laboratory_id, valid_until_time, created_at)
 				VALUES(:id, :work_item_id, :analyte_id, :sample_code, :material_id, :laboratory_id, :valid_until_time, :created_at)
-				ON CONFLICT (work_item_id) DO NOTHING RETURNING work_item_id;`, r.dbSchema)
-	rows, err := r.db.NamedQueryContext(ctx, query, convertAnalysisRequestsToDAOs(analysisRequests))
-	if err != nil {
-		log.Error().Err(err).Msg(msgCreateAnalysisRequestsBatchFailed)
-		return []uuid.UUID{}, []uuid.UUID{}, ErrCreateAnalysisRequestsBatchFailed
-	}
-	defer rows.Close()
-
-	savedWorkItemIDs := make([]uuid.UUID, len(analysisRequests))
-	for rows.Next() {
-		var workItemID uuid.UUID
-		err = rows.Scan(&workItemID)
+				ON CONFLICT (work_item_id) DO NOTHING RETURNING id;`, r.dbSchema)
+		rows, err := r.db.NamedQueryContext(ctx, query, convertAnalysisRequestsToDAOs(analysisRequests[low:high]))
 		if err != nil {
 			log.Error().Err(err).Msg(msgCreateAnalysisRequestsBatchFailed)
-			return []uuid.UUID{}, []uuid.UUID{}, ErrCreateAnalysisRequestsBatchFailed
+			return ErrCreateAnalysisRequestsBatchFailed
 		}
-		savedWorkItemIDs = append(savedWorkItemIDs, workItemID)
-	}
+		defer rows.Close()
 
-	return ids, savedWorkItemIDs, nil
+		for rows.Next() {
+			var analysisRequestID uuid.UUID
+			err = rows.Scan(&analysisRequestID)
+			if err != nil {
+				log.Error().Err(err).Msg(msgCreateAnalysisRequestsBatchFailed)
+				return ErrCreateAnalysisRequestsBatchFailed
+			}
+			ids = append(ids, analysisRequestID)
+		}
+
+		return nil
+	})
+
+	return ids, err
 }
 
 const subjectBatchSize = 6000
@@ -2886,7 +2880,7 @@ func (r *analysisRepository) MarkAnalysisRequestsAsProcessed(ctx context.Context
 	err := utils.Partition(len(analysisRequestIDs), maxParams, func(low int, high int) error {
 		query := fmt.Sprintf(`UPDATE %s.sk_analysis_requests SET is_processed = true WHERE id IN (?);`, r.dbSchema)
 
-		query, args, _ := sqlx.In(query, analysisRequestIDs)
+		query, args, _ := sqlx.In(query, analysisRequestIDs[low:high])
 		query = r.db.Rebind(query)
 
 		_, err := r.db.ExecContext(ctx, query, args...)

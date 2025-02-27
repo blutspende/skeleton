@@ -26,7 +26,6 @@ type skeleton struct {
 	sqlConn                    *sqlx.DB
 	dbSchema                   string
 	migrator                   migrator.SkeletonMigrator
-	api                        GinApi
 	analysisRepository         AnalysisRepository
 	analysisService            AnalysisService
 	instrumentService          InstrumentService
@@ -37,6 +36,7 @@ type skeleton struct {
 	cerberusClient             CerberusClient
 	longPollClient             LongPollClient
 	deaClient                  DeaClientV1
+	longpollClient             LongPollClient
 	manager                    Manager
 	resultTransferFlushTimeout int
 	imageRetrySeconds          int
@@ -450,8 +450,6 @@ func (s *skeleton) migrateUp(ctx context.Context, db *sqlx.DB, schemaName string
 	return s.migrator.Run(ctx, db, schemaName)
 }
 
-const apiVersion = "v1"
-
 func (s *skeleton) Start() error {
 	err := s.registerDriverToCerberus(s.ctx)
 	if err != nil {
@@ -480,15 +478,15 @@ func (s *skeleton) Start() error {
 	go s.enqueueUnprocessedAnalysisRequests(s.ctx)
 	go s.enqueueUnprocessedAnalysisResults(s.ctx)
 	go s.longPollClient.StartInstrumentLongPoll(s.ctx)
-
-	// Todo - use cancellable context what is passed to the routines above too
-	err = s.api.Run()
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to start API")
-		return err
+	go s.startAnalysisRequestFetchJob(s.ctx)
+	go s.startAnalysisRequestRevocationFetchJob(s.ctx)
+	go s.startAnalysisRequestReexamineFetchJob(s.ctx)
+	for {
+		select {
+		case <-s.ctx.Done():
+			return nil
+		}
 	}
-
-	return nil
 }
 
 func (s *skeleton) registerDriverToCerberus(ctx context.Context) error {
@@ -508,7 +506,7 @@ func (s *skeleton) registerDriverToCerberus(ctx context.Context) error {
 		}
 		manufacturerTestTOs := convertSupportedManufacturerTestsToSupportedManufacturerTestTOs(manufacturerTests)
 
-		err = s.cerberusClient.RegisterInstrumentDriver(s.serviceName, s.displayName, apiVersion, s.config.APIPort, s.config.EnableTLS, s.extraValueKeys, protocolsTos, manufacturerTestTOs, s.encodings)
+		err = s.cerberusClient.RegisterInstrumentDriver(s.serviceName, s.displayName, s.extraValueKeys, protocolsTos, manufacturerTestTOs, s.encodings)
 		if err != nil {
 			log.Warn().Err(err).Int("retryCount", retryCount).Msg("register instrument driver to cerberus failed")
 			retryCount++
@@ -876,7 +874,74 @@ func (s *skeleton) processStuckImagesToCerberus(ctx context.Context) {
 	}
 }
 
-func NewSkeleton(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api GinApi, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService service.ConsoleLogService, sortingRuleService SortingRuleService, manager Manager, cerberusClient CerberusClient, longpollClient LongPollClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
+const (
+	syncTypeNewWorkItem = "newWorkItem"
+	syncTypeRevocation  = "revocation"
+	syncTypeReexamine   = "reexamine"
+)
+
+func (s *skeleton) startAnalysisRequestFetchJob(ctx context.Context) {
+	go s.longpollClient.StartAnalysisRequestLongPolling(ctx)
+	for {
+		select {
+		case analysisRequests := <-s.longpollClient.GetAnalysisRequestsChan():
+			err := s.analysisService.CreateAnalysisRequests(ctx, analysisRequests)
+			if err != nil {
+				time.AfterFunc(time.Second*time.Duration(s.config.LongPollingRetrySeconds), func() {
+					s.longpollClient.GetAnalysisRequestsChan() <- analysisRequests
+				})
+				continue
+			}
+			workItemIDs := make([]uuid.UUID, len(analysisRequests))
+			for i := range analysisRequests {
+				workItemIDs[i] = analysisRequests[i].WorkItemID
+			}
+
+			_ = s.cerberusClient.SyncAnalysisRequests(workItemIDs, syncTypeNewWorkItem)
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+func (s *skeleton) startAnalysisRequestRevocationFetchJob(ctx context.Context) {
+	go s.longpollClient.StartRevokedWorkItemIDsLongPolling(ctx)
+	for {
+		select {
+		case revokedWorkItemIDs := <-s.longpollClient.GetRevokedWorkItemIDsChan():
+			err := s.analysisService.RevokeAnalysisRequests(ctx, revokedWorkItemIDs)
+			if err != nil {
+				time.AfterFunc(time.Second*time.Duration(s.config.LongPollingRetrySeconds), func() {
+					s.longpollClient.GetRevokedWorkItemIDsChan() <- revokedWorkItemIDs
+				})
+				continue
+			}
+			_ = s.cerberusClient.SyncAnalysisRequests(revokedWorkItemIDs, syncTypeRevocation)
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (s *skeleton) startAnalysisRequestReexamineFetchJob(ctx context.Context) {
+	go s.longpollClient.StartReexaminedWorkItemIDsLongPolling(ctx)
+	for {
+		select {
+		case reexaminedWorkItemIDs := <-s.longpollClient.GetReexaminedWorkItemIDsChan():
+			err := s.analysisService.ReexamineAnalysisRequestsBatch(ctx, reexaminedWorkItemIDs)
+			if err != nil {
+				time.AfterFunc(time.Second*time.Duration(s.config.LongPollingRetrySeconds), func() {
+					s.longpollClient.GetReexaminedWorkItemIDsChan() <- reexaminedWorkItemIDs
+				})
+				continue
+			}
+			_ = s.cerberusClient.SyncAnalysisRequests(reexaminedWorkItemIDs, syncTypeReexamine)
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func NewSkeleton(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService service.ConsoleLogService, sortingRuleService SortingRuleService, manager Manager, cerberusClient CerberusClient, longpollClient LongPollClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
 	skeleton := &skeleton{
 		ctx:                        ctx,
 		serviceName:                serviceName,
@@ -887,7 +952,6 @@ func NewSkeleton(ctx context.Context, serviceName, displayName string, requested
 		sqlConn:                    sqlConn,
 		dbSchema:                   dbSchema,
 		migrator:                   migrator,
-		api:                        api,
 		analysisRepository:         analysisRepository,
 		analysisService:            analysisService,
 		instrumentService:          instrumentService,
@@ -897,6 +961,7 @@ func NewSkeleton(ctx context.Context, serviceName, displayName string, requested
 		cerberusClient:             cerberusClient,
 		longPollClient:             longpollClient,
 		deaClient:                  deaClient,
+		longpollClient:             longpollClient,
 		resultsBuffer:              make([]AnalysisResult, 0, 500),
 		resultBatchesChan:          make(chan []AnalysisResult, 10),
 		resultTransferFlushTimeout: config.ResultTransferFlushTimeout,
