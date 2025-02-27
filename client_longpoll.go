@@ -71,7 +71,7 @@ func NewLongPollClient(restyClient *resty.Client, serviceName, cerberusUrl strin
 		serviceName:               serviceName,
 		cerberusUrl:               cerberusUrl,
 		instrumentsChan:           make(chan InstrumentMessageTO),
-		reprocessChan:             make(chan ReprocessMessageTO),
+		reprocessChan:             make(chan ReprocessMessageTO, 100),
 		analysisRequestsChan:      make(chan []AnalysisRequest),
 		revokedWorkItemIDsChan:    make(chan []uuid.UUID),
 		reexaminedWorkItemIDsChan: make(chan []uuid.UUID),

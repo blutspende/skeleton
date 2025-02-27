@@ -889,9 +889,7 @@ func (s *skeleton) startInstrumentConfigsFetchJob(ctx context.Context) {
 		case instrumentMessage := <-s.longPollClient.GetInstrumentConfigsChan():
 			err := s.processInstrumentMessage(ctx, instrumentMessage)
 			if err != nil {
-				time.AfterFunc(time.Second*time.Duration(s.config.LongPollingRetrySeconds), func() {
-					s.longpollClient.GetInstrumentConfigsChan() <- instrumentMessage
-				})
+				log.Warn().Err(err).Interface("Message", instrumentMessage).Msg("Failed to process instrument message from Cerberus")
 				continue
 			}
 		case <-ctx.Done():
