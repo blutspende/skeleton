@@ -312,7 +312,7 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 			AnalyteMapping:           analyteMappings[0],
 			Instrument:               instrument,
 			SampleCode:               "testSampleCode",
-			ResultRecordID:           uuid.MustParse("2f369489-77d3-464e-87e2-edbeffa62ae7"),
+			DEARawMessageID:          uuid.MustParse("2f369489-77d3-464e-87e2-edbeffa62ae7"),
 			BatchID:                  batchID,
 			Result:                   "pos",
 			ResultMode:               "PRODUCTION",
@@ -336,7 +336,7 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 			AnalyteMapping:           analyteMappings[0],
 			Instrument:               instrument,
 			SampleCode:               "testSampleCode2",
-			ResultRecordID:           uuid.MustParse("43a7b261-3e1d-4065-935a-ac15841f13e4"),
+			DEARawMessageID:          uuid.MustParse("43a7b261-3e1d-4065-935a-ac15841f13e4"),
 			BatchID:                  batchID,
 			Result:                   "pos",
 			ResultMode:               "PRODUCTION",
@@ -364,6 +364,200 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 
 	time.Sleep(4 * time.Second)
 	assert.Equal(t, 0, len(cerberusClientMock.AnalysisResults))
+}
+
+func TestSubmitAnalysisResultWithoutDEARawMessageID(t *testing.T) {
+	sqlConn, _ := sqlx.Connect("pgx", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
+
+	schemaName := "testSubmitAnalysisResultsWithRequests"
+	_, _ = sqlConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
+	_, _ = sqlConn.Exec(fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schemaName))
+	_, _ = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
+
+	configuration := config.Configuration{
+		APIPort:                          5000,
+		Authorization:                    false,
+		PermittedOrigin:                  "*",
+		ApplicationName:                  "Instrument API Test",
+		TCPListenerPort:                  5401,
+		InstrumentTransferRetryDelayInMs: 100,
+		ResultTransferFlushTimeout:       5,
+		ImageRetrySeconds:                60,
+	}
+	dbConn := db.CreateDbConnector(sqlConn)
+
+	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
+	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
+	ctx, cancel := context.WithCancel(context.Background())
+
+	defer cancel()
+
+	skeletonManager := NewSkeletonManager(ctx)
+	skeletonManager.SetCallbackHandler(&skeletonCallbackHandlerV1Mock{
+		handleAnalysisRequestsFunc: func(request []AnalysisRequest) error {
+			return nil
+		},
+	})
+	cerberusClientMock := &cerberusClientMock{
+		registerInstrumentFunc: func(instrument Instrument) error {
+			return nil
+		},
+	}
+
+	longPollClientMock := &longPollClientMock{}
+	deaClientMock := &deaClientMock{}
+
+	analysisService := NewAnalysisService(analysisRepository, deaClientMock, cerberusClientMock, skeletonManager)
+	conditionRepository := NewConditionRepository(dbConn, schemaName)
+	conditionService := NewConditionService(conditionRepository)
+	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
+	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
+	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, NewInstrumentCache(), cerberusClientMock)
+	consoleLogService := service.NewConsoleLogService("")
+
+	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, sqlConn, schemaName, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, sortingRuleService, skeletonManager, cerberusClientMock, longPollClientMock, deaClientMock, configuration)
+	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('9bec3063-435d-490f-bec0-88a6633ef4c2', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
+
+	go func() {
+		_ = skeletonInstance.Start()
+	}()
+
+	analysisRequests := []AnalysisRequest{
+		{
+			ID:             uuid.New(),
+			WorkItemID:     uuid.New(),
+			AnalyteID:      uuid.New(),
+			SampleCode:     "",
+			MaterialID:     uuid.New(),
+			LaboratoryID:   uuid.New(),
+			ValidUntilTime: time.Now().UTC().Add(14 * 24 * time.Hour),
+			CreatedAt:      time.Now().UTC(),
+			SubjectInfo:    nil,
+		},
+	}
+	err := analysisService.CreateAnalysisRequests(context.TODO(), analysisRequests)
+	assert.Nil(t, err)
+
+	analyteMappings := []AnalyteMapping{
+		{
+			ID:                uuid.MustParse("8facbaeb-368f-482a-9169-4b128632f9e0"),
+			InstrumentAnalyte: "TESTANALYTE",
+			AnalyteID:         uuid.MustParse("51bfea41-1b7e-48f7-8b35-46d930216de7"),
+			ChannelMappings: []ChannelMapping{
+				{
+					ID:                uuid.MustParse("eb780147-a519-4e88-9a5f-961ce531f219"),
+					InstrumentChannel: "TestInstrumentChannel",
+					ChannelID:         uuid.MustParse("9fe9b1f9-e1fd-4669-873b-c2446d5d6b6f"),
+				},
+			},
+			ResultMappings: []ResultMapping{
+				{
+					ID:    uuid.MustParse("0e49a9a7-8ef0-4ef3-a1e1-6277398fcc08"),
+					Key:   "pos",
+					Value: "pos",
+					Index: 0,
+				},
+				{
+					ID:    uuid.MustParse("329080eb-2dca-4a05-9730-24444cc3b487"),
+					Key:   "neg",
+					Value: "neg",
+					Index: 1,
+				},
+			},
+			ResultType: "pein",
+		},
+	}
+
+	instrumentID := uuid.MustParse("93f36696-5ff0-45a9-87eb-ca5c064c5890")
+	instrument := Instrument{
+		ID:                 instrumentID,
+		Name:               "TestInstrument",
+		ProtocolID:         uuid.MustParse("9bec3063-435d-490f-bec0-88a6633ef4c2"),
+		ProtocolName:       "IH-1000 v5.2",
+		Enabled:            true,
+		ConnectionMode:     "TCP_SERVER_ONLY",
+		ResultMode:         "PRODUCTION",
+		CaptureResults:     true,
+		CaptureDiagnostics: true,
+		ReplyToQuery:       true,
+		Status:             "ONLINE",
+		FileEncoding:       "UTF8",
+		Timezone:           "Europe/Budapest",
+		Hostname:           "192.168.1.35",
+		ClientPort:         nil,
+		AnalyteMappings:    analyteMappings,
+		RequestMappings: []RequestMapping{
+			{
+				ID:   uuid.MustParse("9e83ad17-40bc-44b2-b6c9-50a9f559387b"),
+				Code: "Test1",
+				AnalyteIDs: []uuid.UUID{
+					uuid.MustParse("7444d776-3ff7-40b6-9b3c-2e0c58337528"),
+					uuid.MustParse("c9cc51ec-2b63-45df-b0a8-98f325027f8f"),
+				},
+			},
+		},
+		CreatedAt:  time.Now().UTC(),
+		ModifiedAt: nil,
+		DeletedAt:  nil,
+	}
+
+	batchID := uuid.MustParse("ddd34c4d-62f9-4621-bb16-efad459a9bfe")
+	// this one has no DEA raw message ID
+	analysisResults := []AnalysisResult{
+		{
+			AnalysisRequest:          AnalysisRequest{},
+			AnalyteMapping:           analyteMappings[0],
+			Instrument:               instrument,
+			SampleCode:               "testSampleCode",
+			BatchID:                  batchID,
+			Result:                   "pos",
+			ResultMode:               "PRODUCTION",
+			Status:                   "PRE",
+			ResultYieldDateTime:      nil,
+			ValidUntil:               time.Now().Add(1 * time.Minute),
+			Operator:                 "TestOperator",
+			TechnicalReleaseDateTime: nil,
+			InstrumentRunID:          uuid.Nil,
+			Edited:                   false,
+			EditReason:               "",
+			WarnFlag:                 false,
+			Warnings:                 []string{"test warning"},
+			ChannelResults:           []ChannelResult{},
+			ExtraValues:              []ExtraValue{},
+			ReagentInfos:             []ReagentInfo{},
+			Images:                   []Image{},
+		},
+		{
+			AnalysisRequest:          AnalysisRequest{},
+			AnalyteMapping:           analyteMappings[0],
+			Instrument:               instrument,
+			SampleCode:               "testSampleCode2",
+			DEARawMessageID:          uuid.MustParse("43a7b261-3e1d-4065-935a-ac15841f13e4"),
+			BatchID:                  batchID,
+			Result:                   "pos",
+			ResultMode:               "PRODUCTION",
+			Status:                   "PRE",
+			ResultYieldDateTime:      nil,
+			ValidUntil:               time.Now().Add(2 * time.Minute),
+			Operator:                 "TestOperator",
+			TechnicalReleaseDateTime: nil,
+			InstrumentRunID:          uuid.Nil,
+			Edited:                   false,
+			EditReason:               "",
+			WarnFlag:                 false,
+			Warnings:                 []string{},
+			ChannelResults:           []ChannelResult{},
+			ExtraValues:              []ExtraValue{},
+			ReagentInfos:             []ReagentInfo{},
+			Images:                   []Image{},
+		},
+	}
+
+	err = skeletonInstance.SubmitAnalysisResult(context.TODO(), analysisResults[0])
+	assert.NotNil(t, err)
+	assert.Equal(t, err.Error(), "DEA raw message ID is missing")
+	err = skeletonInstance.SubmitAnalysisResult(context.TODO(), analysisResults[1])
+	assert.Nil(t, err)
 }
 
 func TestRegisterProtocol(t *testing.T) {
@@ -435,6 +629,14 @@ func TestAnalysisResultsReprocessing(t *testing.T) {
 	}()
 
 	time.Sleep(1 * time.Second)
+}
+
+func TestGenerateRawMessageFilename(t *testing.T) {
+	ts, _ := time.Parse("2006-01-02-15:04:05.000000", "2025-02-18-20:11:24.123456")
+	filename := generateRawMessageFileName("infinity", ts)
+	assert.Equal(t, "infinity_2025-02-18-20-11-24_123456", filename)
+	filename = generateRawMessageFileName("Sarstedt Host : The Sorter", ts)
+	assert.Equal(t, "Sarstedt_Host_The_Sorter_2025-02-18-20-11-24_123456", filename)
 }
 
 type skeletonCallbackHandlerV1Mock struct {
@@ -578,6 +780,10 @@ func (m *longPollClientMock) StartReexaminedWorkItemIDsLongPolling(ctx context.C
 }
 
 type deaClientMock struct {
+}
+
+func (m *deaClientMock) UploadFile(fileData []byte, name string) (uuid.UUID, error) {
+	return uuid.Nil, nil
 }
 
 func (m *deaClientMock) UploadImage(fileData []byte, name string) (uuid.UUID, error) {
@@ -854,7 +1060,7 @@ var analysisResultsWithoutAnalysisRequestsTest_analysisResults = []AnalysisResul
 		AnalyteMapping:           analysisResultsWithoutAnalysisRequestsTest_analyteMappings[0],
 		Instrument:               analysisResultsWithoutAnalysisRequestsTest_instrument,
 		SampleCode:               "TestSampleCode1",
-		ResultRecordID:           uuid.MustParse("2f369489-77d3-464e-87e2-edbeffa62ae7"),
+		DEARawMessageID:          uuid.MustParse("2f369489-77d3-464e-87e2-edbeffa62ae7"),
 		BatchID:                  uuid.MustParse("ddd34c4d-62f9-4621-bb16-efad459a9bfe"),
 		Result:                   "pos",
 		ResultMode:               "PRODUCTION",
@@ -879,7 +1085,7 @@ var analysisResultsWithoutAnalysisRequestsTest_analysisResults = []AnalysisResul
 		AnalyteMapping:           analysisResultsWithoutAnalysisRequestsTest_analyteMappings[0],
 		Instrument:               analysisResultsWithoutAnalysisRequestsTest_instrument,
 		SampleCode:               "TestSampleCode2",
-		ResultRecordID:           uuid.MustParse("43a7b261-3e1d-4065-935a-ac15841f13e4"),
+		DEARawMessageID:          uuid.MustParse("43a7b261-3e1d-4065-935a-ac15841f13e4"),
 		BatchID:                  uuid.MustParse("ddd34c4d-62f9-4621-bb16-efad459a9bfe"),
 		Result:                   "pos",
 		ResultMode:               "PRODUCTION",

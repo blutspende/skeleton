@@ -32,7 +32,8 @@ func NewRestyClientWithAuthManager(ctx context.Context, configuration *config.Co
 		SetRetryCount(2).
 		AddRetryCondition(configureRetryMechanismForService2ServiceCalls(authManager)).
 		OnBeforeRequest(configureRequest(ctx, configuration)).
-		OnBeforeRequest(setService2ServiceAuthToken(authManager))
+		OnBeforeRequest(setService2ServiceAuthToken(authManager)).
+		SetRetryResetReaders(true)
 	if timeoutSeconds > 0 {
 		client = client.SetTimeout(time.Second * time.Duration(timeoutSeconds))
 	}
