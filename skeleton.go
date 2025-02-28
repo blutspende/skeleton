@@ -937,7 +937,7 @@ func (s *skeleton) startReprocessEventsFetchJob(ctx context.Context) {
 			err := s.processReprocessMessage(ctx, reprocessMessage)
 			if err != nil {
 				time.AfterFunc(time.Second*time.Duration(s.config.LongPollingRetrySeconds), func() {
-					s.longpollClient.GetReprocessEventsChan() <- reprocessMessage
+					s.longPollClient.GetReprocessEventsChan() <- reprocessMessage
 				})
 				continue
 			}
