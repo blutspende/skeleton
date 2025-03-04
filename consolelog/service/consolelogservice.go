@@ -20,9 +20,10 @@ type consoleLogService struct {
 	redisClient *redis.Client
 }
 
-func NewConsoleLogService(redisUrl string) ConsoleLogService {
+func NewConsoleLogService(redisUrl, redisPassword string) ConsoleLogService {
 	client := redis.NewClient(&redis.Options{
-		Addr: redisUrl,
+		Addr:     redisUrl,
+		Password: redisPassword,
 	})
 	return &consoleLogService{
 		redisClient: client,
