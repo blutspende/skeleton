@@ -14,8 +14,8 @@ import (
 )
 
 type ConditionRepository interface {
-	CreateCondition(ctx context.Context, condition Condition) (uuid.UUID, error)
-	CreateConditionOperand(ctx context.Context, condition ConditionOperand) (uuid.UUID, error)
+	UpsertCondition(ctx context.Context, condition Condition) (uuid.UUID, error)
+	UpsertConditionOperand(ctx context.Context, condition ConditionOperand) (uuid.UUID, error)
 	DeleteCondition(ctx context.Context, id uuid.UUID) error
 	DeleteConditionOperand(ctx context.Context, id uuid.UUID) error
 	GetConditionByID(ctx context.Context, id uuid.UUID) (Condition, error)
@@ -35,13 +35,16 @@ type conditionRepository struct {
 	dbSchema string
 }
 
-func (r *conditionRepository) CreateCondition(ctx context.Context, condition Condition) (uuid.UUID, error) {
+func (r *conditionRepository) UpsertCondition(ctx context.Context, condition Condition) (uuid.UUID, error) {
 	if condition.ID == uuid.Nil {
 		condition.ID = uuid.New()
 	}
 
 	query := fmt.Sprintf(`INSERT INTO %s.sk_conditions(id, name, operator, subcondition_1_id, subcondition_2_id, negate_subcondition_1, negate_subcondition_2, operand_1_id, operand_2_id)
-				VALUES (:id,:name,:operator,:subcondition_1_id,:subcondition_2_id,:negate_subcondition_1,:negate_subcondition_2,:operand_1_id,:operand_2_id);`, r.dbSchema)
+				VALUES (:id,:name,:operator,:subcondition_1_id,:subcondition_2_id,:negate_subcondition_1,:negate_subcondition_2,:operand_1_id,:operand_2_id)
+				ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, operator = EXCLUDED.operator, subcondition_1_id = EXCLUDED.subcondition_1_id, subcondition_2_id = EXCLUDED.subcondition_2_id,
+				negate_subcondition_1 = EXCLUDED.negate_subcondition_1, negate_subcondition_2 = EXCLUDED.negate_subcondition_2, operand_1_id = EXCLUDED.operand_1_id,
+				operand_2_id = EXCLUDED.operand_2_id, modified_at = timezone('utc', now());`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, convertConditionToDAO(condition))
 	if err != nil {
 		log.Error().Err(err).Msg(msgCreateConditionFailed)
@@ -128,10 +131,13 @@ func (r *conditionRepository) IsConditionReferenced(ctx context.Context, id uuid
 	return rows.Next(), nil
 }
 
-func (r *conditionRepository) CreateConditionOperand(ctx context.Context, conditionOperand ConditionOperand) (uuid.UUID, error) {
+func (r *conditionRepository) UpsertConditionOperand(ctx context.Context, conditionOperand ConditionOperand) (uuid.UUID, error) {
+	if conditionOperand.ID == uuid.Nil {
+		conditionOperand.ID = uuid.New()
+	}
 	query := fmt.Sprintf(`INSERT INTO %s.sk_condition_operands(id, name, type, constant_value, extra_value_key)
-				VALUES (:id, :name, :type, :constant_value, :extra_value_key);`, r.dbSchema)
-	conditionOperand.ID = uuid.New()
+			VALUES (:id, :name, :type, :constant_value, :extra_value_key)
+			ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, type = EXCLUDED.type, constant_value = EXCLUDED.constant_value, extra_value_key = EXCLUDED.extra_value_key, modified_at = timezone('utc', now());`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, convertConditionOperandToDAO(conditionOperand))
 	if err != nil {
 		log.Error().Err(err).Msg(msgCreateConditionOperandFailed)
