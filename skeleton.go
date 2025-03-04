@@ -495,8 +495,7 @@ func (s *skeleton) Start() error {
 	go s.startInstrumentConfigsFetchJob(s.ctx)
 	go s.startReprocessEventsFetchJob(s.ctx)
 	go s.startAnalysisRequestFetchJob(s.ctx)
-	go s.startAnalysisRequestRevocationFetchJob(s.ctx)
-	go s.startAnalysisRequestReexamineFetchJob(s.ctx)
+	go s.startAnalysisRequestRevocationReexamineJob(s.ctx)
 	for {
 		select {
 		case <-s.ctx.Done():
@@ -1039,27 +1038,25 @@ func (s *skeleton) startAnalysisRequestFetchJob(ctx context.Context) {
 		}
 	}
 }
-func (s *skeleton) startAnalysisRequestRevocationFetchJob(ctx context.Context) {
-	go s.longPollClient.StartRevokedWorkItemIDsLongPolling(ctx)
-	for {
-		select {
-		case revokedWorkItemIDs := <-s.longPollClient.GetRevokedWorkItemIDsChan():
-			err := s.analysisService.RevokeAnalysisRequests(ctx, revokedWorkItemIDs)
-			if err != nil {
-				time.AfterFunc(time.Second*time.Duration(s.config.LongPollingRetrySeconds), func() {
-					s.longPollClient.GetRevokedWorkItemIDsChan() <- revokedWorkItemIDs
-				})
-				continue
+func (s *skeleton) startAnalysisRequestRevocationReexamineJob(ctx context.Context) {
+	go s.longPollClient.StartRevokedReexaminedWorkItemIDsLongPolling(ctx)
+	go func() {
+		for {
+			select {
+			case revokedWorkItemIDs := <-s.longPollClient.GetRevokedWorkItemIDsChan():
+				err := s.analysisService.RevokeAnalysisRequests(ctx, revokedWorkItemIDs)
+				if err != nil {
+					time.AfterFunc(time.Second*time.Duration(s.config.LongPollingRetrySeconds), func() {
+						s.longPollClient.GetRevokedWorkItemIDsChan() <- revokedWorkItemIDs
+					})
+					continue
+				}
+				_ = s.cerberusClient.SyncAnalysisRequests(revokedWorkItemIDs, syncTypeRevocation)
+			case <-ctx.Done():
+				return
 			}
-			_ = s.cerberusClient.SyncAnalysisRequests(revokedWorkItemIDs, syncTypeRevocation)
-		case <-ctx.Done():
-			return
 		}
-	}
-}
-
-func (s *skeleton) startAnalysisRequestReexamineFetchJob(ctx context.Context) {
-	go s.longPollClient.StartReexaminedWorkItemIDsLongPolling(ctx)
+	}()
 	for {
 		select {
 		case reexaminedWorkItemIDs := <-s.longPollClient.GetReexaminedWorkItemIDsChan():
