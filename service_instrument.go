@@ -82,14 +82,14 @@ func (s *instrumentService) CreateInstrument(ctx context.Context, instrument Ins
 			return uuid.Nil, err
 		}
 	}
-	requestMappingIDs, err := s.instrumentRepository.WithTransaction(transaction).CreateRequestMappings(ctx, instrument.RequestMappings, id)
+	err = s.instrumentRepository.WithTransaction(transaction).UpsertRequestMappings(ctx, instrument.RequestMappings, id)
 	if err != nil {
 		_ = transaction.Rollback()
 		return uuid.Nil, err
 	}
 	analyteIDsByRequestMappingIDs := make(map[uuid.UUID][]uuid.UUID)
-	for i, requestMappingID := range requestMappingIDs {
-		analyteIDsByRequestMappingIDs[requestMappingID] = instrument.RequestMappings[i].AnalyteIDs
+	for _, mapping := range instrument.RequestMappings {
+		analyteIDsByRequestMappingIDs[mapping.ID] = mapping.AnalyteIDs
 	}
 	err = s.instrumentRepository.WithTransaction(transaction).UpsertRequestMappingAnalytes(ctx, analyteIDsByRequestMappingIDs)
 	if err != nil {
@@ -659,33 +659,36 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 			return err
 		}
 	}
-	newRequestMappings := make([]RequestMapping, 0)
+	newRequestMappingAnalytes := make(map[uuid.UUID]any)
 	for _, requestMapping := range instrument.RequestMappings {
-		if requestMapping.ID == uuid.Nil {
-			newRequestMappings = append(newRequestMappings, requestMapping)
-		} else {
-			err = s.instrumentRepository.WithTransaction(tx).UpdateRequestMapping(ctx, requestMapping)
-			if err != nil {
-				_ = tx.Rollback()
-				return err
-			}
-			err = s.instrumentRepository.WithTransaction(tx).UpsertRequestMappingAnalytes(ctx, map[uuid.UUID][]uuid.UUID{
-				requestMapping.ID: requestMapping.AnalyteIDs,
-			})
-			if err != nil {
-				_ = tx.Rollback()
-				return err
-			}
+		for _, analyteID := range requestMapping.AnalyteIDs {
+			newRequestMappingAnalytes[analyteID] = requestMapping.ID
 		}
 	}
-	requestMappingIDs, err := s.instrumentRepository.WithTransaction(tx).CreateRequestMappings(ctx, newRequestMappings, instrument.ID)
+	deletedRequestMappingAnalyteIDsByRequestMappingsIDs := make(map[uuid.UUID][]uuid.UUID)
+	for _, requestMapping := range oldInstrument.RequestMappings {
+		for _, analyteID := range requestMapping.AnalyteIDs {
+			if _, ok := newRequestMappingAnalytes[analyteID]; ok {
+				continue
+			}
+			deletedRequestMappingAnalyteIDsByRequestMappingsIDs[requestMapping.ID] = append(deletedRequestMappingAnalyteIDsByRequestMappingsIDs[requestMapping.ID], analyteID)
+		}
+	}
+	for requestMappingID, deletedRequestMappingAnalyteIDs := range deletedRequestMappingAnalyteIDsByRequestMappingsIDs {
+		err = s.instrumentRepository.WithTransaction(tx).DeleteRequestMappingAnalytes(ctx, requestMappingID, deletedRequestMappingAnalyteIDs)
+		if err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+	}
+	err = s.instrumentRepository.WithTransaction(tx).UpsertRequestMappings(ctx, instrument.RequestMappings, instrument.ID)
 	if err != nil {
 		_ = tx.Rollback()
 		return err
 	}
 	requestMappingsAnalytes := make(map[uuid.UUID][]uuid.UUID)
-	for i := range requestMappingIDs {
-		requestMappingsAnalytes[requestMappingIDs[i]] = newRequestMappings[i].AnalyteIDs
+	for i := range instrument.RequestMappings {
+		requestMappingsAnalytes[instrument.RequestMappings[i].ID] = instrument.RequestMappings[i].AnalyteIDs
 	}
 	err = s.instrumentRepository.WithTransaction(tx).UpsertRequestMappingAnalytes(ctx, requestMappingsAnalytes)
 	if err != nil {

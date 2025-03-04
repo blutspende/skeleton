@@ -288,9 +288,8 @@ type InstrumentRepository interface {
 	GetResultMappings(ctx context.Context, analyteMappingIDs []uuid.UUID) (map[uuid.UUID][]ResultMapping, error)
 	UpdateResultMapping(ctx context.Context, resultMapping ResultMapping) error
 	DeleteResultMappings(ctx context.Context, ids []uuid.UUID) error
-	CreateRequestMappings(ctx context.Context, requestMappings []RequestMapping, instrumentID uuid.UUID) ([]uuid.UUID, error)
 	UpsertRequestMappingAnalytes(ctx context.Context, analyteIDsByRequestMappingID map[uuid.UUID][]uuid.UUID) error
-	UpdateRequestMapping(ctx context.Context, requestMapping RequestMapping) error
+	UpsertRequestMappings(ctx context.Context, requestMappings []RequestMapping, instrumentID uuid.UUID) error
 	GetRequestMappings(ctx context.Context, instrumentIDs []uuid.UUID) (map[uuid.UUID][]RequestMapping, error)
 	GetRequestMappingAnalytes(ctx context.Context, requestMappingIDs []uuid.UUID) (map[uuid.UUID][]uuid.UUID, error)
 	DeleteRequestMappings(ctx context.Context, requestMappingIDs []uuid.UUID) error
@@ -566,16 +565,14 @@ func (r *instrumentRepository) UpsertProtocolAbilities(ctx context.Context, prot
 	query := fmt.Sprintf(`INSERT INTO %s.sk_protocol_abilities(protocol_id, connection_mode, abilities, request_mapping_available)
 		VALUES(:protocol_id, :connection_mode, :abilities, :request_mapping_available)
 		ON CONFLICT (protocol_id, connection_mode) WHERE deleted_at IS NULL
-		DO UPDATE SET abilities = :abilities, request_mapping_available = :request_mapping_available, modified_at = timezone('utc', now());`, r.dbSchema)
+		DO UPDATE SET abilities = excluded.abilities, request_mapping_available = excluded.request_mapping_available, modified_at = timezone('utc', now());`, r.dbSchema)
 	protocolAbilityDAOs := convertProtocolAbilitiesToDAOs(protocolAbilities, protocolID)
-	// Todo - check and improve it cuz gives error with batch insert. Old and fixed(?): https://github.com/jmoiron/sqlx/issues/505
-	for _, protocolAbility := range protocolAbilityDAOs {
-		_, err := r.db.NamedExecContext(ctx, query, protocolAbility)
-		if err != nil {
-			log.Error().Err(err).Msg(msgUpsertProtocolAbilitiesFailed)
-			return ErrUpsertProtocolAbilitiesFailed
-		}
+	_, err := r.db.NamedExecContext(ctx, query, protocolAbilityDAOs)
+	if err != nil {
+		log.Error().Err(err).Msg(msgUpsertProtocolAbilitiesFailed)
+		return ErrUpsertProtocolAbilitiesFailed
 	}
+
 	return nil
 }
 
@@ -652,14 +649,12 @@ func (r *instrumentRepository) UpsertManufacturerTests(ctx context.Context, manu
 	query := fmt.Sprintf(`INSERT INTO %s.sk_manufacturer_tests(test_name, channels, valid_result_values)
 		VALUES(:test_name, :channels, :valid_result_values)
 		ON CONFLICT (test_name) WHERE deleted_at IS NULL
-		DO UPDATE SET channels = :channels, valid_result_values = :valid_result_values, modified_at = timezone('utc', now());`, r.dbSchema)
+		DO UPDATE SET channels = excluded.channels, valid_result_values = excluded.valid_result_values, modified_at = timezone('utc', now());`, r.dbSchema)
 	manufacturerTestsDAOs := convertSupportedManufacturerTestsToDAOs(manufacturerTests)
-	for _, manufacturerTest := range manufacturerTestsDAOs {
-		_, err := r.db.NamedExecContext(ctx, query, manufacturerTest)
-		if err != nil {
-			log.Error().Err(err).Msg(msgUpsertManufacturerTestsFailed)
-			return ErrUpsertManufacturerTestsFailed
-		}
+	_, err := r.db.NamedExecContext(ctx, query, manufacturerTestsDAOs)
+	if err != nil {
+		log.Error().Err(err).Msg(msgUpsertManufacturerTestsFailed)
+		return ErrUpsertManufacturerTestsFailed
 	}
 	return nil
 }
@@ -922,25 +917,6 @@ func (r *instrumentRepository) DeleteResultMappings(ctx context.Context, ids []u
 	return nil
 }
 
-func (r *instrumentRepository) CreateRequestMappings(ctx context.Context, requestMappings []RequestMapping, instrumentID uuid.UUID) ([]uuid.UUID, error) {
-	ids := make([]uuid.UUID, len(requestMappings))
-	if len(requestMappings) == 0 {
-		return ids, nil
-	}
-	for i := range requestMappings {
-		requestMappings[i].ID = uuid.New()
-		ids[i] = requestMappings[i].ID
-	}
-	query := fmt.Sprintf(`INSERT INTO %s.sk_request_mappings(id, code, instrument_id, is_default) 
-		VALUES(:id, :code, :instrument_id, :is_default);`, r.dbSchema)
-	_, err := r.db.NamedExecContext(ctx, query, convertRequestMappingsToDAOs(requestMappings, instrumentID))
-	if err != nil {
-		log.Error().Err(err).Msg(msgCreateAnalyteMappingsFailed)
-		return ids, ErrCreateAnalyteMappingsFailed
-	}
-	return ids, nil
-}
-
 func (r *instrumentRepository) UpsertRequestMappingAnalytes(ctx context.Context, analyteIDsByRequestMappingID map[uuid.UUID][]uuid.UUID) error {
 	requestMappingAnalyteDAOs := make([]requestMappingAnalyteDAO, 0)
 	for requestMappingID, analyteIDs := range analyteIDsByRequestMappingID {
@@ -968,10 +944,18 @@ func (r *instrumentRepository) UpsertRequestMappingAnalytes(ctx context.Context,
 	return nil
 }
 
-func (r *instrumentRepository) UpdateRequestMapping(ctx context.Context, requestMapping RequestMapping) error {
-	query := fmt.Sprintf(`UPDATE %s.sk_request_mappings SET code = :code, is_default = :is_default, modified_at = timezone('utc', now()) WHERE id = :id;`, r.dbSchema)
-	dao := convertRequestMappingToDAO(requestMapping, uuid.Nil)
-	_, err := r.db.NamedExecContext(ctx, query, dao)
+func (r *instrumentRepository) UpsertRequestMappings(ctx context.Context, requestMappings []RequestMapping, instrumentID uuid.UUID) error {
+	if len(requestMappings) == 0 {
+		return nil
+	}
+	daos := make([]requestMappingDAO, len(requestMappings))
+	query := fmt.Sprintf(`INSERT INTO %s.sk_request_mappings (id, code, instrument_id, is_default)
+								VALUES (:id, :code, :instrument_id, :is_default)
+								ON CONFLICT (id) DO UPDATE SET code = excluded.code, is_default = excluded.is_default, modified_at = timezone('utc', now());`, r.dbSchema)
+	for i := range requestMappings {
+		daos[i] = convertRequestMappingToDAO(requestMappings[i], instrumentID)
+	}
+	_, err := r.db.NamedExecContext(ctx, query, daos)
 	if err != nil {
 		log.Error().Err(err).Msg(msgUpdateRequestMappingFailed)
 		return ErrUpdateRequestMappingFailed
@@ -1006,7 +990,7 @@ func (r *instrumentRepository) GetRequestMappings(ctx context.Context, instrumen
 }
 
 func (r *instrumentRepository) GetRequestMappingAnalytes(ctx context.Context, requestMappingIDs []uuid.UUID) (map[uuid.UUID][]uuid.UUID, error) {
-	query := fmt.Sprintf(`SELECT request_mapping_id, analyte_id FROM %s.sk_request_mapping_analytes WHERE request_mapping_id IN (?);`, r.dbSchema)
+	query := fmt.Sprintf(`SELECT request_mapping_id, analyte_id FROM %s.sk_request_mapping_analytes WHERE request_mapping_id IN (?) AND deleted_at IS NULL;`, r.dbSchema)
 	query, args, _ := sqlx.In(query, requestMappingIDs)
 	query = r.db.Rebind(query)
 	rows, err := r.db.QueryxContext(ctx, query, args...)
