@@ -542,6 +542,10 @@ type instrumentRepositoryMock struct {
 	db db.DbConnector
 }
 
+func (r *instrumentRepositoryMock) UpsertRequestMappings(ctx context.Context, requestMappings []RequestMapping, instrumentID uuid.UUID) error {
+	return nil
+}
+
 func (r *instrumentRepositoryMock) UpsertManufacturerTests(ctx context.Context, manufacturerTests []SupportedManufacturerTests) error {
 	return nil
 }
@@ -714,13 +718,7 @@ func (r *instrumentRepositoryMock) UpdateResultMapping(ctx context.Context, resu
 func (r *instrumentRepositoryMock) DeleteResultMappings(ctx context.Context, ids []uuid.UUID) error {
 	return nil
 }
-func (r *instrumentRepositoryMock) CreateRequestMappings(ctx context.Context, requestMappings []RequestMapping, instrumentID uuid.UUID) ([]uuid.UUID, error) {
-	return make([]uuid.UUID, 0), nil
-}
 func (r *instrumentRepositoryMock) UpsertRequestMappingAnalytes(ctx context.Context, analyteIDsByRequestMappingID map[uuid.UUID][]uuid.UUID) error {
-	return nil
-}
-func (r *instrumentRepositoryMock) UpdateRequestMapping(ctx context.Context, requestMapping RequestMapping) error {
 	return nil
 }
 func (r *instrumentRepositoryMock) GetRequestMappings(ctx context.Context, instrumentIDs []uuid.UUID) (map[uuid.UUID][]RequestMapping, error) {
