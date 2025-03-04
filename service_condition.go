@@ -14,7 +14,7 @@ import (
 )
 
 type ConditionService interface {
-	CreateCondition(ctx context.Context, condition Condition) (uuid.UUID, error)
+	UpsertCondition(ctx context.Context, condition Condition) (uuid.UUID, error)
 	GetCondition(ctx context.Context, id uuid.UUID) (Condition, error)
 	GetNamedConditions(ctx context.Context) ([]Condition, error)
 	UpdateCondition(ctx context.Context, condition Condition) error
@@ -27,12 +27,12 @@ type conditionService struct {
 	externalTx          *db.DbConnector
 }
 
-func (s *conditionService) CreateCondition(ctx context.Context, condition Condition) (uuid.UUID, error) {
+func (s *conditionService) UpsertCondition(ctx context.Context, condition Condition) (uuid.UUID, error) {
 	tx, err := s.getTransaction()
 	if err != nil {
 		return uuid.Nil, err
 	}
-	id, err := s.createCondition(ctx, tx, condition)
+	id, err := s.upsertCondition(ctx, tx, condition)
 	if s.externalTx != nil {
 		return id, err
 	}
@@ -47,16 +47,16 @@ func (s *conditionService) CreateCondition(ctx context.Context, condition Condit
 	}
 	return id, nil
 }
-func (s *conditionService) createCondition(ctx context.Context, tx db.DbConnector, condition Condition) (uuid.UUID, error) {
+func (s *conditionService) upsertCondition(ctx context.Context, tx db.DbConnector, condition Condition) (uuid.UUID, error) {
 	if condition.SubCondition1 != nil {
-		subCondition1ID, err := s.createCondition(ctx, tx, *condition.SubCondition1)
+		subCondition1ID, err := s.upsertCondition(ctx, tx, *condition.SubCondition1)
 		if err != nil {
 			return uuid.Nil, err
 		}
 		condition.SubCondition1.ID = subCondition1ID
 	}
 	if condition.SubCondition2 != nil {
-		subCondition2ID, err := s.createCondition(ctx, tx, *condition.SubCondition2)
+		subCondition2ID, err := s.upsertCondition(ctx, tx, *condition.SubCondition2)
 		if err != nil {
 			return uuid.Nil, err
 		}
@@ -64,24 +64,21 @@ func (s *conditionService) createCondition(ctx context.Context, tx db.DbConnecto
 	}
 
 	if condition.Operand1 != nil {
-		operand1ID, err := s.conditionRepository.WithTransaction(tx).CreateConditionOperand(ctx, *condition.Operand1)
+		operand1ID, err := s.conditionRepository.WithTransaction(tx).UpsertConditionOperand(ctx, *condition.Operand1)
 		if err != nil {
 			return uuid.Nil, err
 		}
 		condition.Operand1.ID = operand1ID
 	}
 	if condition.Operand2 != nil {
-		operand2ID, err := s.conditionRepository.WithTransaction(tx).CreateConditionOperand(ctx, *condition.Operand2)
+		operand2ID, err := s.conditionRepository.WithTransaction(tx).UpsertConditionOperand(ctx, *condition.Operand2)
 		if err != nil {
 			return uuid.Nil, err
 		}
 		condition.Operand2.ID = operand2ID
 	}
 
-	if condition.ID != uuid.Nil {
-		return condition.ID, nil
-	}
-	return s.conditionRepository.WithTransaction(tx).CreateCondition(ctx, condition)
+	return s.conditionRepository.WithTransaction(tx).UpsertCondition(ctx, condition)
 }
 
 func (s *conditionService) GetCondition(ctx context.Context, id uuid.UUID) (condition Condition, err error) {
@@ -253,7 +250,7 @@ func (s *conditionService) updateCondition(ctx context.Context, tx db.DbConnecto
 	if condition.Operand1 != nil {
 		if condition.Operand1.ID == uuid.Nil {
 			//new operand
-			condition.Operand1.ID, err = s.conditionRepository.WithTransaction(tx).CreateConditionOperand(ctx, *condition.Operand1)
+			condition.Operand1.ID, err = s.conditionRepository.WithTransaction(tx).UpsertConditionOperand(ctx, *condition.Operand1)
 			if err != nil {
 				return err
 			}
@@ -279,7 +276,7 @@ func (s *conditionService) updateCondition(ctx context.Context, tx db.DbConnecto
 	if condition.Operand2 != nil {
 		if condition.Operand2.ID == uuid.Nil {
 			//new operand
-			condition.Operand2.ID, err = s.conditionRepository.WithTransaction(tx).CreateConditionOperand(ctx, *condition.Operand2)
+			condition.Operand2.ID, err = s.conditionRepository.WithTransaction(tx).UpsertConditionOperand(ctx, *condition.Operand2)
 			if err != nil {
 				return err
 			}
@@ -307,7 +304,7 @@ func (s *conditionService) updateCondition(ctx context.Context, tx db.DbConnecto
 		if condition.SubCondition1.ID == uuid.Nil {
 			//new subcondition added
 			hasChange = true
-			condition.SubCondition1.ID, err = s.createCondition(ctx, tx, *condition.SubCondition1)
+			condition.SubCondition1.ID, err = s.upsertCondition(ctx, tx, *condition.SubCondition1)
 			if err != nil {
 				return err
 			}
@@ -331,7 +328,7 @@ func (s *conditionService) updateCondition(ctx context.Context, tx db.DbConnecto
 	if condition.SubCondition2 != nil {
 		if condition.SubCondition2.ID == uuid.Nil {
 			hasChange = true
-			condition.SubCondition2.ID, err = s.createCondition(ctx, tx, *condition.SubCondition2)
+			condition.SubCondition2.ID, err = s.upsertCondition(ctx, tx, *condition.SubCondition2)
 			if err != nil {
 				return err
 			}
