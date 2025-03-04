@@ -49,8 +49,7 @@ type LongPollClient interface {
 	StartInstrumentConfigsLongPolling(ctx context.Context)
 	StartReprocessEventsLongPolling(ctx context.Context)
 	StartAnalysisRequestLongPolling(ctx context.Context)
-	StartRevokedWorkItemIDsLongPolling(ctx context.Context)
-	StartReexaminedWorkItemIDsLongPolling(ctx context.Context)
+	StartRevokedReexaminedWorkItemIDsLongPolling(ctx context.Context)
 }
 
 type longPollClient struct {
@@ -262,8 +261,10 @@ func (l *longPollClient) StartAnalysisRequestLongPolling(ctx context.Context) {
 	}
 }
 
-func (l *longPollClient) StartRevokedWorkItemIDsLongPolling(ctx context.Context) {
-	u, err := url.Parse(l.cerberusUrl + "/v1/instrument-drivers/analysis-requests/revoked")
+const revokedReexaminedCategory = "revoked-reexamined"
+
+func (l *longPollClient) StartRevokedReexaminedWorkItemIDsLongPolling(ctx context.Context) {
+	u, err := url.Parse(l.cerberusUrl + "/v1/instrument-drivers/analysis-requests/revoked-reexamined")
 	if err != nil {
 		log.Fatal().Err(err).Msg("start revoked work item IDs long polling failed")
 	}
@@ -274,7 +275,7 @@ func (l *longPollClient) StartRevokedWorkItemIDsLongPolling(ctx context.Context)
 
 	c, err := longpollclient.NewClient(longpollclient.ClientOptions{
 		SubscribeUrl:       *u,
-		Category:           fmt.Sprintf("%s:%s", l.serviceName, syncTypeRevocation),
+		Category:           fmt.Sprintf("%s:%s", l.serviceName, revokedReexaminedCategory),
 		PollTimeoutSeconds: l.timeoutSeconds,
 		HttpClient:         httpClient,
 	})
@@ -289,7 +290,7 @@ func (l *longPollClient) StartRevokedWorkItemIDsLongPolling(ctx context.Context)
 			log.Info().Msg("Long poll gracefully stopped")
 			return
 		default:
-			data, ok := event.Data.([]interface{})
+			data, ok := event.Data.(interface{})
 			if !ok {
 				log.Error().Msg("unexpected event data type")
 				continue
@@ -300,63 +301,20 @@ func (l *longPollClient) StartRevokedWorkItemIDsLongPolling(ctx context.Context)
 				continue
 			}
 
-			var revokedWorkItemIDs []uuid.UUID
-			err = json.Unmarshal(jsonData, &revokedWorkItemIDs)
+			var workItemIDsTO workItemIDLongPollTO
+			err = json.Unmarshal(jsonData, &workItemIDsTO)
 			if err != nil {
 				log.Error().Err(err).Interface("jsonData", jsonData).Msg("unmarshal event data to UUIDs failed")
 				continue
 			}
-			l.revokedWorkItemIDsChan <- revokedWorkItemIDs
-		}
-	}
-}
-
-func (l *longPollClient) StartReexaminedWorkItemIDsLongPolling(ctx context.Context) {
-	u, err := url.Parse(l.cerberusUrl + "/v1/instrument-drivers/analysis-requests/reexamined")
-	if err != nil {
-		log.Fatal().Err(err).Msg("start reexamined work item IDs long polling failed")
-	}
-
-	httpClient := &http.Client{
-		Transport: &RestyRoundTripper{restyClient: l.restyClient},
-	}
-
-	c, err := longpollclient.NewClient(longpollclient.ClientOptions{
-		SubscribeUrl:       *u,
-		Category:           fmt.Sprintf("%s:%s", l.serviceName, syncTypeReexamine),
-		PollTimeoutSeconds: l.timeoutSeconds,
-		HttpClient:         httpClient,
-	})
-	if err != nil {
-		log.Error().Err(err).Msg("create longpoll client failed")
-		return
-	}
-
-	for event := range c.Start(time.Now().UTC().AddDate(0, 0, -1)) {
-		select {
-		case <-ctx.Done():
-			log.Info().Msg("Long poll gracefully stopped")
-			return
-		default:
-			data, ok := event.Data.([]interface{})
-			if !ok {
-				log.Error().Msg("unexpected event data type")
-				return
+			switch workItemIDsTO.Type {
+			case syncTypeRevocation:
+				l.revokedWorkItemIDsChan <- workItemIDsTO.WorkItemIDs
+			case syncTypeReexamine:
+				l.reexaminedWorkItemIDsChan <- workItemIDsTO.WorkItemIDs
+			default:
+				log.Error().Str("type", workItemIDsTO.Type).Msg("unexpected type of work item IDs in revoke-reexamine job")
 			}
-
-			jsonData, err := json.Marshal(data)
-			if err != nil {
-				log.Error().Err(err).Interface("data", data).Msg("marshal event data failed")
-				return
-			}
-
-			var reexaminedWorkItemIDs []uuid.UUID
-			err = json.Unmarshal(jsonData, &reexaminedWorkItemIDs)
-			if err != nil {
-				log.Error().Err(err).Interface("jsonData", jsonData).Msg("unmarshal event data to UUIDs failed")
-				return
-			}
-			l.reexaminedWorkItemIDsChan <- reexaminedWorkItemIDs
 		}
 	}
 }
@@ -400,6 +358,11 @@ func convertTOToAnalysisRequest(to analysisRequestTO) AnalysisRequest {
 	}
 
 	return analysisRequest
+}
+
+type workItemIDLongPollTO struct {
+	Type        string      `json:"type"`
+	WorkItemIDs []uuid.UUID `json:"workItemIDs"`
 }
 
 type clientError struct {

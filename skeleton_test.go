@@ -768,12 +768,10 @@ func (m *longPollClientMock) StartAnalysisRequestLongPolling(ctx context.Context
 		m.GetAnalysisRequestsChan() <- m.AnalysisRequests
 	}
 }
-func (m *longPollClientMock) StartRevokedWorkItemIDsLongPolling(ctx context.Context) {
+func (m *longPollClientMock) StartRevokedReexaminedWorkItemIDsLongPolling(ctx context.Context) {
 	if len(m.RevokedWorkItemIDs) > 0 {
 		m.GetRevokedWorkItemIDsChan() <- m.RevokedWorkItemIDs
 	}
-}
-func (m *longPollClientMock) StartReexaminedWorkItemIDsLongPolling(ctx context.Context) {
 	if len(m.ReexaminedWorkItemIDs) > 0 {
 		m.GetReexaminedWorkItemIDsChan() <- m.ReexaminedWorkItemIDs
 	}
