@@ -37,7 +37,7 @@ func TestSkeletonStart(t *testing.T) {
 
 	defer cancel()
 
-	skeletonApi, err := New(ctx, serviceName, []string{}, sqlConn, "skeleton")
+	skeletonApi, err := New(ctx, serviceName, []string{}, []string{}, sqlConn, "skeleton")
 	if err != nil {
 		return
 	}
@@ -56,7 +56,7 @@ func TestSkeletonStart(t *testing.T) {
 func TestSubmitAnalysisRequestsParallel(t *testing.T) {
 	sqlConn, _ := sqlx.Connect("pgx", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
 
-	schemaName := "testSubmitAnalysisResultsWithoutRequests"
+	schemaName := "testSubmitAnalysisRequestsParallel"
 	_, _ = sqlConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
 	_, _ = sqlConn.Exec(fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schemaName))
 	_, _ = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
@@ -139,7 +139,7 @@ func TestSubmitAnalysisRequestsParallel(t *testing.T) {
 
 	api := newAPI(ginEngine, &configuration, &authManager, analysisService, instrumentService, consoleLogService, nil)
 
-	skeletonInstance, _ := NewSkeleton(ctx, serviceName, []string{}, sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, sortingRuleService, skeletonManager, cerberusClientMock, deaClientMock, configuration)
+	skeletonInstance, _ := NewSkeleton(ctx, serviceName, []string{}, []string{}, sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, sortingRuleService, skeletonManager, cerberusClientMock, deaClientMock, configuration)
 
 	go func() {
 		_ = skeletonInstance.Start()
@@ -253,7 +253,7 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 
 	api := newAPI(ginEngine, &configuration, &authManager, analysisService, instrumentService, consoleLogService, nil)
 
-	skeletonInstance, _ := NewSkeleton(ctx, serviceName, []string{}, sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, sortingRuleService, skeletonManager, cerberusClientMock, deaClientMock, configuration)
+	skeletonInstance, _ := NewSkeleton(ctx, serviceName, []string{}, []string{}, sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, sortingRuleService, skeletonManager, cerberusClientMock, deaClientMock, configuration)
 
 	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description)
 		VALUES ('abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
@@ -275,15 +275,15 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 
 	time.Sleep(1 * time.Second)
 
-	for _, analysisResult := range analysisResultsWithoutAnalysisRequestsTest_analysisResults {
-		err := skeletonInstance.SubmitAnalysisResult(context.TODO(), analysisResult)
-		assert.Nil(t, err)
-	}
+	err := skeletonInstance.SubmitAnalysisResultBatch(context.TODO(), AnalysisResultSet{
+		Results: analysisResultsWithoutAnalysisRequestsTest_analysisResults,
+	})
+	assert.Nil(t, err)
 
 	time.Sleep(5 * time.Second)
 
 	var resultCount int
-	err := sqlConn.QueryRowx(fmt.Sprintf(`SELECT COUNT(*) FROM %s.sk_analysis_results;`, schemaName)).Scan(&resultCount)
+	err = sqlConn.QueryRowx(fmt.Sprintf(`SELECT COUNT(*) FROM %s.sk_analysis_results;`, schemaName)).Scan(&resultCount)
 	assert.Nil(t, err)
 	assert.Equal(t, 2, resultCount)
 
@@ -369,7 +369,7 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 
 	api := NewAPI(&configuration, &authManager, analysisService, instrumentService, consoleLogService, nil)
 
-	skeletonInstance, _ := NewSkeleton(ctx, serviceName, []string{}, sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, sortingRuleService, skeletonManager, cerberusClientMock, deaClientMock, configuration)
+	skeletonInstance, _ := NewSkeleton(ctx, serviceName, []string{}, []string{}, sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, sortingRuleService, skeletonManager, cerberusClientMock, deaClientMock, configuration)
 
 	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('9bec3063-435d-490f-bec0-88a6633ef4c2', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
 
@@ -479,7 +479,7 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 			Warnings:                 []string{"test warning"},
 			ChannelResults:           []ChannelResult{},
 			ExtraValues:              []ExtraValue{},
-			ReagentInfos:             []ReagentInfo{},
+			Reagents:                 []Reagent{},
 			Images:                   []Image{},
 		},
 		{
@@ -503,15 +503,15 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 			Warnings:                 []string{},
 			ChannelResults:           []ChannelResult{},
 			ExtraValues:              []ExtraValue{},
-			ReagentInfos:             []ReagentInfo{},
+			Reagents:                 []Reagent{},
 			Images:                   []Image{},
 		},
 	}
 
-	for _, analysisResult := range analysisResults {
-		err := skeletonInstance.SubmitAnalysisResult(context.TODO(), analysisResult)
-		assert.Nil(t, err)
-	}
+	err = skeletonInstance.SubmitAnalysisResultBatch(context.TODO(), AnalysisResultSet{
+		Results: analysisResults,
+	})
+	assert.Nil(t, err)
 
 	time.Sleep(4 * time.Second)
 	assert.Equal(t, 0, len(cerberusClientMock.AnalysisResults))
@@ -527,7 +527,7 @@ func TestRegisterProtocol(t *testing.T) {
 func TestAnalysisResultsReprocessing(t *testing.T) {
 	sqlConn, _ := sqlx.Connect("pgx", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
 
-	schemaName := "testSubmitAnalysisResultsWithoutRequests"
+	schemaName := "testAnalysisResultsReprocessing"
 	_, _ = sqlConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
 	_, _ = sqlConn.Exec(fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schemaName))
 	_, _ = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
@@ -592,13 +592,339 @@ func TestAnalysisResultsReprocessing(t *testing.T) {
 
 	api := newAPI(ginEngine, &configuration, &authManager, analysisServiceMock, instrumentService, consoleLogService, nil)
 
-	skeletonInstance, _ := NewSkeleton(ctx, serviceName, []string{}, sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepositoryMock, analysisServiceMock, instrumentService, consoleLogService, sortingRuleService, skeletonManager, cerberusClientMock, deaClientMock, configuration)
+	skeletonInstance, _ := NewSkeleton(ctx, serviceName, []string{}, []string{}, sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepositoryMock, analysisServiceMock, instrumentService, consoleLogService, sortingRuleService, skeletonManager, cerberusClientMock, deaClientMock, configuration)
 
 	go func() {
 		_ = skeletonInstance.Start()
 	}()
 
 	time.Sleep(1 * time.Second)
+}
+
+func TestSubmitControlResultsProcessing(t *testing.T) {
+	sqlConn, _ := sqlx.Connect("pgx", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
+
+	schemaName := "testSubmitControlResultsProcessing"
+	_, _ = sqlConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
+	_, _ = sqlConn.Exec(fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schemaName))
+	_, _ = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
+
+	configuration := config.Configuration{
+		APIPort:                          5679,
+		Authorization:                    false,
+		PermittedOrigin:                  "*",
+		ApplicationName:                  "Submit Control Results Processing Test",
+		TCPListenerPort:                  5401,
+		InstrumentTransferRetryDelayInMs: 100,
+		ResultTransferFlushTimeout:       5,
+		ImageRetrySeconds:                60,
+	}
+	dbConn := db.CreateDbConnector(sqlConn)
+
+	analysisRepositoryMock := &analysisRepositoryMock{}
+	conditionRepository := NewConditionRepository(dbConn, schemaName)
+	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
+	consoleLogRepository := repository.NewConsoleLogRepository(500)
+
+	authManager := authManagerMock{
+		getJWKSFunc: func() (*keyfunc.JWKS, error) {
+			return &keyfunc.JWKS{}, nil
+		},
+		getClientCredentialFunc: func() (string, error) {
+			return "authtoken", nil
+		},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	defer cancel()
+
+	skeletonManagerMock := &mockManager{}
+	cerberusClientMock := &cerberusClientMock{
+		registerInstrumentFunc: func(instrument Instrument) error {
+			return nil
+		},
+		sendAnalysisResultBatchFunc: func(analysisResults []AnalysisResultTO) (AnalysisResultBatchResponse, error) {
+			return AnalysisResultBatchResponse{}, nil
+		},
+	}
+	deaClientMock := &deaClientMock{}
+
+	analysisService := NewAnalysisService(analysisRepositoryMock, deaClientMock, cerberusClientMock, skeletonManagerMock)
+	conditionService := NewConditionService(conditionRepository)
+	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
+	sortingRuleService := NewSortingRuleService(analysisRepositoryMock, conditionService, sortingRuleRepository)
+
+	instrumentService := NewInstrumentService(&configuration, sortingRuleService, instrumentRepository, skeletonManagerMock, NewInstrumentCache(), cerberusClientMock)
+	consoleLogService := service.NewConsoleLogService(consoleLogRepository, nil)
+
+	ginEngine := gin.New()
+
+	ginEngine.Use(timeout.Timeout(timeout.WithTimeout(5*time.Second), timeout.WithErrorHttpCode(http.StatusRequestTimeout)))
+
+	api := newAPI(ginEngine, &configuration, &authManager, analysisService, instrumentService, consoleLogService, nil)
+
+	skeletonInstance, _ := NewSkeleton(ctx, serviceName, []string{}, []string{}, sqlConn, schemaName, migrator.NewSkeletonMigrator(), api, analysisRepositoryMock, analysisService, instrumentService, consoleLogService, sortingRuleService, skeletonManagerMock, cerberusClientMock, deaClientMock, configuration)
+
+	go func() {
+		_ = skeletonInstance.Start()
+	}()
+
+	expectedControlResult := ExpectedControlResult{
+		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
+		SampleCode:     "Sample1",
+		Operator:       Equals,
+		ExpectedValue:  "40",
+		ExpectedValue2: nil,
+		CreatedAt:      time.Time{},
+		DeletedAt:      nil,
+		CreatedBy:      uuid.UUID{},
+		DeletedBy:      uuid.NullUUID{},
+	}
+
+	analyteMappings := []AnalyteMapping{
+		{
+			ID:                uuid.MustParse("8facbaeb-368f-482a-9169-4b128632f9e0"),
+			InstrumentAnalyte: "TESTANALYTE",
+			AnalyteID:         uuid.MustParse("51bfea41-1b7e-48f7-8b35-46d930216de7"),
+			ChannelMappings: []ChannelMapping{
+				{
+					ID:                uuid.MustParse("eb780147-a519-4e88-9a5f-961ce531f219"),
+					InstrumentChannel: "TestInstrumentChannel",
+					ChannelID:         uuid.MustParse("9fe9b1f9-e1fd-4669-873b-c2446d5d6b6f"),
+				},
+			},
+			ResultMappings: []ResultMapping{
+				{
+					ID:    uuid.MustParse("0e49a9a7-8ef0-4ef3-a1e1-6277398fcc08"),
+					Key:   "pos",
+					Value: "pos",
+					Index: 0,
+				},
+				{
+					ID:    uuid.MustParse("329080eb-2dca-4a05-9730-24444cc3b487"),
+					Key:   "neg",
+					Value: "neg",
+					Index: 1,
+				},
+			},
+			ResultType:             "pein",
+			ExpectedControlResults: []ExpectedControlResult{expectedControlResult},
+		},
+	}
+
+	instrumentID := uuid.MustParse("93f36696-5ff0-45a9-87eb-ca5c064c5890")
+	instrument := Instrument{
+		ID:                 instrumentID,
+		Name:               "TestInstrument",
+		ProtocolID:         uuid.MustParse("9bec3063-435d-490f-bec0-88a6633ef4c2"),
+		ProtocolName:       "IH-1000 v5.2",
+		Enabled:            true,
+		ConnectionMode:     "TCP_SERVER_ONLY",
+		ResultMode:         "PRODUCTION",
+		CaptureResults:     true,
+		CaptureDiagnostics: true,
+		ReplyToQuery:       true,
+		Status:             "ONLINE",
+		FileEncoding:       "UTF8",
+		Timezone:           "Europe/Budapest",
+		Hostname:           "192.168.1.35",
+		ClientPort:         nil,
+		AnalyteMappings:    analyteMappings,
+		RequestMappings: []RequestMapping{
+			{
+				ID:   uuid.MustParse("9e83ad17-40bc-44b2-b6c9-50a9f559387b"),
+				Code: "Test1",
+				AnalyteIDs: []uuid.UUID{
+					uuid.MustParse("7444d776-3ff7-40b6-9b3c-2e0c58337528"),
+					uuid.MustParse("c9cc51ec-2b63-45df-b0a8-98f325027f8f"),
+				},
+			},
+		},
+		CreatedAt:  time.Now().UTC(),
+		ModifiedAt: nil,
+		DeletedAt:  nil,
+	}
+
+	reagent := Reagent{
+		ID:             uuid.MustParse("69f853b0-fe43-4bd1-a8d4-64c0ff704558"),
+		Manufacturer:   "Test Manufacturer",
+		SerialNumber:   "0001",
+		LotNo:          "0002",
+		Name:           "Reagent name",
+		Type:           Standard,
+		CreatedAt:      time.Time{},
+		ExpirationDate: nil,
+		ControlResults: nil,
+	}
+
+	batchID := uuid.MustParse("ddd34c4d-62f9-4621-bb16-efad459a9bfe")
+	analysisResultId1 := uuid.MustParse("88888acb-5449-4012-96c2-2dd761b62b19")
+	analysisResultId2 := uuid.MustParse("69f853b0-fe43-4bd1-a8d4-64c0ff704558")
+	analysisResults := []AnalysisResult{
+		{
+			ID:                       analysisResultId1,
+			AnalysisRequest:          AnalysisRequest{},
+			AnalyteMapping:           analyteMappings[0],
+			Instrument:               instrument,
+			SampleCode:               "testSampleCode",
+			ResultRecordID:           uuid.MustParse("2f369489-77d3-464e-87e2-edbeffa62ae7"),
+			BatchID:                  batchID,
+			Result:                   "pos",
+			ResultMode:               "PRODUCTION",
+			Status:                   "PRE",
+			ResultYieldDateTime:      nil,
+			ValidUntil:               time.Now().Add(1 * time.Minute),
+			Operator:                 "TestOperator",
+			TechnicalReleaseDateTime: nil,
+			InstrumentRunID:          uuid.Nil,
+			Edited:                   false,
+			EditReason:               "",
+			WarnFlag:                 false,
+			Warnings:                 []string{"test warning"},
+			ChannelResults:           []ChannelResult{},
+			ExtraValues:              []ExtraValue{},
+			Reagents:                 []Reagent{reagent},
+			Images:                   []Image{},
+		},
+		{
+			ID:                       analysisResultId2,
+			AnalysisRequest:          AnalysisRequest{},
+			AnalyteMapping:           analyteMappings[0],
+			Instrument:               instrument,
+			SampleCode:               "testSampleCode2",
+			ResultRecordID:           uuid.MustParse("43a7b261-3e1d-4065-935a-ac15841f13e4"),
+			BatchID:                  batchID,
+			Result:                   "pos",
+			ResultMode:               "PRODUCTION",
+			Status:                   "PRE",
+			ResultYieldDateTime:      nil,
+			ValidUntil:               time.Now().Add(2 * time.Minute),
+			Operator:                 "TestOperator",
+			TechnicalReleaseDateTime: nil,
+			InstrumentRunID:          uuid.Nil,
+			Edited:                   false,
+			EditReason:               "",
+			WarnFlag:                 false,
+			Warnings:                 []string{},
+			ChannelResults:           []ChannelResult{},
+			ExtraValues:              []ExtraValue{},
+			Reagents:                 []Reagent{reagent},
+			Images:                   []Image{},
+		},
+	}
+
+	analysisRequests := []AnalysisRequest{
+		{
+			ID:                          uuid.MustParse("4a7a8b97-59f5-46bc-9fab-0674504e4cc6"),
+			WorkItemID:                  uuid.UUID{},
+			AnalyteID:                   analyteMappings[0].AnalyteID,
+			SampleCode:                  "testSampleCode",
+			MaterialID:                  uuid.UUID{},
+			LaboratoryID:                uuid.UUID{},
+			ValidUntilTime:              time.Time{},
+			CreatedAt:                   time.Time{},
+			ModifiedAt:                  nil,
+			SubjectInfo:                 nil,
+			ExtraValues:                 nil,
+			ReexaminationRequestedCount: 0,
+		},
+	}
+
+	controlResult := ControlResult{
+		ID:             uuid.UUID{},
+		SampleCode:     "",
+		AnalyteMapping: analyteMappings[0],
+		Result:         "40",
+		ExpectedControlResultId: uuid.NullUUID{
+			UUID:  uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
+			Valid: true,
+		},
+		IsValid:                    false,
+		IsComparedToExpectedResult: false,
+		ExaminedAt:                 time.Time{},
+		InstrumentID:               instrumentID,
+		Warnings:                   nil,
+		ChannelResults:             nil,
+		ExtraValues:                nil,
+	}
+
+	err := skeletonInstance.SubmitAnalysisResultBatch(context.TODO(), AnalysisResultSet{
+		Results: analysisResults,
+	})
+	assert.Nil(t, err)
+
+	time.Sleep(6 * time.Second)
+
+	skeletonManagerMock.AnalysisResultsForProcessing = make([]AnalysisResult, 0)
+
+	analysisRepositoryMock.analysisResultsById = analysisResults
+	analysisRepositoryMock.analysisRequests = analysisRequests
+	err = skeletonInstance.SubmitControlResults(context.TODO(), []StandaloneControlResult{
+		{
+			ControlResult: controlResult,
+			Reagents:      []Reagent{reagent},
+			ResultIDs:     []uuid.UUID{analysisResultId1, analysisResultId2},
+		},
+	})
+	assert.Nil(t, err)
+
+	time.Sleep(6 * time.Second)
+	assert.Equal(t, 2, len(skeletonManagerMock.AnalysisResultsForProcessing))
+
+	analysisRepositoryMock.analysisResultsById = make([]AnalysisResult, 0)
+	analysisRepositoryMock.analysisRequests = make([]AnalysisRequest, 0)
+	skeletonManagerMock.AnalysisResultsForProcessing = make([]AnalysisResult, 0)
+
+	err = skeletonInstance.SubmitControlResults(context.TODO(), []StandaloneControlResult{
+		{
+			ControlResult: controlResult,
+			Reagents:      []Reagent{reagent},
+			ResultIDs:     []uuid.UUID{},
+		},
+	})
+	assert.Nil(t, err)
+
+	time.Sleep(6 * time.Second)
+	assert.Equal(t, 0, len(skeletonManagerMock.AnalysisResultsForProcessing))
+
+	analysisRepositoryMock.analysisResultsById = analysisResults
+	analysisRepositoryMock.analysisRequests = analysisRequests
+	skeletonManagerMock.AnalysisResultsForProcessing = make([]AnalysisResult, 0)
+	controlResultWithoutAnalysisResult := ControlResult{
+		ID:             uuid.UUID{},
+		SampleCode:     "",
+		AnalyteMapping: analyteMappings[0],
+		Result:         "40",
+		ExpectedControlResultId: uuid.NullUUID{
+			UUID:  uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
+			Valid: true,
+		},
+		IsValid:                    false,
+		IsComparedToExpectedResult: false,
+		ExaminedAt:                 time.Time{},
+		InstrumentID:               instrumentID,
+		Warnings:                   nil,
+		ChannelResults:             nil,
+		ExtraValues:                nil,
+	}
+
+	err = skeletonInstance.SubmitControlResults(context.TODO(), []StandaloneControlResult{
+		{
+			ControlResult: controlResultWithoutAnalysisResult,
+			Reagents:      []Reagent{reagent},
+			ResultIDs:     []uuid.UUID{},
+		},
+		{
+			ControlResult: controlResult,
+			Reagents:      []Reagent{reagent},
+			ResultIDs:     []uuid.UUID{analysisResultId1, analysisResultId2},
+		},
+	})
+	assert.Nil(t, err)
+
+	time.Sleep(6 * time.Second)
+	assert.Equal(t, 2, len(skeletonManagerMock.AnalysisResultsForProcessing))
 }
 
 type skeletonCallbackHandlerV1Mock struct {
@@ -694,12 +1020,25 @@ func (m *deaClientMock) UploadImage(fileData []byte, name string) (uuid.UUID, er
 
 type cerberusClientMock struct {
 	registerInstrumentFunc           func(instrument Instrument) error
-	registerInstrumentDriverFunc     func(serviceName string, apiVersion string, apiPort uint16, tlsEnabled bool, extraValueKeys []string) error
+	registerInstrumentDriverFunc     func(serviceName string, apiVersion string, apiPort uint16, tlsEnabled bool, extraValueKeys []string, reagentManufacturers []string) error
 	sendAnalysisResultBatchFunc      func(analysisResults []AnalysisResultTO) (AnalysisResultBatchResponse, error)
+	sendControlResultBatchFunc       func(controlResults []StandaloneControlResultTO) (ControlResultBatchResponse, error)
 	sendAnalysisResultImageBatchFunc func(images []WorkItemResultImageTO) error
 
-	AnalysisResults []AnalysisResultTO
-	BatchResponse   AnalysisResultBatchResponse
+	AnalysisResults      []AnalysisResultTO
+	ControlResults       []StandaloneControlResultTO
+	BatchResponse        AnalysisResultBatchResponse
+	ControlBatchResponse ControlResultBatchResponse
+}
+
+func (m *cerberusClientMock) SendControlResultBatch(controlResults []StandaloneControlResultTO) (ControlResultBatchResponse, error) {
+	m.ControlResults = append(m.ControlResults, controlResults...)
+	if m.sendControlResultBatchFunc == nil {
+		return ControlResultBatchResponse{}, errors.New("not implemented")
+	}
+	response, err := m.sendControlResultBatchFunc(controlResults)
+	m.ControlBatchResponse = response
+	return response, err
 }
 
 func (m *cerberusClientMock) RegisterInstrument(instrument Instrument) error {
@@ -709,11 +1048,11 @@ func (m *cerberusClientMock) RegisterInstrument(instrument Instrument) error {
 	return m.registerInstrumentFunc(instrument)
 }
 
-func (m *cerberusClientMock) RegisterInstrumentDriver(serviceName string, apiVersion string, apiPort uint16, tlsEnabled bool, extraValueKeys []string) error {
+func (m *cerberusClientMock) RegisterInstrumentDriver(serviceName string, apiVersion string, apiPort uint16, tlsEnabled bool, extraValueKeys []string, reagentManufacturers []string) error {
 	if m.registerInstrumentDriverFunc == nil {
 		return nil
 	}
-	return m.registerInstrumentDriverFunc(serviceName, apiVersion, apiPort, tlsEnabled, extraValueKeys)
+	return m.registerInstrumentDriverFunc(serviceName, apiVersion, apiPort, tlsEnabled, extraValueKeys, reagentManufacturers)
 }
 
 func (m *cerberusClientMock) SendAnalysisResultBatch(analysisResults []AnalysisResultTO) (AnalysisResultBatchResponse, error) {
@@ -761,6 +1100,9 @@ func generateAnalysisRequestsJson(count int) string {
 type analysisServiceMock struct {
 }
 
+func (m *analysisServiceMock) SaveCerberusIDsForAnalysisResultBatchItems(ctx context.Context, analysisResults []AnalysisResultBatchItemInfo) {
+}
+
 func (m *analysisServiceMock) CreateAnalysisRequests(ctx context.Context, analysisRequests []AnalysisRequest) ([]AnalysisRequestStatus, error) {
 	return nil, nil
 }
@@ -782,9 +1124,28 @@ func (m *analysisServiceMock) GetAnalysisResultsInfo(ctx context.Context, instru
 func (m *analysisServiceMock) GetAnalysisBatches(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisBatch, int, error) {
 	return nil, 0, nil
 }
+func (m *analysisServiceMock) CreateAnalysisResultsBatch(ctx context.Context, analysisResults AnalysisResultSet) ([]AnalysisResult, error) {
+	for i := range analysisResults.Results {
+		analysisResults.Results[i].ID = uuid.New()
+	}
+	return analysisResults.Results, nil
+}
+func (m *analysisServiceMock) CreateControlResultBatch(ctx context.Context, controlResults []StandaloneControlResult) ([]StandaloneControlResult, []uuid.UUID, error) {
+	return nil, nil, nil
+}
+func (m *analysisServiceMock) GetAnalysisResultsByIDsWithRecalculatedStatus(ctx context.Context, analysisResultIDs []uuid.UUID, reValidateControlResult bool) ([]AnalysisResult, error) {
+	return nil, nil
+}
+func (m *analysisServiceMock) ValidateAndUpdatingExistingControlResults(ctx context.Context, analyteMappingIds []uuid.UUID) error {
+	return nil
+}
+func (m *analysisServiceMock) AnalysisResultStatusRecalculationAndSendForProcessingIfFinal(ctx context.Context, controlResultIds []uuid.UUID) error {
+	return nil
+}
 func (m *analysisServiceMock) QueueAnalysisResults(ctx context.Context, results []AnalysisResult) error {
 	return nil
 }
+
 func (m *analysisServiceMock) RetransmitResult(ctx context.Context, resultID uuid.UUID) error {
 	return nil
 }
@@ -799,7 +1160,9 @@ func (m *analysisServiceMock) ProcessStuckImagesToCerberus(ctx context.Context) 
 }
 
 type analysisRepositoryMock struct {
-	callCount int
+	callCount           int
+	analysisResultsById []AnalysisResult
+	analysisRequests    []AnalysisRequest
 }
 
 func (m *analysisRepositoryMock) DeleteOldCerberusQueueItems(ctx context.Context, cleanupDays, limit int) (int64, error) {
@@ -812,6 +1175,74 @@ func (m *analysisRepositoryMock) DeleteOldAnalysisRequestsWithTx(ctx context.Con
 
 func (m *analysisRepositoryMock) DeleteOldAnalysisResultsWithTx(ctx context.Context, cleanupDays, limit int, tx db.DbConnector) (int64, error) {
 	return 0, nil
+}
+
+func (m *analysisRepositoryMock) UpdateCerberusQueueItemStatus(ctx context.Context, queueItem CerberusQueueItem) error {
+	return nil
+}
+
+func (m *analysisRepositoryMock) GetUnprocessedAnalysisResultIDsByControlResultIDs(ctx context.Context, controlResultIDs []uuid.UUID) (map[uuid.UUID]map[uuid.UUID]uuid.UUID, error) {
+	return make(map[uuid.UUID]map[uuid.UUID]uuid.UUID), nil
+}
+
+func (m *analysisRepositoryMock) GetUnprocessedReagentIDsByControlResultIDs(ctx context.Context, controlResultIDs []uuid.UUID) (map[uuid.UUID][]uuid.UUID, error) {
+	return make(map[uuid.UUID][]uuid.UUID), nil
+}
+
+func (m *analysisRepositoryMock) CreateReagents(ctx context.Context, reagents []Reagent) ([]uuid.UUID, error) {
+	return []uuid.UUID{}, nil
+}
+
+func (m *analysisRepositoryMock) GetReagentsByIDs(ctx context.Context, reagentIDs []uuid.UUID) (map[uuid.UUID]Reagent, error) {
+	return make(map[uuid.UUID]Reagent), nil
+}
+
+func (m *analysisRepositoryMock) CreateControlResultBatch(ctx context.Context, controlResults []ControlResult) ([]ControlResult, error) {
+	return []ControlResult{}, nil
+}
+
+func (m *analysisRepositoryMock) GetControlResultsByIDs(ctx context.Context, controlResultIDs []uuid.UUID) (map[uuid.UUID]ControlResult, error) {
+	return make(map[uuid.UUID]ControlResult), nil
+}
+
+func (m *analysisRepositoryMock) CreateReagentControlResultRelations(ctx context.Context, relationDAOs []reagentControlResultRelationDAO) error {
+	return nil
+}
+
+func (m *analysisRepositoryMock) CreateAnalysisResultControlResultRelations(ctx context.Context, relationDAOs []analysisResultControlResultRelationDAO) error {
+	return nil
+}
+
+func (m *analysisRepositoryMock) GetCerberusIDForAnalysisResults(ctx context.Context, analysisResultIDs []uuid.UUID) (map[uuid.UUID]uuid.UUID, error) {
+	return make(map[uuid.UUID]uuid.UUID), nil
+}
+
+func (m *analysisRepositoryMock) SaveCerberusIDForAnalysisResult(ctx context.Context, analysisResultID uuid.UUID, cerberusID uuid.UUID) error {
+	return nil
+}
+
+func (m *analysisRepositoryMock) SaveCerberusIDForControlResult(ctx context.Context, controlResultID uuid.UUID, cerberusID uuid.UUID) error {
+	return nil
+}
+
+func (m *analysisRepositoryMock) SaveCerberusIDForReagent(ctx context.Context, reagentID uuid.UUID, cerberusID uuid.UUID) error {
+	return nil
+}
+
+func (m *analysisRepositoryMock) GetAnalysisResultIdsSinceLastControlByReagent(ctx context.Context, reagent Reagent, examinedAt time.Time, analyteMappingId uuid.UUID, instrumentId uuid.UUID) ([]uuid.UUID, error) {
+	return nil, nil
+}
+
+func (m *analysisRepositoryMock) GetLatestControlResultIdByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time) (ControlResult, error) {
+	return ControlResult{}, nil
+}
+
+func (m *analysisRepositoryMock) MarkReagentControlResultRelationsAsProcessed(ctx context.Context, controlResultID uuid.UUID, reagentIDs []uuid.UUID) error {
+	return nil
+}
+
+func (m *analysisRepositoryMock) MarkAnalysisResultControlResultRelationsAsProcessed(ctx context.Context, controlResultID uuid.UUID, analysisResultIDs []uuid.UUID) error {
+	return nil
 }
 
 func (m *analysisRepositoryMock) CreateAnalysisRequestExtraValues(ctx context.Context, extraValuesByAnalysisRequestIDs map[uuid.UUID][]ExtraValue) error {
@@ -827,6 +1258,9 @@ func (m *analysisRepositoryMock) GetUnprocessedAnalysisResultIDs(ctx context.Con
 }
 
 func (m *analysisRepositoryMock) GetAnalysisResultsByIDs(ctx context.Context, ids []uuid.UUID) ([]AnalysisResult, error) {
+	if len(m.analysisResultsById) > 0 {
+		return m.analysisResultsById, nil
+	}
 	return make([]AnalysisResult, len(ids)), nil
 }
 
@@ -834,6 +1268,9 @@ func (m *analysisRepositoryMock) CreateAnalysisRequestsBatch(ctx context.Context
 	return nil, nil, nil
 }
 func (m *analysisRepositoryMock) GetAnalysisRequestsBySampleCodeAndAnalyteID(ctx context.Context, sampleCodes string, analyteID uuid.UUID) ([]AnalysisRequest, error) {
+	if len(m.analysisRequests) > 0 {
+		return m.analysisRequests, nil
+	}
 	return nil, nil
 }
 func (m *analysisRepositoryMock) GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string, allowResending bool) (map[string][]AnalysisRequest, error) {
@@ -873,7 +1310,16 @@ func (m *analysisRepositoryMock) SaveAnalysisRequestsInstrumentTransmissions(ctx
 	return nil
 }
 func (m *analysisRepositoryMock) CreateAnalysisResultsBatch(ctx context.Context, analysisResults []AnalysisResult) ([]AnalysisResult, error) {
-	return nil, nil
+	for i := range analysisResults {
+		analysisResults[i].ID = uuid.New()
+	}
+	return analysisResults, nil
+}
+func (m *analysisRepositoryMock) UpdateStatusAnalysisResultsBatch(ctx context.Context, analysisResultsToUpdate []AnalysisResult) error {
+	return nil
+}
+func (m *analysisRepositoryMock) CreateAnalysisResultReagentRelations(ctx context.Context, relationDAOs []analysisResultReagentRelationDAO) error {
+	return nil
 }
 func (m *analysisRepositoryMock) GetAnalysisResultsBySampleCodeAndAnalyteID(ctx context.Context, sampleCode string, analyteID uuid.UUID) ([]AnalysisResult, error) {
 	return nil, nil
@@ -883,6 +1329,70 @@ func (m *analysisRepositoryMock) GetAnalysisResultByID(ctx context.Context, id u
 }
 func (m *analysisRepositoryMock) GetAnalysisResultsByBatchIDs(ctx context.Context, batchIDs []uuid.UUID) ([]AnalysisResult, error) {
 	return nil, nil
+}
+func (m *analysisRepositoryMock) GetAnalysisResultIdsForStatusRecalculationByControlIds(ctx context.Context, controlResultIds []uuid.UUID) ([]uuid.UUID, error) {
+	return nil, nil
+}
+func (m *analysisRepositoryMock) CreateAnalysisResultExtraValues(ctx context.Context, extraValuesByAnalysisRequestIDs map[uuid.UUID][]ExtraValue) error {
+	return nil
+}
+func (m *analysisRepositoryMock) CreateChannelResults(ctx context.Context, channelResults []ChannelResult, analysisResultID uuid.UUID) ([]uuid.UUID, error) {
+	return nil, nil
+}
+func (m *analysisRepositoryMock) CreateChannelResultQuantitativeValues(ctx context.Context, quantitativeValuesByChannelResultIDs map[uuid.UUID]map[string]string) error {
+	return nil
+}
+func (m *analysisRepositoryMock) CreateReagentsByAnalysisResultID(ctx context.Context, reagentsByAnalysisResultID map[uuid.UUID][]Reagent) (map[uuid.UUID]map[uuid.UUID][]ControlResult, map[uuid.UUID][]Reagent, error) {
+	reagentsMapWithIds := make(map[uuid.UUID][]Reagent)
+	controlResultsMap := make(map[uuid.UUID]map[uuid.UUID][]ControlResult)
+	uniqueReagentToIncomingIndexMap := make(map[string]uuid.UUID)
+	for analysisResultId, reagents := range reagentsByAnalysisResultID {
+		reagentArray := make([]Reagent, 0)
+		for i, reagent := range reagents {
+			if _, ok := uniqueReagentToIncomingIndexMap[getUniqueReagentString(convertReagentToDAO(reagent))]; !ok {
+				newReagentId := uuid.New()
+				reagentsByAnalysisResultID[analysisResultId][i].ID = newReagentId
+				uniqueReagentToIncomingIndexMap[getUniqueReagentString(convertReagentToDAO(reagent))] = newReagentId
+			} else {
+				reagentsByAnalysisResultID[analysisResultId][i].ID = uniqueReagentToIncomingIndexMap[getUniqueReagentString(convertReagentToDAO(reagent))]
+			}
+			reagentArray = append(reagentArray, reagentsByAnalysisResultID[analysisResultId][i])
+			controlResults := make([]ControlResult, 0)
+			for j := range reagent.ControlResults {
+				reagentsByAnalysisResultID[analysisResultId][i].ControlResults[j].ID = uuid.New()
+				controlResults = append(controlResults, reagentsByAnalysisResultID[analysisResultId][i].ControlResults[j])
+			}
+			if _, ok := controlResultsMap[analysisResultId]; !ok {
+				controlResultsMap[analysisResultId] = make(map[uuid.UUID][]ControlResult)
+			}
+			controlResultsMap[analysisResultId][reagentsByAnalysisResultID[analysisResultId][i].ID] = controlResults
+		}
+		reagentsMapWithIds[analysisResultId] = reagentArray
+	}
+	return controlResultsMap, reagentsMapWithIds, nil
+}
+func (m *analysisRepositoryMock) CreateReagentBatch(ctx context.Context, reagents []Reagent) ([]Reagent, error) {
+	return nil, nil
+}
+func (m *analysisRepositoryMock) CreateControlResults(ctx context.Context, controlResultsMap map[uuid.UUID]map[uuid.UUID][]ControlResult) (map[uuid.UUID]map[uuid.UUID][]uuid.UUID, error) {
+	controlResultIdsMap := make(map[uuid.UUID]map[uuid.UUID][]uuid.UUID)
+	for analysisResultId, reagentMap := range controlResultsMap {
+		controlResultIdsMap[analysisResultId] = make(map[uuid.UUID][]uuid.UUID)
+		for reagentId, controlResults := range reagentMap {
+			controlResultIds := make([]uuid.UUID, 0)
+			for i := 0; i < len(controlResults); i++ {
+				controlResultIds = append(controlResultIds, uuid.New())
+			}
+			controlResultIdsMap[analysisResultId][reagentId] = controlResultIds
+		}
+	}
+	return controlResultIdsMap, nil
+}
+func (m *analysisRepositoryMock) UpdateControlResultBatch(ctx context.Context, controlResults []ControlResult) error {
+	return nil
+}
+func (m *analysisRepositoryMock) CreateWarnings(ctx context.Context, warningsByAnalysisResultID map[uuid.UUID][]string) error {
+	return nil
 }
 func (m *analysisRepositoryMock) GetAnalysisResultsByBatchIDsMapped(ctx context.Context, batchIDs []uuid.UUID) (map[uuid.UUID][]AnalysisResultInfo, error) {
 	return nil, nil
@@ -900,6 +1410,9 @@ func (m *analysisRepositoryMock) CreateAnalysisResultQueueItem(ctx context.Conte
 	return uuid.New(), nil
 }
 func (m *analysisRepositoryMock) SaveImages(ctx context.Context, images []imageDAO) ([]uuid.UUID, error) {
+	return nil, nil
+}
+func (m *analysisRepositoryMock) SaveControlResultImages(ctx context.Context, images []controlResultImageDAO) ([]uuid.UUID, error) {
 	return nil, nil
 }
 func (m *analysisRepositoryMock) GetStuckImageIDsForDEA(ctx context.Context) ([]uuid.UUID, error) {
@@ -924,6 +1437,13 @@ func (m *analysisRepositoryMock) MarkImagesAsSyncedToCerberus(ctx context.Contex
 	return nil
 }
 func (m *analysisRepositoryMock) GetUnprocessedAnalysisRequests(ctx context.Context) ([]AnalysisRequest, error) {
+	return nil, nil
+}
+
+func (m *analysisRepositoryMock) GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMappingId uuid.UUID, instrumentId uuid.UUID) ([]ControlResult, error) {
+	return nil, nil
+}
+func (m *analysisRepositoryMock) GetControlResultsToValidate(ctx context.Context, analyteMappingIds []uuid.UUID) ([]ControlResult, error) {
 	return nil, nil
 }
 func (m *analysisRepositoryMock) MarkAnalysisRequestsAsProcessed(ctx context.Context, analysisRequestIDs []uuid.UUID) error {
@@ -962,8 +1482,19 @@ var analysisResultsWithoutAnalysisRequestsTest_analysisResults = []AnalysisResul
 		Warnings:                 []string{"test warning"},
 		ChannelResults:           []ChannelResult{},
 		ExtraValues:              []ExtraValue{},
-		ReagentInfos:             []ReagentInfo{},
-		Images:                   []Image{},
+		Reagents: []Reagent{
+			{
+				ID:             uuid.New(),
+				Manufacturer:   "manufacturer",
+				SerialNumber:   "serialNumber",
+				LotNo:          "lotNo",
+				Name:           "name",
+				Type:           Standard,
+				ExpirationDate: nil,
+				ControlResults: nil,
+			},
+		},
+		Images: []Image{},
 	},
 	{
 		AnalysisRequest:          AnalysisRequest{},
@@ -986,7 +1517,7 @@ var analysisResultsWithoutAnalysisRequestsTest_analysisResults = []AnalysisResul
 		Warnings:                 []string{},
 		ChannelResults:           []ChannelResult{},
 		ExtraValues:              []ExtraValue{},
-		ReagentInfos:             []ReagentInfo{},
+		Reagents:                 []Reagent{},
 		Images:                   []Image{},
 	},
 }
@@ -1008,7 +1539,7 @@ var analysisResultsWithoutAnalysisRequestsTest_analysisResultTOs = []AnalysisRes
 		Warnings:                 []string{"test warning"},
 		ChannelResults:           []ChannelResultTO{},
 		ExtraValues:              []ExtraValueTO{},
-		ReagentInfos:             []ReagentInfoTO{},
+		Reagents:                 []ReagentTO{},
 		Images:                   []ImageTO{},
 	},
 	{
@@ -1027,7 +1558,7 @@ var analysisResultsWithoutAnalysisRequestsTest_analysisResultTOs = []AnalysisRes
 		Warnings:                 []string{},
 		ChannelResults:           []ChannelResultTO{},
 		ExtraValues:              []ExtraValueTO{},
-		ReagentInfos:             []ReagentInfoTO{},
+		Reagents:                 []ReagentTO{},
 		Images:                   []ImageTO{},
 	},
 }

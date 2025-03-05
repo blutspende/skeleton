@@ -1,6 +1,8 @@
 package skeleton
 
 import (
+	"errors"
+	"github.com/blutspende/skeleton/middleware"
 	"net/http"
 	"time"
 
@@ -51,12 +53,14 @@ type listInstrumentTO struct {
 }
 
 type analyteMappingTO struct {
-	ID                uuid.UUID          `json:"id"`
-	InstrumentAnalyte string             `json:"instrumentAnalyte"`
-	AnalyteID         uuid.UUID          `json:"analyteId"`
-	ChannelMappings   []channelMappingTO `json:"channelMappings"`
-	ResultMappings    []resultMappingTO  `json:"resultMappings"`
-	ResultType        ResultType         `json:"resultType"`
+	ID                       uuid.UUID          `json:"id"`
+	InstrumentAnalyte        string             `json:"instrumentAnalyte"`
+	AnalyteID                uuid.UUID          `json:"analyteId"`
+	ChannelMappings          []channelMappingTO `json:"channelMappings"`
+	ResultMappings           []resultMappingTO  `json:"resultMappings"`
+	ResultType               ResultType         `json:"resultType"`
+	ControlRequired          bool               `json:"controlRequired"`
+	InstrumentControlAnalyte *string            `json:"instrumentControlAnalyte"`
 }
 
 type requestMappingTO struct {
@@ -156,9 +160,40 @@ type reprocessTO struct {
 	SampleCode string `json:"sampleCode"`
 }
 
+type expectedControlResultTO struct {
+	ID               uuid.UUID         `json:"id"`
+	AnalyteMappingId uuid.UUID         `json:"analyteMappingId"`
+	SampleCode       string            `json:"sampleCode"`
+	Operator         ConditionOperator `json:"operator"`
+	ExpectedValue    string            `json:"expectedValue"`
+	ExpectedValue2   *string           `json:"expectedValue2"`
+	CreatedBy        *uuid.UUID        `json:"createdBy"`
+	CreatedAt        *time.Time        `json:"createdAt"`
+}
+
+type notSpecifiedExpectedControlResultTO struct {
+	AnalyteMappingId uuid.UUID `json:"analyteMappingId"`
+	SampleCode       string    `json:"sampleCode"`
+}
+
 const (
-	MsgFailedToReprocessInstrumentData = "failed to reprocess instrument data"
-	keyFailedToReprocessInstrumentData = "failedToReprocessInstrumentData"
+	MsgReprocessInstrumentDataFailed           = "Reprocessing instrument data failed!"
+	keyReprocessInstrumentDataFailed           = "reprocessInstrumentDataFailed"
+	keyExpectedControlResultCreateFailed       = "expectedControlResultCreateFailed"
+	msgExpectedControlResultCreateFailed       = "Expected control result create failed!"
+	keyExpectedControlResultUpdateFailed       = "expectedControlResultUpdateFailed"
+	msgExpectedControlResultUpdateFailed       = "Expected control result update failed!"
+	keyInvalidExpectedControlResultValue       = "invalidExpectedControlResultValue"
+	keyExpectedControlResultValidationError    = "expectedControlResultValidationError"
+	msgExpectedControlResultValidationError    = "Invalid request body!"
+	keyAnalyteNotFoundForExpectedControlResult = "analyteNotFoundForExpectedControlResult"
+	msgAnalyteNotFoundForExpectedControlResult = "Unexpected analyte for expected control result!"
+	keyGetInstrumentByIdFailed                 = "getInstrumentByIdFailed"
+	msgGetInstrumentByIdFailed                 = "Get specific instrument data failed!"
+	keyInstrumentControlAnalyteAlreadyInUse    = "instrumentControlAnalyteAlreadyInUse"
+	msgInstrumentControlAnalyteAlreadyInUse    = "Control testcode already in use!"
+	keyInstrumentAnalyteAlreadyInUse           = "instrumentAnalyteAlreadyInUse"
+	msgInstrumentAnalyteAlreadyInUse           = "Manufacturer's testcode already in use!"
 )
 
 type sortingRuleGroupTO struct {
@@ -199,7 +234,10 @@ type conditionOperandTO struct {
 func (api *api) GetInstruments(c *gin.Context) {
 	instruments, err := api.instrumentService.GetInstruments(c)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, "GetInstruments Error")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, middleware.ClientError{
+			MessageKey: "getInstrumentsFailed",
+			Message:    "Getting instruments failed!",
+		})
 		return
 	}
 
@@ -215,7 +253,9 @@ func (api *api) GetInstruments(c *gin.Context) {
 func (api *api) GetInstrumentByID(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("instrumentId"))
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, "GetInstrumentByID Error")
+		clientError := middleware.ErrInvalidOrMissingRequestParameter
+		clientError.MessageParams = map[string]string{"param": "instrumentId"}
+		c.AbortWithStatusJSON(http.StatusBadRequest, clientError)
 		return
 	}
 
@@ -224,12 +264,18 @@ func (api *api) GetInstrumentByID(c *gin.Context) {
 		if err == ErrInstrumentNotFound {
 			c.AbortWithStatus(http.StatusNotFound)
 		}
-		c.AbortWithStatusJSON(http.StatusInternalServerError, "GetInstrumentByID Error")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, middleware.ClientError{
+			MessageKey: keyGetInstrumentByIdFailed,
+			Message:    msgGetInstrumentByIdFailed,
+		})
 		return
 	}
 	err = api.instrumentService.HidePassword(c, &instrument)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, "GetInstrumentByID Error")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, middleware.ClientError{
+			MessageKey: keyGetInstrumentByIdFailed,
+			Message:    msgGetInstrumentByIdFailed,
+		})
 		return
 	}
 	c.JSON(http.StatusOK, convertInstrumentToInstrumentTO(instrument))
@@ -242,7 +288,7 @@ func (api *api) CreateInstrument(c *gin.Context) {
 	err := c.ShouldBindJSON(&instrumentTO)
 	if err != nil {
 		log.Error().Err(err).Msg("Create instrument failed! Can't parse request body!")
-		c.AbortWithStatusJSON(http.StatusBadRequest, "CreateInstrument Error")
+		c.AbortWithStatusJSON(http.StatusBadRequest, middleware.ErrInvalidRequestBody)
 		return
 	}
 
@@ -250,15 +296,35 @@ func (api *api) CreateInstrument(c *gin.Context) {
 
 	if !isRequestMappingValid(instrument) {
 		log.Error().Msg("RequestMapping is not Valid")
-		c.AbortWithStatusJSON(http.StatusBadRequest, "CreateInstrument Error")
+		c.AbortWithStatusJSON(http.StatusBadRequest, middleware.ClientError{
+			MessageKey: "instrumentValidationFailed",
+			Message:    "Instrument validation failed!",
+		})
 		return
 	}
 
 	savedInstrumentID, err := api.instrumentService.CreateInstrument(c, instrument)
 	if err != nil {
 		log.Error().Err(err).Interface("instrument", instrumentTO).Msg("CreateInstrument failed")
-		c.AbortWithStatusJSON(http.StatusInternalServerError, "CreateInstrument Error")
-		return
+		if errors.Is(err, ErrUniqueViolationInstrumentControlAnalyte) {
+			c.AbortWithStatusJSON(http.StatusBadRequest, middleware.ClientError{
+				MessageKey: keyInstrumentControlAnalyteAlreadyInUse,
+				Message:    msgInstrumentControlAnalyteAlreadyInUse,
+			})
+			return
+		} else if errors.Is(err, ErrUniqueViolationInstrumentAnalyte) {
+			c.AbortWithStatusJSON(http.StatusBadRequest, middleware.ClientError{
+				MessageKey: keyInstrumentAnalyteAlreadyInUse,
+				Message:    msgInstrumentAnalyteAlreadyInUse,
+			})
+			return
+		} else {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, middleware.ClientError{
+				MessageKey: "createInstrumentFailed",
+				Message:    "Instrument creation failed!",
+			})
+			return
+		}
 	}
 
 	c.JSON(http.StatusOK, savedInstrumentID)
@@ -270,16 +336,40 @@ func (api *api) UpdateInstrument(c *gin.Context) {
 	err := c.ShouldBindJSON(&instrumentTO)
 	if err != nil {
 		log.Error().Err(err).Msg("Update instrument failed! Can't bind request body!")
-		c.AbortWithStatusJSON(http.StatusBadRequest, "api_errors.InvalidRequestBody")
+		c.AbortWithStatusJSON(http.StatusBadRequest, middleware.ErrInvalidRequestBody)
 		return
 	}
 
 	instrument := convertInstrumentTOToInstrument(instrumentTO)
 
-	err = api.instrumentService.UpdateInstrument(c, instrument)
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, "api_errors.InternalServerError")
+	user, ok := c.Get("User")
+	if !ok {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, middleware.ErrInvalidToken)
 		return
+	}
+	userId := user.(middleware.UserToken).UserID
+
+	err = api.instrumentService.UpdateInstrument(c, instrument, userId)
+	if err != nil {
+		if errors.Is(err, ErrUniqueViolationInstrumentControlAnalyte) {
+			c.AbortWithStatusJSON(http.StatusBadRequest, middleware.ClientError{
+				MessageKey: keyInstrumentControlAnalyteAlreadyInUse,
+				Message:    msgInstrumentControlAnalyteAlreadyInUse,
+			})
+			return
+		} else if errors.Is(err, ErrUniqueViolationInstrumentAnalyte) {
+			c.AbortWithStatusJSON(http.StatusBadRequest, middleware.ClientError{
+				MessageKey: keyInstrumentAnalyteAlreadyInUse,
+				Message:    msgInstrumentAnalyteAlreadyInUse,
+			})
+			return
+		} else {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, middleware.ClientError{
+				MessageKey: "updateInstrumentFailed",
+				Message:    "Instrument update failed!",
+			})
+			return
+		}
 	}
 
 	c.Status(http.StatusNoContent)
@@ -288,7 +378,9 @@ func (api *api) UpdateInstrument(c *gin.Context) {
 func (api *api) DeleteInstrument(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("instrumentId"))
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, "DeleteInstrument Error")
+		clientError := middleware.ErrInvalidOrMissingRequestParameter
+		clientError.MessageParams = map[string]string{"param": "instrumentId"}
+		c.AbortWithStatusJSON(http.StatusBadRequest, clientError)
 		return
 	}
 
@@ -297,7 +389,198 @@ func (api *api) DeleteInstrument(c *gin.Context) {
 		if err == ErrInstrumentNotFound {
 			c.AbortWithStatus(http.StatusNotFound)
 		}
-		c.AbortWithStatusJSON(http.StatusInternalServerError, "Error")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, middleware.ClientError{
+			MessageKey: "instrumentDeletionFailed",
+			Message:    "Instrument deletion failed!",
+		})
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+func (api *api) GetExpectedControlResultsByInstrumentId(c *gin.Context) {
+	instrumentId, err := uuid.Parse(c.Param("instrumentId"))
+	if err != nil {
+		clientError := middleware.ErrInvalidOrMissingRequestParameter
+		clientError.MessageParams = map[string]string{"param": "instrumentId"}
+		c.AbortWithStatusJSON(http.StatusBadRequest, clientError)
+		return
+	}
+
+	expectedControlResults, err := api.instrumentService.GetExpectedControlResultsByInstrumentId(c, instrumentId)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, middleware.ClientError{
+			MessageKey: "getExpectedControlResultsByInstrumentIdFailed",
+			Message:    "Gathering expected control results failed!",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, convertExpectedControlResultListToTOList(expectedControlResults))
+}
+
+func (api *api) GetNotSpecifiedExpectedControlResultsByInstrumentId(c *gin.Context) {
+	instrumentId, err := uuid.Parse(c.Param("instrumentId"))
+	if err != nil {
+		clientError := middleware.ErrInvalidOrMissingRequestParameter
+		clientError.MessageParams = map[string]string{"param": "instrumentId"}
+		c.AbortWithStatusJSON(http.StatusBadRequest, clientError)
+		return
+	}
+
+	notSpecifiedExpectedControlResults, err := api.instrumentService.GetNotSpecifiedExpectedControlResultsByInstrumentId(c, instrumentId)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, middleware.ClientError{
+			MessageKey: "getNotSpecifiedExpectedControlResultsByInstrumentIdFailed",
+			Message:    "Gathering not specified expected control results failed!",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, convertNotSpecifiedExpectedControlResultListToTOList(notSpecifiedExpectedControlResults))
+}
+
+func (api *api) CreateExpectedControlResults(c *gin.Context) {
+	user, ok := c.Get("User")
+	if !ok {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, middleware.ErrInvalidToken)
+		return
+	}
+	userId := user.(middleware.UserToken).UserID
+
+	instrumentId, err := uuid.Parse(c.Param("instrumentId"))
+	if err != nil {
+		clientError := middleware.ErrInvalidOrMissingRequestParameter
+		clientError.MessageParams = map[string]string{"param": "instrumentId"}
+		c.AbortWithStatusJSON(http.StatusBadRequest, clientError)
+		return
+	}
+
+	var expectedControlResultTos []expectedControlResultTO
+	err = c.ShouldBindJSON(&expectedControlResultTos)
+	if err != nil {
+		log.Error().Err(err).Msg("Create expected control results failed! Can't bind request body!")
+		c.AbortWithStatusJSON(http.StatusBadRequest, middleware.ErrUnableToParseRequestBody)
+		return
+	}
+
+	err = api.instrumentService.CreateExpectedControlResults(c, instrumentId, convertTOsToExpectedControlResults(expectedControlResultTos), userId)
+	if err != nil {
+		if errors.Is(err, ErrAnalyteMappingNotFound) {
+			c.AbortWithStatusJSON(http.StatusNotFound, middleware.ClientError{
+				MessageKey: keyAnalyteNotFoundForExpectedControlResult,
+				Message:    msgAnalyteNotFoundForExpectedControlResult,
+			})
+		} else {
+			parameterizedErrors, ok := err.(ParameterizedErrors)
+			if ok {
+				resp := middleware.ClientError{
+					MessageKey: keyExpectedControlResultValidationError,
+					Message:    msgExpectedControlResultValidationError,
+				}
+				for _, customError := range parameterizedErrors {
+					resp.Errors = append(resp.Errors, middleware.ClientError{
+						MessageKey:    keyInvalidExpectedControlResultValue,
+						MessageParams: customError.Params,
+						Message:       customError.Error(),
+					})
+				}
+				c.AbortWithStatusJSON(http.StatusBadRequest, resp)
+			} else {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, middleware.ClientError{
+					MessageKey: keyExpectedControlResultCreateFailed,
+					Message:    msgExpectedControlResultCreateFailed,
+				})
+			}
+		}
+		return
+	}
+
+	c.Status(http.StatusOK)
+}
+
+func (api *api) UpdateExpectedControlResults(c *gin.Context) {
+	user, ok := c.Get("User")
+	if !ok {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, middleware.ErrInvalidToken)
+		return
+	}
+	userId := user.(middleware.UserToken).UserID
+
+	instrumentId, err := uuid.Parse(c.Param("instrumentId"))
+	if err != nil {
+		clientError := middleware.ErrInvalidOrMissingRequestParameter
+		clientError.MessageParams = map[string]string{"param": "instrumentId"}
+		c.AbortWithStatusJSON(http.StatusBadRequest, clientError)
+		return
+	}
+
+	var expectedControlResultTos []expectedControlResultTO
+	err = c.ShouldBindJSON(&expectedControlResultTos)
+	if err != nil {
+		log.Error().Err(err).Msg("Create expected control results failed! Can't bind request body!")
+		c.AbortWithStatusJSON(http.StatusBadRequest, middleware.ErrUnableToParseRequestBody)
+		return
+	}
+
+	err = api.instrumentService.UpdateExpectedControlResults(c, instrumentId, convertTOsToExpectedControlResults(expectedControlResultTos), userId)
+	if err != nil {
+		if errors.Is(err, ErrAnalyteMappingNotFound) {
+			c.AbortWithStatusJSON(http.StatusNotFound, middleware.ClientError{
+				MessageKey: keyAnalyteNotFoundForExpectedControlResult,
+				Message:    msgAnalyteNotFoundForExpectedControlResult,
+			})
+		} else {
+			parameterizedErrors, ok := err.(ParameterizedErrors)
+			if ok {
+				resp := middleware.ClientError{
+					MessageKey: keyExpectedControlResultValidationError,
+					Message:    msgExpectedControlResultValidationError,
+				}
+				for _, customError := range parameterizedErrors {
+					resp.Errors = append(resp.Errors, middleware.ClientError{
+						MessageKey:    keyInvalidExpectedControlResultValue,
+						MessageParams: customError.Params,
+						Message:       customError.Error(),
+					})
+				}
+				c.AbortWithStatusJSON(http.StatusBadRequest, resp)
+			} else {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, middleware.ClientError{
+					MessageKey: keyExpectedControlResultUpdateFailed,
+					Message:    msgExpectedControlResultUpdateFailed,
+				})
+			}
+		}
+		return
+	}
+
+	c.Status(http.StatusOK)
+}
+
+func (api *api) DeleteExpectedControlResult(c *gin.Context) {
+	user, ok := c.Get("User")
+	if !ok {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, middleware.ErrInvalidToken)
+		return
+	}
+	userId := user.(middleware.UserToken).UserID
+
+	expectedControlResultId, err := uuid.Parse(c.Param("expectedControlResultId"))
+	if err != nil {
+		clientError := middleware.ErrInvalidOrMissingRequestParameter
+		clientError.MessageParams = map[string]string{"param": "expectedControlResultId"}
+		c.AbortWithStatusJSON(http.StatusBadRequest, clientError)
+		return
+	}
+
+	err = api.instrumentService.DeleteExpectedControlResult(c, expectedControlResultId, userId)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, middleware.ClientError{
+			MessageKey: "expectedControlResultDeletionFailed",
+			Message:    "Expected control result deletion failed!",
+		})
 		return
 	}
 
@@ -307,7 +590,10 @@ func (api *api) DeleteInstrument(c *gin.Context) {
 func (api *api) GetSupportedProtocols(c *gin.Context) {
 	supportedInstruments, err := api.instrumentService.GetSupportedProtocols(c)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, "GetSupportedProtocols Error")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, middleware.ClientError{
+			MessageKey: "getSupportedProtocolsFailed",
+			Message:    "Getting supported protocols failed!",
+		})
 		return
 	}
 
@@ -317,7 +603,9 @@ func (api *api) GetSupportedProtocols(c *gin.Context) {
 func (api *api) GetProtocolAbilities(c *gin.Context) {
 	protocolID, err := uuid.Parse(c.Param("protocolVersionId"))
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, "GetProtocolAbilities Error")
+		clientError := middleware.ErrInvalidOrMissingRequestParameter
+		clientError.MessageParams = map[string]string{"param": "protocolVersionId"}
+		c.AbortWithStatusJSON(http.StatusBadRequest, clientError)
 		return
 	}
 
@@ -333,7 +621,9 @@ func (api *api) GetProtocolAbilities(c *gin.Context) {
 func (api *api) GetManufacturerTests(c *gin.Context) {
 	protocolID, err := uuid.Parse(c.Param("protocolVersionId"))
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, "GetProtocolAbilities Error")
+		clientError := middleware.ErrInvalidOrMissingRequestParameter
+		clientError.MessageParams = map[string]string{"param": "protocolVersionId"}
+		c.AbortWithStatusJSON(http.StatusBadRequest, clientError)
 		return
 	}
 
@@ -342,14 +632,19 @@ func (api *api) GetManufacturerTests(c *gin.Context) {
 	if ok {
 		instrumentID, err = uuid.Parse(instrumentIDString)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, "malformed instrument ID")
+			clientError := middleware.ErrInvalidOrMissingRequestParameter
+			clientError.MessageParams = map[string]string{"param": "instrumentId"}
+			c.AbortWithStatusJSON(http.StatusBadRequest, clientError)
 			return
 		}
 	}
 
 	tests, err := api.instrumentService.GetManufacturerTests(c, instrumentID, protocolID)
 	if err != nil {
-		c.AbortWithStatus(http.StatusBadRequest)
+		c.AbortWithStatusJSON(http.StatusInternalServerError, middleware.ClientError{
+			MessageKey: "getManufacturerTestsFailed",
+			Message:    "Getting manufacturer tests failed!",
+		})
 		return
 	}
 
@@ -359,14 +654,16 @@ func (api *api) GetManufacturerTests(c *gin.Context) {
 func (api *api) GetAnalysisRequestsInfo(c *gin.Context) {
 	instrumentID, err := uuid.Parse(c.Param("instrumentId"))
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, err.Error())
+		clientError := middleware.ErrInvalidOrMissingRequestParameter
+		clientError.MessageParams = map[string]string{"param": "instrumentId"}
+		c.AbortWithStatusJSON(http.StatusBadRequest, clientError)
 		return
 	}
 
 	var filter Filter
 	err = c.ShouldBindQuery(&filter)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, "malformed pageable data")
+		c.AbortWithStatusJSON(http.StatusBadRequest, middleware.ErrUnableToParseRequestBody)
 		return
 	}
 
@@ -374,7 +671,10 @@ func (api *api) GetAnalysisRequestsInfo(c *gin.Context) {
 
 	analysisRequestInfoList, totalCount, err := api.analysisService.GetAnalysisRequestsInfo(c, instrumentID, filter)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, err.Error())
+		c.AbortWithStatusJSON(http.StatusInternalServerError, middleware.ClientError{
+			MessageKey: "getAnalysisRequestsInfoFailed",
+			Message:    "Getting analysis requests info failed!",
+		})
 		return
 	}
 
@@ -384,14 +684,16 @@ func (api *api) GetAnalysisRequestsInfo(c *gin.Context) {
 func (api *api) GetAnalysisResultsInfo(c *gin.Context) {
 	instrumentID, err := uuid.Parse(c.Param("instrumentId"))
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, err.Error())
+		clientError := middleware.ErrInvalidOrMissingRequestParameter
+		clientError.MessageParams = map[string]string{"param": "instrumentId"}
+		c.AbortWithStatusJSON(http.StatusBadRequest, clientError)
 		return
 	}
 
 	var filter Filter
 	err = c.ShouldBindQuery(&filter)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, "malformed pageable data")
+		c.AbortWithStatusJSON(http.StatusBadRequest, middleware.ErrUnableToParseRequestBody)
 		return
 	}
 
@@ -399,7 +701,10 @@ func (api *api) GetAnalysisResultsInfo(c *gin.Context) {
 
 	analysisResultInfoList, totalCount, err := api.analysisService.GetAnalysisResultsInfo(c, instrumentID, filter)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, err.Error())
+		c.AbortWithStatusJSON(http.StatusInternalServerError, middleware.ClientError{
+			MessageKey: "getAnalysisResultsInfoFailed",
+			Message:    "Getting analysis results info failed!",
+		})
 		return
 	}
 
@@ -409,14 +714,16 @@ func (api *api) GetAnalysisResultsInfo(c *gin.Context) {
 func (api *api) GetAnalysisBatches(c *gin.Context) {
 	instrumentID, err := uuid.Parse(c.Param("instrumentId"))
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, err.Error())
+		clientError := middleware.ErrInvalidOrMissingRequestParameter
+		clientError.MessageParams = map[string]string{"param": "instrumentId"}
+		c.AbortWithStatusJSON(http.StatusBadRequest, clientError)
 		return
 	}
 
 	var filter Filter
 	err = c.ShouldBindQuery(&filter)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, "malformed pageable data")
+		c.AbortWithStatusJSON(http.StatusBadRequest, middleware.ErrUnableToParseRequestBody)
 		return
 	}
 
@@ -424,7 +731,10 @@ func (api *api) GetAnalysisBatches(c *gin.Context) {
 
 	analysisBatchList, totalCount, err := api.analysisService.GetAnalysisBatches(c, instrumentID, filter)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, err.Error())
+		c.AbortWithStatusJSON(http.StatusInternalServerError, middleware.ClientError{
+			MessageKey: "getAnalysisBatchesFailed",
+			Message:    "Getting analysis batches failed!",
+		})
 		return
 	}
 
@@ -434,13 +744,18 @@ func (api *api) GetAnalysisBatches(c *gin.Context) {
 func (api *api) RetransmitResult(c *gin.Context) {
 	resultID, err := uuid.Parse(c.Param("resultID"))
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, err.Error())
+		clientError := middleware.ErrInvalidOrMissingRequestParameter
+		clientError.MessageParams = map[string]string{"param": "resultID"}
+		c.AbortWithStatusJSON(http.StatusBadRequest, clientError)
 		return
 	}
 
 	err = api.analysisService.RetransmitResult(c, resultID)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, err.Error())
+		c.AbortWithStatusJSON(http.StatusInternalServerError, middleware.ClientError{
+			MessageKey: "retransmitResultFailed",
+			Message:    "Retransmission of results failed!",
+		})
 		return
 	}
 
@@ -451,13 +766,16 @@ func (api *api) RetransmitResultBatches(c *gin.Context) {
 	var to batchRetransmitTO
 	err := c.ShouldBindJSON(&to)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, "invalid batch ids")
+		c.AbortWithStatusJSON(http.StatusBadRequest, middleware.ErrUnableToParseRequestBody)
 		return
 	}
 
 	err = api.analysisService.RetransmitResultBatches(c, to.BatchIDs)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, err.Error())
+		c.AbortWithStatusJSON(http.StatusInternalServerError, middleware.ClientError{
+			MessageKey: "retransmitResultBatchesFailed",
+			Message:    "Retransmission of results batches failed!",
+		})
 		return
 	}
 
@@ -469,19 +787,16 @@ func (api *api) ReprocessInstrumentData(c *gin.Context) {
 	err := c.ShouldBindJSON(&batchIDs)
 	if err != nil {
 		log.Error().Err(err).Msg(MsgCanNotBindRequestBody)
-		c.AbortWithStatusJSON(http.StatusBadRequest, clientError{
-			Message:    MsgCanNotBindRequestBody,
-			MessageKey: keyBadRequest,
-		})
+		c.AbortWithStatusJSON(http.StatusBadRequest, middleware.ErrUnableToParseRequestBody)
 		return
 	}
 
 	if len(batchIDs) > 0 {
 		err = api.instrumentService.ReprocessInstrumentData(c, batchIDs)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, clientError{
-				Message:    MsgFailedToReprocessInstrumentData,
-				MessageKey: keyFailedToReprocessInstrumentData,
+			c.AbortWithStatusJSON(http.StatusInternalServerError, middleware.ClientError{
+				Message:    MsgReprocessInstrumentDataFailed,
+				MessageKey: keyReprocessInstrumentDataFailed,
 			})
 			return
 		}
@@ -495,18 +810,15 @@ func (api *api) ReprocessInstrumentDataBySampleCode(c *gin.Context) {
 	err := c.ShouldBindJSON(&to)
 	if err != nil {
 		log.Error().Err(err).Msg(MsgCanNotBindRequestBody)
-		c.AbortWithStatusJSON(http.StatusBadRequest, clientError{
-			Message:    MsgCanNotBindRequestBody,
-			MessageKey: keyBadRequest,
-		})
+		c.AbortWithStatusJSON(http.StatusBadRequest, middleware.ErrUnableToParseRequestBody)
 		return
 	}
 
 	err = api.instrumentService.ReprocessInstrumentDataBySampleCode(c, to.SampleCode)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, clientError{
-			Message:    MsgFailedToReprocessInstrumentData,
-			MessageKey: keyFailedToReprocessInstrumentData,
+		c.AbortWithStatusJSON(http.StatusInternalServerError, middleware.ClientError{
+			Message:    MsgReprocessInstrumentDataFailed,
+			MessageKey: keyReprocessInstrumentDataFailed,
 		})
 		return
 	}
@@ -517,7 +829,9 @@ func (api *api) ReprocessInstrumentDataBySampleCode(c *gin.Context) {
 func (api *api) GetMessages(c *gin.Context) {
 	instrumentID, err := uuid.Parse(c.Param("instrumentId"))
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, "GetMessages Error")
+		clientError := middleware.ErrInvalidOrMissingRequestParameter
+		clientError.MessageParams = map[string]string{"param": "instrumentId"}
+		c.AbortWithStatusJSON(http.StatusBadRequest, clientError)
 		return
 	}
 
@@ -529,13 +843,18 @@ func (api *api) GetMessages(c *gin.Context) {
 func (api *api) GetEncodings(c *gin.Context) {
 	protocolID, err := uuid.Parse(c.Param("protocolId"))
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, "invalid protocol id")
+		clientError := middleware.ErrInvalidOrMissingRequestParameter
+		clientError.MessageParams = map[string]string{"param": "protocolId"}
+		c.AbortWithStatusJSON(http.StatusBadRequest, clientError)
 		return
 	}
 
 	encodings, err := api.instrumentService.GetEncodings(c, protocolID)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, err.Error())
+		c.AbortWithStatusJSON(http.StatusInternalServerError, middleware.ClientError{
+			MessageKey: "getEncodingsFailed",
+			Message:    "Getting encodings failed!",
+		})
 		return
 	}
 
@@ -690,12 +1009,14 @@ func convertInstrumentSettingTOToInstrumentSetting(settingTO instrumentSettingTO
 
 func convertAnalyteMappingTOToAnalyteMapping(analyteMappingTO analyteMappingTO) AnalyteMapping {
 	model := AnalyteMapping{
-		ID:                analyteMappingTO.ID,
-		InstrumentAnalyte: analyteMappingTO.InstrumentAnalyte,
-		AnalyteID:         analyteMappingTO.AnalyteID,
-		ChannelMappings:   make([]ChannelMapping, len(analyteMappingTO.ChannelMappings)),
-		ResultMappings:    make([]ResultMapping, len(analyteMappingTO.ResultMappings)),
-		ResultType:        analyteMappingTO.ResultType,
+		ID:                       analyteMappingTO.ID,
+		InstrumentAnalyte:        analyteMappingTO.InstrumentAnalyte,
+		AnalyteID:                analyteMappingTO.AnalyteID,
+		ChannelMappings:          make([]ChannelMapping, len(analyteMappingTO.ChannelMappings)),
+		ResultMappings:           make([]ResultMapping, len(analyteMappingTO.ResultMappings)),
+		ResultType:               analyteMappingTO.ResultType,
+		ControlResultRequired:    analyteMappingTO.ControlRequired,
+		ControlInstrumentAnalyte: analyteMappingTO.InstrumentControlAnalyte,
 	}
 
 	for i, channelMapping := range analyteMappingTO.ChannelMappings {
@@ -711,12 +1032,14 @@ func convertAnalyteMappingTOToAnalyteMapping(analyteMappingTO analyteMappingTO) 
 
 func convertAnalyteMappingToAnalyteMappingTO(analyteMapping AnalyteMapping) analyteMappingTO {
 	model := analyteMappingTO{
-		ID:                analyteMapping.ID,
-		InstrumentAnalyte: analyteMapping.InstrumentAnalyte,
-		AnalyteID:         analyteMapping.AnalyteID,
-		ChannelMappings:   make([]channelMappingTO, len(analyteMapping.ChannelMappings)),
-		ResultMappings:    make([]resultMappingTO, len(analyteMapping.ResultMappings)),
-		ResultType:        analyteMapping.ResultType,
+		ID:                       analyteMapping.ID,
+		InstrumentAnalyte:        analyteMapping.InstrumentAnalyte,
+		AnalyteID:                analyteMapping.AnalyteID,
+		ChannelMappings:          make([]channelMappingTO, len(analyteMapping.ChannelMappings)),
+		ResultMappings:           make([]resultMappingTO, len(analyteMapping.ResultMappings)),
+		ResultType:               analyteMapping.ResultType,
+		ControlRequired:          analyteMapping.ControlResultRequired,
+		InstrumentControlAnalyte: analyteMapping.ControlInstrumentAnalyte,
 	}
 
 	for i, channelMapping := range analyteMapping.ChannelMappings {
@@ -1060,6 +1383,67 @@ func convertTOToConditionOperand(to conditionOperandTO) ConditionOperand {
 		ConstantValue: to.ConstantValue,
 		ExtraValueKey: to.ExtraValueKey,
 	}
+}
+
+func convertExpectedControlResultListToTOList(expectedControlResults []ExpectedControlResult) []expectedControlResultTO {
+	tos := make([]expectedControlResultTO, 0)
+	for _, expectedControlResult := range expectedControlResults {
+		tos = append(tos, convertExpectedControlResultToExpectedControlResultTO(expectedControlResult))
+	}
+	return tos
+}
+
+func convertExpectedControlResultToExpectedControlResultTO(expectedControlResult ExpectedControlResult) expectedControlResultTO {
+	return expectedControlResultTO{
+		ID:               expectedControlResult.ID,
+		AnalyteMappingId: expectedControlResult.AnalyteMappingId,
+		SampleCode:       expectedControlResult.SampleCode,
+		Operator:         expectedControlResult.Operator,
+		ExpectedValue:    expectedControlResult.ExpectedValue,
+		ExpectedValue2:   expectedControlResult.ExpectedValue2,
+		CreatedBy:        &expectedControlResult.CreatedBy,
+		CreatedAt:        &expectedControlResult.CreatedAt,
+	}
+}
+
+func convertNotSpecifiedExpectedControlResultListToTOList(notSpecifiedExpectedControlResults []NotSpecifiedExpectedControlResult) []notSpecifiedExpectedControlResultTO {
+	tos := make([]notSpecifiedExpectedControlResultTO, 0)
+	for _, notSpecifiedExpectedControlResult := range notSpecifiedExpectedControlResults {
+		tos = append(tos, notSpecifiedExpectedControlResultTO{
+			AnalyteMappingId: notSpecifiedExpectedControlResult.AnalyteMappingId,
+			SampleCode:       notSpecifiedExpectedControlResult.SampleCode,
+		})
+	}
+	return tos
+}
+
+func convertTOsToExpectedControlResults(expectedControlResultTOs []expectedControlResultTO) []ExpectedControlResult {
+	expectedControlResults := make([]ExpectedControlResult, 0)
+	for i := range expectedControlResultTOs {
+		expectedControlResults = append(expectedControlResults, convertTOToExpectedControlResult(expectedControlResultTOs[i]))
+	}
+	return expectedControlResults
+}
+
+func convertTOToExpectedControlResult(expectedControlResultTO expectedControlResultTO) ExpectedControlResult {
+	expectedControlResult := ExpectedControlResult{
+		ID:               expectedControlResultTO.ID,
+		SampleCode:       expectedControlResultTO.SampleCode,
+		AnalyteMappingId: expectedControlResultTO.AnalyteMappingId,
+		Operator:         expectedControlResultTO.Operator,
+		ExpectedValue:    expectedControlResultTO.ExpectedValue,
+		ExpectedValue2:   expectedControlResultTO.ExpectedValue2,
+	}
+
+	if expectedControlResultTO.CreatedBy != nil {
+		expectedControlResult.CreatedBy = *expectedControlResultTO.CreatedBy
+	}
+
+	if expectedControlResultTO.CreatedAt != nil {
+		expectedControlResult.CreatedAt = *expectedControlResultTO.CreatedAt
+	}
+
+	return expectedControlResult
 }
 
 // Todo ZsN - Improve this

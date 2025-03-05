@@ -108,6 +108,41 @@ func newAPI(engine *gin.Engine, config *config.Configuration, authManager AuthMa
 		}
 	}
 
+	expectedControlResultsGroup := v1Group.Group("/expected-control-results")
+	{
+		expectedControlResultsGroup.GET("/:instrumentId", middleware.RoleProtection([]middleware.UserRole{
+			middleware.Admin,
+			middleware.MedLabSuper,
+			middleware.MedLabHead,
+			middleware.MedLabDoc,
+			middleware.MedLabAssist,
+			middleware.ITSupport}, false, api.config.Authorization), api.GetExpectedControlResultsByInstrumentId)
+		expectedControlResultsGroup.GET("/not-specified/:instrumentId", middleware.RoleProtection([]middleware.UserRole{
+			middleware.Admin,
+			middleware.MedLabSuper,
+			middleware.MedLabHead,
+			middleware.MedLabDoc,
+			middleware.MedLabAssist}, false, api.config.Authorization), api.GetNotSpecifiedExpectedControlResultsByInstrumentId)
+		expectedControlResultsGroup.POST("/:instrumentId", middleware.RoleProtection([]middleware.UserRole{
+			middleware.Admin,
+			middleware.MedLabSuper,
+			middleware.MedLabHead,
+			middleware.MedLabDoc,
+			middleware.MedLabAssist}, false, api.config.Authorization), api.CreateExpectedControlResults)
+		expectedControlResultsGroup.PUT("/:instrumentId", middleware.RoleProtection([]middleware.UserRole{
+			middleware.Admin,
+			middleware.MedLabSuper,
+			middleware.MedLabHead,
+			middleware.MedLabDoc,
+			middleware.MedLabAssist}, false, api.config.Authorization), api.UpdateExpectedControlResults)
+		expectedControlResultsGroup.DELETE("/:expectedControlResultId", middleware.RoleProtection([]middleware.UserRole{
+			middleware.Admin,
+			middleware.MedLabSuper,
+			middleware.MedLabHead,
+			middleware.MedLabDoc,
+			middleware.MedLabAssist}, false, api.config.Authorization), api.DeleteExpectedControlResult)
+	}
+
 	protocolVersions := v1Group.Group("/protocol-versions")
 	{
 		protocolVersions.GET("", api.GetSupportedProtocols)

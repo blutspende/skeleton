@@ -41,10 +41,11 @@ instrumentRunId          uuid.UUID
 resultEdit               bool
 editReason               string
 isInvalid                bool
-channelResults           []ChannelResultTO
-extraValues              []ExtraValueTO
-reagentInfos             []ReagentInfoTO
-images                   []ImageTO
+channelResults           []ChannelResult
+extraValues              []ExtraValue
+reagents                 []Reagent
+controlResults           []ControlResult
+images                   []Image
 warnFlag                 bool
 warnings                 []string
 ```

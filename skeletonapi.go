@@ -8,6 +8,7 @@ import (
 	"github.com/blutspende/skeleton/server"
 	"github.com/gin-gonic/gin"
 	"net/http"
+	"time"
 
 	config2 "github.com/blutspende/skeleton/config"
 	"github.com/blutspende/skeleton/db"
@@ -75,12 +76,17 @@ type SkeletonAPI interface {
 	// SubmitAnalysisResult - Submit result to Skeleton and Cerberus,
 	// By default this function batches the transmissions by collecting them and
 	// use the batch-endpoint of cerberus for performance reasons
-	SubmitAnalysisResult(ctx context.Context, resultData AnalysisResult) error
+	//SubmitAnalysisResult(ctx context.Context, resultData AnalysisResultSet) error
 
 	// SubmitAnalysisResultBatch - Submit result batch to Skeleton and Cerberus,
 	// By default this function batches the transmissions by collecting them and
 	// use the batch-endpoint of cerberus for performance reasons
-	SubmitAnalysisResultBatch(ctx context.Context, resultBatch []AnalysisResult) error
+	SubmitAnalysisResultBatch(ctx context.Context, resultBatch AnalysisResultSet) error
+
+	SubmitControlResults(ctx context.Context, controlResults []StandaloneControlResult) error
+
+	GetAnalysisResultIdsSinceLastControlByReagent(ctx context.Context, reagent Reagent, examinedAt time.Time, analyteMappingId uuid.UUID, instrumentId uuid.UUID) ([]uuid.UUID, error)
+	GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMappingId uuid.UUID, instrumentId uuid.UUID) ([]ControlResult, error)
 
 	// GetInstrument returns all the settings regarding an instrument
 	// contains AnalyteMappings[] and RequestMappings[]
@@ -113,7 +119,7 @@ type SkeletonAPI interface {
 	Start() error
 }
 
-func New(ctx context.Context, serviceName string, requestedExtraValueKeys []string, sqlConn *sqlx.DB, dbSchema string) (SkeletonAPI, error) {
+func New(ctx context.Context, serviceName string, requestedExtraValueKeys []string, reagentManufacturers []string, sqlConn *sqlx.DB, dbSchema string) (SkeletonAPI, error) {
 	config, err := config2.ReadConfiguration()
 	if err != nil {
 		return nil, err
@@ -146,7 +152,7 @@ func New(ctx context.Context, serviceName string, requestedExtraValueKeys []stri
 	api := NewAPI(&config, authManager, analysisService, instrumentService, consoleLogService, consoleLogSSEServer)
 
 	logcom.Init(logcom.Configuration{
-		ServiceName: config.LogComServiceName,
+		ServiceName: serviceName,
 		LogComURL:   config.LogComURL,
 		HeaderProvider: func(ctx context.Context) http.Header {
 			if ginCtx, ok := ctx.(*gin.Context); ok {
@@ -156,5 +162,5 @@ func New(ctx context.Context, serviceName string, requestedExtraValueKeys []stri
 		},
 	})
 
-	return NewSkeleton(ctx, serviceName, requestedExtraValueKeys, sqlConn, dbSchema, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, sortingRuleService, manager, cerberusClient, deaClient, config)
+	return NewSkeleton(ctx, serviceName, requestedExtraValueKeys, reagentManufacturers, sqlConn, dbSchema, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, sortingRuleService, manager, cerberusClient, deaClient, config)
 }

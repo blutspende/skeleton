@@ -2,34 +2,45 @@ package middleware
 
 import "errors"
 
-// TODO: Update new Error Structure
-type HTTPError struct {
+type ClientError struct {
 	MessageKey    string            `json:"messageKey"`
 	MessageParams map[string]string `json:"messageParams"`
 	Message       string            `json:"message"`
-	Errors        []HTTPError       `json:"errors"`
+	Errors        []ClientError     `json:"errors"`
 }
 
 var (
-	InvalidTokenResponse = HTTPError{
-		MessageKey: "40100",
-		Message:    "Invalid Token",
+	InvalidTokenResponse = ClientError{
+		MessageKey: "invalidTokenResponse",
+		Message:    "Invalid Token Response",
 	}
-	ErrOpenIDConfiguration = HTTPError{
+	ErrOpenIDConfiguration = ClientError{
 		MessageKey: "40099",
 		Message:    "OIDC .well-known/configuration could not be retrieved",
 	}
-	TokenExpiredResponse = HTTPError{
-		MessageKey: "40101",
+	TokenExpiredResponse = ClientError{
+		MessageKey: "tokenExpired",
 		Message:    "Token expired",
 	}
-	ErrInvalidToken = HTTPError{
-		MessageKey: "40100",
+	ErrInvalidToken = ClientError{
+		MessageKey: "invalidToken",
 		Message:    "Invalid Token",
 	}
-	ErrNoPrivileges = HTTPError{
-		MessageKey: "40102",
+	ErrNoPrivileges = ClientError{
+		MessageKey: "unauthorized",
 		Message:    "Not authorized",
+	}
+	ErrInvalidRequestBody = ClientError{
+		MessageKey: "invalidRequestBody",
+		Message:    "Invalid request body",
+	}
+	ErrUnableToParseRequestBody = ClientError{
+		MessageKey: "unableToParseRequestBody",
+		Message:    "Unable to parse request body",
+	}
+	ErrInvalidOrMissingRequestParameter = ClientError{
+		MessageKey: "invalidOrMissingRequestParameter",
+		Message:    "Invalid or missing request parameter: {{param}}",
 	}
 )
 

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/blutspende/skeleton/config"
@@ -21,27 +22,35 @@ import (
 )
 
 type skeleton struct {
-	ctx                        context.Context
-	config                     config.Configuration
-	sqlConn                    *sqlx.DB
-	dbSchema                   string
-	migrator                   migrator.SkeletonMigrator
-	api                        GinApi
-	analysisRepository         AnalysisRepository
-	analysisService            AnalysisService
-	instrumentService          InstrumentService
-	consoleLogService          service.ConsoleLogService
-	sortingRuleService         SortingRuleService
-	resultsBuffer              []AnalysisResult
-	resultBatchesChan          chan []AnalysisResult
-	cerberusClient             CerberusClient
-	deaClient                  DeaClientV1
-	manager                    Manager
-	resultTransferFlushTimeout int
-	imageRetrySeconds          int
-	serviceName                string
-	extraValueKeys             []string
+	ctx                                        context.Context
+	config                                     config.Configuration
+	sqlConn                                    *sqlx.DB
+	dbSchema                                   string
+	migrator                                   migrator.SkeletonMigrator
+	api                                        GinApi
+	analysisRepository                         AnalysisRepository
+	analysisService                            AnalysisService
+	instrumentService                          InstrumentService
+	consoleLogService                          service.ConsoleLogService
+	sortingRuleService                         SortingRuleService
+	resultsBuffer                              []AnalysisResult
+	resultBatchesChan                          chan []AnalysisResult
+	controlValidationAnalyteMappingsBuffer     []uuid.UUID
+	controlValidationAnalyteMappingBatchesChan chan []uuid.UUID
+	analysisResultStatusControlIdsBuffer       []uuid.UUID
+	analysisResultStatusControlIdBatchesChan   chan []uuid.UUID
+	cerberusClient                             CerberusClient
+	deaClient                                  DeaClientV1
+	manager                                    Manager
+	resultTransferFlushTimeout                 int
+	imageRetrySeconds                          int
+	serviceName                                string
+	extraValueKeys                             []string
+	reagentManufacturers                       []string
+	unprocessedHandlingWaitGroup               sync.WaitGroup
 }
+
+const waitGroupSize = 3
 
 func (s *skeleton) SetCallbackHandler(eventHandler SkeletonCallbackHandlerV1) {
 	s.manager.SetCallbackHandler(eventHandler)
@@ -110,37 +119,26 @@ func (s *skeleton) SaveAnalysisRequestsInstrumentTransmissions(ctx context.Conte
 	return nil
 }
 
-func (s *skeleton) SubmitAnalysisResult(ctx context.Context, resultData AnalysisResult) error {
-	if resultData.AnalyteMapping.ID == uuid.Nil {
-		return errors.New("analyte mapping ID is missing")
-	}
-	if resultData.Instrument.ID == uuid.Nil {
-		return errors.New("instrument ID is missing")
-	}
+func (s *skeleton) SubmitAnalysisResult(ctx context.Context, resultData AnalysisResultSet) error {
+	s.unprocessedHandlingWaitGroup.Wait()
 
-	if resultData.ResultMode == "" {
-		resultData.ResultMode = resultData.Instrument.ResultMode
-	}
-
-	tx, err := s.analysisRepository.CreateTransaction()
+	savedResultDataList, err := s.analysisService.CreateAnalysisResultsBatch(ctx, resultData)
 	if err != nil {
 		return err
 	}
-	savedResultDataList, err := s.analysisRepository.WithTransaction(tx).CreateAnalysisResultsBatch(ctx, []AnalysisResult{resultData})
-	if err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-	if err = tx.Commit(); err != nil {
-		_ = tx.Rollback()
-		return err
-	}
+
 	savedResultData := savedResultDataList[0]
 
 	go func(analysisResult AnalysisResult) {
 		err := s.saveImages(ctx, &analysisResult)
 		if err != nil {
 			log.Error().Err(err).Str("analysisResultID", analysisResult.ID.String()).Msg("save images of analysis result failed")
+		}
+		for j := range analysisResult.ControlResults {
+			err := s.SaveControlResultImages(ctx, &analysisResult.ControlResults[j])
+			if err != nil {
+				log.Error().Err(err).Str("controlResultID", analysisResult.ControlResults[j].ID.String()).Msg("save images of control result failed")
+			}
 		}
 		analyteRequests, err := s.analysisRepository.GetAnalysisRequestsBySampleCodeAndAnalyteID(ctx, analysisResult.SampleCode, analysisResult.AnalyteMapping.AnalyteID)
 		if err != nil {
@@ -157,30 +155,11 @@ func (s *skeleton) SubmitAnalysisResult(ctx context.Context, resultData Analysis
 	return nil
 }
 
-func (s *skeleton) SubmitAnalysisResultBatch(ctx context.Context, resultBatch []AnalysisResult) error {
-	for i := range resultBatch {
-		if resultBatch[i].AnalyteMapping.ID == uuid.Nil {
-			return errors.New(fmt.Sprintf("analyte mapping ID is missing at index: %d", i))
-		}
-		if resultBatch[i].Instrument.ID == uuid.Nil {
-			return errors.New(fmt.Sprintf("instrument ID is missing at index: %d", i))
-		}
-		if resultBatch[i].ResultMode == "" {
-			resultBatch[i].ResultMode = resultBatch[i].Instrument.ResultMode
-		}
-	}
+func (s *skeleton) SubmitAnalysisResultBatch(ctx context.Context, resultBatch AnalysisResultSet) error {
+	s.unprocessedHandlingWaitGroup.Wait()
 
-	tx, err := s.analysisRepository.CreateTransaction()
+	savedAnalysisResults, err := s.analysisService.CreateAnalysisResultsBatch(ctx, resultBatch)
 	if err != nil {
-		return err
-	}
-	savedAnalysisResults, err := s.analysisRepository.WithTransaction(tx).CreateAnalysisResultsBatch(ctx, resultBatch)
-	if err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-	if err = tx.Commit(); err != nil {
-		_ = tx.Rollback()
 		return err
 	}
 
@@ -190,6 +169,13 @@ func (s *skeleton) SubmitAnalysisResultBatch(ctx context.Context, resultBatch []
 			if err != nil {
 				log.Error().Err(err).Str("analysisResultID", analysisResults[i].ID.String()).Msg("save images of analysis result failed")
 			}
+			for j := range analysisResults[i].ControlResults {
+				err := s.SaveControlResultImages(ctx, &analysisResults[i].ControlResults[j])
+				if err != nil {
+					log.Error().Err(err).Str("controlResultID", analysisResults[i].ControlResults[j].ID.String()).Msg("save images of control result failed")
+				}
+			}
+
 			analyteRequests, err := s.analysisRepository.GetAnalysisRequestsBySampleCodeAndAnalyteID(ctx, analysisResults[i].SampleCode, analysisResults[i].AnalyteMapping.AnalyteID)
 			if err != nil {
 				log.Error().Err(err).Msg("get analysis requests by sample code and analyteID failed after saving results")
@@ -202,6 +188,40 @@ func (s *skeleton) SubmitAnalysisResultBatch(ctx context.Context, resultBatch []
 			}
 		}
 	}(savedAnalysisResults)
+
+	return nil
+}
+
+func (s *skeleton) SubmitControlResults(ctx context.Context, controlResults []StandaloneControlResult) error {
+	s.unprocessedHandlingWaitGroup.Wait()
+
+	var err error
+	var analysisResultIds []uuid.UUID
+	controlResults, analysisResultIds, err = s.analysisService.CreateControlResultBatch(ctx, controlResults)
+	if err != nil {
+		return err
+	}
+
+	go func(analysisResultIDs []uuid.UUID) {
+		analysisResults, err := s.analysisService.GetAnalysisResultsByIDsWithRecalculatedStatus(ctx, analysisResultIDs, true)
+		if err != nil {
+			log.Error().Err(err).Msg("get analysis results by analysisResultIds with recalculated status failed after saving control results")
+			return
+		}
+
+		for i := range analysisResults {
+			analyteRequests, err := s.analysisRepository.GetAnalysisRequestsBySampleCodeAndAnalyteID(ctx, analysisResults[i].SampleCode, analysisResults[i].AnalyteMapping.AnalyteID)
+			if err != nil {
+				log.Error().Err(err).Msg("get analysis requests by sample code and analyteID failed after saving results")
+				return
+			}
+
+			for j := range analyteRequests {
+				analysisResults[i].AnalysisRequest = analyteRequests[j]
+				s.manager.SendResultForProcessing(analysisResults[i])
+			}
+		}
+	}(analysisResultIds)
 
 	return nil
 }
@@ -301,6 +321,69 @@ func (s *skeleton) saveImages(ctx context.Context, resultData *AnalysisResult) e
 		imagePtrs[i].DeaImageID = imageDaos[i].DeaImageID
 	}
 	return nil
+}
+
+func (s *skeleton) SaveControlResultImages(ctx context.Context, controlResult *ControlResult) error {
+	if controlResult == nil {
+		return nil
+	}
+	imageDaos := make([]controlResultImageDAO, 0)
+	for i := range controlResult.ChannelResults {
+		for j := range controlResult.ChannelResults[i].Images {
+			imageDao := controlResultImageDAO{
+				ControlResultId: controlResult.ID,
+				ChannelResultID: uuid.NullUUID{
+					UUID:  controlResult.ChannelResults[i].ID,
+					Valid: true,
+				},
+				Name: controlResult.ChannelResults[i].Images[j].Name,
+			}
+			if controlResult.ChannelResults[i].Images[j].Description != nil && len(*controlResult.ChannelResults[i].Images[j].Description) > 0 {
+				imageDao.Description = sql.NullString{
+					String: *controlResult.ChannelResults[i].Images[j].Description,
+					Valid:  true,
+				}
+			}
+
+			filename := fmt.Sprintf("%s_control_chres_%d_%d.jpg", controlResult.ID.String(), i, j)
+			id, err := s.deaClient.UploadImage(controlResult.ChannelResults[i].Images[j].ImageBytes, filename)
+			if err != nil {
+				imageDao.ImageBytes = controlResult.ChannelResults[i].Images[j].ImageBytes
+				imageDao.UploadError = sql.NullString{
+					String: err.Error(),
+					Valid:  true,
+				}
+				log.Error().
+					Err(err).
+					Str("analysisResultID", controlResult.ID.String()).
+					Str("channelResultID", controlResult.ChannelResults[i].ID.String()).
+					Msg("upload image to dea failed")
+			} else {
+				imageDao.DeaImageID = uuid.NullUUID{
+					UUID:  id,
+					Valid: true,
+				}
+				imageDao.UploadedToDeaAt = sql.NullTime{
+					Time:  time.Now().UTC(),
+					Valid: true,
+				}
+			}
+			imageDaos = append(imageDaos, imageDao)
+		}
+	}
+	_, err := s.analysisRepository.SaveControlResultImages(ctx, imageDaos)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *skeleton) GetAnalysisResultIdsSinceLastControlByReagent(ctx context.Context, reagent Reagent, examinedAt time.Time, analyteMappingId uuid.UUID, instrumentId uuid.UUID) ([]uuid.UUID, error) {
+	return s.analysisRepository.GetAnalysisResultIdsSinceLastControlByReagent(ctx, reagent, examinedAt, analyteMappingId, instrumentId)
+}
+
+func (s *skeleton) GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMappingId uuid.UUID, instrumentId uuid.UUID) ([]ControlResult, error) {
+	return s.analysisRepository.GetLatestControlResultsByReagent(ctx, reagent, resultYieldTime, analyteMappingId, instrumentId)
 }
 
 func (s *skeleton) GetInstrument(ctx context.Context, instrumentID uuid.UUID) (Instrument, error) {
@@ -471,8 +554,17 @@ func (s *skeleton) Start() error {
 	go s.submitAnalysisResultsToCerberus(s.ctx)
 	go s.processStuckImagesToDEA(s.ctx)
 	go s.processStuckImagesToCerberus(s.ctx)
+	go s.validateControlResultsByAnalyteMappings(s.ctx)
+	go s.validateControlResultsByAnalyteMappingBatches(s.ctx)
+	go s.analysisResultStatusRecalculationAndSendForProcessing(s.ctx)
+	go s.analysisResultStatusRecalculationAndSendForProcessingBatches(s.ctx)
+
 	go s.enqueueUnprocessedAnalysisRequests(s.ctx)
 	go s.enqueueUnprocessedAnalysisResults(s.ctx)
+	go s.processUnvalidatedControlResults(s.ctx)
+	go s.validateAnalysisResultStatusAndSend(s.ctx)
+
+	s.unprocessedHandlingWaitGroup.Wait()
 
 	// Todo - use cancellable context what is passed to the routines above too
 	err = s.api.Run()
@@ -487,7 +579,7 @@ func (s *skeleton) Start() error {
 func (s *skeleton) registerDriverToCerberus(ctx context.Context) error {
 	retryCount := 0
 	for {
-		err := s.cerberusClient.RegisterInstrumentDriver(s.serviceName, apiVersion, s.config.APIPort, s.config.EnableTLS, s.extraValueKeys)
+		err := s.cerberusClient.RegisterInstrumentDriver(s.serviceName, apiVersion, s.config.APIPort, s.config.EnableTLS, s.extraValueKeys, s.reagentManufacturers)
 		if err != nil {
 			log.Warn().Err(err).Int("retryCount", retryCount).Msg("register instrument driver to cerberus failed")
 			retryCount++
@@ -522,9 +614,11 @@ func (s *skeleton) enqueueUnprocessedAnalysisRequests(ctx context.Context) {
 	for {
 		requests, err := s.analysisRepository.GetUnprocessedAnalysisRequests(ctx)
 		if err != nil {
-			time.Sleep(5 * time.Minute)
+			time.Sleep(time.Duration(s.config.GetUnprocessedAnalysisRequestRetryMinute) * time.Minute)
 			continue
 		}
+
+		s.unprocessedHandlingWaitGroup.Done()
 
 		for {
 			failed := make([]AnalysisRequest, 0)
@@ -557,7 +651,7 @@ func (s *skeleton) enqueueUnprocessedAnalysisRequests(ctx context.Context) {
 
 			if err != nil {
 				requests = failed
-				time.Sleep(5 * time.Minute)
+				time.Sleep(time.Duration(s.config.UnprocessedAnalysisRequestErrorRetryMinute) * time.Minute)
 				continue
 			}
 
@@ -572,14 +666,21 @@ func (s *skeleton) enqueueUnprocessedAnalysisResults(ctx context.Context) {
 	for {
 		resultIDs, err := s.analysisRepository.GetUnprocessedAnalysisResultIDs(ctx)
 		if err != nil {
-			time.Sleep(5 * time.Minute)
+			time.Sleep(time.Duration(s.config.GetUnprocessedAnalysisResultIDsRetryMinute) * time.Minute)
 			continue
 		}
 
+		s.unprocessedHandlingWaitGroup.Done()
+
 		for {
+			failed := make([]uuid.UUID, 0)
+
 			err = utils.Partition(len(resultIDs), 500, func(low int, high int) error {
-				results, err := s.analysisRepository.GetAnalysisResultsByIDs(ctx, resultIDs[low:high])
+				partition := resultIDs[low:high]
+
+				results, err := s.analysisRepository.GetAnalysisResultsByIDs(ctx, partition)
 				if err != nil {
+					failed = append(failed, partition...)
 					return err
 				}
 
@@ -591,6 +692,9 @@ func (s *skeleton) enqueueUnprocessedAnalysisResults(ctx context.Context) {
 			})
 			if err != nil {
 				log.Error().Err(err).Msg("GetAnalysisResultsByIDs failed")
+				resultIDs = failed
+				time.Sleep(time.Duration(s.config.UnprocessedAnalysisResultErrorRetryMinute) * time.Minute)
+				continue
 			}
 
 			break
@@ -672,6 +776,117 @@ func (s *skeleton) processAnalysisResultBatches(ctx context.Context) {
 			})
 			continue
 		}
+	}
+}
+
+func (s *skeleton) analysisResultStatusRecalculationAndSendForProcessing(ctx context.Context) {
+	s.unprocessedHandlingWaitGroup.Wait()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case result, ok := <-s.manager.GetAnalysisResultStatusRecalculationChan():
+			if !ok {
+				log.Fatal().Msg("recalculating analysis result statuses stopped: results channel closed")
+			}
+			s.analysisResultStatusControlIdsBuffer = append(s.analysisResultStatusControlIdsBuffer, result...)
+			if len(s.analysisResultStatusControlIdsBuffer) >= 500 {
+				s.analysisResultStatusControlIdBatchesChan <- s.analysisResultStatusControlIdsBuffer
+				s.analysisResultStatusControlIdsBuffer = make([]uuid.UUID, 0, 500)
+			}
+		case <-time.After(3 * time.Second):
+			if len(s.analysisResultStatusControlIdsBuffer) > 0 {
+				s.analysisResultStatusControlIdBatchesChan <- s.analysisResultStatusControlIdsBuffer
+				s.analysisResultStatusControlIdsBuffer = make([]uuid.UUID, 0, 500)
+			}
+		}
+	}
+}
+
+func (s *skeleton) analysisResultStatusRecalculationAndSendForProcessingBatches(ctx context.Context) {
+	for {
+		resultsBatch, ok := <-s.analysisResultStatusControlIdBatchesChan
+		if !ok {
+			log.Fatal().Msg("recalculating analysis result status batches stopped: resultBatches channel closed")
+		}
+
+		if len(resultsBatch) < 1 {
+			continue
+		}
+
+		err := s.analysisService.AnalysisResultStatusRecalculationAndSendForProcessingIfFinal(ctx, resultsBatch)
+		if err != nil {
+			time.AfterFunc(30*time.Second, func() {
+				s.analysisResultStatusControlIdBatchesChan <- resultsBatch
+			})
+			continue
+		}
+	}
+}
+
+func (s *skeleton) validateControlResultsByAnalyteMappings(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case result, ok := <-s.manager.GetControlValidationChan():
+			if !ok {
+				log.Fatal().Msg("validating control results stopped: results channel closed")
+			}
+			s.controlValidationAnalyteMappingsBuffer = append(s.controlValidationAnalyteMappingsBuffer, result...)
+			if len(s.controlValidationAnalyteMappingsBuffer) >= 500 {
+				s.controlValidationAnalyteMappingBatchesChan <- s.controlValidationAnalyteMappingsBuffer
+				s.controlValidationAnalyteMappingsBuffer = make([]uuid.UUID, 0, 500)
+			}
+		case <-time.After(3 * time.Second):
+			if len(s.controlValidationAnalyteMappingsBuffer) > 0 {
+				s.controlValidationAnalyteMappingBatchesChan <- s.controlValidationAnalyteMappingsBuffer
+				s.controlValidationAnalyteMappingsBuffer = make([]uuid.UUID, 0, 500)
+			}
+		}
+	}
+}
+
+func (s *skeleton) validateControlResultsByAnalyteMappingBatches(ctx context.Context) {
+	for {
+		resultsBatch, ok := <-s.controlValidationAnalyteMappingBatchesChan
+		if !ok {
+			log.Fatal().Msg("validating control result batches stopped: resultBatches channel closed")
+		}
+
+		if len(resultsBatch) < 1 {
+			continue
+		}
+
+		err := s.analysisService.ValidateAndUpdatingExistingControlResults(ctx, resultsBatch)
+		if err != nil {
+			time.AfterFunc(30*time.Second, func() {
+				s.controlValidationAnalyteMappingBatchesChan <- resultsBatch
+			})
+			continue
+		}
+	}
+}
+
+func (s *skeleton) processUnvalidatedControlResults(ctx context.Context) {
+	for {
+		err := s.analysisService.ValidateAndUpdatingExistingControlResults(ctx, []uuid.UUID{})
+		if err != nil {
+			log.Error().Err(err).Msg("startup process of validating control results failed")
+		}
+		s.unprocessedHandlingWaitGroup.Done()
+		return
+	}
+}
+
+func (s *skeleton) validateAnalysisResultStatusAndSend(ctx context.Context) {
+	for {
+		s.unprocessedHandlingWaitGroup.Wait()
+		err := s.analysisService.AnalysisResultStatusRecalculationAndSendForProcessingIfFinal(ctx, []uuid.UUID{})
+		if err != nil {
+			log.Error().Err(err).Msg("startup process of recalculating analysis result statuses and send FINAL ones for processing")
+		}
+		return
 	}
 }
 
@@ -798,10 +1013,12 @@ func (s *skeleton) submitAnalysisResultsToCerberus(ctx context.Context) {
 					cerberusQueueItem.RetryNotBefore = utcNow.Add(10 * time.Minute)
 				}
 
-				err = s.analysisRepository.UpdateAnalysisResultQueueItemStatus(ctx, cerberusQueueItem)
+				err = s.analysisRepository.UpdateCerberusQueueItemStatus(ctx, cerberusQueueItem)
 				if err != nil {
 					log.Error().Err(err).Msg("Failed to update the status of the cerberus queue item")
 				}
+
+				s.analysisService.SaveCerberusIDsForAnalysisResultBatchItems(ctx, response.AnalysisResultBatchItemInfoList)
 			}
 
 			log.Trace().Int64("elapsedExecutionTime", time.Since(executionStarted).Milliseconds()).
@@ -871,29 +1088,35 @@ func (s *skeleton) processStuckImagesToCerberus(ctx context.Context) {
 	}
 }
 
-func NewSkeleton(ctx context.Context, serviceName string, requestedExtraValueKeys []string, sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api GinApi, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService service.ConsoleLogService, sortingRuleService SortingRuleService, manager Manager, cerberusClient CerberusClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
+func NewSkeleton(ctx context.Context, serviceName string, requestedExtraValueKeys []string, reagentManufacturers []string, sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api GinApi, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService service.ConsoleLogService, sortingRuleService SortingRuleService, manager Manager, cerberusClient CerberusClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
 	skeleton := &skeleton{
-		ctx:                        ctx,
-		serviceName:                serviceName,
-		extraValueKeys:             requestedExtraValueKeys,
-		config:                     config,
-		sqlConn:                    sqlConn,
-		dbSchema:                   dbSchema,
-		migrator:                   migrator,
-		api:                        api,
-		analysisRepository:         analysisRepository,
-		analysisService:            analysisService,
-		instrumentService:          instrumentService,
-		consoleLogService:          consoleLogService,
-		sortingRuleService:         sortingRuleService,
-		manager:                    manager,
-		cerberusClient:             cerberusClient,
-		deaClient:                  deaClient,
-		resultsBuffer:              make([]AnalysisResult, 0, 500),
-		resultBatchesChan:          make(chan []AnalysisResult, 10),
-		resultTransferFlushTimeout: config.ResultTransferFlushTimeout,
-		imageRetrySeconds:          config.ImageRetrySeconds,
+		ctx:                                    ctx,
+		serviceName:                            serviceName,
+		extraValueKeys:                         requestedExtraValueKeys,
+		reagentManufacturers:                   reagentManufacturers,
+		config:                                 config,
+		sqlConn:                                sqlConn,
+		dbSchema:                               dbSchema,
+		migrator:                               migrator,
+		api:                                    api,
+		analysisRepository:                     analysisRepository,
+		analysisService:                        analysisService,
+		instrumentService:                      instrumentService,
+		consoleLogService:                      consoleLogService,
+		manager:                                manager,
+		cerberusClient:                         cerberusClient,
+		deaClient:                              deaClient,
+		resultsBuffer:                          make([]AnalysisResult, 0, 500),
+		resultBatchesChan:                      make(chan []AnalysisResult, 10),
+		controlValidationAnalyteMappingsBuffer: make([]uuid.UUID, 0, 500),
+		controlValidationAnalyteMappingBatchesChan: make(chan []uuid.UUID, 10),
+		analysisResultStatusControlIdsBuffer:       make([]uuid.UUID, 0, 500),
+		analysisResultStatusControlIdBatchesChan:   make(chan []uuid.UUID, 10),
+		resultTransferFlushTimeout:                 config.ResultTransferFlushTimeout,
+		imageRetrySeconds:                          config.ImageRetrySeconds,
 	}
+
+	skeleton.unprocessedHandlingWaitGroup.Add(waitGroupSize)
 
 	err := skeleton.migrateUp(context.Background(), skeleton.sqlConn, skeleton.dbSchema)
 	if err != nil {

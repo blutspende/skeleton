@@ -41,6 +41,12 @@ type Manager interface {
 
 	SendResultForProcessing(analysisResult AnalysisResult)
 	GetResultChan() chan AnalysisResult
+
+	SendAnalyteMappingsToValidateControlResults(analyteMappingIds []uuid.UUID)
+	GetControlValidationChan() chan []uuid.UUID
+
+	SendControlResultIdsToAnalysisResultStatusRecalculation(controlResultIds []uuid.UUID)
+	GetAnalysisResultStatusRecalculationChan() chan []uuid.UUID
 }
 
 type instrumentEvent struct {
@@ -52,6 +58,8 @@ type manager struct {
 	resultsChan                         chan AnalysisResult
 	processableAnalysisRequestBatchChan chan []AnalysisRequest
 	processableAnalysisRequestQueue     *utils.ConcurrentQueue[[]AnalysisRequest]
+	analyteMappingIdBatchChan           chan []uuid.UUID
+	controlResultIdBatchChan            chan []uuid.UUID
 	instrumentEventChan                 chan instrumentEvent
 	instrumentQueueListeners            map[instrumentEventType][]InstrumentQueueListener
 	instrumentQueueListenersMutex       sync.Mutex
@@ -64,6 +72,8 @@ func NewSkeletonManager(ctx context.Context) Manager {
 		resultsChan:                         make(chan AnalysisResult, 500),
 		processableAnalysisRequestBatchChan: make(chan []AnalysisRequest, 0),
 		processableAnalysisRequestQueue:     utils.NewConcurrentQueue[[]AnalysisRequest](ctx),
+		analyteMappingIdBatchChan:           make(chan []uuid.UUID, 10),
+		controlResultIdBatchChan:            make(chan []uuid.UUID, 10),
 		instrumentEventChan:                 make(chan instrumentEvent, 0),
 		instrumentQueueListeners:            make(map[instrumentEventType][]InstrumentQueueListener, 0),
 	}
@@ -122,13 +132,29 @@ func (sm *manager) GetResultChan() chan AnalysisResult {
 	return sm.resultsChan
 }
 
+func (sm *manager) SendAnalyteMappingsToValidateControlResults(analyteMappingIds []uuid.UUID) {
+	sm.analyteMappingIdBatchChan <- analyteMappingIds
+}
+
+func (sm *manager) GetControlValidationChan() chan []uuid.UUID {
+	return sm.analyteMappingIdBatchChan
+}
+
+func (sm *manager) SendControlResultIdsToAnalysisResultStatusRecalculation(controlResultIds []uuid.UUID) {
+	sm.controlResultIdBatchChan <- controlResultIds
+}
+
+func (sm *manager) GetAnalysisResultStatusRecalculationChan() chan []uuid.UUID {
+	return sm.controlResultIdBatchChan
+}
+
 func (sm *manager) listenOnInstruments() {
 	for {
 		select {
 		case instrumentEvent, ok := <-sm.instrumentEventChan:
 			{
 				if !ok {
-					log.Error().Msg("Failed to read from instrument ID channel")
+					log.Error().Msg("Failed to read from instrument CerberusID channel")
 					break
 				}
 				sm.instrumentQueueListenersMutex.Lock()

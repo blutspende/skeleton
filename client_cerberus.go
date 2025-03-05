@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/blutspende/skeleton/middleware"
 	"net/http"
 	"time"
 
@@ -23,7 +24,7 @@ var (
 
 type CerberusClient interface {
 	RegisterInstrument(instrument Instrument) error
-	RegisterInstrumentDriver(name, apiVersion string, apiPort uint16, tlsEnabled bool, extraValueKeys []string) error
+	RegisterInstrumentDriver(name, apiVersion string, apiPort uint16, tlsEnabled bool, extraValueKeys []string, reagentManufacturers []string) error
 	SendAnalysisResultBatch(analysisResults []AnalysisResultTO) (AnalysisResultBatchResponse, error)
 	SendAnalysisResultImageBatch(images []WorkItemResultImageTO) error
 }
@@ -39,11 +40,12 @@ type ciaInstrumentTO struct {
 }
 
 type registerInstrumentDriverTO struct {
-	Name           string   `json:"name" binding:"required"`
-	APIVersion     string   `json:"apiVersion" binding:"required"`
-	APIPort        uint16   `json:"apiPort" binding:"required"`
-	TLSEnabled     bool     `json:"tlsEnabled" default:"false"`
-	ExtraValueKeys []string `json:"extraValueKeys,omitempty"`
+	Name                 string   `json:"name" binding:"required"`
+	APIVersion           string   `json:"apiVersion" binding:"required"`
+	APIPort              uint16   `json:"apiPort" binding:"required"`
+	TLSEnabled           bool     `json:"tlsEnabled" default:"false"`
+	ExtraValueKeys       []string `json:"extraValueKeys,omitempty"`
+	ReagentManufacturers []string `json:"reagentManufacturers"`
 }
 
 type ExtraValueTO struct {
@@ -66,6 +68,7 @@ type ChannelResultTO struct {
 }
 
 type AnalysisResultTO struct {
+	ID                       uuid.UUID         `json:"id"`
 	WorkingItemID            uuid.UUID         `json:"workItemId"`
 	ValidUntil               time.Time         `json:"validUntil"`
 	Status                   string            `json:"status"`
@@ -82,7 +85,8 @@ type AnalysisResultTO struct {
 	IsInvalid                bool              `json:"isInvalid"`
 	ChannelResults           []ChannelResultTO `json:"channelResults"`
 	ExtraValues              []ExtraValueTO    `json:"extraValues"`
-	ReagentInfos             []ReagentInfoTO   `json:"reagentInfos"`
+	Reagents                 []ReagentTO       `json:"reagents"`
+	ControlResults           []ControlResultTO `json:"controlResults"`
 	Images                   []ImageTO         `json:"images"`
 	WarnFlag                 bool              `json:"warnFlag"`
 	Warnings                 []string          `json:"warnings"`
@@ -94,18 +98,34 @@ type ImageTO struct {
 	Description *string   `json:"description,omitempty"`
 }
 
-type ReagentInfoTO struct {
-	SerialNumber            string    `json:"serialNo"`
-	Name                    string    `json:"name"`
-	Code                    string    `json:"code"`
-	LotNo                   string    `json:"lotNo"`
-	ShelfLife               time.Time `json:"shelfLife"`
-	ExpiryDateTime          time.Time `json:"expiryDateTime"`
-	ManufacturerName        string    `json:"manufacturer"`
-	ReagentManufacturerDate time.Time `json:"reagentManufacturerDate"`
-	ReagentType             string    `json:"reagentType"`
-	UseUntil                time.Time `json:"useUntil"`
-	DateCreated             time.Time `json:"dateCreated"`
+type ReagentTO struct {
+	ID             uuid.UUID         `json:"id"`
+	Manufacturer   string            `json:"manufacturer"`
+	Name           string            `json:"name"`
+	SerialNo       string            `json:"serialNo"`
+	LotNo          string            `json:"lotNo"`
+	Type           ReagentType       `json:"type"`
+	ControlResults []ControlResultTO `json:"controlResults"`
+}
+
+type ControlResultTO struct {
+	ID                         uuid.UUID         `json:"id"`
+	InstrumentID               uuid.UUID         `json:"instrumentID"`
+	SampleCode                 string            `json:"sampleCode"`
+	AnalyteID                  uuid.UUID         `json:"analyteID"`
+	IsValid                    bool              `json:"isValid"`
+	IsComparedToExpectedResult bool              `json:"isComparedToExpectedResult"`
+	Result                     string            `json:"result"`
+	ExaminedAt                 time.Time         `json:"examinedAt"`
+	ChannelResults             []ChannelResultTO `json:"channelResults"`
+	ExtraValues                []ExtraValueTO    `json:"extraValues"`
+	Warnings                   []string          `json:"warnings"`
+}
+
+type StandaloneControlResultTO struct {
+	ControlResultTO
+	Reagents  []ReagentTO `json:"reagents"`
+	ResultIDs []uuid.UUID `json:"resultIds"`
 }
 
 type WorkItemResultImageTO struct {
@@ -144,7 +164,7 @@ func (c *cerberusClient) RegisterInstrument(instrument Instrument) error {
 	}
 
 	if resp.StatusCode() != http.StatusNoContent {
-		errReps := clientError{}
+		errReps := middleware.ClientError{}
 		err = json.Unmarshal(resp.Body(), &errReps)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to unmarshal error of response")
@@ -156,15 +176,16 @@ func (c *cerberusClient) RegisterInstrument(instrument Instrument) error {
 	return nil
 }
 
-func (c *cerberusClient) RegisterInstrumentDriver(name, apiVersion string, apiPort uint16, tlsEnabled bool, extraValueKeys []string) error {
+func (c *cerberusClient) RegisterInstrumentDriver(name, apiVersion string, apiPort uint16, tlsEnabled bool, extraValueKeys []string, reagentManufacturers []string) error {
 	resp, err := c.client.R().
 		SetHeader("Content-Type", "application/json").
 		SetBody(registerInstrumentDriverTO{
-			Name:           name,
-			APIVersion:     apiVersion,
-			APIPort:        apiPort,
-			TLSEnabled:     tlsEnabled,
-			ExtraValueKeys: extraValueKeys,
+			Name:                 name,
+			APIVersion:           apiVersion,
+			APIPort:              apiPort,
+			TLSEnabled:           tlsEnabled,
+			ExtraValueKeys:       extraValueKeys,
+			ReagentManufacturers: reagentManufacturers,
 		}).
 		Post(c.cerberusUrl + "/v1/instrument-drivers")
 
@@ -174,7 +195,7 @@ func (c *cerberusClient) RegisterInstrumentDriver(name, apiVersion string, apiPo
 	}
 
 	if resp.IsError() {
-		errReps := clientError{}
+		errReps := middleware.ClientError{}
 		err = json.Unmarshal(resp.Body(), &errReps)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to unmarshal error of response")
@@ -255,7 +276,7 @@ func (c *cerberusClient) SendAnalysisResultBatch(analysisResults []AnalysisResul
 
 		return response, nil
 	case resp.StatusCode() == http.StatusInternalServerError:
-		errReps := clientError{}
+		errReps := middleware.ClientError{}
 		err = json.Unmarshal(resp.Body(), &errReps)
 		if err != nil {
 			err = fmt.Errorf("can not unmarshal error of response (%w)", err)

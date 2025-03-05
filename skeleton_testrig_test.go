@@ -25,12 +25,15 @@ func TestSubmitResultCanBeQueried(t *testing.T) {
 		ID:     uuid.New(),
 		Result: "pos",
 	}
-	err := rig.SubmitAnalysisResult(context.Background(), ar)
+	err := rig.SubmitAnalysisResult(context.Background(), AnalysisResultSet{
+		Results: []AnalysisResult{ar},
+	})
 	assert.Nil(t, err)
 
 	assert.Equal(t, 1, len(rig.StoredAnalysisResults))
-	assert.Equal(t, ar.ID, rig.StoredAnalysisResults[0].ID)
-	assert.Equal(t, ar.Result, rig.StoredAnalysisResults[0].Result)
+	assert.Equal(t, 1, len(rig.StoredAnalysisResults[0].Results))
+	assert.Equal(t, ar.ID, rig.StoredAnalysisResults[0].Results[0].ID)
+	assert.Equal(t, ar.Result, rig.StoredAnalysisResults[0].Results[0].Result)
 
 	rig.ClearStoredAnalysisResults()
 }

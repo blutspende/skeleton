@@ -2,6 +2,7 @@ package skeleton
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -12,16 +13,19 @@ import (
 type SkeletonTestRig struct {
 	eventHandler SkeletonCallbackHandlerV1
 
-	storedInstrumentsMap       map[string]Instrument
-	StoredAnalysisResults      []AnalysisResult
-	AnalysisRequests           []*AnalysisRequest
-	AnalysisRequestExtraValues map[string]string
+	storedInstrumentsMap              map[string]Instrument
+	StoredAnalysisResults             []AnalysisResultSet
+	ControlResults                    map[string][]ControlResult
+	StoredStandaloneControlResultSets []StandaloneControlResult
+	AnalysisRequests                  []*AnalysisRequest
+	AnalysisRequestExtraValues        map[string]string
 }
 
 func NewTestRig() *SkeletonTestRig {
 	return &SkeletonTestRig{
 		storedInstrumentsMap:       make(map[string]Instrument),
-		StoredAnalysisResults:      []AnalysisResult{},
+		StoredAnalysisResults:      []AnalysisResultSet{},
+		ControlResults:             make(map[string][]ControlResult),
 		AnalysisRequests:           []*AnalysisRequest{},
 		AnalysisRequestExtraValues: make(map[string]string),
 	}
@@ -74,14 +78,27 @@ func (sr *SkeletonTestRig) SaveAnalysisRequestsInstrumentTransmissions(ctx conte
 	return nil
 }
 
-func (sr *SkeletonTestRig) SubmitAnalysisResult(ctx context.Context, resultData AnalysisResult) error {
+func (sr *SkeletonTestRig) SubmitAnalysisResult(ctx context.Context, resultData AnalysisResultSet) error {
 	sr.StoredAnalysisResults = append(sr.StoredAnalysisResults, resultData)
 	return nil
 }
 
-func (sr *SkeletonTestRig) SubmitAnalysisResultBatch(ctx context.Context, resultBatch []AnalysisResult) error {
-	sr.StoredAnalysisResults = append(sr.StoredAnalysisResults, resultBatch...)
+func (sr *SkeletonTestRig) SubmitAnalysisResultBatch(ctx context.Context, resultBatch AnalysisResultSet) error {
+	sr.StoredAnalysisResults = append(sr.StoredAnalysisResults, resultBatch)
 	return nil
+}
+
+func (sr *SkeletonTestRig) SubmitControlResults(ctx context.Context, controlResults []StandaloneControlResult) error {
+	sr.StoredStandaloneControlResultSets = append(sr.StoredStandaloneControlResultSets, controlResults...)
+	return nil
+}
+
+func (sr *SkeletonTestRig) GetAnalysisResultIdsSinceLastControlByReagent(ctx context.Context, reagent Reagent, examinedAt time.Time, analyteMappingId uuid.UUID, instrumentId uuid.UUID) ([]uuid.UUID, error) {
+	return make([]uuid.UUID, 0), nil
+}
+
+func (sr *SkeletonTestRig) GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMappingId uuid.UUID, instrumentId uuid.UUID) ([]ControlResult, error) {
+	return sr.ControlResults[fmt.Sprintf("%s%s%s", reagent.Manufacturer, reagent.LotNo, reagent.SerialNumber)], nil
 }
 
 func (sr *SkeletonTestRig) GetInstrument(ctx context.Context, instrumentID uuid.UUID) (Instrument, error) {
@@ -127,7 +144,7 @@ func (sr *SkeletonTestRig) Start() error {
 // ---------------------------------------------------------------------------------- Additonal Testing Functionality
 // Testfunktion: Clear the stored Analysis Results
 func (sr *SkeletonTestRig) ClearStoredAnalysisResults() {
-	sr.StoredAnalysisResults = []AnalysisResult{}
+	sr.StoredAnalysisResults = []AnalysisResultSet{}
 }
 
 // Testfunktion: Create an Analysis Request for a SampleCode and analyte id
