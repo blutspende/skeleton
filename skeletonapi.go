@@ -152,7 +152,7 @@ func New(ctx context.Context, serviceName string, requestedExtraValueKeys []stri
 	api := NewAPI(&config, authManager, analysisService, instrumentService, consoleLogService, consoleLogSSEServer)
 
 	logcom.Init(logcom.Configuration{
-		ServiceName: config.LogComServiceName,
+		ServiceName: serviceName,
 		LogComURL:   config.LogComURL,
 		HeaderProvider: func(ctx context.Context) http.Header {
 			if ginCtx, ok := ctx.(*gin.Context); ok {

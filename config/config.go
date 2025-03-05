@@ -46,7 +46,6 @@ type Configuration struct {
 	AnalysisRequestsChannelBufferSize          int           `envconfig:"ANALYSIS_REQUESTS_CHANNEL_BUFFER_SIZE" default:"1024"`
 	AnalysisResultsChannelBufferSize           int           `envconfig:"ANALYSIS_RESULTS_CHANNEL_BUFFER_SIZE" default:"1024"`
 	LogComURL                                  string        `envconfig:"LOG_COM_URL" required:"true" default:"http://logcom"`
-	LogComServiceName                          string        `envconfig:"LOG_COM_SERVICE_NAME" required:"true"`
 	AnalysisRequestWorkerPoolSize              int           `envconfig:"ANALYSIS_REQUEST_WORKER_POOL_SIZE" default:"3"`
 	InstrumentDriverRegistrationTimeoutSeconds int           `envconfig:"INSTRUMENT_DRIVER_REGISTRATION_RETRY_TIMEOUT" default:"10"`
 	InstrumentDriverRegistrationMaxRetry       int           `envconfig:"INSTRUMENT_DRIVER_REGISTRATION_MAX_RETRY" default:"20"`
