@@ -149,6 +149,7 @@ func convertInstrumentTOToInstrument(instrumentTO instrumentTO) Instrument {
 		ResultMode:         instrumentTO.ResultMode,
 		CaptureResults:     instrumentTO.CaptureResults,
 		CaptureDiagnostics: instrumentTO.CaptureDiagnostics,
+		Status:             instrumentTO.Status,
 		ReplyToQuery:       instrumentTO.ReplyToQuery,
 		FileEncoding:       instrumentTO.FileEncoding,
 		Timezone:           instrumentTO.Timezone,
