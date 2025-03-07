@@ -141,11 +141,13 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 	}()
 
 	time.Sleep(1 * time.Second)
-
+	err := skeletonInstance.SubmitAnalysisResultBatch(context.TODO(), AnalysisResultSet{
+		Results: analysisResultsWithoutAnalysisRequestsTest_analysisResults,
+	})
 	time.Sleep(5 * time.Second)
 
 	var resultCount int
-	err := sqlConn.QueryRowx(fmt.Sprintf(`SELECT COUNT(*) FROM %s.sk_analysis_results;`, schemaName)).Scan(&resultCount)
+	err = sqlConn.QueryRowx(fmt.Sprintf(`SELECT COUNT(*) FROM %s.sk_analysis_results;`, schemaName)).Scan(&resultCount)
 	assert.Nil(t, err)
 	assert.Equal(t, 2, resultCount)
 
@@ -558,8 +560,8 @@ func TestSubmitAnalysisResultWithoutDEARawMessageID(t *testing.T) {
 	err = skeletonInstance.SubmitAnalysisResultBatch(context.TODO(), AnalysisResultSet{
 		Results: analysisResults,
 	})
-	assert.Nil(t, err)
-	assert.Equal(t, err.Error(), "DEA raw message ID is missing")
+	assert.NotNil(t, err)
+	assert.Equal(t, "DEA raw message ID is missing at index: 0", err.Error())
 }
 
 func TestRegisterProtocol(t *testing.T) {

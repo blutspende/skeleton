@@ -326,6 +326,7 @@ func TestUpdateInstrument(t *testing.T) {
 	assert.Equal(t, protocolID, instrument.ProtocolID)
 
 	analyteID1 := uuid.New()
+	analyteMappingID1 := uuid.New()
 	channelID1 := uuid.New()
 
 	err = instrumentService.UpdateInstrument(ctx, Instrument{
@@ -347,6 +348,7 @@ func TestUpdateInstrument(t *testing.T) {
 		ClientPort:         &clientPort,
 		AnalyteMappings: []AnalyteMapping{
 			{
+				ID:                analyteMappingID1,
 				InstrumentAnalyte: "TESTANALYTE",
 				AnalyteID:         analyteID1,
 				ChannelMappings: []ChannelMapping{
@@ -433,6 +435,7 @@ func TestUpdateInstrument(t *testing.T) {
 		ClientPort:         &clientPort,
 		AnalyteMappings: []AnalyteMapping{
 			{
+				ID:                analyteMappingID1,
 				InstrumentAnalyte: "TESTANALYTE",
 				AnalyteID:         analyteID1,
 				ChannelMappings: []ChannelMapping{
@@ -460,6 +463,7 @@ func TestUpdateInstrument(t *testing.T) {
 				ResultType: "pein",
 			},
 			{
+				ID:                uuid.New(),
 				InstrumentAnalyte: "TESTANALYTE2",
 				AnalyteID:         analyteID2,
 				ChannelMappings: []ChannelMapping{
@@ -1452,7 +1456,7 @@ func (r *instrumentRepositoryMock) DeleteProtocolSettings(ctx context.Context, p
 func (r *instrumentRepositoryMock) UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error {
 	return nil
 }
-func (r *instrumentRepositoryMock) CreateAnalyteMappings(ctx context.Context, analyteMappings []AnalyteMapping, instrumentID uuid.UUID) ([]uuid.UUID, error) {
+func (r *instrumentRepositoryMock) UpsertAnalyteMappings(ctx context.Context, analyteMappings []AnalyteMapping, instrumentID uuid.UUID) ([]uuid.UUID, error) {
 	return make([]uuid.UUID, 0), nil
 }
 func (r *instrumentRepositoryMock) GetAnalyteMappings(ctx context.Context, instrumentIDs []uuid.UUID) (map[uuid.UUID][]AnalyteMapping, error) {
@@ -1467,7 +1471,7 @@ func (r *instrumentRepositoryMock) UpdateAnalyteMapping(ctx context.Context, ana
 func (r *instrumentRepositoryMock) DeleteAnalyteMappings(ctx context.Context, ids []uuid.UUID) error {
 	return nil
 }
-func (r *instrumentRepositoryMock) CreateChannelMappings(ctx context.Context, channelMappings []ChannelMapping, analyteMappingID uuid.UUID) ([]uuid.UUID, error) {
+func (r *instrumentRepositoryMock) UpsertChannelMappings(ctx context.Context, channelMappings []ChannelMapping, analyteMappingID uuid.UUID) ([]uuid.UUID, error) {
 	return make([]uuid.UUID, 0), nil
 }
 func (r *instrumentRepositoryMock) GetChannelMappings(ctx context.Context, analyteMappingIDs []uuid.UUID) (map[uuid.UUID][]ChannelMapping, error) {
@@ -1479,7 +1483,7 @@ func (r *instrumentRepositoryMock) UpdateChannelMapping(ctx context.Context, cha
 func (r *instrumentRepositoryMock) DeleteChannelMappings(ctx context.Context, ids []uuid.UUID) error {
 	return nil
 }
-func (r *instrumentRepositoryMock) CreateResultMappings(ctx context.Context, resultMappings []ResultMapping, analyteMappingID uuid.UUID) ([]uuid.UUID, error) {
+func (r *instrumentRepositoryMock) UpsertResultMappings(ctx context.Context, resultMappings []ResultMapping, analyteMappingID uuid.UUID) ([]uuid.UUID, error) {
 	return make([]uuid.UUID, 0), nil
 }
 func (r *instrumentRepositoryMock) GetResultMappings(ctx context.Context, analyteMappingIDs []uuid.UUID) (map[uuid.UUID][]ResultMapping, error) {

@@ -136,9 +136,6 @@ func generateRawMessageFileName(serviceName string, ts time.Time) string {
 }
 
 func (s *skeleton) SubmitAnalysisResult(ctx context.Context, resultData AnalysisResultSet) error {
-	if resultData.DEARawMessageID == uuid.Nil {
-		return errors.New("DEA raw message ID is missing")
-	}
 	s.unprocessedHandlingWaitGroup.Wait()
 
 	savedResultDataList, err := s.analysisService.CreateAnalysisResultsBatch(ctx, resultData)
@@ -1295,12 +1292,13 @@ func (s *skeleton) startAnalysisRequestRevocationReexamineJob(ctx context.Contex
 
 func NewSkeleton(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, reagentManufacturers []string, sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService service.ConsoleLogService, manager Manager, cerberusClient CerberusClient, longPollClient LongPollClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
 	skeleton := &skeleton{
-		ctx:                  ctx,
-		serviceName:          serviceName,
-		displayName:          displayName,
-		extraValueKeys:       requestedExtraValueKeys,
-		encodings:            encodings,
-		reagentManufacturers: reagentManufacturers, config: config,
+		ctx:                                    ctx,
+		serviceName:                            serviceName,
+		displayName:                            displayName,
+		extraValueKeys:                         requestedExtraValueKeys,
+		encodings:                              encodings,
+		reagentManufacturers:                   reagentManufacturers,
+		config:                                 config,
 		sqlConn:                                sqlConn,
 		dbSchema:                               dbSchema,
 		migrator:                               migrator,

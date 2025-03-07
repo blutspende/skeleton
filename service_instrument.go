@@ -90,18 +90,18 @@ func (s *instrumentService) CreateInstrument(ctx context.Context, instrument Ins
 		}
 	}
 
-	analyteMappingIDs, err := s.instrumentRepository.WithTransaction(transaction).CreateAnalyteMappings(ctx, instrument.AnalyteMappings, id)
+	analyteMappingIDs, err := s.instrumentRepository.WithTransaction(transaction).UpsertAnalyteMappings(ctx, instrument.AnalyteMappings, id)
 	if err != nil {
 		_ = transaction.Rollback()
 		return uuid.Nil, err
 	}
 	for i, analyteMappingID := range analyteMappingIDs {
-		_, err = s.instrumentRepository.WithTransaction(transaction).CreateChannelMappings(ctx, instrument.AnalyteMappings[i].ChannelMappings, analyteMappingID)
+		_, err = s.instrumentRepository.WithTransaction(transaction).UpsertChannelMappings(ctx, instrument.AnalyteMappings[i].ChannelMappings, analyteMappingID)
 		if err != nil {
 			_ = transaction.Rollback()
 			return uuid.Nil, err
 		}
-		_, err = s.instrumentRepository.WithTransaction(transaction).CreateResultMappings(ctx, instrument.AnalyteMappings[i].ResultMappings, analyteMappingID)
+		_, err = s.instrumentRepository.WithTransaction(transaction).UpsertResultMappings(ctx, instrument.AnalyteMappings[i].ResultMappings, analyteMappingID)
 		if err != nil {
 			_ = transaction.Rollback()
 			return uuid.Nil, err
@@ -649,65 +649,18 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 		return err
 	}
 
-	newAnalyteMappings := make([]AnalyteMapping, 0)
-	for _, analyteMapping := range instrument.AnalyteMappings {
-		if analyteMapping.ID == uuid.Nil {
-			newAnalyteMappings = append(newAnalyteMappings, analyteMapping)
-		} else {
-			err = s.instrumentRepository.WithTransaction(tx).UpdateAnalyteMapping(ctx, analyteMapping)
-			if err != nil {
-				_ = tx.Rollback()
-				return err
-			}
-			newChannelMappings := make([]ChannelMapping, 0)
-			for _, channelMapping := range analyteMapping.ChannelMappings {
-				if channelMapping.ID == uuid.Nil {
-					newChannelMappings = append(newChannelMappings, channelMapping)
-				} else {
-					err = s.instrumentRepository.WithTransaction(tx).UpdateChannelMapping(ctx, channelMapping)
-					if err != nil {
-						_ = tx.Rollback()
-						return err
-					}
-				}
-			}
-			_, err = s.instrumentRepository.WithTransaction(tx).CreateChannelMappings(ctx, newChannelMappings, analyteMapping.ID)
-			if err != nil {
-				_ = tx.Rollback()
-				return err
-			}
-
-			newResultMappings := make([]ResultMapping, 0)
-			for _, resultMapping := range analyteMapping.ResultMappings {
-				if resultMapping.ID == uuid.Nil {
-					newResultMappings = append(newResultMappings, resultMapping)
-				} else {
-					err = s.instrumentRepository.WithTransaction(tx).UpdateResultMapping(ctx, resultMapping)
-					if err != nil {
-						_ = tx.Rollback()
-						return err
-					}
-				}
-			}
-			_, err = s.instrumentRepository.WithTransaction(tx).CreateResultMappings(ctx, newResultMappings, analyteMapping.ID)
-			if err != nil {
-				_ = tx.Rollback()
-				return err
-			}
-		}
-	}
-	analyteMappingIDs, err := s.instrumentRepository.WithTransaction(tx).CreateAnalyteMappings(ctx, newAnalyteMappings, instrument.ID)
+	_, err = s.instrumentRepository.WithTransaction(tx).UpsertAnalyteMappings(ctx, instrument.AnalyteMappings, instrument.ID)
 	if err != nil {
 		_ = tx.Rollback()
 		return err
 	}
-	for i, analyteMappingID := range analyteMappingIDs {
-		_, err = s.instrumentRepository.WithTransaction(tx).CreateChannelMappings(ctx, newAnalyteMappings[i].ChannelMappings, analyteMappingID)
+	for _, analyteMapping := range instrument.AnalyteMappings {
+		_, err = s.instrumentRepository.WithTransaction(tx).UpsertChannelMappings(ctx, analyteMapping.ChannelMappings, analyteMapping.ID)
 		if err != nil {
 			_ = tx.Rollback()
 			return err
 		}
-		_, err = s.instrumentRepository.WithTransaction(tx).CreateResultMappings(ctx, newAnalyteMappings[i].ResultMappings, analyteMappingID)
+		_, err = s.instrumentRepository.WithTransaction(tx).UpsertResultMappings(ctx, analyteMapping.ResultMappings, analyteMapping.ID)
 		if err != nil {
 			_ = tx.Rollback()
 			return err

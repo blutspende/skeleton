@@ -39,12 +39,14 @@ type instrumentTO struct {
 }
 
 type analyteMappingTO struct {
-	ID                uuid.UUID          `json:"id"`
-	InstrumentAnalyte string             `json:"instrumentAnalyte"`
-	AnalyteID         uuid.UUID          `json:"analyteId"`
-	ChannelMappings   []channelMappingTO `json:"channelMappings"`
-	ResultMappings    []resultMappingTO  `json:"resultMappings"`
-	ResultType        ResultType         `json:"resultType"`
+	ID                       uuid.UUID          `json:"id"`
+	InstrumentAnalyte        string             `json:"instrumentAnalyte"`
+	AnalyteID                uuid.UUID          `json:"analyteId"`
+	ChannelMappings          []channelMappingTO `json:"channelMappings"`
+	ResultMappings           []resultMappingTO  `json:"resultMappings"`
+	ResultType               ResultType         `json:"resultType"`
+	ControlRequired          bool               `json:"controlRequired"`
+	InstrumentControlAnalyte *string            `json:"instrumentControlAnalyte"`
 }
 
 type requestMappingTO struct {
@@ -149,6 +151,7 @@ func convertInstrumentTOToInstrument(instrumentTO instrumentTO) Instrument {
 		ResultMode:         instrumentTO.ResultMode,
 		CaptureResults:     instrumentTO.CaptureResults,
 		CaptureDiagnostics: instrumentTO.CaptureDiagnostics,
+		Status:             instrumentTO.Status,
 		ReplyToQuery:       instrumentTO.ReplyToQuery,
 		FileEncoding:       instrumentTO.FileEncoding,
 		Timezone:           instrumentTO.Timezone,
@@ -210,12 +213,14 @@ func convertInstrumentSettingTOToInstrumentSetting(settingTO instrumentSettingTO
 
 func convertAnalyteMappingTOToAnalyteMapping(analyteMappingTO analyteMappingTO) AnalyteMapping {
 	model := AnalyteMapping{
-		ID:                analyteMappingTO.ID,
-		InstrumentAnalyte: analyteMappingTO.InstrumentAnalyte,
-		AnalyteID:         analyteMappingTO.AnalyteID,
-		ChannelMappings:   make([]ChannelMapping, len(analyteMappingTO.ChannelMappings)),
-		ResultMappings:    make([]ResultMapping, len(analyteMappingTO.ResultMappings)),
-		ResultType:        analyteMappingTO.ResultType,
+		ID:                       analyteMappingTO.ID,
+		InstrumentAnalyte:        analyteMappingTO.InstrumentAnalyte,
+		AnalyteID:                analyteMappingTO.AnalyteID,
+		ChannelMappings:          make([]ChannelMapping, len(analyteMappingTO.ChannelMappings)),
+		ResultMappings:           make([]ResultMapping, len(analyteMappingTO.ResultMappings)),
+		ResultType:               analyteMappingTO.ResultType,
+		ControlResultRequired:    analyteMappingTO.ControlRequired,
+		ControlInstrumentAnalyte: analyteMappingTO.InstrumentControlAnalyte,
 	}
 
 	for i, channelMapping := range analyteMappingTO.ChannelMappings {

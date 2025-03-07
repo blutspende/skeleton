@@ -2,6 +2,7 @@ package skeleton
 
 import (
 	"context"
+	"github.com/blutspende/skeleton/db"
 	"github.com/blutspende/skeleton/utils"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -1379,4 +1380,8 @@ func (r *extendedMockAnalysisRepo) MarkReagentControlResultRelationsAsProcessed(
 
 func (r *extendedMockAnalysisRepo) MarkAnalysisResultControlResultRelationsAsProcessed(ctx context.Context, controlResultID uuid.UUID, analysisResultIDs []uuid.UUID) error {
 	return nil
+}
+
+func (r *extendedMockAnalysisRepo) WithTransaction(tx db.DbConnector) AnalysisRepository {
+	return r
 }
