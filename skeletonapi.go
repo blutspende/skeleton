@@ -152,5 +152,5 @@ func New(ctx context.Context, serviceName, displayName string, requestedExtraVal
 
 	longpollClient := NewLongPollClient(longPollingApiRestyClient, serviceName, config.CerberusURL, config.LongPollingAPIClientTimeoutSeconds)
 
-	return NewSkeleton(ctx, serviceName, displayName, requestedExtraValueKeys, reagentManufacturers, encodings, sqlConn, dbSchema, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, manager, cerberusClient, longpollClient, deaClient, config)
+	return NewSkeleton(ctx, serviceName, displayName, requestedExtraValueKeys, encodings, reagentManufacturers, sqlConn, dbSchema, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, manager, cerberusClient, longpollClient, deaClient, config)
 }

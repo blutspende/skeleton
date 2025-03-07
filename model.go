@@ -247,10 +247,9 @@ const (
 )
 
 type AnalysisResultSet struct {
-	Results         []AnalysisResult
-	Reagents        []Reagent
-	ControlResults  []ControlResult
-	DEARawMessageID uuid.UUID
+	Results        []AnalysisResult
+	Reagents       []Reagent
+	ControlResults []ControlResult
 }
 
 // AnalysisResult - The final result on 'per-workitem' basis to return the result to cerberus.

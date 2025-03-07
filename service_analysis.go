@@ -226,6 +226,9 @@ func (as *analysisService) CreateAnalysisResultsBatch(ctx context.Context, analy
 func (as *analysisService) createAnalysisResultsBatch(ctx context.Context, tx db.DbConnector, analysisResultSet AnalysisResultSet) (AnalysisResultSet, error) {
 	var err error
 	for i := range analysisResultSet.Results {
+		if analysisResultSet.Results[i].DEARawMessageID == uuid.Nil {
+			return analysisResultSet, errors.New(fmt.Sprintf("DEA raw message ID is missing at index: %d", i))
+		}
 		if analysisResultSet.Results[i].AnalyteMapping.ID == uuid.Nil {
 			return analysisResultSet, errors.New(fmt.Sprintf("analyte mapping CerberusID is missing at index: %d", i))
 		}

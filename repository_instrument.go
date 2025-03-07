@@ -37,7 +37,7 @@ const (
 	msgGetManufacturerTestsFailed                  = "get manufacturer tests failed"
 	msgUpsertProtocolAbilitiesFailed               = "upsert protocol abilities failed"
 	msgUpdateInstrumentStatusFailed                = "update instrument status failed"
-	msgCreateAnalyteMappingsFailed                 = "create analyte mappings failed"
+	msgUpsertAnalyteMappingsFailed                 = "upsert analyte mappings failed"
 	msgGetAnalyteMappingsFailed                    = "get analyte mappings failed"
 	msgUpdateAnalyteMappingFailed                  = "update analyte mapping failed"
 	msgDeleteAnalyteMappingFailed                  = "delete analyte mapping failed"
@@ -92,7 +92,7 @@ var (
 	ErrGetManufacturerTestsFailed                  = errors.New(msgGetManufacturerTestsFailed)
 	ErrUpsertProtocolAbilitiesFailed               = errors.New(msgUpsertProtocolAbilitiesFailed)
 	ErrUpdateInstrumentStatusFailed                = errors.New(msgUpdateInstrumentStatusFailed)
-	ErrCreateAnalyteMappingsFailed                 = errors.New(msgCreateAnalyteMappingsFailed)
+	ErrUpsertAnalyteMappingsFailed                 = errors.New(msgUpsertAnalyteMappingsFailed)
 	ErrGetAnalyteMappingsFailed                    = errors.New(msgGetAnalyteMappingsFailed)
 	ErrUpdateAnalyteMappingFailed                  = errors.New(msgUpdateAnalyteMappingFailed)
 	ErrDeleteAnalyteMappingFailed                  = errors.New(msgDeleteAnalyteMappingFailed)
@@ -305,17 +305,14 @@ type InstrumentRepository interface {
 	UpsertManufacturerTests(ctx context.Context, manufacturerTests []SupportedManufacturerTests) error
 	GetManufacturerTests(ctx context.Context) ([]SupportedManufacturerTests, error)
 	UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error
-	CreateAnalyteMappings(ctx context.Context, analyteMappings []AnalyteMapping, instrumentID uuid.UUID) ([]uuid.UUID, error)
+	UpsertAnalyteMappings(ctx context.Context, analyteMappings []AnalyteMapping, instrumentID uuid.UUID) ([]uuid.UUID, error)
 	GetAnalyteMappings(ctx context.Context, instrumentIDs []uuid.UUID) (map[uuid.UUID][]AnalyteMapping, error)
-	UpdateAnalyteMapping(ctx context.Context, analyteMapping AnalyteMapping) error
 	DeleteAnalyteMappings(ctx context.Context, ids []uuid.UUID) error
-	CreateChannelMappings(ctx context.Context, channelMappings []ChannelMapping, analyteMappingID uuid.UUID) ([]uuid.UUID, error)
+	UpsertChannelMappings(ctx context.Context, channelMappings []ChannelMapping, analyteMappingID uuid.UUID) ([]uuid.UUID, error)
 	GetChannelMappings(ctx context.Context, analyteMappingIDs []uuid.UUID) (map[uuid.UUID][]ChannelMapping, error)
-	UpdateChannelMapping(ctx context.Context, channelMapping ChannelMapping) error
 	DeleteChannelMappings(ctx context.Context, ids []uuid.UUID) error
-	CreateResultMappings(ctx context.Context, resultMappings []ResultMapping, analyteMappingID uuid.UUID) ([]uuid.UUID, error)
+	UpsertResultMappings(ctx context.Context, resultMappings []ResultMapping, analyteMappingID uuid.UUID) ([]uuid.UUID, error)
 	GetResultMappings(ctx context.Context, analyteMappingIDs []uuid.UUID) (map[uuid.UUID][]ResultMapping, error)
-	UpdateResultMapping(ctx context.Context, resultMapping ResultMapping) error
 	DeleteResultMappings(ctx context.Context, ids []uuid.UUID) error
 	CreateExpectedControlResults(ctx context.Context, expectedControlResults []ExpectedControlResult) ([]uuid.UUID, error)
 	GetExpectedControlResultsByInstrumentId(ctx context.Context, instrumentId uuid.UUID) ([]ExpectedControlResult, error)
@@ -731,29 +728,29 @@ func (r *instrumentRepository) UpdateInstrumentStatus(ctx context.Context, id uu
 	return nil
 }
 
-func (r *instrumentRepository) CreateAnalyteMappings(ctx context.Context, analyteMappings []AnalyteMapping, instrumentID uuid.UUID) ([]uuid.UUID, error) {
+func (r *instrumentRepository) UpsertAnalyteMappings(ctx context.Context, analyteMappings []AnalyteMapping, instrumentID uuid.UUID) ([]uuid.UUID, error) {
 	if len(analyteMappings) == 0 {
 		return []uuid.UUID{}, nil
 	}
 	ids := make([]uuid.UUID, len(analyteMappings))
 	for i := range analyteMappings {
-		if (analyteMappings[i].ID == uuid.UUID{}) || (analyteMappings[i].ID == uuid.Nil) {
-			analyteMappings[i].ID = uuid.New()
-		}
 		ids[i] = analyteMappings[i].ID
 	}
 	query := fmt.Sprintf(`INSERT INTO %s.sk_analyte_mappings(id, instrument_id, instrument_analyte, analyte_id, result_type, control_instrument_analyte, control_result_required) 
-		VALUES(:id, :instrument_id, :instrument_analyte, :analyte_id, :result_type, :control_instrument_analyte, :control_result_required);`, r.dbSchema)
+		VALUES(:id, :instrument_id, :instrument_analyte, :analyte_id, :result_type, :control_instrument_analyte, :control_result_required)
+		ON CONFLICT (id) WHERE deleted_at IS NULL DO UPDATE SET instrument_analyte = excluded.instrument_analyte, analyte_id = excluded.analyte_id,
+		    result_type = excluded.result_type, control_instrument_analyte = excluded.control_instrument_analyte,
+		    control_result_required = excluded.control_result_required, modified_at = timezone('utc', now());`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, convertAnalyteMappingsToDAOs(analyteMappings, instrumentID))
 	if err != nil {
-		log.Error().Err(err).Msg(msgCreateAnalyteMappingsFailed)
+		log.Error().Err(err).Msg(msgUpsertAnalyteMappingsFailed)
 		if IsErrorCode(err, UniqueViolationErrorCode) {
 			if strings.Contains(err.Error(), "sk_un_analyte_mapping_instrument_id_control_instrument_analyte") {
 				return []uuid.UUID{}, ErrUniqueViolationInstrumentControlAnalyte
 			}
 			return []uuid.UUID{}, ErrUniqueViolationInstrumentAnalyte
 		}
-		return []uuid.UUID{}, ErrCreateAnalyteMappingsFailed
+		return []uuid.UUID{}, ErrUpsertAnalyteMappingsFailed
 	}
 	return ids, nil
 }
@@ -784,24 +781,6 @@ func (r *instrumentRepository) GetAnalyteMappings(ctx context.Context, instrumen
 	return analyteMappingsByInstrumentID, nil
 }
 
-func (r *instrumentRepository) UpdateAnalyteMapping(ctx context.Context, analyteMapping AnalyteMapping) error {
-	query := fmt.Sprintf(`UPDATE %s.sk_analyte_mappings SET instrument_analyte = :instrument_analyte, analyte_id = :analyte_id, result_type = :result_type, 
-        control_result_required = :control_result_required, control_instrument_analyte = :control_instrument_analyte, modified_at = timezone('utc', now()) WHERE id = :id;`, r.dbSchema)
-	dao := convertAnalyteMappingToDAO(analyteMapping, uuid.Nil)
-	_, err := r.db.NamedExecContext(ctx, query, dao)
-	if err != nil {
-		log.Error().Err(err).Msg(msgUpdateAnalyteMappingFailed)
-		if IsErrorCode(err, UniqueViolationErrorCode) {
-			if strings.Contains(err.Error(), "sk_un_analyte_mapping_instrument_id_control_instrument_analyte") {
-				return ErrUniqueViolationInstrumentControlAnalyte
-			}
-			return ErrUniqueViolationInstrumentAnalyte
-		}
-		return ErrUpdateAnalyteMappingFailed
-	}
-	return nil
-}
-
 func (r *instrumentRepository) DeleteAnalyteMappings(ctx context.Context, ids []uuid.UUID) error {
 	if len(ids) == 0 {
 		return nil
@@ -822,7 +801,7 @@ func (r *instrumentRepository) DeleteAnalyteMappings(ctx context.Context, ids []
 	return nil
 }
 
-func (r *instrumentRepository) CreateChannelMappings(ctx context.Context, channelMappings []ChannelMapping, analyteMappingID uuid.UUID) ([]uuid.UUID, error) {
+func (r *instrumentRepository) UpsertChannelMappings(ctx context.Context, channelMappings []ChannelMapping, analyteMappingID uuid.UUID) ([]uuid.UUID, error) {
 	ids := make([]uuid.UUID, len(channelMappings))
 	if len(channelMappings) == 0 {
 		return ids, nil
@@ -834,7 +813,8 @@ func (r *instrumentRepository) CreateChannelMappings(ctx context.Context, channe
 		ids[i] = channelMappings[i].ID
 	}
 	query := fmt.Sprintf(`INSERT INTO %s.sk_channel_mappings(id, instrument_channel, channel_id, analyte_mapping_id) 
-		VALUES(:id, :instrument_channel, :channel_id, :analyte_mapping_id);`, r.dbSchema)
+		VALUES(:id, :instrument_channel, :channel_id, :analyte_mapping_id) ON CONFLICT (id)
+		    DO UPDATE SET instrument_channel=excluded.instrument_channel, channel_id=excluded.channel_id, analyte_mapping_id=excluded.analyte_mapping_id, modified_at = timezone('utc', now());`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, convertChannelMappingsToDAOs(channelMappings, analyteMappingID))
 	if err != nil {
 		log.Error().Err(err).Msg(msgCreateChannelMappingsFailed)
@@ -869,17 +849,6 @@ func (r *instrumentRepository) GetChannelMappings(ctx context.Context, analyteMa
 	return channelMappingsByAnalyteMappingID, nil
 }
 
-func (r *instrumentRepository) UpdateChannelMapping(ctx context.Context, channelMapping ChannelMapping) error {
-	query := fmt.Sprintf(`UPDATE %s.sk_channel_mappings SET instrument_channel = :instrument_channel, channel_id = :channel_id, modified_at = timezone('utc', now()) WHERE id = :id;`, r.dbSchema)
-	dao := convertChannelMappingToDAO(channelMapping, uuid.Nil)
-	_, err := r.db.NamedExecContext(ctx, query, dao)
-	if err != nil {
-		log.Error().Err(err).Msg(msgUpdateChannelMappingFailed)
-		return ErrUpdateChannelMappingFailed
-	}
-	return nil
-}
-
 func (r *instrumentRepository) DeleteChannelMappings(ctx context.Context, ids []uuid.UUID) error {
 	if len(ids) == 0 {
 		return nil
@@ -895,7 +864,7 @@ func (r *instrumentRepository) DeleteChannelMappings(ctx context.Context, ids []
 	return nil
 }
 
-func (r *instrumentRepository) CreateResultMappings(ctx context.Context, resultMappings []ResultMapping, analyteMappingID uuid.UUID) ([]uuid.UUID, error) {
+func (r *instrumentRepository) UpsertResultMappings(ctx context.Context, resultMappings []ResultMapping, analyteMappingID uuid.UUID) ([]uuid.UUID, error) {
 	ids := make([]uuid.UUID, len(resultMappings))
 	if len(resultMappings) == 0 {
 		return ids, nil
@@ -907,7 +876,8 @@ func (r *instrumentRepository) CreateResultMappings(ctx context.Context, resultM
 		ids[i] = resultMappings[i].ID
 	}
 	query := fmt.Sprintf(`INSERT INTO %s.sk_result_mappings(id, analyte_mapping_id, "key", "value", "index") 
-		VALUES(:id, :analyte_mapping_id, :key, :value, :index);`, r.dbSchema)
+		VALUES(:id, :analyte_mapping_id, :key, :value, :index)
+		ON CONFLICT(id) DO UPDATE SET analyte_mapping_id=excluded.analyte_mapping_id,key=excluded.key,value=excluded.value,index=excluded.index,modified_at=timezone('utc', now());`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, convertResultMappingsToDAOs(resultMappings, analyteMappingID))
 	if err != nil {
 		log.Error().Err(err).Msg(msgCreateChannelMappingsFailed)
@@ -940,17 +910,6 @@ func (r *instrumentRepository) GetResultMappings(ctx context.Context, analyteMap
 		resultMappingsByAnalyteMappingID[dao.AnalyteMappingID] = append(resultMappingsByAnalyteMappingID[dao.AnalyteMappingID], convertResultMappingDaoToChannelMapping(dao))
 	}
 	return resultMappingsByAnalyteMappingID, nil
-}
-
-func (r *instrumentRepository) UpdateResultMapping(ctx context.Context, resultMapping ResultMapping) error {
-	query := fmt.Sprintf(`UPDATE %s.sk_result_mappings SET "key" = :key, "value" = :value, "index" = :index, modified_at = timezone('utc', now()) WHERE id = :id`, r.dbSchema)
-	dao := convertResultMappingToDAO(resultMapping, uuid.Nil)
-	_, err := r.db.NamedExecContext(ctx, query, dao)
-	if err != nil {
-		log.Error().Err(err).Msg(msgUpdateResultMappingFailed)
-		return ErrUpdateResultMappingFailed
-	}
-	return nil
 }
 
 func (r *instrumentRepository) DeleteResultMappings(ctx context.Context, ids []uuid.UUID) error {
@@ -1184,8 +1143,8 @@ func (r *instrumentRepository) UpsertRequestMappingAnalytes(ctx context.Context,
 		VALUES(:id, :analyte_id, :request_mapping_id) ON CONFLICT ON CONSTRAINT sk_unique_request_mapping_analytes DO NOTHING;`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, requestMappingAnalyteDAOs)
 	if err != nil {
-		log.Error().Err(err).Msg(msgCreateAnalyteMappingsFailed)
-		return ErrCreateAnalyteMappingsFailed
+		log.Error().Err(err).Msg(msgUpsertAnalyteMappingsFailed)
+		return ErrUpsertAnalyteMappingsFailed
 	}
 	return nil
 }
@@ -1547,7 +1506,7 @@ func convertAnalyteMappingToDAO(analyteMapping AnalyteMapping, instrumentID uuid
 	if analyteMapping.ControlInstrumentAnalyte != nil {
 		dao.ControlInstrumentAnalyte = sql.NullString{
 			String: *analyteMapping.ControlInstrumentAnalyte,
-			Valid:  true,
+			Valid:  len(*analyteMapping.ControlInstrumentAnalyte) > 0,
 		}
 	}
 	return dao

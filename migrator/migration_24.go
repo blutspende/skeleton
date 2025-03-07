@@ -15,5 +15,5 @@ CREATE TABLE IF NOT EXISTS <SCHEMA_PLACEHOLDER>.sk_manufacturer_tests(
 );
 CREATE UNIQUE INDEX IF NOT EXISTS sk_un_manufacturer_tests_name_idx ON <SCHEMA_PLACEHOLDER>.sk_manufacturer_tests (test_name);
 
-ALTER TABLE <SCHEMA_PLACEHOLDER>.sk_instruments DROP COLUMN sent_to_cerberus;
+ALTER TABLE <SCHEMA_PLACEHOLDER>.sk_instruments DROP COLUMN IF EXISTS sent_to_cerberus;
 `
