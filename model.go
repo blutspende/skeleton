@@ -15,12 +15,6 @@ type GinApi interface {
 	Run() error
 }
 
-// AnalysisRequestResponseItemV1 - Response of the AnalysisService to indicate the status of the requests
-type AnalysisRequestStatus struct {
-	WorkItemID uuid.UUID
-	Error      error
-}
-
 // AnalysisRequest - Analysis Request as processed by our AnalysisService
 // Do not use in implementation directly
 type AnalysisRequest struct {
@@ -261,13 +255,12 @@ type AnalysisResultSet struct {
 // AnalysisResult - The final result on 'per-workitem' basis to return the result to cerberus.
 // Call v1.SubmitAnalysisResult for submission.
 type AnalysisResult struct {
-	ID              uuid.UUID
-	AnalysisRequest AnalysisRequest
-	AnalyteMapping  AnalyteMapping
-	Instrument      Instrument
-	SampleCode      string
-	// ResultRecordID - reference to raw result record stored in an implementation-created table
-	ResultRecordID           uuid.UUID
+	ID                       uuid.UUID
+	AnalysisRequest          AnalysisRequest
+	AnalyteMapping           AnalyteMapping
+	Instrument               Instrument
+	SampleCode               string
+	DEARawMessageID          uuid.UUID
 	BatchID                  uuid.UUID
 	Result                   string
 	ResultMode               ResultMode

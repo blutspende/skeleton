@@ -181,3 +181,11 @@ func (sr *SkeletonTestRig) AddInstrument(instrument Instrument) {
 func (sr *SkeletonTestRig) MarkSortingTargetAsApplied(ctx context.Context, instrumentIP, sampleCode, programme, target string) error {
 	return nil
 }
+
+func (sr *SkeletonTestRig) RegisterManufacturerTests(ctx context.Context, manufacturerTests []SupportedManufacturerTests) error {
+	return nil
+}
+
+func (sr *SkeletonTestRig) UploadRawMessageToDEA(rawMessage []byte) (uuid.UUID, error) {
+	return uuid.Nil, nil
+}
