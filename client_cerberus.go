@@ -29,6 +29,7 @@ type CerberusClient interface {
 	SendAnalysisResultBatch(analysisResults []AnalysisResultTO) (AnalysisResultBatchResponse, error)
 	SendAnalysisResultImageBatch(images []WorkItemResultImageTO) error
 	VerifyInstrumentHash(hash string) error
+	VerifyExpectedControlResultsHash(hash string) error
 	SyncAnalysisRequests(workItemIDs []uuid.UUID, syncType string) error
 }
 
@@ -318,6 +319,27 @@ func (c *cerberusClient) VerifyInstrumentHash(hash string) error {
 
 	return nil
 }
+
+func (c *cerberusClient) VerifyExpectedControlResultsHash(hash string) error {
+	verifyTO := VerifyInstrumentTO{Hash: hash}
+	resp, err := c.client.R().
+		SetHeader("Content-Type", "application/json").
+		SetBody(verifyTO).
+		Post(c.cerberusUrl + "/v1/expected-control-results/verify")
+
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to call Cerberus API (/v1/expected-control-results/verify)")
+		return err
+	}
+
+	if resp.IsError() {
+		log.Error().Int("Code", resp.StatusCode()).Msg("Failed to call Cerberus API (/v1/expected-control-results/verify)")
+		return fmt.Errorf("unexpected error from cerberus %d", resp.StatusCode())
+	}
+
+	return nil
+}
+
 func (c *cerberusClient) SyncAnalysisRequests(workItemIDs []uuid.UUID, syncType string) error {
 	queryParams := make(map[string]string)
 	queryParams["driverName"] = c.driverName

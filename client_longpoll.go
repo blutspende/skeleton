@@ -13,18 +13,27 @@ import (
 	"time"
 )
 
-type InstrumentMessageType string
+type MessageType string
 
 const (
-	MessageTypeCreate InstrumentMessageType = "CREATE"
-	MessageTypeUpdate InstrumentMessageType = "UPDATE"
-	MessageTypeDelete InstrumentMessageType = "DELETE"
+	MessageTypeCreate MessageType = "CREATE"
+	MessageTypeUpdate MessageType = "UPDATE"
+	MessageTypeDelete MessageType = "DELETE"
 )
 
 type InstrumentMessageTO struct {
-	MessageType  InstrumentMessageType `json:"messageType" binding:"required"`
-	InstrumentId uuid.UUID             `json:"instrumentId" binding:"required"`
-	Instrument   *instrumentTO         `json:"instrument,omitempty"`
+	MessageType  MessageType   `json:"messageType" binding:"required"`
+	InstrumentId uuid.UUID     `json:"instrumentId" binding:"required"`
+	UserId       *uuid.UUID    `json:"userId,omitempty" binding:"required"`
+	Instrument   *instrumentTO `json:"instrument,omitempty"`
+}
+
+type ExpectedControlResultMessageTO struct {
+	MessageType                    MessageType               `json:"messageType" binding:"required"`
+	InstrumentId                   *uuid.UUID                `json:"instrumentId,omitempty" binding:"required"`
+	UserId                         uuid.UUID                 `json:"userId" binding:"required"`
+	ExpectedControlResults         []expectedControlResultTO `json:"expectedControlResult,omitempty"`
+	DeletedExpectedControlResultId *uuid.UUID                `json:"deletedExpectedControlResultId,omitempty"`
 }
 
 type ReprocessMessageType string
@@ -42,44 +51,52 @@ type ReprocessMessageTO struct {
 
 type LongPollClient interface {
 	GetInstrumentConfigsChan() chan InstrumentMessageTO
+	GetExpectedControlResultsChan() chan ExpectedControlResultMessageTO
 	GetReprocessEventsChan() chan ReprocessMessageTO
 	GetAnalysisRequestsChan() chan []AnalysisRequest
 	GetRevokedWorkItemIDsChan() chan []uuid.UUID
 	GetReexaminedWorkItemIDsChan() chan []uuid.UUID
 	StartInstrumentConfigsLongPolling(ctx context.Context)
+	StartExpectedControlResultsLongPolling(ctx context.Context)
 	StartReprocessEventsLongPolling(ctx context.Context)
 	StartAnalysisRequestLongPolling(ctx context.Context)
 	StartRevokedReexaminedWorkItemIDsLongPolling(ctx context.Context)
 }
 
 type longPollClient struct {
-	restyClient               *resty.Client
-	serviceName               string
-	cerberusUrl               string
-	timeoutSeconds            uint
-	instrumentsChan           chan InstrumentMessageTO
-	reprocessChan             chan ReprocessMessageTO
-	analysisRequestsChan      chan []AnalysisRequest
-	revokedWorkItemIDsChan    chan []uuid.UUID
-	reexaminedWorkItemIDsChan chan []uuid.UUID
+	restyClient                *resty.Client
+	serviceName                string
+	cerberusUrl                string
+	timeoutSeconds             uint
+	instrumentsChan            chan InstrumentMessageTO
+	expectedControlResultsChan chan ExpectedControlResultMessageTO
+	reprocessChan              chan ReprocessMessageTO
+	analysisRequestsChan       chan []AnalysisRequest
+	revokedWorkItemIDsChan     chan []uuid.UUID
+	reexaminedWorkItemIDsChan  chan []uuid.UUID
 }
 
 func NewLongPollClient(restyClient *resty.Client, serviceName, cerberusUrl string, timeoutSeconds uint) LongPollClient {
 	return &longPollClient{
-		restyClient:               restyClient,
-		serviceName:               serviceName,
-		cerberusUrl:               cerberusUrl,
-		instrumentsChan:           make(chan InstrumentMessageTO),
-		reprocessChan:             make(chan ReprocessMessageTO, 100),
-		analysisRequestsChan:      make(chan []AnalysisRequest),
-		revokedWorkItemIDsChan:    make(chan []uuid.UUID),
-		reexaminedWorkItemIDsChan: make(chan []uuid.UUID),
-		timeoutSeconds:            timeoutSeconds,
+		restyClient:                restyClient,
+		serviceName:                serviceName,
+		cerberusUrl:                cerberusUrl,
+		instrumentsChan:            make(chan InstrumentMessageTO),
+		expectedControlResultsChan: make(chan ExpectedControlResultMessageTO, 100),
+		reprocessChan:              make(chan ReprocessMessageTO, 100),
+		analysisRequestsChan:       make(chan []AnalysisRequest),
+		revokedWorkItemIDsChan:     make(chan []uuid.UUID),
+		reexaminedWorkItemIDsChan:  make(chan []uuid.UUID),
+		timeoutSeconds:             timeoutSeconds,
 	}
 }
 
 func (l *longPollClient) GetInstrumentConfigsChan() chan InstrumentMessageTO {
 	return l.instrumentsChan
+}
+
+func (l *longPollClient) GetExpectedControlResultsChan() chan ExpectedControlResultMessageTO {
+	return l.expectedControlResultsChan
 }
 
 func (l *longPollClient) GetReprocessEventsChan() chan ReprocessMessageTO {
@@ -99,7 +116,7 @@ func (l *longPollClient) GetReexaminedWorkItemIDsChan() chan []uuid.UUID {
 }
 
 func (l *longPollClient) StartInstrumentConfigsLongPolling(ctx context.Context) {
-	u, err := url.Parse(l.cerberusUrl + "/v1/instruments/poll-config")
+	u, err := url.Parse(l.cerberusUrl + "/v1/instruments/poll-instrument-config")
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to parse URL for long-poll")
 	}
@@ -149,6 +166,56 @@ func (l *longPollClient) StartInstrumentConfigsLongPolling(ctx context.Context) 
 				Msg("Received event mapped to InstrumentMessageTO")
 
 			l.instrumentsChan <- instrumentMessageTO
+		}
+	}
+}
+
+func (l *longPollClient) StartExpectedControlResultsLongPolling(ctx context.Context) {
+	u, err := url.Parse(l.cerberusUrl + "/v1/expected-control-results/poll")
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to parse URL for long-poll")
+	}
+
+	httpClient := &http.Client{
+		Transport: &RestyRoundTripper{restyClient: l.restyClient},
+	}
+
+	c, err := longpollclient.NewClient(longpollclient.ClientOptions{
+		SubscribeUrl:       *u,
+		Category:           fmt.Sprintf("%s:%s", l.serviceName, syncTypeExpectedControlResults),
+		PollTimeoutSeconds: l.timeoutSeconds,
+		HttpClient:         httpClient,
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to create long-poll client")
+		return
+	}
+
+	for event := range c.Start(time.Now().UTC().AddDate(0, 0, -1)) {
+		select {
+		case <-ctx.Done():
+			log.Info().Msg("Long poll gracefully stopped")
+			return
+		default:
+			data, ok := event.Data.(map[string]interface{})
+			if !ok {
+				log.Error().Msg("Unexpected event data type")
+				return
+			}
+
+			jsonData, err := json.Marshal(data)
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to marshal event data")
+				return
+			}
+
+			var expectedControlResultMessage ExpectedControlResultMessageTO
+			if err := json.Unmarshal(jsonData, &expectedControlResultMessage); err != nil {
+				log.Error().Err(err).Msg("Failed to unmarshal event data to ExpectedControlResultMessageTO")
+				return
+			}
+
+			l.expectedControlResultsChan <- expectedControlResultMessage
 		}
 	}
 }
