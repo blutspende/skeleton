@@ -395,16 +395,16 @@ func convertTOToConditionOperand(to conditionOperandTO) ConditionOperand {
 	}
 }
 
-func convertExpectedControlResultListToTOList(expectedControlResults []ExpectedControlResult) []expectedControlResultTO {
-	tos := make([]expectedControlResultTO, 0)
+func convertExpectedControlResultListToTOList(expectedControlResults []ExpectedControlResult) []ExpectedControlResultTO {
+	tos := make([]ExpectedControlResultTO, 0)
 	for _, expectedControlResult := range expectedControlResults {
 		tos = append(tos, convertExpectedControlResultToExpectedControlResultTO(expectedControlResult))
 	}
 	return tos
 }
 
-func convertExpectedControlResultToExpectedControlResultTO(expectedControlResult ExpectedControlResult) expectedControlResultTO {
-	return expectedControlResultTO{
+func convertExpectedControlResultToExpectedControlResultTO(expectedControlResult ExpectedControlResult) ExpectedControlResultTO {
+	return ExpectedControlResultTO{
 		ID:               expectedControlResult.ID,
 		AnalyteMappingId: expectedControlResult.AnalyteMappingId,
 		SampleCode:       expectedControlResult.SampleCode,
@@ -416,10 +416,10 @@ func convertExpectedControlResultToExpectedControlResultTO(expectedControlResult
 	}
 }
 
-func convertNotSpecifiedExpectedControlResultListToTOList(notSpecifiedExpectedControlResults []NotSpecifiedExpectedControlResult) []notSpecifiedExpectedControlResultTO {
-	tos := make([]notSpecifiedExpectedControlResultTO, 0)
+func convertNotSpecifiedExpectedControlResultListToTOList(notSpecifiedExpectedControlResults []NotSpecifiedExpectedControlResult) []NotSpecifiedExpectedControlResultTO {
+	tos := make([]NotSpecifiedExpectedControlResultTO, 0)
 	for _, notSpecifiedExpectedControlResult := range notSpecifiedExpectedControlResults {
-		tos = append(tos, notSpecifiedExpectedControlResultTO{
+		tos = append(tos, NotSpecifiedExpectedControlResultTO{
 			AnalyteMappingId: notSpecifiedExpectedControlResult.AnalyteMappingId,
 			SampleCode:       notSpecifiedExpectedControlResult.SampleCode,
 		})
@@ -427,7 +427,7 @@ func convertNotSpecifiedExpectedControlResultListToTOList(notSpecifiedExpectedCo
 	return tos
 }
 
-func convertTOsToExpectedControlResults(expectedControlResultTOs []expectedControlResultTO) []ExpectedControlResult {
+func convertTOsToExpectedControlResults(expectedControlResultTOs []ExpectedControlResultTO) []ExpectedControlResult {
 	expectedControlResults := make([]ExpectedControlResult, 0)
 	for i := range expectedControlResultTOs {
 		expectedControlResults = append(expectedControlResults, convertTOToExpectedControlResult(expectedControlResultTOs[i]))
@@ -435,7 +435,7 @@ func convertTOsToExpectedControlResults(expectedControlResultTOs []expectedContr
 	return expectedControlResults
 }
 
-func convertTOToExpectedControlResult(expectedControlResultTO expectedControlResultTO) ExpectedControlResult {
+func convertTOToExpectedControlResult(expectedControlResultTO ExpectedControlResultTO) ExpectedControlResult {
 	expectedControlResult := ExpectedControlResult{
 		ID:               expectedControlResultTO.ID,
 		SampleCode:       expectedControlResultTO.SampleCode,

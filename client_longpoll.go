@@ -32,8 +32,24 @@ type ExpectedControlResultMessageTO struct {
 	MessageType                    MessageType               `json:"messageType" binding:"required"`
 	InstrumentId                   *uuid.UUID                `json:"instrumentId,omitempty" binding:"required"`
 	UserId                         uuid.UUID                 `json:"userId" binding:"required"`
-	ExpectedControlResults         []expectedControlResultTO `json:"expectedControlResult,omitempty"`
+	ExpectedControlResults         []ExpectedControlResultTO `json:"expectedControlResult,omitempty"`
 	DeletedExpectedControlResultId *uuid.UUID                `json:"deletedExpectedControlResultId,omitempty"`
+}
+
+type ExpectedControlResultTO struct {
+	ID               uuid.UUID         `json:"id"`
+	AnalyteMappingId uuid.UUID         `json:"analyteMappingId"`
+	SampleCode       string            `json:"sampleCode"`
+	Operator         ConditionOperator `json:"operator"`
+	ExpectedValue    string            `json:"expectedValue"`
+	ExpectedValue2   *string           `json:"expectedValue2"`
+	CreatedBy        *uuid.UUID        `json:"createdBy"`
+	CreatedAt        *time.Time        `json:"createdAt"`
+}
+
+type NotSpecifiedExpectedControlResultTO struct {
+	AnalyteMappingId uuid.UUID `json:"analyteMappingId"`
+	SampleCode       string    `json:"sampleCode"`
 }
 
 type ReprocessMessageType string
@@ -328,7 +344,7 @@ func (l *longPollClient) StartAnalysisRequestLongPolling(ctx context.Context) {
 	}
 }
 
-const revokedReexaminedCategory = "revoked-reexamined"
+var revokedReexaminedCategory = fmt.Sprintf("%s-%s", syncTypeRevocation, syncTypeReexamine)
 
 func (l *longPollClient) StartRevokedReexaminedWorkItemIDsLongPolling(ctx context.Context) {
 	u, err := url.Parse(l.cerberusUrl + "/v1/instrument-drivers/analysis-requests/revoked-reexamined")

@@ -1472,7 +1472,7 @@ func (r *analysisRepository) gatherAndAttachAllConnectedDataToAnalysisResults(ct
 	analyteMappingIDs := make([]uuid.UUID, 0)
 	for i := range analysisResultDAOs {
 		analysisResultIDs = append(analysisResultIDs, analysisResultDAOs[i].ID)
-		analyteMappingIDs = append(analysisResultIDs, analysisResultDAOs[i].AnalyteMappingID)
+		analyteMappingIDs = append(analyteMappingIDs, analysisResultDAOs[i].AnalyteMappingID)
 	}
 
 	extraValuesMap, err := r.getAnalysisResultExtraValues(ctx, analysisResultIDs)
@@ -3652,7 +3652,7 @@ func (r *analysisRepository) gatherAndAttachAllConnectedDataToControlResults(ctx
 
 	for i := range controlResultDAOs {
 		analyteMappingIDs = append(analyteMappingIDs, controlResultDAOs[i].AnalyteMappingID)
-		controlResultIDs = append(analyteMappingIDs, controlResultDAOs[i].ID)
+		controlResultIDs = append(controlResultIDs, controlResultDAOs[i].ID)
 	}
 
 	extraValues, err := r.getControlResultExtraValues(ctx, controlResultIDs)

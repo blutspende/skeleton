@@ -105,10 +105,31 @@ func (as *analysisService) ProcessAnalysisRequests(ctx context.Context, analysis
 	processedAnalysisRequestIDs := make([]uuid.UUID, 0)
 
 	for _, request := range analysisRequests {
-
 		analysisResults, err := as.analysisRepository.GetAnalysisResultsBySampleCodeAndAnalyteID(ctx, request.SampleCode, request.AnalyteID)
 		if err != nil {
 			log.Debug().Err(err).Str("requestID", request.ID.String()).Msg("Failed to load analysis results for the request")
+			return err
+		}
+		for i := range analysisResults {
+			analysisResults[i], err = setAnalysisResultStatusBasedOnControlResults(analysisResults[i], nil, false)
+			if err != nil {
+				return err
+			}
+		}
+
+		tx, err := as.analysisRepository.CreateTransaction()
+		if err != nil {
+			log.Error().Err(err).Msg("failed to create transaction")
+			return err
+		}
+
+		err = as.analysisRepository.WithTransaction(tx).UpdateStatusAnalysisResultsBatch(ctx, analysisResults)
+		if err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+		if err = tx.Commit(); err != nil {
+			_ = tx.Rollback()
 			return err
 		}
 
