@@ -328,7 +328,7 @@ func (l *longPollClient) StartAnalysisRequestLongPolling(ctx context.Context) {
 	}
 }
 
-const revokedReexaminedCategory = "revoked-reexamined"
+var revokedReexaminedCategory = fmt.Sprintf("%s-%s", syncTypeRevocation, syncTypeReexamine)
 
 func (l *longPollClient) StartRevokedReexaminedWorkItemIDsLongPolling(ctx context.Context) {
 	u, err := url.Parse(l.cerberusUrl + "/v1/instrument-drivers/analysis-requests/revoked-reexamined")
