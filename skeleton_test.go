@@ -1032,11 +1032,28 @@ type longPollClientMock struct {
 	AnalysisRequests          []AnalysisRequest
 	ReexaminedWorkItemIDs     []uuid.UUID
 	RevokedWorkItemIDs        []uuid.UUID
+	ExpectedControlResults    []ExpectedControlResultMessageTO
 	instrumentConfigsChan     chan InstrumentMessageTO
 	reprocessEventChan        chan ReprocessMessageTO
 	analysisRequestChan       chan []AnalysisRequest
 	reexaminedWorkItemIDsChan chan []uuid.UUID
 	revokedWorkItemIDsChan    chan []uuid.UUID
+	expectedControlResultChan chan ExpectedControlResultMessageTO
+}
+
+func (m *longPollClientMock) GetExpectedControlResultsChan() chan ExpectedControlResultMessageTO {
+	if m.expectedControlResultChan == nil {
+		m.expectedControlResultChan = make(chan ExpectedControlResultMessageTO)
+	}
+	return m.expectedControlResultChan
+}
+
+func (m *longPollClientMock) StartExpectedControlResultsLongPolling(ctx context.Context) {
+	if len(m.ExpectedControlResults) > 0 {
+		for _, expectedControlResult := range m.ExpectedControlResults {
+			m.GetExpectedControlResultsChan() <- expectedControlResult
+		}
+	}
 }
 
 func (m *longPollClientMock) GetInstrumentConfigsChan() chan InstrumentMessageTO {
@@ -1116,6 +1133,10 @@ type cerberusClientMock struct {
 	ControlResults       []StandaloneControlResultTO
 	BatchResponse        AnalysisResultBatchResponse
 	ControlBatchResponse ControlResultBatchResponse
+}
+
+func (m *cerberusClientMock) VerifyExpectedControlResultsHash(hash string) error {
+	return nil
 }
 
 func (m *cerberusClientMock) SendControlResultBatch(controlResults []StandaloneControlResultTO) (ControlResultBatchResponse, error) {

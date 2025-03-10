@@ -880,6 +880,14 @@ func (s *instrumentService) CreateExpectedControlResults(ctx context.Context, in
 		return err
 	}
 
+	expectedControlResultsHash := HashExpectedControlResults(expectedControlResults)
+	err = s.cerberusClient.VerifyExpectedControlResultsHash(expectedControlResultsHash)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to verify instrument hash")
+		_ = tx.Rollback()
+		return err
+	}
+
 	err = tx.Commit()
 	if err != nil {
 		_ = tx.Rollback()
@@ -975,6 +983,14 @@ func (s *instrumentService) UpdateExpectedControlResults(ctx context.Context, in
 		return err
 	}
 
+	expectedControlResultsHash := HashExpectedControlResults(expectedControlResults)
+	err = s.cerberusClient.VerifyExpectedControlResultsHash(expectedControlResultsHash)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to verify instrument hash")
+		_ = tx.Rollback()
+		return err
+	}
+
 	err = tx.Commit()
 	if err != nil {
 		_ = tx.Rollback()
@@ -989,6 +1005,14 @@ func (s *instrumentService) DeleteExpectedControlResult(ctx context.Context, exp
 
 	err = s.instrumentRepository.WithTransaction(tx).DeleteExpectedControlResults(ctx, []uuid.UUID{expectedControlResultId}, userId)
 	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	deletionHash := HashDeletedExpectedControlResult(expectedControlResultId, userId)
+	err = s.cerberusClient.VerifyExpectedControlResultsHash(deletionHash)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to verify deleted expected control result hash")
 		_ = tx.Rollback()
 		return err
 	}

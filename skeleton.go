@@ -579,6 +579,7 @@ func (s *skeleton) Start() error {
 	go s.enqueueUnprocessedAnalysisRequests(s.ctx)
 	go s.enqueueUnprocessedAnalysisResults(s.ctx)
 	go s.startInstrumentConfigsFetchJob(s.ctx)
+	go s.startExpectedControlResultsFetchJob(s.ctx)
 	go s.startReprocessEventsFetchJob(s.ctx)
 	go s.startAnalysisRequestFetchJob(s.ctx)
 	go s.startAnalysisRequestRevocationReexamineJob(s.ctx)
@@ -1105,11 +1106,12 @@ func (s *skeleton) processStuckImagesToCerberus(ctx context.Context) {
 }
 
 const (
-	syncTypeInstrument  = "instrument"
-	syncTypeNewWorkItem = "newWorkItem"
-	syncTypeRevocation  = "revocation"
-	syncTypeReexamine   = "reexamine"
-	syncTypeReprocess   = "reprocess"
+	syncTypeInstrument             = "instrument"
+	syncTypeNewWorkItem            = "newWorkItem"
+	syncTypeRevocation             = "revocation"
+	syncTypeReexamine              = "reexamine"
+	syncTypeReprocess              = "reprocess"
+	syncTypeExpectedControlResults = "expectedControlResults"
 )
 
 func (s *skeleton) startInstrumentConfigsFetchJob(ctx context.Context) {
@@ -1121,6 +1123,21 @@ func (s *skeleton) startInstrumentConfigsFetchJob(ctx context.Context) {
 			if err != nil {
 				log.Warn().Err(err).Interface("Message", instrumentMessage).Msg("Failed to process instrument message from Cerberus")
 				continue
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (s *skeleton) startExpectedControlResultsFetchJob(ctx context.Context) {
+	go s.longPollClient.StartExpectedControlResultsLongPolling(ctx)
+	for {
+		select {
+		case expectedControlResult := <-s.longPollClient.GetExpectedControlResultsChan():
+			err := s.processExpectedControlResult(ctx, expectedControlResult)
+			if err != nil {
+				log.Warn().Err(err).Interface("Message", expectedControlResult).Msg("Failed to process expected control result")
 			}
 		case <-ctx.Done():
 			return
@@ -1141,8 +1158,7 @@ func (s *skeleton) processInstrumentMessage(ctx context.Context, message Instrum
 	case MessageTypeUpdate:
 		log.Info().Msgf("Processing update event for InstrumentId: %s", message.InstrumentId)
 		instrument := convertInstrumentTOToInstrument(*message.Instrument)
-		//TODO: pass user id here somehow
-		err := s.instrumentService.UpdateInstrument(ctx, instrument, uuid.New())
+		err := s.instrumentService.UpdateInstrument(ctx, instrument, *message.UserId)
 		if err != nil {
 			return err
 		}
@@ -1156,6 +1172,34 @@ func (s *skeleton) processInstrumentMessage(ctx context.Context, message Instrum
 		log.Info().Msg("Deleted instrument")
 	default:
 		log.Warn().Msgf("Unknown message type for InstrumentId: %s", message.InstrumentId)
+	}
+	return nil
+}
+
+func (s *skeleton) processExpectedControlResult(ctx context.Context, controlResultMessage ExpectedControlResultMessageTO) error {
+	switch controlResultMessage.MessageType {
+	case MessageTypeCreate:
+		log.Info().Msgf("Processing expected control result creation event for InstrumentId: %s", controlResultMessage.InstrumentId)
+		expectedControlResult := convertTOsToExpectedControlResults(controlResultMessage.ExpectedControlResults)
+		err := s.instrumentService.CreateExpectedControlResults(ctx, *controlResultMessage.InstrumentId, expectedControlResult, controlResultMessage.UserId)
+		if err != nil {
+			return err
+		}
+	case MessageTypeUpdate:
+		log.Info().Msgf("Processing expected control result update event for InstrumentId: %s", controlResultMessage.InstrumentId)
+		expectedControlResult := convertTOsToExpectedControlResults(controlResultMessage.ExpectedControlResults)
+		err := s.instrumentService.UpdateExpectedControlResults(ctx, *controlResultMessage.InstrumentId, expectedControlResult, controlResultMessage.UserId)
+		if err != nil {
+			return err
+		}
+	case MessageTypeDelete:
+		log.Info().Msgf("Processing deletion event for ExpectedControlResultId: %s", controlResultMessage.DeletedExpectedControlResultId)
+		err := s.instrumentService.DeleteExpectedControlResult(ctx, *controlResultMessage.DeletedExpectedControlResultId, controlResultMessage.UserId)
+		if err != nil {
+			return err
+		}
+	default:
+		log.Warn().Interface("Message", controlResultMessage).Msg("Unknown message type")
 	}
 	return nil
 }

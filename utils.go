@@ -142,9 +142,11 @@ func ConvertUUIDsToMap(ids []uuid.UUID) map[uuid.UUID]any {
 
 func HashDeletedInstrument(instrumentID uuid.UUID) string {
 	const deletedMarker = "DELETED"
+	const deletedType = "INSTRUMENT"
 
 	hasher := sha256.New()
 	hasher.Write([]byte(deletedMarker))
+	hasher.Write([]byte(deletedType))
 	hasher.Write([]byte(instrumentID.String()))
 
 	return hex.EncodeToString(hasher.Sum(nil))
@@ -193,6 +195,8 @@ func HashInstrument(instrument Instrument) string {
 		analyteBuilder.WriteString(a.AnalyteID.String())
 		analyteBuilder.WriteString(a.InstrumentAnalyte)
 		analyteBuilder.WriteString(string(a.ResultType))
+		analyteBuilder.WriteString(stringPointerToString(a.ControlInstrumentAnalyte))
+		analyteBuilder.WriteString(fmt.Sprintf("%t", a.ControlResultRequired))
 
 		// Hash nested ChannelMappings
 		hashSlice(&analyteBuilder, a.ChannelMappings, func(c ChannelMapping) string {
@@ -245,6 +249,48 @@ func HashInstrument(instrument Instrument) string {
 	})
 
 	// Create the hash
+	hasher := sha256.New()
+	hasher.Write([]byte(builder.String()))
+	return hex.EncodeToString(hasher.Sum(nil))
+}
+
+func HashDeletedExpectedControlResult(expectedControlResultId, userId uuid.UUID) string {
+	const deletedMarker = "DELETED"
+	const deletedType = "EXPECTED_CONTROL_RESULT"
+
+	hasher := sha256.New()
+	hasher.Write([]byte(deletedMarker))
+	hasher.Write([]byte(deletedType))
+	hasher.Write([]byte(expectedControlResultId.String()))
+	hasher.Write([]byte(userId.String()))
+
+	return hex.EncodeToString(hasher.Sum(nil))
+}
+
+func HashExpectedControlResults(expectedControlResults []ExpectedControlResult) string {
+	var builder strings.Builder
+
+	hashSlice(&builder, expectedControlResults, func(e ExpectedControlResult) string {
+		var resultBuilder strings.Builder
+		resultBuilder.WriteString(e.ID.String())
+		resultBuilder.WriteString(e.SampleCode)
+		resultBuilder.WriteString(e.AnalyteMappingId.String())
+		resultBuilder.WriteString(e.ExpectedValue)
+		if e.ExpectedValue2 != nil {
+			resultBuilder.WriteString(*e.ExpectedValue2)
+		}
+		resultBuilder.WriteString(string(e.Operator))
+		resultBuilder.WriteString(e.CreatedAt.Format(time.RFC3339))
+		if e.DeletedAt != nil {
+			resultBuilder.WriteString(e.DeletedAt.Format(time.RFC3339))
+		}
+		resultBuilder.WriteString(e.CreatedBy.String())
+		if e.DeletedBy.Valid {
+			resultBuilder.WriteString(e.DeletedBy.UUID.String())
+		}
+		return resultBuilder.String()
+	})
+
 	hasher := sha256.New()
 	hasher.Write([]byte(builder.String()))
 	return hex.EncodeToString(hasher.Sum(nil))
