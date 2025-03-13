@@ -15,37 +15,38 @@ import (
 )
 
 const (
-	MsgSendResultBatchFailed = "send result batch failed"
+	MsgSendResultBatchFailed      = "send result batch failed"
+	MsgSyncAnalysisRequestsFailed = "sync analysis requests failed"
 )
 
 var (
-	ErrSendResultBatchFailed = errors.New(MsgSendResultBatchFailed)
+	ErrSendResultBatchFailed      = errors.New(MsgSendResultBatchFailed)
+	ErrSyncAnalysisRequestsFailed = errors.New(MsgSyncAnalysisRequestsFailed)
 )
 
 type CerberusClient interface {
-	RegisterInstrument(instrument Instrument) error
-	RegisterInstrumentDriver(name, apiVersion string, apiPort uint16, tlsEnabled bool, extraValueKeys []string, reagentManufacturers []string) error
+	RegisterInstrumentDriver(name, displayName string, extraValueKeys []string, protocols []supportedProtocolTO, tests []supportedManufacturerTestTO, encodings []string, reagentManufacturers []string) error
 	SendAnalysisResultBatch(analysisResults []AnalysisResultTO) (AnalysisResultBatchResponse, error)
 	SendAnalysisResultImageBatch(images []WorkItemResultImageTO) error
+	VerifyInstrumentHash(hash string) error
+	VerifyExpectedControlResultsHash(hash string) error
+	SyncAnalysisRequests(workItemIDs []uuid.UUID, syncType string) error
 }
 
 type cerberusClient struct {
 	client      *resty.Client
 	cerberusUrl string
-}
-
-type ciaInstrumentTO struct {
-	ID   uuid.UUID `json:"id"`
-	Name string    `json:"name"`
+	driverName  string
 }
 
 type registerInstrumentDriverTO struct {
-	Name                 string   `json:"name" binding:"required"`
-	APIVersion           string   `json:"apiVersion" binding:"required"`
-	APIPort              uint16   `json:"apiPort" binding:"required"`
-	TLSEnabled           bool     `json:"tlsEnabled" default:"false"`
-	ExtraValueKeys       []string `json:"extraValueKeys,omitempty"`
-	ReagentManufacturers []string `json:"reagentManufacturers"`
+	Name                 string                        `json:"name" binding:"required"`
+	DisplayName          string                        `json:"display_name"`
+	ExtraValueKeys       []string                      `json:"extraValueKeys,omitempty"`
+	Protocols            []supportedProtocolTO         `json:"protocols"`
+	ManufacturerTests    []supportedManufacturerTestTO `json:"manufacturerTests"`
+	Encodings            []string                      `json:"encodings"`
+	ReagentManufacturers []string                      `json:"reagentManufacturers"`
 }
 
 type ExtraValueTO struct {
@@ -70,11 +71,13 @@ type ChannelResultTO struct {
 type AnalysisResultTO struct {
 	ID                       uuid.UUID         `json:"id"`
 	WorkingItemID            uuid.UUID         `json:"workItemId"`
+	DEARawMessageID          uuid.UUID         `json:"deaRawMessageId"`
 	ValidUntil               time.Time         `json:"validUntil"`
 	Status                   string            `json:"status"`
 	Mode                     string            `json:"mode"` // ResultMode
 	ResultYieldDateTime      *time.Time        `json:"resultYieldDateTime"`
 	ExaminedMaterial         uuid.UUID         `json:"examinedMaterial"`
+	BatchId                  uuid.UUID         `json:"batchId"`
 	Result                   string            `json:"result"`
 	Operator                 string            `json:"operator"`
 	TechnicalReleaseDateTime *time.Time        `json:"technicalReleaseDateTime"`
@@ -135,6 +138,10 @@ type WorkItemResultImageTO struct {
 	Image               ImageTO    `json:"image"`
 }
 
+type VerifyInstrumentTO struct {
+	Hash string `json:"hash"`
+}
+
 func NewCerberusClient(cerberusUrl string, restyClient *resty.Client) (CerberusClient, error) {
 	if cerberusUrl == "" {
 		return nil, fmt.Errorf("basepath for cerberus must be set. check your configurationf or CerberusURL")
@@ -146,45 +153,17 @@ func NewCerberusClient(cerberusUrl string, restyClient *resty.Client) (CerberusC
 	}, nil
 }
 
-// RegisterInstrument Update cerberus with changed instrument-information
-func (c *cerberusClient) RegisterInstrument(instrument Instrument) error {
-	ciaInstrumentTO := ciaInstrumentTO{
-		ID:   instrument.ID,
-		Name: instrument.Name,
-	}
-
-	resp, err := c.client.R().
-		SetHeader("Content-Type", "application/json").
-		SetBody(ciaInstrumentTO).
-		Post(c.cerberusUrl + "/v1/instruments")
-
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to call Cerberus API")
-		return err
-	}
-
-	if resp.StatusCode() != http.StatusNoContent {
-		errReps := middleware.ClientError{}
-		err = json.Unmarshal(resp.Body(), &errReps)
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to unmarshal error of response")
-			return err
-		}
-		return errors.New(errReps.Message)
-	}
-
-	return nil
-}
-
-func (c *cerberusClient) RegisterInstrumentDriver(name, apiVersion string, apiPort uint16, tlsEnabled bool, extraValueKeys []string, reagentManufacturers []string) error {
+func (c *cerberusClient) RegisterInstrumentDriver(name, displayName string, extraValueKeys []string,
+	protocols []supportedProtocolTO, tests []supportedManufacturerTestTO, encodings []string, reagentManufacturers []string) error {
 	resp, err := c.client.R().
 		SetHeader("Content-Type", "application/json").
 		SetBody(registerInstrumentDriverTO{
 			Name:                 name,
-			APIVersion:           apiVersion,
-			APIPort:              apiPort,
-			TLSEnabled:           tlsEnabled,
+			DisplayName:          displayName,
 			ExtraValueKeys:       extraValueKeys,
+			Protocols:            protocols,
+			ManufacturerTests:    tests,
+			Encodings:            encodings,
 			ReagentManufacturers: reagentManufacturers,
 		}).
 		Post(c.cerberusUrl + "/v1/instrument-drivers")
@@ -203,7 +182,7 @@ func (c *cerberusClient) RegisterInstrumentDriver(name, apiVersion string, apiPo
 		}
 		return errors.New(errReps.Message)
 	}
-
+	c.driverName = name
 	return nil
 }
 
@@ -317,6 +296,63 @@ func (c *cerberusClient) SendAnalysisResultImageBatch(images []WorkItemResultIma
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to call Cerberus API (/v1/analysis-results/image/batch)")
 		return err
+	}
+
+	return nil
+}
+func (c *cerberusClient) VerifyInstrumentHash(hash string) error {
+	verifyTO := VerifyInstrumentTO{Hash: hash}
+	resp, err := c.client.R().
+		SetHeader("Content-Type", "application/json").
+		SetBody(verifyTO).
+		Post(c.cerberusUrl + "/v1/instruments/verify")
+
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to call Cerberus API (/v1/instrument/verify)")
+		return err
+	}
+
+	if resp.IsError() {
+		log.Error().Int("Code", resp.StatusCode()).Msg("Failed to call Cerberus API (/v1/instrument/verify)")
+		return fmt.Errorf("unexpected error from cerberus %d", resp.StatusCode())
+	}
+
+	return nil
+}
+
+func (c *cerberusClient) VerifyExpectedControlResultsHash(hash string) error {
+	verifyTO := VerifyInstrumentTO{Hash: hash}
+	resp, err := c.client.R().
+		SetHeader("Content-Type", "application/json").
+		SetBody(verifyTO).
+		Post(c.cerberusUrl + "/v1/expected-control-results/verify")
+
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to call Cerberus API (/v1/expected-control-results/verify)")
+		return err
+	}
+
+	if resp.IsError() {
+		log.Error().Int("Code", resp.StatusCode()).Msg("Failed to call Cerberus API (/v1/expected-control-results/verify)")
+		return fmt.Errorf("unexpected error from cerberus %d", resp.StatusCode())
+	}
+
+	return nil
+}
+
+func (c *cerberusClient) SyncAnalysisRequests(workItemIDs []uuid.UUID, syncType string) error {
+	queryParams := make(map[string]string)
+	queryParams["driverName"] = c.driverName
+	queryParams["syncType"] = syncType
+	resp, err := c.client.R().
+		SetHeader("Content-Type", "application/json").
+		SetBody(workItemIDs).
+		SetQueryParams(queryParams).
+		Post(c.cerberusUrl + "/v1/instrument-drivers/analysis-requests/sync")
+
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to call Cerberus API (/v1/instrument-drivers/analysis-requests/sync)")
+		return fmt.Errorf("unexpected error from cerberus %d", resp.StatusCode())
 	}
 
 	return nil

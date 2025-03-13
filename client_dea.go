@@ -11,6 +11,7 @@ import (
 
 type DeaClientV1 interface {
 	UploadImage(fileData []byte, name string) (uuid.UUID, error)
+	UploadFile(fileData []byte, name string) (uuid.UUID, error)
 }
 
 type deaClientV1 struct {
@@ -52,4 +53,33 @@ func (dea *deaClientV1) UploadImage(fileData []byte, name string) (uuid.UUID, er
 	}
 
 	return imageID, nil
+}
+
+type savedFileResponseItem struct {
+	ID       uuid.UUID `json:"id"`
+	FileName string    `json:"fileName"`
+}
+
+func (dea *deaClientV1) UploadFile(fileData []byte, name string) (uuid.UUID, error) {
+	var response []savedFileResponseItem
+	var errResponse clientError
+	resp, err := dea.client.R().
+		SetFileReader("file", name, bytes.NewReader(fileData)).
+		SetResult(&response).
+		SetError(&errResponse).
+		Post(dea.deaUrl + "/v1/files")
+	if err != nil {
+		log.Error().Err(err).Msg("upload file to DEA failed")
+		return uuid.Nil, err
+	}
+
+	if resp.StatusCode() != http.StatusCreated {
+		log.Error().Int("lenOfFileBytes", len(fileData)).Str("message", errResponse.Message).Msg("upload file to DEA failed")
+		return uuid.Nil, fmt.Errorf(errResponse.Message)
+	}
+
+	if len(response) != 1 {
+		return uuid.Nil, fmt.Errorf("DEA returned %d response items for single file upload", len(response))
+	}
+	return response[0].ID, nil
 }

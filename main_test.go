@@ -1,12 +1,11 @@
 package skeleton
 
 import (
+	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
+	"github.com/rs/zerolog"
 	"os"
 	"testing"
 
-	"github.com/rs/zerolog"
-
-	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
 	"github.com/rs/zerolog/log"
 )
 

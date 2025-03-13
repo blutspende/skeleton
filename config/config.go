@@ -55,8 +55,13 @@ type Configuration struct {
 	UnprocessedAnalysisResultErrorRetryMinute  int           `envconfig:"UNPROCESSED_ANALYSIS_RESULT_ERROR_RETRY" default:"5"`
 	GetUnprocessedAnalysisRequestRetryMinute   int           `envconfig:"GET_UNPROCESSED_ANALYSIS_REQUEST_RETRY" default:"5"`
 	GetUnprocessedAnalysisResultIDsRetryMinute int           `envconfig:"GET_UNPROCESSED_ANALYSIS_RESULT_IDS_RETRY" default:"5"`
+	StandardAPIClientTimeoutSeconds            uint          `envconfig:"STANDARD_API_CLIENT_TIMEOUT_SECONDS" default:"10"`
+	LongPollingAPIClientTimeoutSeconds         uint          `envconfig:"LONG_POLLING_API_CLIENT_TIMEOUT_SECONDS" default:"80"`
+	LongPollingRetrySeconds                    int           `envconfig:"LONG_POLLING_RETRY_SECONDS" default:"30"`
+	RedisUrl                                   string        `envconfig:"REDIS_URL" required:"true"`
+	RedisPort                                  int           `envconfig:"REDIS_PORT" default:"6379"`
 
-	ClientCredentialAuthHeaderValue string
+	ClientCredentialAuthHeaderValue            string
 }
 
 var Settings Configuration

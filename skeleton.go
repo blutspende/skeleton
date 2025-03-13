@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -40,14 +41,17 @@ type skeleton struct {
 	analysisResultStatusControlIdsBuffer       []uuid.UUID
 	analysisResultStatusControlIdBatchesChan   chan []uuid.UUID
 	cerberusClient                             CerberusClient
+	longPollClient                             LongPollClient
 	deaClient                                  DeaClientV1
 	manager                                    Manager
 	resultTransferFlushTimeout                 int
 	imageRetrySeconds                          int
 	serviceName                                string
+	displayName                                string
 	extraValueKeys                             []string
 	reagentManufacturers                       []string
 	unprocessedHandlingWaitGroup               sync.WaitGroup
+	encodings                                  []string
 }
 
 const waitGroupSize = 3
@@ -117,6 +121,18 @@ func (s *skeleton) SaveAnalysisRequestsInstrumentTransmissions(ctx context.Conte
 		return err
 	}
 	return nil
+}
+
+var nonSpecialCharactersRegex = regexp.MustCompile("[^A-Za-z0-9]+")
+
+func (s *skeleton) UploadRawMessageToDEA(rawMessageBytes []byte) (uuid.UUID, error) {
+	return s.deaClient.UploadFile(rawMessageBytes, generateRawMessageFileName(s.serviceName, time.Now().UTC()))
+}
+
+func generateRawMessageFileName(serviceName string, ts time.Time) string {
+	strippedServiceName := nonSpecialCharactersRegex.ReplaceAllString(serviceName, "_")
+	formattedTs := strings.ReplaceAll(ts.Format("2006-01-02-15-04-05.000000"), ".", "_")
+	return fmt.Sprintf("%s_%s", strippedServiceName, formattedTs)
 }
 
 func (s *skeleton) SubmitAnalysisResult(ctx context.Context, resultData AnalysisResultSet) error {
@@ -514,6 +530,10 @@ func (s *skeleton) FindResultEntities(ctx context.Context, InstrumentID uuid.UUI
 	return instrument, analysisRequests, analyteMapping, nil
 }
 
+func (s *skeleton) RegisterManufacturerTests(ctx context.Context, manufacturerTests []SupportedManufacturerTests) error {
+	return s.instrumentService.UpsertManufacturerTests(ctx, manufacturerTests)
+}
+
 func (s *skeleton) RegisterProtocol(ctx context.Context, id uuid.UUID, name string, description string, abilities []ProtocolAbility, settings []ProtocolSetting) error {
 	return s.instrumentService.UpsertSupportedProtocol(ctx, id, name, description, abilities, settings)
 }
@@ -525,8 +545,6 @@ func (s *skeleton) SetOnlineStatus(ctx context.Context, id uuid.UUID, status Ins
 func (s *skeleton) migrateUp(ctx context.Context, db *sqlx.DB, schemaName string) error {
 	return s.migrator.Run(ctx, db, schemaName)
 }
-
-const apiVersion = "v1"
 
 func (s *skeleton) Start() error {
 	err := s.registerDriverToCerberus(s.ctx)
@@ -545,7 +563,6 @@ func (s *skeleton) Start() error {
 			}
 		}
 	}()
-	go s.sendUnsentInstrumentsToCerberus(s.ctx)
 	for i := 0; i < s.config.AnalysisRequestWorkerPoolSize; i++ {
 		go s.processAnalysisRequests(s.ctx)
 	}
@@ -561,25 +578,41 @@ func (s *skeleton) Start() error {
 
 	go s.enqueueUnprocessedAnalysisRequests(s.ctx)
 	go s.enqueueUnprocessedAnalysisResults(s.ctx)
+	go s.startInstrumentConfigsFetchJob(s.ctx)
+	go s.startExpectedControlResultsFetchJob(s.ctx)
+	go s.startReprocessEventsFetchJob(s.ctx)
+	go s.startAnalysisRequestFetchJob(s.ctx)
+	go s.startAnalysisRequestRevocationReexamineJob(s.ctx)
 	go s.processUnvalidatedControlResults(s.ctx)
 	go s.validateAnalysisResultStatusAndSend(s.ctx)
 
 	s.unprocessedHandlingWaitGroup.Wait()
-
-	// Todo - use cancellable context what is passed to the routines above too
-	err = s.api.Run()
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to start API")
-		return err
+	for {
+		select {
+		case <-s.ctx.Done():
+			return nil
+		}
 	}
-
-	return nil
 }
 
 func (s *skeleton) registerDriverToCerberus(ctx context.Context) error {
 	retryCount := 0
 	for {
-		err := s.cerberusClient.RegisterInstrumentDriver(s.serviceName, apiVersion, s.config.APIPort, s.config.EnableTLS, s.extraValueKeys, s.reagentManufacturers)
+		protocols, err := s.instrumentService.GetSupportedProtocols(ctx)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to get supported protocols")
+			return err
+		}
+		protocolsTos := convertSupportedProtocolsToSupportedProtocolTOs(protocols)
+
+		manufacturerTests, err := s.instrumentService.GetManufacturerTests(ctx)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to get manufacturer tests")
+			return err
+		}
+		manufacturerTestTOs := convertSupportedManufacturerTestsToSupportedManufacturerTestTOs(manufacturerTests)
+
+		err = s.cerberusClient.RegisterInstrumentDriver(s.serviceName, s.displayName, s.extraValueKeys, protocolsTos, manufacturerTestTOs, s.encodings, s.reagentManufacturers)
 		if err != nil {
 			log.Warn().Err(err).Int("retryCount", retryCount).Msg("register instrument driver to cerberus failed")
 			retryCount++
@@ -592,22 +625,6 @@ func (s *skeleton) registerDriverToCerberus(ctx context.Context) error {
 		return nil
 	}
 	return errors.New("register instrument driver to cerberus failed too many times")
-}
-
-func (s *skeleton) sendUnsentInstrumentsToCerberus(ctx context.Context) {
-	ticker := time.NewTicker(10 * time.Minute)
-	for {
-		select {
-		case <-ctx.Done():
-			ticker.Stop()
-			return
-		case _, ok := <-ticker.C:
-			if !ok {
-				log.Error().Msg("Sending unsent instruments to Cerberus stopped")
-			}
-			s.instrumentService.EnqueueUnsentInstrumentsToCerberus(ctx)
-		}
-	}
 }
 
 func (s *skeleton) enqueueUnprocessedAnalysisRequests(ctx context.Context) {
@@ -1088,23 +1105,254 @@ func (s *skeleton) processStuckImagesToCerberus(ctx context.Context) {
 	}
 }
 
-func NewSkeleton(ctx context.Context, serviceName string, requestedExtraValueKeys []string, reagentManufacturers []string, sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, api GinApi, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService service.ConsoleLogService, sortingRuleService SortingRuleService, manager Manager, cerberusClient CerberusClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
+const (
+	syncTypeInstrument             = "instrument"
+	syncTypeNewWorkItem            = "newWorkItem"
+	syncTypeRevocation             = "revocation"
+	syncTypeReexamine              = "reexamine"
+	syncTypeReprocess              = "reprocess"
+	syncTypeExpectedControlResults = "expectedControlResults"
+)
+
+func (s *skeleton) startInstrumentConfigsFetchJob(ctx context.Context) {
+	go s.longPollClient.StartInstrumentConfigsLongPolling(ctx)
+	for {
+		select {
+		case instrumentMessage := <-s.longPollClient.GetInstrumentConfigsChan():
+			err := s.processInstrumentMessage(ctx, instrumentMessage)
+			if err != nil {
+				log.Warn().Err(err).Interface("Message", instrumentMessage).Msg("Failed to process instrument message from Cerberus")
+				continue
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (s *skeleton) startExpectedControlResultsFetchJob(ctx context.Context) {
+	go s.longPollClient.StartExpectedControlResultsLongPolling(ctx)
+	for {
+		select {
+		case expectedControlResult := <-s.longPollClient.GetExpectedControlResultsChan():
+			err := s.processExpectedControlResult(ctx, expectedControlResult)
+			if err != nil {
+				log.Warn().Err(err).Interface("Message", expectedControlResult).Msg("Failed to process expected control result")
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (s *skeleton) processInstrumentMessage(ctx context.Context, message InstrumentMessageTO) error {
+	switch message.MessageType {
+	case MessageTypeCreate:
+		log.Info().Msgf("Processing creation event for InstrumentId: %s", message.InstrumentId)
+		instrument := convertInstrumentTOToInstrument(*message.Instrument)
+		id, err := s.instrumentService.CreateInstrument(ctx, instrument)
+		if err != nil {
+			return err
+		}
+		log.Info().Interface("UUID", id).Msg("Created instrument")
+	case MessageTypeUpdate:
+		log.Info().Msgf("Processing update event for InstrumentId: %s", message.InstrumentId)
+		instrument := convertInstrumentTOToInstrument(*message.Instrument)
+		err := s.instrumentService.UpdateInstrument(ctx, instrument, *message.UserId)
+		if err != nil {
+			return err
+		}
+		log.Info().Msg("Updated instrument")
+	case MessageTypeDelete:
+		log.Info().Msgf("Processing deletion event for InstrumentId: %s", message.InstrumentId)
+		err := s.instrumentService.DeleteInstrument(ctx, message.InstrumentId)
+		if err != nil {
+			return err
+		}
+		log.Info().Msg("Deleted instrument")
+	default:
+		log.Warn().Msgf("Unknown message type for InstrumentId: %s", message.InstrumentId)
+	}
+	return nil
+}
+
+func (s *skeleton) processExpectedControlResult(ctx context.Context, controlResultMessage ExpectedControlResultMessageTO) error {
+	switch controlResultMessage.MessageType {
+	case MessageTypeCreate:
+		log.Info().Msgf("Processing expected control result creation event for InstrumentId: %s", controlResultMessage.InstrumentId)
+		expectedControlResult := convertTOsToExpectedControlResults(controlResultMessage.ExpectedControlResults)
+		err := s.instrumentService.CreateExpectedControlResults(ctx, *controlResultMessage.InstrumentId, expectedControlResult, controlResultMessage.UserId)
+		if err != nil {
+			return err
+		}
+	case MessageTypeUpdate:
+		log.Info().Msgf("Processing expected control result update event for InstrumentId: %s", controlResultMessage.InstrumentId)
+		expectedControlResult := convertTOsToExpectedControlResults(controlResultMessage.ExpectedControlResults)
+		err := s.instrumentService.UpdateExpectedControlResults(ctx, *controlResultMessage.InstrumentId, expectedControlResult, controlResultMessage.UserId)
+		if err != nil {
+			return err
+		}
+	case MessageTypeDelete:
+		log.Info().Msgf("Processing deletion event for ExpectedControlResultId: %s", controlResultMessage.DeletedExpectedControlResultId)
+		err := s.instrumentService.DeleteExpectedControlResult(ctx, *controlResultMessage.DeletedExpectedControlResultId, controlResultMessage.UserId)
+		if err != nil {
+			return err
+		}
+	default:
+		log.Warn().Interface("Message", controlResultMessage).Msg("Unknown message type")
+	}
+	return nil
+}
+
+func (s *skeleton) startReprocessEventsFetchJob(ctx context.Context) {
+	go s.longPollClient.StartReprocessEventsLongPolling(ctx)
+	for {
+		select {
+		case reprocessMessage := <-s.longPollClient.GetReprocessEventsChan():
+			err := s.processReprocessMessage(ctx, reprocessMessage)
+			if err != nil {
+				time.AfterFunc(time.Second*time.Duration(s.config.LongPollingRetrySeconds), func() {
+					s.longPollClient.GetReprocessEventsChan() <- reprocessMessage
+				})
+				continue
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (s *skeleton) processReprocessMessage(ctx context.Context, message ReprocessMessageTO) error {
+	switch message.MessageType {
+	case MessageTypeRetransmitResult:
+		if str, ok := message.ReprocessId.(string); ok {
+			resultId, err := uuid.Parse(str)
+			if err != nil {
+				return fmt.Errorf("invalid UUID format for message type: %s", MessageTypeRetransmitResult)
+			}
+			err = s.analysisService.RetransmitResult(ctx, resultId)
+			if err != nil {
+				return err
+			}
+		} else {
+			return fmt.Errorf("unexpected reprocess id type for message type: %s", MessageTypeRetransmitResult)
+		}
+	case MessageTypeReprocessBySampleCode:
+		if sampleCode, ok := message.ReprocessId.(string); ok {
+			err := s.manager.GetCallbackHandler().ReprocessInstrumentDataBySampleCode(sampleCode)
+			if err != nil {
+				return err
+			}
+		} else {
+			return fmt.Errorf("unexpected reprocess id type for message type: %s", MessageTypeReprocessBySampleCode)
+		}
+	case MessageTypeReprocessByBatchIds:
+		if slice, ok := message.ReprocessId.([]interface{}); ok {
+			var batchIds []uuid.UUID
+			for _, item := range slice {
+				if str, ok := item.(string); ok {
+					parsedUUID, err := uuid.Parse(str)
+					if err != nil {
+						log.Error().Err(err).Msgf("Invalid UUID in batch list for message type: %s", MessageTypeReprocessByBatchIds)
+						continue
+					}
+					batchIds = append(batchIds, parsedUUID)
+				} else {
+					log.Error().Msgf("Unexpected batch ID type for message type: %s", MessageTypeReprocessByBatchIds)
+					continue
+				}
+			}
+			err := s.manager.GetCallbackHandler().ReprocessInstrumentData(batchIds)
+			if err != nil {
+				return err
+			}
+		} else {
+			return fmt.Errorf("unexpected reprocess id type for message type: %s", MessageTypeReprocessByBatchIds)
+		}
+	default:
+		log.Warn().Interface("Received message", message).Msg("Unknown message type for Reprocess")
+	}
+	return nil
+}
+
+func (s *skeleton) startAnalysisRequestFetchJob(ctx context.Context) {
+	go s.longPollClient.StartAnalysisRequestLongPolling(ctx)
+	for {
+		select {
+		case analysisRequests := <-s.longPollClient.GetAnalysisRequestsChan():
+			err := s.analysisService.CreateAnalysisRequests(ctx, analysisRequests)
+			if err != nil {
+				time.AfterFunc(time.Second*time.Duration(s.config.LongPollingRetrySeconds), func() {
+					s.longPollClient.GetAnalysisRequestsChan() <- analysisRequests
+				})
+				continue
+			}
+			workItemIDs := make([]uuid.UUID, len(analysisRequests))
+			for i := range analysisRequests {
+				workItemIDs[i] = analysisRequests[i].WorkItemID
+			}
+
+			_ = s.cerberusClient.SyncAnalysisRequests(workItemIDs, syncTypeNewWorkItem)
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+func (s *skeleton) startAnalysisRequestRevocationReexamineJob(ctx context.Context) {
+	go s.longPollClient.StartRevokedReexaminedWorkItemIDsLongPolling(ctx)
+	go func() {
+		for {
+			select {
+			case revokedWorkItemIDs := <-s.longPollClient.GetRevokedWorkItemIDsChan():
+				err := s.analysisService.RevokeAnalysisRequests(ctx, revokedWorkItemIDs)
+				if err != nil {
+					time.AfterFunc(time.Second*time.Duration(s.config.LongPollingRetrySeconds), func() {
+						s.longPollClient.GetRevokedWorkItemIDsChan() <- revokedWorkItemIDs
+					})
+					continue
+				}
+				_ = s.cerberusClient.SyncAnalysisRequests(revokedWorkItemIDs, syncTypeRevocation)
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	for {
+		select {
+		case reexaminedWorkItemIDs := <-s.longPollClient.GetReexaminedWorkItemIDsChan():
+			err := s.analysisService.ReexamineAnalysisRequestsBatch(ctx, reexaminedWorkItemIDs)
+			if err != nil {
+				time.AfterFunc(time.Second*time.Duration(s.config.LongPollingRetrySeconds), func() {
+					s.longPollClient.GetReexaminedWorkItemIDsChan() <- reexaminedWorkItemIDs
+				})
+				continue
+			}
+			_ = s.cerberusClient.SyncAnalysisRequests(reexaminedWorkItemIDs, syncTypeReexamine)
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func NewSkeleton(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, reagentManufacturers []string, sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService service.ConsoleLogService, manager Manager, cerberusClient CerberusClient, longPollClient LongPollClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
 	skeleton := &skeleton{
 		ctx:                                    ctx,
 		serviceName:                            serviceName,
+		displayName:                            displayName,
 		extraValueKeys:                         requestedExtraValueKeys,
+		encodings:                              encodings,
 		reagentManufacturers:                   reagentManufacturers,
 		config:                                 config,
 		sqlConn:                                sqlConn,
 		dbSchema:                               dbSchema,
 		migrator:                               migrator,
-		api:                                    api,
 		analysisRepository:                     analysisRepository,
 		analysisService:                        analysisService,
 		instrumentService:                      instrumentService,
 		consoleLogService:                      consoleLogService,
 		manager:                                manager,
 		cerberusClient:                         cerberusClient,
+		longPollClient:                         longPollClient,
 		deaClient:                              deaClient,
 		resultsBuffer:                          make([]AnalysisResult, 0, 500),
 		resultBatchesChan:                      make(chan []AnalysisResult, 10),

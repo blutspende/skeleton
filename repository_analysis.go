@@ -230,7 +230,7 @@ type analysisResultDAO struct {
 	InstrumentID             uuid.UUID         `db:"instrument_id"`
 	InstrumentRunID          uuid.UUID         `db:"instrument_run_id"`
 	SampleCode               string            `db:"sample_code"`
-	ResultRecordID           uuid.UUID         `db:"result_record_id"`
+	DEARawMessageID          uuid.UUID         `db:"dea_raw_message_id"`
 	BatchID                  uuid.UUID         `db:"batch_id"`
 	Result                   string            `db:"result"`
 	Status                   ResultStatus      `db:"status"`
@@ -434,7 +434,7 @@ type cerberusQueueItemDAO struct {
 }
 
 type AnalysisRepository interface {
-	CreateAnalysisRequestsBatch(ctx context.Context, analysisRequests []AnalysisRequest) ([]uuid.UUID, []uuid.UUID, error)
+	CreateAnalysisRequestsBatch(ctx context.Context, analysisRequests []AnalysisRequest) ([]uuid.UUID, error)
 	CreateAnalysisRequestExtraValues(ctx context.Context, extraValuesByAnalysisRequestIDs map[uuid.UUID][]ExtraValue) error
 	GetAnalysisRequestsBySampleCodeAndAnalyteID(ctx context.Context, sampleCodes string, analyteID uuid.UUID) ([]AnalysisRequest, error)
 	GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string, allowResending bool) (map[string][]AnalysisRequest, error)
@@ -531,58 +531,52 @@ const analysisRequestsBatchSize = 9000
 
 // CreateAnalysisRequestsBatch
 // Returns the CerberusID and work item IDs of saved requests
-func (r *analysisRepository) CreateAnalysisRequestsBatch(ctx context.Context, analysisRequests []AnalysisRequest) ([]uuid.UUID, []uuid.UUID, error) {
+func (r *analysisRepository) CreateAnalysisRequestsBatch(ctx context.Context, analysisRequests []AnalysisRequest) ([]uuid.UUID, error) {
 	ids := make([]uuid.UUID, 0, len(analysisRequests))
-	workItemIDs := make([]uuid.UUID, 0, len(analysisRequests))
 	err := utils.Partition(len(analysisRequests), analysisRequestsBatchSize, func(low int, high int) error {
-		idsPart, workItemIDsPart, err := r.createAnalysisRequestsBatch(ctx, analysisRequests[low:high])
+		idsPart, err := r.createAnalysisRequestsBatch(ctx, analysisRequests[low:high])
 		if err != nil {
 			return err
 		}
 		ids = append(ids, idsPart...)
-		workItemIDs = append(workItemIDs, workItemIDsPart...)
 		return nil
 	})
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return ids, workItemIDs, nil
+	return ids, nil
 }
 
-func (r *analysisRepository) createAnalysisRequestsBatch(ctx context.Context, analysisRequests []AnalysisRequest) ([]uuid.UUID, []uuid.UUID, error) {
+func (r *analysisRepository) createAnalysisRequestsBatch(ctx context.Context, analysisRequests []AnalysisRequest) ([]uuid.UUID, error) {
 	if len(analysisRequests) == 0 {
-		return []uuid.UUID{}, []uuid.UUID{}, nil
+		return nil, nil
 	}
-	ids := make([]uuid.UUID, len(analysisRequests))
-	for i := range analysisRequests {
-		if (analysisRequests[i].ID == uuid.UUID{}) || (analysisRequests[i].ID == uuid.Nil) {
-			analysisRequests[i].ID = uuid.New()
-		}
-		ids[i] = analysisRequests[i].ID
-	}
-
-	query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_requests(id, work_item_id, analyte_id, sample_code, material_id, laboratory_id, valid_until_time, created_at)
+	ids := make([]uuid.UUID, 0)
+	err := utils.Partition(len(analysisRequests), maxParams/8, func(low int, high int) error {
+		query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_requests(id, work_item_id, analyte_id, sample_code, material_id, laboratory_id, valid_until_time, created_at)
 				VALUES(:id, :work_item_id, :analyte_id, :sample_code, :material_id, :laboratory_id, :valid_until_time, :created_at)
-				ON CONFLICT (work_item_id) DO NOTHING RETURNING work_item_id;`, r.dbSchema)
-	rows, err := r.db.NamedQueryContext(ctx, query, convertAnalysisRequestsToDAOs(analysisRequests))
-	if err != nil {
-		log.Error().Err(err).Msg(msgCreateAnalysisRequestsBatchFailed)
-		return []uuid.UUID{}, []uuid.UUID{}, ErrCreateAnalysisRequestsBatchFailed
-	}
-	defer rows.Close()
-
-	savedWorkItemIDs := make([]uuid.UUID, len(analysisRequests))
-	for rows.Next() {
-		var workItemID uuid.UUID
-		err = rows.Scan(&workItemID)
+				ON CONFLICT (work_item_id) DO NOTHING RETURNING id;`, r.dbSchema)
+		rows, err := r.db.NamedQueryContext(ctx, query, convertAnalysisRequestsToDAOs(analysisRequests[low:high]))
 		if err != nil {
 			log.Error().Err(err).Msg(msgCreateAnalysisRequestsBatchFailed)
-			return []uuid.UUID{}, []uuid.UUID{}, ErrCreateAnalysisRequestsBatchFailed
+			return ErrCreateAnalysisRequestsBatchFailed
 		}
-		savedWorkItemIDs = append(savedWorkItemIDs, workItemID)
-	}
+		defer rows.Close()
 
-	return ids, savedWorkItemIDs, nil
+		for rows.Next() {
+			var analysisRequestID uuid.UUID
+			err = rows.Scan(&analysisRequestID)
+			if err != nil {
+				log.Error().Err(err).Msg(msgCreateAnalysisRequestsBatchFailed)
+				return ErrCreateAnalysisRequestsBatchFailed
+			}
+			ids = append(ids, analysisRequestID)
+		}
+
+		return nil
+	})
+
+	return ids, err
 }
 
 const subjectBatchSize = 6000
@@ -1178,8 +1172,8 @@ func (r *analysisRepository) createAnalysisResultsBatch(ctx context.Context, ana
 	}
 
 	err := utils.Partition(len(analysisResults), analysisResultBatchSize, func(low int, high int) error {
-		query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_results(id, analyte_mapping_id, instrument_id, sample_code, instrument_run_id, result_record_id, batch_id, "result", status, result_mode, yielded_at, valid_until, operator, technical_release_datetime, edited, edit_reason, is_invalid)
-			VALUES(:id, :analyte_mapping_id, :instrument_id, :sample_code, :instrument_run_id, :result_record_id, :batch_id, :result, :status, :result_mode, :yielded_at, :valid_until, :operator, :technical_release_datetime, :edited, :edit_reason, :is_invalid);`, r.dbSchema)
+		query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_results(id, analyte_mapping_id, instrument_id, sample_code, instrument_run_id, dea_raw_message_id, batch_id, "result", status, result_mode, yielded_at, valid_until, operator, technical_release_datetime, edited, edit_reason, is_invalid)
+			VALUES(:id, :analyte_mapping_id, :instrument_id, :sample_code, :instrument_run_id, :dea_raw_message_id, :batch_id, :result, :status, :result_mode, :yielded_at, :valid_until, :operator, :technical_release_datetime, :edited, :edit_reason, :is_invalid);`, r.dbSchema)
 		_, err := r.db.NamedExecContext(ctx, query, convertAnalysisResultsToDAOs(analysisResults[low:high]))
 		if err != nil {
 			log.Error().Err(err).Msg(msgCreateAnalysisResultBatchFailed)
@@ -1299,7 +1293,7 @@ func (r *analysisRepository) CreateAnalysisResultControlResultRelations(ctx cont
 
 func (r *analysisRepository) GetAnalysisResultsBySampleCodeAndAnalyteID(ctx context.Context, sampleCode string, analyteID uuid.UUID) ([]AnalysisResult, error) {
 	query := `SELECT sar.id, sar.analyte_mapping_id, sar.instrument_id, sar.sample_code, sar.instrument_run_id, sar.is_invalid,
-       				sar.result_record_id, sar.batch_id, sar."result", sar.status, sar.result_mode, sar.yielded_at,
+       				sar.dea_raw_message_id, sar.batch_id, sar."result", sar.status, sar.result_mode, sar.yielded_at,
        				sar.valid_until, sar.operator, sar.edited, sar.edit_reason, sam.id AS "analyte_mapping.id",
        				sam.instrument_id AS "analyte_mapping.instrument_id", sam.instrument_analyte AS "analyte_mapping.instrument_analyte",
 					sam.analyte_id AS "analyte_mapping.analyte_id", sam.result_type AS "analyte_mapping.result_type",
@@ -1339,7 +1333,7 @@ func (r *analysisRepository) GetAnalysisResultsBySampleCodeAndAnalyteID(ctx cont
 }
 
 func (r *analysisRepository) GetAnalysisResultByID(ctx context.Context, id uuid.UUID, allowDeletedAnalyteMapping bool) (AnalysisResult, error) {
-	query := `SELECT sar.id, sar.analyte_mapping_id, sar.instrument_id, sar.sample_code, sar.instrument_run_id, sar.result_record_id, sar.batch_id, sar."result", sar.status, sar.result_mode, sar.yielded_at, sar.valid_until, sar.operator, sar.edited, sar.edit_reason, sar.is_invalid,
+	query := `SELECT sar.id, sar.analyte_mapping_id, sar.instrument_id, sar.sample_code, sar.instrument_run_id, sar.dea_raw_message_id, sar.batch_id, sar."result", sar.status, sar.result_mode, sar.yielded_at, sar.valid_until, sar.operator, sar.edited, sar.edit_reason, sar.is_invalid,
 					sam.id AS "analyte_mapping.id", sam.instrument_id AS "analyte_mapping.instrument_id", sam.instrument_analyte AS "analyte_mapping.instrument_analyte", sam.analyte_id AS "analyte_mapping.analyte_id", sam.result_type AS "analyte_mapping.result_type", 
 					sam.control_instrument_analyte AS "analyte_mapping.control_instrument_analyte", sam.control_result_required AS "analyte_mapping.control_result_required", sam.created_at AS "analyte_mapping.created_at", sam.modified_at AS "analyte_mapping.modified_at"
 			FROM %schema_name%.sk_analysis_results sar
@@ -1386,7 +1380,7 @@ func (r *analysisRepository) GetAnalysisResultsByIDs(ctx context.Context, ids []
 		return []AnalysisResult{}, nil
 	}
 
-	query := `SELECT sar.id, sar.analyte_mapping_id, sar.instrument_id, sar.sample_code, sar.instrument_run_id, sar.result_record_id, sar.batch_id, sar."result", sar.status, sar.result_mode, sar.yielded_at, sar.valid_until, sar.operator, sar.edited, sar.edit_reason, sar.is_invalid,
+	query := `SELECT sar.id, sar.analyte_mapping_id, sar.instrument_id, sar.sample_code, sar.instrument_run_id, sar.dea_raw_message_id, sar.batch_id, sar."result", sar.status, sar.result_mode, sar.yielded_at, sar.valid_until, sar.operator, sar.edited, sar.edit_reason, sar.is_invalid,
 					sam.id AS "analyte_mapping.id", sam.instrument_id AS "analyte_mapping.instrument_id", sam.instrument_analyte AS "analyte_mapping.instrument_analyte", sam.analyte_id AS "analyte_mapping.analyte_id", sam.result_type AS "analyte_mapping.result_type", 
 					sam.control_instrument_analyte AS "analyte_mapping.control_instrument_analyte", sam.control_result_required AS "analyte_mapping.control_result_required", sam.created_at AS "analyte_mapping.created_at", sam.modified_at AS "analyte_mapping.modified_at"
 			FROM %schema_name%.sk_analysis_results sar
@@ -1431,7 +1425,7 @@ func (r *analysisRepository) GetAnalysisResultsByBatchIDs(ctx context.Context, b
 	analysisResultDAOs := make([]analysisResultDAO, 0)
 
 	err := utils.Partition(len(batchIDs), maxParams, func(low int, high int) error {
-		query := `SELECT sar.id, sar.analyte_mapping_id, sar.instrument_id, sar.sample_code, sar.instrument_run_id, sar.result_record_id, sar.batch_id, sar."result", sar.status, sar.result_mode, sar.yielded_at, sar.valid_until, sar.operator, sar.edited, sar.edit_reason, sar.is_invalid,
+		query := `SELECT sar.id, sar.analyte_mapping_id, sar.instrument_id, sar.sample_code, sar.instrument_run_id, sar.dea_raw_message_id, sar.batch_id, sar."result", sar.status, sar.result_mode, sar.yielded_at, sar.valid_until, sar.operator, sar.edited, sar.edit_reason, sar.is_invalid,
 					sam.id AS "analyte_mapping.id", sam.instrument_id AS "analyte_mapping.instrument_id", sam.instrument_analyte AS "analyte_mapping.instrument_analyte", sam.analyte_id AS "analyte_mapping.analyte_id", sam.result_type AS "analyte_mapping.result_type", 
 					sam.control_instrument_analyte AS "analyte_mapping.control_instrument_analyte", sam.control_result_required AS "analyte_mapping.control_result_required", sam.created_at AS "analyte_mapping.created_at", sam.modified_at AS "analyte_mapping.modified_at"
 			FROM %schema_name%.sk_analysis_results sar
@@ -1478,7 +1472,7 @@ func (r *analysisRepository) gatherAndAttachAllConnectedDataToAnalysisResults(ct
 	analyteMappingIDs := make([]uuid.UUID, 0)
 	for i := range analysisResultDAOs {
 		analysisResultIDs = append(analysisResultIDs, analysisResultDAOs[i].ID)
-		analyteMappingIDs = append(analysisResultIDs, analysisResultDAOs[i].AnalyteMappingID)
+		analyteMappingIDs = append(analyteMappingIDs, analysisResultDAOs[i].AnalyteMappingID)
 	}
 
 	extraValuesMap, err := r.getAnalysisResultExtraValues(ctx, analysisResultIDs)
@@ -2745,7 +2739,7 @@ func (r *analysisRepository) DeleteOldCerberusQueueItems(ctx context.Context, cl
 func (r *analysisRepository) DeleteOldAnalysisRequestsWithTx(ctx context.Context, cleanupDays, limit int, tx db.DbConnector) (int64, error) {
 	txR := *r
 	txR.db = tx
-	query := fmt.Sprintf(`SELECT id, sample_code FROM %s.sk_analysis_requests WHERE valid_until_time < (current_date - ($1 ||' DAY')::INTERVAL) AND is_processed LIMIT $2;`, r.dbSchema)
+	query := fmt.Sprintf(`SELECT id, sample_code FROM %s.sk_analysis_requests WHERE valid_until_time < (current_date - make_interval(days := $1)) AND is_processed LIMIT $2;`, r.dbSchema)
 	rows, err := txR.db.QueryxContext(ctx, query, cleanupDays, limit)
 	if err != nil {
 		log.Error().Err(err).Msg(msgDeleteOldAnalysisRequestsFailed)
@@ -2883,7 +2877,7 @@ func (r *analysisRepository) DeleteOldAnalysisResultsWithTx(ctx context.Context,
 	txR := *r
 	txR.db = tx
 
-	query := fmt.Sprintf(`SELECT id FROM %s.sk_analysis_results WHERE GREATEST(valid_until, created_at + INTERVAL '14 DAYS') < (current_date - ($1 ||' DAY')::INTERVAL) AND is_processed LIMIT $2;`, r.dbSchema)
+	query := fmt.Sprintf(`SELECT id FROM %s.sk_analysis_results WHERE GREATEST(valid_until, created_at + INTERVAL '14 DAYS') < (current_date - make_interval(days := $1))  AND is_processed LIMIT $2;`, r.dbSchema)
 	rows, err := txR.db.QueryxContext(ctx, query, cleanupDays, limit)
 	if err != nil {
 		log.Error().Err(err).Msg(msgDeleteOldAnalysisResultsFailed)
@@ -3102,9 +3096,11 @@ func convertAnalysisResultToTO(ar AnalysisResult) (AnalysisResultTO, error) {
 	analysisResultTO := AnalysisResultTO{
 		ID:                       ar.ID,
 		WorkingItemID:            ar.AnalysisRequest.WorkItemID,
+		DEARawMessageID:          ar.DEARawMessageID,
 		ValidUntil:               ar.ValidUntil,
 		ResultYieldDateTime:      ar.ResultYieldDateTime,
 		ExaminedMaterial:         ar.AnalysisRequest.MaterialID,
+		BatchId:                  ar.BatchID,
 		Result:                   ar.Result,
 		Mode:                     string(ar.ResultMode),
 		Status:                   string(ar.Status),
@@ -3656,7 +3652,7 @@ func (r *analysisRepository) gatherAndAttachAllConnectedDataToControlResults(ctx
 
 	for i := range controlResultDAOs {
 		analyteMappingIDs = append(analyteMappingIDs, controlResultDAOs[i].AnalyteMappingID)
-		controlResultIDs = append(analyteMappingIDs, controlResultDAOs[i].ID)
+		controlResultIDs = append(controlResultIDs, controlResultDAOs[i].ID)
 	}
 
 	extraValues, err := r.getControlResultExtraValues(ctx, controlResultIDs)
@@ -4249,7 +4245,7 @@ func convertAnalysisResultToDAO(analysisResult AnalysisResult) analysisResultDAO
 		ResultMode:       analysisResult.ResultMode,
 		SampleCode:       analysisResult.SampleCode,
 		InstrumentRunID:  analysisResult.InstrumentRunID,
-		ResultRecordID:   analysisResult.ResultRecordID,
+		DEARawMessageID:  analysisResult.DEARawMessageID,
 		BatchID:          analysisResult.BatchID,
 		Result:           analysisResult.Result,
 		Status:           analysisResult.Status,
@@ -4296,7 +4292,7 @@ func convertAnalysisResultDAOToAnalysisResult(analysisResultDAO analysisResultDA
 			ID: analysisResultDAO.InstrumentID,
 		},
 		SampleCode:      analysisResultDAO.SampleCode,
-		ResultRecordID:  analysisResultDAO.ResultRecordID,
+		DEARawMessageID: analysisResultDAO.DEARawMessageID,
 		BatchID:         analysisResultDAO.BatchID,
 		Result:          analysisResultDAO.Result,
 		ResultMode:      analysisResultDAO.ResultMode,

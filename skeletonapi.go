@@ -2,12 +2,8 @@ package skeleton
 
 import (
 	"context"
-	"github.com/blutspende/logcom-api/logcom"
-	"github.com/blutspende/skeleton/consolelog/repository"
+	"fmt"
 	"github.com/blutspende/skeleton/consolelog/service"
-	"github.com/blutspende/skeleton/server"
-	"github.com/gin-gonic/gin"
-	"net/http"
 	"time"
 
 	config2 "github.com/blutspende/skeleton/config"
@@ -25,14 +21,6 @@ type SkeletonCallbackHandlerV1 interface {
 	// Returning a not nil will prevent the result being processed further.
 	// This method should be used e.g. to update standing caches regarding analysis requests whenever a request is received.
 	HandleAnalysisRequests(request []AnalysisRequest) error
-
-	// GetManufacturerTestList is called when the Skeleton requires a list of test names (strings)
-	// as known to be valid by the manufacturer of this instrument
-	GetManufacturerTestList(instrumentId uuid.UUID, protocolId uuid.UUID) ([]SupportedManufacturerTests, error)
-
-	// GetEncodingList is called when the Skeleton requires a list of supported encodings (strings)
-	// as known to be valid by the provided protocol
-	GetEncodingList(protocolId uuid.UUID) ([]string, error)
 
 	RevokeAnalysisRequests(request []AnalysisRequest)
 
@@ -75,11 +63,16 @@ type SkeletonAPI interface {
 	MarkSortingTargetAsApplied(ctx context.Context, instrumentIP, sampleCode, programme, target string) error
 	// SubmitAnalysisResult - Submit result to Skeleton and Cerberus,
 	// By default this function batches the transmissions by collecting them and
-	// use the batch-endpoint of cerberus for performance reasons
+	// use the batch-endpoint of cerberus for performance reasons.
+	// Analysis results must have their DEARawMessageID set, therefore calling UploadRawMessageToDEA
+	// on the raw instrument message is a prerequisite to submitting analysis results.
 	//SubmitAnalysisResult(ctx context.Context, resultData AnalysisResultSet) error
 
 	// SubmitAnalysisResultBatch - Submit result batch to Skeleton and Cerberus,
 	// By default this function batches the transmissions by collecting them and
+	// use the batch-endpoint of cerberus for performance reasons.
+	// Analysis results must have their DEARawMessageID set, therefore calling UploadRawMessageToDEA
+	// on the raw instrument message is a prerequisite to submitting analysis results.
 	// use the batch-endpoint of cerberus for performance reasons
 	SubmitAnalysisResultBatch(ctx context.Context, resultBatch AnalysisResultSet) error
 
@@ -87,6 +80,10 @@ type SkeletonAPI interface {
 
 	GetAnalysisResultIdsSinceLastControlByReagent(ctx context.Context, reagent Reagent, examinedAt time.Time, analyteMappingId uuid.UUID, instrumentId uuid.UUID) ([]uuid.UUID, error)
 	GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMappingId uuid.UUID, instrumentId uuid.UUID) ([]ControlResult, error)
+
+	// UploadRawMessageToDEA - Uploads raw instrument message to DEA, and returns its ID. Must be called before
+	// submitting analysis result, as every analysis result must have a reference to it.
+	UploadRawMessageToDEA(rawMessage []byte) (uuid.UUID, error)
 
 	// GetInstrument returns all the settings regarding an instrument
 	// contains AnalyteMappings[] and RequestMappings[]
@@ -106,6 +103,9 @@ type SkeletonAPI interface {
 	// RegisterProtocol - Registers the supported protocols of a driver class
 	RegisterProtocol(ctx context.Context, id uuid.UUID, name string, description string, abilities []ProtocolAbility, settings []ProtocolSetting) error
 
+	// RegisterManufacturerTests - Registers the supported manufacturer tests of the driver
+	RegisterManufacturerTests(ctx context.Context, manufacturerTests []SupportedManufacturerTests) error
+
 	// SetOnlineStatus - Sets the current status of an instrument. Possible values:
 	// - ONLINE - instrument is actively connected
 	// - READY - instrument is not actively connected, but ready to connect
@@ -119,14 +119,15 @@ type SkeletonAPI interface {
 	Start() error
 }
 
-func New(ctx context.Context, serviceName string, requestedExtraValueKeys []string, reagentManufacturers []string, sqlConn *sqlx.DB, dbSchema string) (SkeletonAPI, error) {
+func New(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, reagentManufacturers []string, sqlConn *sqlx.DB, dbSchema string) (SkeletonAPI, error) {
 	config, err := config2.ReadConfiguration()
 	if err != nil {
 		return nil, err
 	}
 	authManager := NewAuthManager(&config,
 		NewRestyClient(context.Background(), &config, true))
-	internalApiRestyClient := NewRestyClientWithAuthManager(context.Background(), &config, authManager)
+	internalApiRestyClient := NewRestyClientWithAuthManager(context.Background(), &config, authManager, config.StandardAPIClientTimeoutSeconds)
+	longPollingApiRestyClient := NewRestyClientWithAuthManager(context.Background(), &config, authManager, 0) // do not set timeout for resty client, it is handled by longpollClient (prevents unnecessary context deadline exceeded errors)
 	cerberusClient, err := NewCerberusClient(config.CerberusURL, internalApiRestyClient)
 	if err != nil {
 		return nil, err
@@ -140,27 +141,16 @@ func New(ctx context.Context, serviceName string, requestedExtraValueKeys []stri
 	instrumentCache := NewInstrumentCache()
 	analysisRepository := NewAnalysisRepository(dbConn, dbSchema)
 	instrumentRepository := NewInstrumentRepository(dbConn, dbSchema)
-	consoleLogRepository := repository.NewConsoleLogRepository(500)
 	analysisService := NewAnalysisService(analysisRepository, deaClient, cerberusClient, manager)
 	conditionRepository := NewConditionRepository(dbConn, dbSchema)
 	conditionService := NewConditionService(conditionRepository)
 	sortingRuleRepository := NewSortingRuleRepository(dbConn, dbSchema)
 	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
-	instrumentService := NewInstrumentService(&config, sortingRuleService, instrumentRepository, manager, instrumentCache, cerberusClient)
-	consoleLogSSEServer := server.NewConsoleLogSSEServer(service.NewConsoleLogSSEClientListener())
-	consoleLogService := service.NewConsoleLogService(consoleLogRepository, consoleLogSSEServer)
-	api := NewAPI(&config, authManager, analysisService, instrumentService, consoleLogService, consoleLogSSEServer)
+	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, manager, instrumentCache, cerberusClient)
 
-	logcom.Init(logcom.Configuration{
-		ServiceName: serviceName,
-		LogComURL:   config.LogComURL,
-		HeaderProvider: func(ctx context.Context) http.Header {
-			if ginCtx, ok := ctx.(*gin.Context); ok {
-				return ginCtx.Request.Header
-			}
-			return http.Header{}
-		},
-	})
+	consoleLogService := service.NewConsoleLogService(fmt.Sprintf("%s:%d", config.RedisUrl, config.RedisPort))
 
-	return NewSkeleton(ctx, serviceName, requestedExtraValueKeys, reagentManufacturers, sqlConn, dbSchema, migrator.NewSkeletonMigrator(), api, analysisRepository, analysisService, instrumentService, consoleLogService, sortingRuleService, manager, cerberusClient, deaClient, config)
+	longpollClient := NewLongPollClient(longPollingApiRestyClient, serviceName, config.CerberusURL, config.LongPollingAPIClientTimeoutSeconds)
+
+	return NewSkeleton(ctx, serviceName, displayName, requestedExtraValueKeys, encodings, reagentManufacturers, sqlConn, dbSchema, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, manager, cerberusClient, longpollClient, deaClient, config)
 }
