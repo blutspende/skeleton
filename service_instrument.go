@@ -151,7 +151,7 @@ func (s *instrumentService) CreateInstrument(ctx context.Context, instrument Ins
 
 	for i := range instrument.SortingRules {
 		instrument.SortingRules[i].InstrumentID = id
-		err = s.sortingRuleService.WithTransaction(transaction).Upsert(ctx, &instrument.SortingRules[i])
+		err = s.sortingRuleService.WithTransaction(transaction).UpsertWithTx(ctx, &instrument.SortingRules[i])
 		if err != nil {
 			_ = transaction.Rollback()
 			return uuid.Nil, err
@@ -519,6 +519,7 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 
 	oldInstrument, err := s.GetInstrumentByID(ctx, tx, instrument.ID, false)
 	if err != nil {
+		_ = tx.Rollback()
 		return err
 	}
 
@@ -747,7 +748,7 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 
 		deletedSortingRules = append(deletedSortingRules, oldInstrument.SortingRules[i])
 	}
-	err = s.sortingRuleService.WithTransaction(tx).DeleteSortingRules(ctx, deletedSortingRules)
+	err = s.sortingRuleService.WithTransaction(tx).DeleteSortingRulesWithTx(ctx, deletedSortingRules)
 	if err != nil {
 		_ = tx.Rollback()
 		return err
@@ -755,7 +756,7 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 
 	for i := range instrument.SortingRules {
 		instrument.SortingRules[i].InstrumentID = instrument.ID
-		err = s.sortingRuleService.WithTransaction(tx).Upsert(ctx, &instrument.SortingRules[i])
+		err = s.sortingRuleService.WithTransaction(tx).UpsertWithTx(ctx, &instrument.SortingRules[i])
 		if err != nil {
 			_ = tx.Rollback()
 			return err

@@ -59,8 +59,6 @@ type Configuration struct {
 	LongPollingReattemptWaitSeconds            uint          `envconfig:"LONG_POLLING_REATTEMPT_WAIT_SECONDS" default:"5"`
 	LongPollingLoggingEnabled                  bool          `envconfig:"LONG_POLLING_LOGGING_ENABLED" default:"false"`
 	LongPollingRetrySeconds                    int           `envconfig:"LONG_POLLING_RETRY_SECONDS" default:"30"`
-	RedisUrl                                   string        `envconfig:"REDIS_URL" required:"true"`
-	RedisPassword                              string        `envconfig:"REDIS_PASSWORD" required:"true"`
 	ClientCredentialAuthHeaderValue            string
 }
 

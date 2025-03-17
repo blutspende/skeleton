@@ -234,6 +234,9 @@ func (r *sortingRuleRepository) CreateTransaction() (db.DbConnector, error) {
 }
 
 func (r *sortingRuleRepository) WithTransaction(tx db.DbConnector) SortingRuleRepository {
+	if tx == nil {
+		return r
+	}
 	txRepo := *r
 	txRepo.db = tx
 	return &txRepo

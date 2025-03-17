@@ -265,6 +265,9 @@ func (r *conditionRepository) CreateTransaction() (db.DbConnector, error) {
 }
 
 func (r *conditionRepository) WithTransaction(tx db.DbConnector) ConditionRepository {
+	if tx == nil {
+		return r
+	}
 	txRepo := *r
 	txRepo.db = tx
 	return &txRepo

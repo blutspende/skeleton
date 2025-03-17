@@ -31,6 +31,7 @@ type CerberusClient interface {
 	VerifyInstrumentHash(hash string) error
 	VerifyExpectedControlResultsHash(hash string) error
 	SyncAnalysisRequests(workItemIDs []uuid.UUID, syncType string) error
+	SendConsoleLog(instrumentId uuid.UUID, consoleLogDTO ConsoleLogDTO) error
 }
 
 type cerberusClient struct {
@@ -352,6 +353,25 @@ func (c *cerberusClient) SyncAnalysisRequests(workItemIDs []uuid.UUID, syncType 
 
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to call Cerberus API (/v1/instrument-drivers/analysis-requests/sync)")
+		return fmt.Errorf("unexpected error from cerberus %d", resp.StatusCode())
+	}
+
+	return nil
+}
+
+func (c *cerberusClient) SendConsoleLog(instrumentId uuid.UUID, consoleLogDTO ConsoleLogDTO) error {
+	resp, err := c.client.R().
+		SetHeader("Content-Type", "application/json").
+		SetBody(consoleLogDTO).
+		Post(c.cerberusUrl + "/v1/instruments/" + instrumentId.String() + "/logs")
+
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to call Cerberus API (/v1/instruments/{instrumentId}/logs)")
+		return err
+	}
+
+	if resp.IsError() {
+		log.Error().Int("Code", resp.StatusCode()).Msg("Failed to call Cerberus API (/v1/instruments/{instrumentId}/logs)")
 		return fmt.Errorf("unexpected error from cerberus %d", resp.StatusCode())
 	}
 

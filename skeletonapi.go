@@ -2,7 +2,6 @@ package skeleton
 
 import (
 	"context"
-	"github.com/blutspende/skeleton/consolelog/service"
 	"time"
 
 	config2 "github.com/blutspende/skeleton/config"
@@ -147,7 +146,7 @@ func New(ctx context.Context, serviceName, displayName string, requestedExtraVal
 	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
 	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, manager, instrumentCache, cerberusClient)
 
-	consoleLogService := service.NewConsoleLogService(config.RedisUrl, config.RedisPassword)
+	consoleLogService := NewConsoleLogService(cerberusClient)
 
 	longpollClient := NewLongPollClient(longPollingApiRestyClient, serviceName, config.CerberusURL, config.LongPollingAPIClientTimeoutSeconds, config.LongPollingReattemptWaitSeconds, config.LongPollingLoggingEnabled)
 
