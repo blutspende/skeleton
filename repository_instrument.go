@@ -1014,7 +1014,7 @@ func (r *instrumentRepository) GetExpectedControlResultsByInstrumentId(ctx conte
 	SELECT secr.id, secr.analyte_mapping_id, secr.sample_code, secr.operator, secr.expected_value, secr.expected_value2, secr.created_at, secr.deleted_at, secr.created_by, secr.deleted_by
 		FROM %s.sk_expected_control_result secr
 			INNER JOIN groupping ON secr.sample_code = groupping.sample_code
-			INNER JOIN %s.sk_analyte_mappings sam ON secr.analyte_mapping_id = sam.id WHERE sam.instrument_id = $1 AND secr.deleted_at IS NULL ORDER BY groupping.minCreatedAt desc, sam.instrument_analyte;`, r.dbSchema, r.dbSchema, r.dbSchema, r.dbSchema)
+			INNER JOIN %s.sk_analyte_mappings sam ON secr.analyte_mapping_id = sam.id WHERE sam.instrument_id = $1 AND secr.deleted_at IS NULL ORDER BY groupping.minCreatedAt desc, secr.sample_code, sam.instrument_analyte;`, r.dbSchema, r.dbSchema, r.dbSchema, r.dbSchema)
 	rows, err := r.db.QueryxContext(ctx, query, instrumentId)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetExpectedControlResultsFailed)

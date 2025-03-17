@@ -1638,26 +1638,19 @@ func (r *analysisRepository) gatherAndAttachAllConnectedDataToAnalysisResults(ct
 
 func (r *analysisRepository) GetAnalysisResultIdsForStatusRecalculationByControlIds(ctx context.Context, controlResultIds []uuid.UUID) ([]uuid.UUID, error) {
 	analysisResultIds := make([]uuid.UUID, 0)
-	query := `WITH groupping AS (
-			SELECT sar.id
-			FROM %schema_name%.sk_analysis_results sar
-				INNER JOIN %schema_name%.sk_analysis_result_control_result_relations sarcrr ON sar.id = sarcrr.analysis_result_id
-				INNER JOIN %schema_name%.sk_control_results scr ON sarcrr.control_result_id = scr.id
-			WHERE sar.status != 'FIN' AND sar.is_processed = TRUE `
-	if len(controlResultIds) > 0 {
-		query += ` AND scr.id IN (?)`
-	}
-
-	query += ` GROUP BY sar.id)
-		SELECT sar.id
+	query := `SELECT sar.id
 		FROM %schema_name%.sk_analysis_results sar
-			INNER JOIN groupping g ON sar.id = g.id
 			INNER JOIN %schema_name%.sk_analysis_result_control_result_relations sarcrr ON sar.id = sarcrr.analysis_result_id
 			INNER JOIN %schema_name%.sk_control_results scr ON sarcrr.control_result_id = scr.id
 			INNER JOIN %schema_name%.sk_analyte_mappings sam ON scr.instrument_id = sam.instrument_id AND scr.analyte_mapping_id = sam.id
 			LEFT JOIN %schema_name%.sk_expected_control_result secr ON sam.id = secr.analyte_mapping_id AND scr.sample_code = secr.sample_code
-		GROUP BY sar.id
-		HAVING bool_and(CASE WHEN sam.control_result_required = TRUE AND (secr.id IS NULL OR scr.is_compared_to_expected_result = FALSE) THEN FALSE ELSE TRUE END);`
+		WHERE sar.status != 'FIN' AND sar.is_processed = TRUE AND CASE WHEN sam.control_result_required = TRUE AND (secr.id IS NULL OR scr.is_compared_to_expected_result = FALSE) THEN FALSE ELSE TRUE END`
+
+	if len(controlResultIds) > 0 {
+		query += ` AND scr.id IN (?) `
+	}
+
+	query += ` GROUP BY sar.id;`
 	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
 
 	var rows *sqlx.Rows
@@ -4051,26 +4044,18 @@ func (r *analysisRepository) GetLatestControlResultsByReagent(ctx context.Contex
 		"instrument_id":      instrumentId,
 	}
 
-	query := `WITH groupping AS (
-    SELECT skcr.sample_code, skcr.analyte_mapping_id, max(skcr.examined_at) as last_examination
+	query := `SELECT DISTINCT ON (skcr.sample_code, skcr.analyte_mapping_id) skcr.id, skcr.sample_code, skcr.analyte_mapping_id, skcr.instrument_id, skcr.expected_control_result_id, skcr.is_valid, skcr.is_compared_to_expected_result, skcr.result, skcr.examined_at, skcr.created_at,
+    sam.id AS "analyte_mapping.id", sam.instrument_id AS "analyte_mapping.instrument_id", sam.instrument_analyte AS "analyte_mapping.instrument_analyte", sam.analyte_id AS "analyte_mapping.analyte_id", sam.result_type AS "analyte_mapping.result_type", sam.created_at AS "analyte_mapping.created_at", sam.modified_at AS "analyte_mapping.modified_at"
     FROM %schema_name%.sk_control_results skcr
+        INNER JOIN %schema_name%.sk_analyte_mappings sam ON skcr.analyte_mapping_id = sam.id
         INNER JOIN %schema_name%.sk_reagent_control_result_relations skrcrr ON skcr.id = skrcrr.control_result_id
         INNER JOIN %schema_name%.sk_reagents skr ON skrcrr.reagent_id = skr.id
-	WHERE skr.manufacturer = :manufacturer AND skr.lot_no = :lot_no AND skr.serial = :serial AND skr.name = :name AND skcr.analyte_mapping_id = :analyte_mapping_id AND skcr.instrument_id = :instrument_id`
+    WHERE skr.manufacturer = :manufacturer AND skr.lot_no = :lot_no AND skr.serial = :serial AND skr.name = :name AND skcr.analyte_mapping_id = :analyte_mapping_id AND skcr.instrument_id = :instrument_id`
 	if resultYieldTime != nil {
 		preparedValues["result_yield_time"] = resultYieldTime
 		query += ` AND skcr.examined_at < :result_yield_time`
 	}
-	query += ` GROUP BY skcr.sample_code, skcr.analyte_mapping_id)
-	SELECT skcr.id, skcr.sample_code, skcr.analyte_mapping_id, skcr.instrument_id, skcr.expected_control_result_id, skcr.is_valid, skcr.is_compared_to_expected_result, skcr.result, skcr.examined_at, skcr.created_at,
-		sam.id AS "analyte_mapping.id", sam.instrument_id AS "analyte_mapping.instrument_id", sam.instrument_analyte AS "analyte_mapping.instrument_analyte", sam.analyte_id AS "analyte_mapping.analyte_id", sam.result_type AS "analyte_mapping.result_type", 
-		sam.control_instrument_analyte AS "analyte_mapping.control_instrument_analyte", sam.control_result_required AS "analyte_mapping.control_result_required", sam.created_at AS "analyte_mapping.created_at", sam.modified_at AS "analyte_mapping.modified_at"
-	FROM %schema_name%.sk_control_results skcr
-		INNER JOIN groupping g ON skcr.sample_code = g.sample_code AND skcr.analyte_mapping_id = g.analyte_mapping_id AND skcr.examined_at = g.last_examination
-		INNER JOIN %schema_name%.sk_analyte_mappings sam ON skcr.analyte_mapping_id = sam.id
-		INNER JOIN %schema_name%.sk_reagent_control_result_relations skrcrr ON skcr.id = skrcrr.control_result_id
-		INNER JOIN %schema_name%.sk_reagents skr ON skrcrr.reagent_id = skr.id
-	WHERE skr.manufacturer = :manufacturer AND skr.lot_no = :lot_no AND skr.serial = :serial AND skr.name = :name AND sam.id = :analyte_mapping_id AND sam.instrument_id = :instrument_id;`
+	query += ` ORDER BY skcr.sample_code, skcr.analyte_mapping_id, skcr. examined_at desc, skcr.created_at desc;`
 	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
 	rows, err := r.db.NamedQueryContext(ctx, query, preparedValues)
 	if err != nil {
@@ -4097,23 +4082,16 @@ func (r *analysisRepository) GetLatestControlResultsByReagent(ctx context.Contex
 func (r *analysisRepository) GetControlResultsToValidate(ctx context.Context, analyteMappingIds []uuid.UUID) ([]ControlResult, error) {
 	controlResults := make([]ControlResult, 0)
 
-	query := fmt.Sprintf(`WITH controlResultsToValidate AS (
-		SELECT scr.id
-			FROM %s.sk_control_results scr
-			INNER JOIN %s.sk_analyte_mappings sam ON scr.analyte_mapping_id = sam.id
-			LEFT JOIN %s.sk_expected_control_result secr ON sam.id = secr.analyte_mapping_id AND scr.sample_code = secr.sample_code
-			WHERE secr.id IS NOT NULL AND scr.expected_control_result_id IS NULL `, r.dbSchema, r.dbSchema, r.dbSchema)
+	query := fmt.Sprintf(`SELECT skcr.id, skcr.sample_code, skcr.analyte_mapping_id, skcr.instrument_id, skcr.expected_control_result_id, skcr.is_valid, skcr.is_compared_to_expected_result, skcr.result, skcr.examined_at, skcr.created_at,
+		sam.id AS "analyte_mapping.id", sam.instrument_id AS "analyte_mapping.instrument_id", sam.instrument_analyte AS "analyte_mapping.instrument_analyte", sam.analyte_id AS "analyte_mapping.analyte_id", sam.result_type AS "analyte_mapping.result_type",
+		sam.control_instrument_analyte AS "analyte_mapping.control_instrument_analyte", sam.control_result_required AS "analyte_mapping.control_result_required", sam.created_at AS "analyte_mapping.created_at", sam.modified_at AS "analyte_mapping.modified_at"
+	FROM %s.sk_control_results skcr
+	INNER JOIN %s.sk_analyte_mappings sam ON skcr.analyte_mapping_id = sam.id
+    INNER JOIN %s.sk_expected_control_result secr ON sam.id = secr.analyte_mapping_id AND skcr.sample_code = secr.sample_code
+	WHERE skcr.expected_control_result_id IS NULL`, r.dbSchema, r.dbSchema, r.dbSchema)
 	if len(analyteMappingIds) > 0 {
 		query += " AND scr.analyte_mapping_id IN (?) "
 	}
-
-	query += fmt.Sprintf(` GROUP BY scr.id)
-	SELECT skcr.id, skcr.sample_code, skcr.analyte_mapping_id, skcr.instrument_id, skcr.expected_control_result_id, skcr.is_valid, skcr.is_compared_to_expected_result, skcr.result, skcr.examined_at, skcr.created_at,
-		sam.id AS "analyte_mapping.id", sam.instrument_id AS "analyte_mapping.instrument_id", sam.instrument_analyte AS "analyte_mapping.instrument_analyte", sam.analyte_id AS "analyte_mapping.analyte_id", sam.result_type AS "analyte_mapping.result_type", 
-		sam.control_instrument_analyte AS "analyte_mapping.control_instrument_analyte", sam.control_result_required AS "analyte_mapping.control_result_required", sam.created_at AS "analyte_mapping.created_at", sam.modified_at AS "analyte_mapping.modified_at"
-	FROM %s.sk_control_results skcr
-	INNER JOIN controlResultsToValidate g ON skcr.id = g.id
-	INNER JOIN %s.sk_analyte_mappings sam ON skcr.analyte_mapping_id = sam.id;`, r.dbSchema, r.dbSchema)
 
 	var rows *sqlx.Rows
 	var err error
