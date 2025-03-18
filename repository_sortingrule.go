@@ -14,7 +14,8 @@ import (
 )
 
 type SortingRuleRepository interface {
-	Create(ctx context.Context, sortingRule SortingRule) (uuid.UUID, error)
+	Upsert(ctx context.Context, sortingRule SortingRule) (uuid.UUID, error)
+	GetById(ctx context.Context, id uuid.UUID) (*SortingRule, error)
 	GetByInstrumentIDs(ctx context.Context, instrumentIDs []uuid.UUID) (map[uuid.UUID][]SortingRule, error)
 	GetByInstrumentIDAndProgramme(ctx context.Context, instrumentID uuid.UUID, programme string) ([]SortingRule, error)
 	GetAppliedSortingRuleTargets(ctx context.Context, instrumentID uuid.UUID, programme string, sampleCodes []string) ([]string, error)
@@ -32,13 +33,15 @@ type sortingRuleRepository struct {
 	dbSchema string
 }
 
-func (r *sortingRuleRepository) Create(ctx context.Context, sortingRule SortingRule) (uuid.UUID, error) {
+func (r *sortingRuleRepository) Upsert(ctx context.Context, sortingRule SortingRule) (uuid.UUID, error) {
 	if sortingRule.ID == uuid.Nil {
 		sortingRule.ID = uuid.New()
 	}
 
-	query := fmt.Sprintf("INSERT INTO %s.sk_sorting_rules (id, instrument_id, priority, target, condition_id, programme)"+
-		" VALUES (:id, :instrument_id, :priority, :target, :condition_id, :programme);", r.dbSchema)
+	query := fmt.Sprintf(`INSERT INTO %s.sk_sorting_rules (id, instrument_id, priority, target, condition_id, programme)
+		VALUES (:id, :instrument_id, :priority, :target, :condition_id, :programme)
+		ON CONFLICT (id) DO UPDATE SET instrument_id = EXCLUDED.instrument_id, priority = EXCLUDED.priority,
+		target = EXCLUDED.target, condition_id = EXCLUDED.condition_id, programme = EXCLUDED.programme;`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, convertSortingRuleToDAO(sortingRule))
 	if err != nil {
 		log.Error().Err(err).Msg(msgCreateSortingRuleFailed)
@@ -46,6 +49,22 @@ func (r *sortingRuleRepository) Create(ctx context.Context, sortingRule SortingR
 	}
 
 	return sortingRule.ID, nil
+}
+
+func (r *sortingRuleRepository) GetById(ctx context.Context, id uuid.UUID) (*SortingRule, error) {
+	query := fmt.Sprintf(`SELECT * FROM %s.sk_sorting_rules WHERE id = $1 AND deleted_at IS NULL;`, r.dbSchema)
+	var dao sortingRuleDAO
+	err := r.db.QueryRowxContext(ctx, query, id).StructScan(&dao)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		log.Error().Err(err).Msg(msgGetSortingRuleByIDFailed)
+		return nil, ErrGetSortingRuleByIDFailed
+	}
+
+	sortingRule := convertDAOToSortingRule(dao)
+	return &sortingRule, nil
 }
 
 func (r *sortingRuleRepository) GetByInstrumentIDs(ctx context.Context, instrumentIDs []uuid.UUID) (map[uuid.UUID][]SortingRule, error) {
@@ -215,6 +234,9 @@ func (r *sortingRuleRepository) CreateTransaction() (db.DbConnector, error) {
 }
 
 func (r *sortingRuleRepository) WithTransaction(tx db.DbConnector) SortingRuleRepository {
+	if tx == nil {
+		return r
+	}
 	txRepo := *r
 	txRepo.db = tx
 	return &txRepo
@@ -276,21 +298,25 @@ func convertDAOToSortingRule(dao sortingRuleDAO) SortingRule {
 }
 
 const (
-	msgApplySortingRuleTargetFailed       = "apply sorting rule target failed"
-	msgCreateSortingRuleFailed            = "create sorting rule failed"
-	msgGetSortingRuleByInstrumentIDFailed = "get sorting rule by instrument ID failed"
-	msgGetAppliedSortingRuleTargetsFailed = "get applied sorting rule targets failed"
-	msgGetSampleSequenceNumberFailed      = "get sample sequence number failed"
-	msgUpdateSortingRuleFailed            = "update sorting rule failed"
-	msgDeleteSortingRulesFailed           = "delete sorting rules failed"
+	msgApplySortingRuleTargetFailed           = "apply sorting rule target failed"
+	msgCreateSortingRuleFailed                = "create sorting rule failed"
+	msgGetSortingRuleByInstrumentIDFailed     = "get sorting rule by instrument ID failed"
+	msgGetAppliedSortingRuleTargetsFailed     = "get applied sorting rule targets failed"
+	msgGetSampleSequenceNumberFailed          = "get sample sequence number failed"
+	msgUpdateSortingRuleFailed                = "update sorting rule failed"
+	msgDeleteSortingRulesFailed               = "delete sorting rules failed"
+	msgGetSortingRuleByIDFailed               = "get sorting rule by ID failed"
+	msgRequiredSortingRuleTransactionNotFound = "required transaction not found when handling sorting rules"
 )
 
 var (
-	ErrApplySortingRuleTargetFailed       = errors.New(msgApplySortingRuleTargetFailed)
-	ErrCreateSortingRuleFailed            = errors.New(msgCreateSortingRuleFailed)
-	ErrGetSortingRuleByInstrumentIDFailed = errors.New(msgGetSortingRuleByInstrumentIDFailed)
-	ErrGetAppliedSortingRuleTargetsFailed = errors.New(msgGetAppliedSortingRuleTargetsFailed)
-	ErrGetSampleSequenceNumberFailed      = errors.New(msgGetSampleSequenceNumberFailed)
-	ErrUpdateSortingRuleFailed            = errors.New(msgUpdateSortingRuleFailed)
-	ErrDeleteSortingRulesFailed           = errors.New(msgDeleteSortingRulesFailed)
+	ErrApplySortingRuleTargetFailed             = errors.New(msgApplySortingRuleTargetFailed)
+	ErrCreateSortingRuleFailed                  = errors.New(msgCreateSortingRuleFailed)
+	ErrGetSortingRuleByInstrumentIDFailed       = errors.New(msgGetSortingRuleByInstrumentIDFailed)
+	ErrGetAppliedSortingRuleTargetsFailed       = errors.New(msgGetAppliedSortingRuleTargetsFailed)
+	ErrGetSampleSequenceNumberFailed            = errors.New(msgGetSampleSequenceNumberFailed)
+	ErrUpdateSortingRuleFailed                  = errors.New(msgUpdateSortingRuleFailed)
+	ErrDeleteSortingRulesFailed                 = errors.New(msgDeleteSortingRulesFailed)
+	ErrGetSortingRuleByIDFailed                 = errors.New(msgGetSortingRuleByIDFailed)
+	ErrorRequiredSortingRuleTransactionNotFound = errors.New(msgRequiredSortingRuleTransactionNotFound)
 )

@@ -45,7 +45,6 @@ type Configuration struct {
 	ImageRetrySeconds                          int           `envconfig:"IMAGE_RETRY_SECONDS" default:"60"`
 	AnalysisRequestsChannelBufferSize          int           `envconfig:"ANALYSIS_REQUESTS_CHANNEL_BUFFER_SIZE" default:"1024"`
 	AnalysisResultsChannelBufferSize           int           `envconfig:"ANALYSIS_RESULTS_CHANNEL_BUFFER_SIZE" default:"1024"`
-	LogComURL                                  string        `envconfig:"LOG_COM_URL" required:"true" default:"http://logcom"`
 	AnalysisRequestWorkerPoolSize              int           `envconfig:"ANALYSIS_REQUEST_WORKER_POOL_SIZE" default:"3"`
 	InstrumentDriverRegistrationTimeoutSeconds int           `envconfig:"INSTRUMENT_DRIVER_REGISTRATION_RETRY_TIMEOUT" default:"10"`
 	InstrumentDriverRegistrationMaxRetry       int           `envconfig:"INSTRUMENT_DRIVER_REGISTRATION_MAX_RETRY" default:"20"`
@@ -57,10 +56,9 @@ type Configuration struct {
 	GetUnprocessedAnalysisResultIDsRetryMinute int           `envconfig:"GET_UNPROCESSED_ANALYSIS_RESULT_IDS_RETRY" default:"5"`
 	StandardAPIClientTimeoutSeconds            uint          `envconfig:"STANDARD_API_CLIENT_TIMEOUT_SECONDS" default:"10"`
 	LongPollingAPIClientTimeoutSeconds         uint          `envconfig:"LONG_POLLING_API_CLIENT_TIMEOUT_SECONDS" default:"80"`
+	LongPollingReattemptWaitSeconds            uint          `envconfig:"LONG_POLLING_REATTEMPT_WAIT_SECONDS" default:"5"`
+	LongPollingLoggingEnabled                  bool          `envconfig:"LONG_POLLING_LOGGING_ENABLED" default:"false"`
 	LongPollingRetrySeconds                    int           `envconfig:"LONG_POLLING_RETRY_SECONDS" default:"30"`
-	RedisUrl                                   string        `envconfig:"REDIS_URL" required:"true"`
-	RedisPort                                  int           `envconfig:"REDIS_PORT" default:"6379"`
-
 	ClientCredentialAuthHeaderValue            string
 }
 

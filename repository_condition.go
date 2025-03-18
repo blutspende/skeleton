@@ -14,8 +14,8 @@ import (
 )
 
 type ConditionRepository interface {
-	CreateCondition(ctx context.Context, condition Condition) (uuid.UUID, error)
-	CreateConditionOperand(ctx context.Context, condition ConditionOperand) (uuid.UUID, error)
+	UpsertCondition(ctx context.Context, condition Condition) (uuid.UUID, error)
+	UpsertConditionOperand(ctx context.Context, condition ConditionOperand) (uuid.UUID, error)
 	DeleteCondition(ctx context.Context, id uuid.UUID) error
 	DeleteConditionOperand(ctx context.Context, id uuid.UUID) error
 	GetConditionByID(ctx context.Context, id uuid.UUID) (Condition, error)
@@ -35,13 +35,16 @@ type conditionRepository struct {
 	dbSchema string
 }
 
-func (r *conditionRepository) CreateCondition(ctx context.Context, condition Condition) (uuid.UUID, error) {
+func (r *conditionRepository) UpsertCondition(ctx context.Context, condition Condition) (uuid.UUID, error) {
 	if condition.ID == uuid.Nil {
 		condition.ID = uuid.New()
 	}
 
 	query := fmt.Sprintf(`INSERT INTO %s.sk_conditions(id, name, operator, subcondition_1_id, subcondition_2_id, negate_subcondition_1, negate_subcondition_2, operand_1_id, operand_2_id)
-				VALUES (:id,:name,:operator,:subcondition_1_id,:subcondition_2_id,:negate_subcondition_1,:negate_subcondition_2,:operand_1_id,:operand_2_id);`, r.dbSchema)
+				VALUES (:id,:name,:operator,:subcondition_1_id,:subcondition_2_id,:negate_subcondition_1,:negate_subcondition_2,:operand_1_id,:operand_2_id)
+				ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, operator = EXCLUDED.operator, subcondition_1_id = EXCLUDED.subcondition_1_id, subcondition_2_id = EXCLUDED.subcondition_2_id,
+				negate_subcondition_1 = EXCLUDED.negate_subcondition_1, negate_subcondition_2 = EXCLUDED.negate_subcondition_2, operand_1_id = EXCLUDED.operand_1_id,
+				operand_2_id = EXCLUDED.operand_2_id, modified_at = timezone('utc', now());`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, convertConditionToDAO(condition))
 	if err != nil {
 		log.Error().Err(err).Msg(msgCreateConditionFailed)
@@ -128,10 +131,13 @@ func (r *conditionRepository) IsConditionReferenced(ctx context.Context, id uuid
 	return rows.Next(), nil
 }
 
-func (r *conditionRepository) CreateConditionOperand(ctx context.Context, conditionOperand ConditionOperand) (uuid.UUID, error) {
+func (r *conditionRepository) UpsertConditionOperand(ctx context.Context, conditionOperand ConditionOperand) (uuid.UUID, error) {
+	if conditionOperand.ID == uuid.Nil {
+		conditionOperand.ID = uuid.New()
+	}
 	query := fmt.Sprintf(`INSERT INTO %s.sk_condition_operands(id, name, type, constant_value, extra_value_key)
-				VALUES (:id, :name, :type, :constant_value, :extra_value_key);`, r.dbSchema)
-	conditionOperand.ID = uuid.New()
+			VALUES (:id, :name, :type, :constant_value, :extra_value_key)
+			ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, type = EXCLUDED.type, constant_value = EXCLUDED.constant_value, extra_value_key = EXCLUDED.extra_value_key, modified_at = timezone('utc', now());`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, convertConditionOperandToDAO(conditionOperand))
 	if err != nil {
 		log.Error().Err(err).Msg(msgCreateConditionOperandFailed)
@@ -259,6 +265,9 @@ func (r *conditionRepository) CreateTransaction() (db.DbConnector, error) {
 }
 
 func (r *conditionRepository) WithTransaction(tx db.DbConnector) ConditionRepository {
+	if tx == nil {
+		return r
+	}
 	txRepo := *r
 	txRepo.db = tx
 	return &txRepo
@@ -366,36 +375,38 @@ func convertDAOToCondition(dao conditionDAO) Condition {
 }
 
 const (
-	msgConditionNotFound                  = "condition not found"
-	msgConditionOperandNotFound           = "condition operand not found"
-	msgCreateConditionFailed              = "create condition failed"
-	msgCreateConditionOperandFailed       = "create condition operand failed"
-	msgDecimalFieldValueParseFailed       = "parse fieldvalue as a decimal number failed"
-	msgDeleteConditionFailed              = "delete condition failed"
-	msgDeleteConditionOperandFailed       = "delete condition operand failed"
-	msgGetConditionFailed                 = "get condition failed"
-	msgGetConditionOperandFailed          = "get condition operand failed"
-	msgGetNamedConditionsFailed           = "get named condition failed"
-	msgIsConditionOperandReferencedFailed = "check if condition operand is referenced failed"
-	msgIsConditionReferencedFailed        = "check if condition is referenced failed"
-	msgUpdateConditionFailed              = "update condition failed"
-	msgUpdateConditionOperandFailed       = "update condition operand failed"
+	msgConditionNotFound                    = "condition not found"
+	msgConditionOperandNotFound             = "condition operand not found"
+	msgCreateConditionFailed                = "create condition failed"
+	msgCreateConditionOperandFailed         = "create condition operand failed"
+	msgDecimalFieldValueParseFailed         = "parse fieldvalue as a decimal number failed"
+	msgDeleteConditionFailed                = "delete condition failed"
+	msgDeleteConditionOperandFailed         = "delete condition operand failed"
+	msgGetConditionFailed                   = "get condition failed"
+	msgGetConditionOperandFailed            = "get condition operand failed"
+	msgGetNamedConditionsFailed             = "get named condition failed"
+	msgIsConditionOperandReferencedFailed   = "check if condition operand is referenced failed"
+	msgIsConditionReferencedFailed          = "check if condition is referenced failed"
+	msgUpdateConditionFailed                = "update condition failed"
+	msgUpdateConditionOperandFailed         = "update condition operand failed"
+	msgRequiredConditionTransactionNotFound = "required transaction not found when handling conditions"
 )
 
 var (
-	ErrConditionNotFound                  = errors.New(msgConditionNotFound)
-	ErrConditionOperandNotFound           = errors.New(msgConditionOperandNotFound)
-	ErrCreateConditionFailed              = errors.New(msgCreateConditionFailed)
-	ErrCreateConditionOperandFailed       = errors.New(msgCreateConditionOperandFailed)
-	ErrDeleteConditionFailed              = errors.New(msgDeleteConditionFailed)
-	ErrDeleteConditionOperandFailed       = errors.New(msgDeleteConditionOperandFailed)
-	ErrGetConditionFailed                 = errors.New(msgGetConditionFailed)
-	ErrGetConditionOperandFailed          = errors.New(msgGetConditionOperandFailed)
-	ErrGetNamedConditionsFailed           = errors.New(msgGetNamedConditionsFailed)
-	ErrIsConditionOperandReferencedFailed = errors.New(msgIsConditionOperandReferencedFailed)
-	ErrIsConditionReferencedFailed        = errors.New(msgIsConditionReferencedFailed)
-	ErrUpdateConditionFailed              = errors.New(msgUpdateConditionFailed)
-	ErrUpdateConditionOperandFailed       = errors.New(msgUpdateConditionOperandFailed)
+	ErrConditionNotFound                      = errors.New(msgConditionNotFound)
+	ErrConditionOperandNotFound               = errors.New(msgConditionOperandNotFound)
+	ErrCreateConditionFailed                  = errors.New(msgCreateConditionFailed)
+	ErrCreateConditionOperandFailed           = errors.New(msgCreateConditionOperandFailed)
+	ErrDeleteConditionFailed                  = errors.New(msgDeleteConditionFailed)
+	ErrDeleteConditionOperandFailed           = errors.New(msgDeleteConditionOperandFailed)
+	ErrGetConditionFailed                     = errors.New(msgGetConditionFailed)
+	ErrGetConditionOperandFailed              = errors.New(msgGetConditionOperandFailed)
+	ErrGetNamedConditionsFailed               = errors.New(msgGetNamedConditionsFailed)
+	ErrIsConditionOperandReferencedFailed     = errors.New(msgIsConditionOperandReferencedFailed)
+	ErrIsConditionReferencedFailed            = errors.New(msgIsConditionReferencedFailed)
+	ErrUpdateConditionFailed                  = errors.New(msgUpdateConditionFailed)
+	ErrUpdateConditionOperandFailed           = errors.New(msgUpdateConditionOperandFailed)
+	ErrorRequiredConditionTransactionNotFound = errors.New(msgRequiredConditionTransactionNotFound)
 )
 
 const (
@@ -404,7 +415,6 @@ const (
 	msgInvalidOperandForExistOrNotExist             = "invalid operand for exists or not exists operator"
 	msgInvalidOperatorForArithmeticFilter           = "invalid operator for arithmetic filter"
 	msgInvalidOperatorForLogicFilter                = "invalid operator for logic filter"
-	msgIsAnalyteUsedAsConditionOperandFailed        = "check if analyte is used as condition operand failed"
 	msgMissingExtraValueKey                         = "extravaluekey missing from condition"
 	msgOperand1Missing                              = "operand 1 missing"
 	msgOperand2Missing                              = "operand 2 missing"

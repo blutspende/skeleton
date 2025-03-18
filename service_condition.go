@@ -8,55 +8,46 @@ import (
 	"github.com/shopspring/decimal"
 	"math/rand/v2"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 )
 
 type ConditionService interface {
-	CreateCondition(ctx context.Context, condition Condition) (uuid.UUID, error)
+	UpsertConditionWithTx(ctx context.Context, condition Condition) (uuid.UUID, error)
 	GetCondition(ctx context.Context, id uuid.UUID) (Condition, error)
-	GetNamedConditions(ctx context.Context) ([]Condition, error)
-	UpdateCondition(ctx context.Context, condition Condition) error
-	DeleteCondition(ctx context.Context, id uuid.UUID) error
+	DeleteConditionWithTx(ctx context.Context, id uuid.UUID) error
 	WithTransaction(tx db.DbConnector) ConditionService
 }
 
 type conditionService struct {
 	conditionRepository ConditionRepository
-	externalTx          *db.DbConnector
+	externalTx          db.DbConnector
 }
 
-func (s *conditionService) CreateCondition(ctx context.Context, condition Condition) (uuid.UUID, error) {
-	tx, err := s.getTransaction()
-	if err != nil {
-		return uuid.Nil, err
+func (s *conditionService) UpsertConditionWithTx(ctx context.Context, condition Condition) (uuid.UUID, error) {
+	tx := s.getTransaction()
+	if tx == nil {
+		log.Error().Msg(msgRequiredConditionTransactionNotFound)
+		return uuid.Nil, ErrorRequiredConditionTransactionNotFound
 	}
-	id, err := s.createCondition(ctx, tx, condition)
-	if s.externalTx != nil {
-		return id, err
-	}
+
+	id, err := s.upsertConditionWithTx(ctx, tx, condition)
 	if err != nil {
-		_ = tx.Rollback()
-		return uuid.Nil, err
-	}
-	err = tx.Commit()
-	if err != nil {
-		_ = tx.Rollback()
 		return uuid.Nil, err
 	}
 	return id, nil
 }
-func (s *conditionService) createCondition(ctx context.Context, tx db.DbConnector, condition Condition) (uuid.UUID, error) {
+
+func (s *conditionService) upsertConditionWithTx(ctx context.Context, tx db.DbConnector, condition Condition) (uuid.UUID, error) {
 	if condition.SubCondition1 != nil {
-		subCondition1ID, err := s.createCondition(ctx, tx, *condition.SubCondition1)
+		subCondition1ID, err := s.upsertConditionWithTx(ctx, tx, *condition.SubCondition1)
 		if err != nil {
 			return uuid.Nil, err
 		}
 		condition.SubCondition1.ID = subCondition1ID
 	}
 	if condition.SubCondition2 != nil {
-		subCondition2ID, err := s.createCondition(ctx, tx, *condition.SubCondition2)
+		subCondition2ID, err := s.upsertConditionWithTx(ctx, tx, *condition.SubCondition2)
 		if err != nil {
 			return uuid.Nil, err
 		}
@@ -64,48 +55,35 @@ func (s *conditionService) createCondition(ctx context.Context, tx db.DbConnecto
 	}
 
 	if condition.Operand1 != nil {
-		operand1ID, err := s.conditionRepository.WithTransaction(tx).CreateConditionOperand(ctx, *condition.Operand1)
+		operand1ID, err := s.conditionRepository.WithTransaction(tx).UpsertConditionOperand(ctx, *condition.Operand1)
 		if err != nil {
 			return uuid.Nil, err
 		}
 		condition.Operand1.ID = operand1ID
 	}
 	if condition.Operand2 != nil {
-		operand2ID, err := s.conditionRepository.WithTransaction(tx).CreateConditionOperand(ctx, *condition.Operand2)
+		operand2ID, err := s.conditionRepository.WithTransaction(tx).UpsertConditionOperand(ctx, *condition.Operand2)
 		if err != nil {
 			return uuid.Nil, err
 		}
 		condition.Operand2.ID = operand2ID
 	}
 
-	if condition.ID != uuid.Nil {
-		return condition.ID, nil
-	}
-	return s.conditionRepository.WithTransaction(tx).CreateCondition(ctx, condition)
+	return s.conditionRepository.WithTransaction(tx).UpsertCondition(ctx, condition)
 }
 
 func (s *conditionService) GetCondition(ctx context.Context, id uuid.UUID) (condition Condition, err error) {
-	tx, err := s.getTransaction()
+	tx := s.getTransaction()
+
+	condition, err = s.getConditionRecursively(ctx, tx, id)
 	if err != nil {
-		return
-	}
-	condition, err = s.getConditionWithTx(ctx, tx, id)
-	if s.externalTx != nil {
 		return condition, err
 	}
-	if err != nil {
-		_ = tx.Rollback()
-		return condition, err
-	}
-	err = tx.Commit()
-	if err != nil {
-		_ = tx.Rollback()
-		return condition, err
-	}
+
 	return condition, nil
 }
 
-func (s *conditionService) getConditionWithTx(ctx context.Context, tx db.DbConnector, id uuid.UUID) (Condition, error) {
+func (s *conditionService) getConditionRecursively(ctx context.Context, tx db.DbConnector, id uuid.UUID) (Condition, error) {
 	condition, err := s.conditionRepository.WithTransaction(tx).GetConditionByID(ctx, id)
 	if err != nil {
 		return Condition{}, err
@@ -113,14 +91,14 @@ func (s *conditionService) getConditionWithTx(ctx context.Context, tx db.DbConne
 
 	var subCondition1, subCondition2 Condition
 	if condition.SubCondition1 != nil {
-		subCondition1, err = s.getConditionWithTx(ctx, tx, condition.SubCondition1.ID)
+		subCondition1, err = s.getConditionRecursively(ctx, tx, condition.SubCondition1.ID)
 		if err != nil {
 			return Condition{}, err
 		}
 		condition.SubCondition1 = &subCondition1
 	}
 	if condition.SubCondition2 != nil {
-		subCondition2, err = s.getConditionWithTx(ctx, tx, condition.SubCondition2.ID)
+		subCondition2, err = s.getConditionRecursively(ctx, tx, condition.SubCondition2.ID)
 		if err != nil {
 			return Condition{}, err
 		}
@@ -147,87 +125,8 @@ func (s *conditionService) getConditionWithTx(ctx context.Context, tx db.DbConne
 	return condition, nil
 }
 
-var firstTimeDonationConditionID = uuid.MustParse("34fdb17b-0d60-4676-80c0-0924667272ca")
-var secondTimeDonationConditionID = uuid.MustParse("19a7ff42-9669-4559-9acd-6616679dc386")
-var multiTimeDonationConditionID = uuid.MustParse("84ef19e9-3c88-422a-9c14-841a48e4e5cb")
-var nonDonorSubjectConditionID = uuid.MustParse("16a0db9f-21b8-439d-86d4-f00a0bb9ab66")
-
-func (s *conditionService) GetNamedConditions(ctx context.Context) ([]Condition, error) {
-	tx, err := s.getTransaction()
-	if err != nil {
-		return nil, err
-	}
-	conditions, err := s.getNamedConditionsWithTx(ctx, tx)
-	if s.externalTx != nil {
-		return conditions, err
-	}
-	if err != nil {
-		_ = tx.Rollback()
-		return nil, err
-	}
-	if err = tx.Commit(); err != nil {
-		_ = tx.Rollback()
-		return nil, err
-	}
-	return conditions, nil
-}
-
-func (s *conditionService) getNamedConditionsWithTx(ctx context.Context, tx db.DbConnector) ([]Condition, error) {
-	namedConditions, err := s.conditionRepository.WithTransaction(tx).GetNamedConditions(ctx)
-	if err != nil {
-		return nil, err
-	}
-	ids := make([]uuid.UUID, len(namedConditions))
-	for i := range namedConditions {
-		ids[i] = namedConditions[i].ID
-	}
-	sortedConditions := make([]Condition, 4, len(namedConditions))
-	conditions := make([]Condition, 0, len(namedConditions))
-	for _, namedCondition := range namedConditions {
-		condition, err := s.WithTransaction(tx).GetCondition(ctx, namedCondition.ID)
-		if err != nil {
-			return nil, err
-		}
-		if condition.ID == firstTimeDonationConditionID {
-			sortedConditions[0] = condition
-		} else if condition.ID == secondTimeDonationConditionID {
-			sortedConditions[1] = condition
-		} else if condition.ID == multiTimeDonationConditionID {
-			sortedConditions[2] = condition
-		} else if condition.ID == nonDonorSubjectConditionID {
-			sortedConditions[3] = condition
-		} else {
-			conditions = append(conditions, condition)
-		}
-	}
-	sort.Slice(conditions, func(i, j int) bool {
-		return *conditions[i].Name < *conditions[j].Name
-	})
-	sortedConditions = append(sortedConditions, conditions...)
-	return sortedConditions, nil
-}
-
-func (s *conditionService) UpdateCondition(ctx context.Context, condition Condition) error {
-	tx, err := s.getTransaction()
-	if err != nil {
-		return err
-	}
-	err = s.updateConditionWithTx(ctx, tx, condition)
-	if s.externalTx != nil {
-		return err
-	}
-	if err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-	if err = tx.Commit(); err != nil {
-		_ = tx.Rollback()
-	}
-	return err
-}
-
 func (s *conditionService) updateConditionWithTx(ctx context.Context, tx db.DbConnector, condition Condition) error {
-	oldCondition, err := s.getConditionWithTx(ctx, tx, condition.ID)
+	oldCondition, err := s.getConditionRecursively(ctx, tx, condition.ID)
 	if err != nil {
 		return err
 	}
@@ -253,7 +152,7 @@ func (s *conditionService) updateCondition(ctx context.Context, tx db.DbConnecto
 	if condition.Operand1 != nil {
 		if condition.Operand1.ID == uuid.Nil {
 			//new operand
-			condition.Operand1.ID, err = s.conditionRepository.WithTransaction(tx).CreateConditionOperand(ctx, *condition.Operand1)
+			condition.Operand1.ID, err = s.conditionRepository.WithTransaction(tx).UpsertConditionOperand(ctx, *condition.Operand1)
 			if err != nil {
 				return err
 			}
@@ -279,7 +178,7 @@ func (s *conditionService) updateCondition(ctx context.Context, tx db.DbConnecto
 	if condition.Operand2 != nil {
 		if condition.Operand2.ID == uuid.Nil {
 			//new operand
-			condition.Operand2.ID, err = s.conditionRepository.WithTransaction(tx).CreateConditionOperand(ctx, *condition.Operand2)
+			condition.Operand2.ID, err = s.conditionRepository.WithTransaction(tx).UpsertConditionOperand(ctx, *condition.Operand2)
 			if err != nil {
 				return err
 			}
@@ -307,7 +206,7 @@ func (s *conditionService) updateCondition(ctx context.Context, tx db.DbConnecto
 		if condition.SubCondition1.ID == uuid.Nil {
 			//new subcondition added
 			hasChange = true
-			condition.SubCondition1.ID, err = s.createCondition(ctx, tx, *condition.SubCondition1)
+			condition.SubCondition1.ID, err = s.upsertConditionWithTx(ctx, tx, *condition.SubCondition1)
 			if err != nil {
 				return err
 			}
@@ -331,7 +230,7 @@ func (s *conditionService) updateCondition(ctx context.Context, tx db.DbConnecto
 	if condition.SubCondition2 != nil {
 		if condition.SubCondition2.ID == uuid.Nil {
 			hasChange = true
-			condition.SubCondition2.ID, err = s.createCondition(ctx, tx, *condition.SubCondition2)
+			condition.SubCondition2.ID, err = s.upsertConditionWithTx(ctx, tx, *condition.SubCondition2)
 			if err != nil {
 				return err
 			}
@@ -381,25 +280,19 @@ func ConditionHasOperator(condition *Condition, operators ...ConditionOperator) 
 	return false
 }
 
-func (s *conditionService) DeleteCondition(ctx context.Context, id uuid.UUID) error {
-	tx, err := s.getTransaction()
+func (s *conditionService) DeleteConditionWithTx(ctx context.Context, id uuid.UUID) error {
+	tx := s.getTransaction()
+	if tx == nil {
+		log.Error().Msg(msgRequiredConditionTransactionNotFound)
+		return ErrorRequiredConditionTransactionNotFound
+	}
+
+	err := s.deleteConditionWithTx(ctx, tx, id)
+
 	if err != nil {
 		return err
 	}
-	err = s.deleteConditionWithTx(ctx, tx, id)
-	if s.externalTx != nil {
-		return err
-	}
-	if err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-	err = tx.Commit()
-	if err != nil {
-		_ = tx.Rollback()
-		log.Error().Err(err).Msg(msgDeleteConditionFailed)
-		return ErrDeleteConditionFailed
-	}
+
 	return nil
 }
 
@@ -469,17 +362,16 @@ func (s *conditionService) deleteConditionRecursively(ctx context.Context, condi
 	return conditionTxRepo.DeleteCondition(ctx, id)
 }
 
-func (s *conditionService) getTransaction() (db.DbConnector, error) {
-	if s.externalTx != nil {
-		return *s.externalTx, nil
-	}
-
-	return s.conditionRepository.CreateTransaction()
+func (s *conditionService) getTransaction() db.DbConnector {
+	return s.externalTx
 }
 
 func (s *conditionService) WithTransaction(tx db.DbConnector) ConditionService {
+	if tx == nil {
+		return s
+	}
 	txSvc := *s
-	txSvc.externalTx = &tx
+	txSvc.externalTx = tx
 	return &txSvc
 }
 

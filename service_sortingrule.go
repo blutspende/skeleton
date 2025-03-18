@@ -11,13 +11,12 @@ import (
 
 type SortingRuleService interface {
 	ApplySortingRuleTarget(ctx context.Context, instrumentID uuid.UUID, programme, sampleCode, target string, validUntil time.Time) error
-	Create(ctx context.Context, sortingRule *SortingRule) error
+	UpsertWithTx(ctx context.Context, sortingRule *SortingRule) error
 	GetAppliedSortingRuleTargets(ctx context.Context, instrumentID uuid.UUID, programme string, analysisRequest AnalysisRequest) ([]string, error)
 	GetByInstrumentIDAndProgramme(ctx context.Context, instrumentID uuid.UUID, programme string) ([]SortingRule, error)
 	GetByInstrumentIDs(ctx context.Context, instrumentIDs []uuid.UUID) (map[uuid.UUID][]SortingRule, error)
 	GetSampleSequenceNumber(ctx context.Context, sampleCode string) (int, error)
-	Update(ctx context.Context, rule *SortingRule) error
-	DeleteSortingRules(ctx context.Context, sortingRules []SortingRule) error
+	DeleteSortingRulesWithTx(ctx context.Context, sortingRules []SortingRule) error
 	WithTransaction(tx db.DbConnector) SortingRuleService
 }
 
@@ -28,12 +27,8 @@ type sortingRuleService struct {
 	externalTx            db.DbConnector
 }
 
-func (s *sortingRuleService) getTransaction() (db.DbConnector, error) {
-	if s.externalTx != nil {
-		return s.externalTx, nil
-	}
-
-	return s.sortingRuleRepository.CreateTransaction()
+func (s *sortingRuleService) getTransaction() db.DbConnector {
+	return s.externalTx
 }
 
 func (s *sortingRuleService) ApplySortingRuleTarget(ctx context.Context, instrumentID uuid.UUID, programme, sampleCode, target string, validUntil time.Time) error {
@@ -69,38 +64,38 @@ func (s *sortingRuleService) GetSampleSequenceNumber(ctx context.Context, sample
 	return s.sortingRuleRepository.GetSampleSequenceNumber(ctx, sampleCode)
 }
 
-func (s *sortingRuleService) Create(ctx context.Context, sortingRule *SortingRule) error {
-	tx, err := s.getTransaction()
+func (s *sortingRuleService) UpsertWithTx(ctx context.Context, sortingRule *SortingRule) error {
+	tx := s.getTransaction()
+	if tx == nil {
+		log.Error().Msg(msgRequiredSortingRuleTransactionNotFound)
+		return ErrorRequiredSortingRuleTransactionNotFound
+	}
+
+	existingSortingRule, err := s.sortingRuleRepository.WithTransaction(tx).GetById(ctx, sortingRule.ID)
 	if err != nil {
 		return err
 	}
 
-	if sortingRule.Condition != nil {
-		conditionID, err := s.conditionService.WithTransaction(tx).CreateCondition(ctx, *sortingRule.Condition)
+	if existingSortingRule != nil && existingSortingRule.Condition != nil {
+		err = s.conditionService.WithTransaction(tx).DeleteConditionWithTx(ctx, existingSortingRule.Condition.ID)
 		if err != nil {
-			if s.externalTx == nil {
-				_ = tx.Rollback()
-			}
+			return err
+		}
+	}
+
+	if sortingRule.Condition != nil {
+		conditionID, err := s.conditionService.WithTransaction(tx).UpsertConditionWithTx(ctx, *sortingRule.Condition)
+		if err != nil {
 			return err
 		}
 		sortingRule.Condition.ID = conditionID
 	}
 
-	sortingRule.ID, err = s.sortingRuleRepository.WithTransaction(tx).Create(ctx, *sortingRule)
+	sortingRule.ID, err = s.sortingRuleRepository.WithTransaction(tx).Upsert(ctx, *sortingRule)
 	if err != nil {
-		if s.externalTx == nil {
-			_ = tx.Rollback()
-		}
 		return err
 	}
 
-	if s.externalTx == nil {
-		err = tx.Commit()
-		if err != nil {
-			_ = tx.Rollback()
-			return err
-		}
-	}
 	return nil
 }
 
@@ -129,7 +124,8 @@ func GetSortingTargetForAnalysisRequestAndCondition(analysisRequests []AnalysisR
 }
 
 func (s *sortingRuleService) GetByInstrumentIDs(ctx context.Context, instrumentIDs []uuid.UUID) (map[uuid.UUID][]SortingRule, error) {
-	sortingRulesMap, err := s.sortingRuleRepository.GetByInstrumentIDs(ctx, instrumentIDs)
+	tx := s.getTransaction()
+	sortingRulesMap, err := s.sortingRuleRepository.WithTransaction(tx).GetByInstrumentIDs(ctx, instrumentIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +133,7 @@ func (s *sortingRuleService) GetByInstrumentIDs(ctx context.Context, instrumentI
 	for instrumentID := range sortingRulesMap {
 		for i := range sortingRulesMap[instrumentID] {
 			if sortingRulesMap[instrumentID][i].Condition != nil {
-				condition, err := s.conditionService.GetCondition(ctx, sortingRulesMap[instrumentID][i].Condition.ID)
+				condition, err := s.conditionService.WithTransaction(tx).GetCondition(ctx, sortingRulesMap[instrumentID][i].Condition.ID)
 				if err != nil {
 					return nil, err
 				}
@@ -168,55 +164,13 @@ func (s *sortingRuleService) GetByInstrumentIDAndProgramme(ctx context.Context, 
 	return sortingRules, nil
 }
 
-func (s *sortingRuleService) Update(ctx context.Context, rule *SortingRule) error {
-	tx, err := s.getTransaction()
-	if err != nil {
-		return err
+func (s *sortingRuleService) DeleteSortingRulesWithTx(ctx context.Context, sortingRules []SortingRule) error {
+	tx := s.getTransaction()
+	if tx == nil {
+		log.Error().Msg(msgRequiredSortingRuleTransactionNotFound)
+		return ErrorRequiredSortingRuleTransactionNotFound
 	}
 
-	if rule.Condition != nil {
-		err = s.conditionService.WithTransaction(tx).UpdateCondition(ctx, *rule.Condition)
-		if err != nil {
-			if err == ErrConditionNotFound {
-				conditionID, err := s.conditionService.CreateCondition(ctx, *rule.Condition)
-				if err != nil {
-					if s.externalTx == nil {
-						_ = tx.Rollback()
-					}
-					return err
-				}
-				rule.Condition.ID = conditionID
-			} else {
-				if s.externalTx == nil {
-					_ = tx.Rollback()
-				}
-				return err
-			}
-		}
-	}
-	err = s.sortingRuleRepository.WithTransaction(tx).Update(ctx, *rule)
-	if err != nil {
-		if s.externalTx == nil {
-			_ = tx.Rollback()
-		}
-		return err
-	}
-	if s.externalTx == nil {
-		err = tx.Commit()
-		if err != nil {
-			_ = tx.Rollback()
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (s *sortingRuleService) DeleteSortingRules(ctx context.Context, sortingRules []SortingRule) error {
-	tx, err := s.getTransaction()
-	if err != nil {
-		return err
-	}
 	sortingRuleIDs := make([]uuid.UUID, len(sortingRules))
 	for i := range sortingRules {
 		sortingRuleIDs = append(sortingRuleIDs, sortingRules[i].ID)
@@ -224,61 +178,28 @@ func (s *sortingRuleService) DeleteSortingRules(ctx context.Context, sortingRule
 			continue
 		}
 
-		err = s.conditionService.WithTransaction(tx).DeleteCondition(ctx, sortingRules[i].Condition.ID)
+		err := s.conditionService.WithTransaction(tx).DeleteConditionWithTx(ctx, sortingRules[i].Condition.ID)
 		if err != nil {
-			if s.externalTx == nil {
-				_ = tx.Rollback()
-			}
 			return err
 		}
 	}
-	err = s.sortingRuleRepository.Delete(ctx, sortingRuleIDs)
+	err := s.sortingRuleRepository.WithTransaction(tx).Delete(ctx, sortingRuleIDs)
 	if err != nil {
-		if s.externalTx == nil {
-			_ = tx.Rollback()
-		}
 		return err
-	}
-
-	if s.externalTx == nil {
-		err = tx.Commit()
-		if err != nil {
-			_ = tx.Rollback()
-			return err
-		}
 	}
 
 	return nil
 }
 
 func (s *sortingRuleService) WithTransaction(tx db.DbConnector) SortingRuleService {
+	if tx == nil {
+		return s
+	}
 	txSvc := *s
 	txSvc.externalTx = tx
 	return &txSvc
 }
 
-func IsSortingRuleUpdated(originalRule SortingRule, newRule SortingRule) bool {
-	if newRule.Target != originalRule.Target {
-		return true
-	}
-	if newRule.Programme != originalRule.Programme {
-		return true
-	}
-	if newRule.Condition == nil && originalRule.Condition != nil {
-		return true
-	}
-	if newRule.Condition != nil && originalRule.Condition == nil {
-		return true
-	}
-	if newRule.Condition != nil && originalRule.Condition != nil && newRule.Condition.ID != originalRule.Condition.ID {
-		return true
-	}
-	if newRule.Priority != originalRule.Priority {
-		return true
-	}
-
-	return false
-}
 func NewSortingRuleService(analysisRepository AnalysisRepository, conditionService ConditionService, sortingRuleRepository SortingRuleRepository) SortingRuleService {
 	return &sortingRuleService{
 		analysisRepository:    analysisRepository,

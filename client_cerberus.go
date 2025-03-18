@@ -8,20 +8,29 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/google/uuid"
-
 	"github.com/go-resty/resty/v2"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 )
 
 const (
-	MsgSendResultBatchFailed      = "send result batch failed"
-	MsgSyncAnalysisRequestsFailed = "sync analysis requests failed"
+	MsgSendResultBatchFailed                 = "send result batch failed"
+	MsgBasepathNotSet                        = "basepath for cerberus must be set. check your configuration for CerberusURL"
+	MsgFailedToCallCerberusAPI               = "Failed to call Cerberus API"
+	MsgFailedToUnmarshalError                = "Failed to unmarshal error of response"
+	MsgUnexpectedErrorFromCerberus           = "unexpected error from cerberus"
+	MsgEmptyAnalysisResultsBatch             = "Send analysis results batch called with empty array"
+	MsgFailedToPrepareData                   = "Failed to prepare data for sending"
+	MsgFailedToCallImageBatchAPI             = "Failed to call Cerberus API (/v1/analysis-results/image/batch)"
+	MsgFailedToCallVerifyAPI                 = "Failed to call Cerberus API (/v1/instrument/verify)"
+	MsgFailedToCallExpectedControlResultsAPI = "Failed to call Cerberus API (/v1/expected-control-results/verify)"
+	MsgFailedToCallSyncAPI                   = "Failed to call Cerberus API (/v1/instrument-drivers/analysis-requests/sync)"
+	MsgFailedToCallLogsAPI                   = "Failed to call Cerberus API (/v1/instruments/{instrumentId}/logs)"
 )
 
 var (
-	ErrSendResultBatchFailed      = errors.New(MsgSendResultBatchFailed)
-	ErrSyncAnalysisRequestsFailed = errors.New(MsgSyncAnalysisRequestsFailed)
+	ErrSendResultBatchFailed = errors.New(MsgSendResultBatchFailed)
+	ErrBasePathNotSet        = errors.New(MsgBasepathNotSet)
 )
 
 type CerberusClient interface {
@@ -31,6 +40,7 @@ type CerberusClient interface {
 	VerifyInstrumentHash(hash string) error
 	VerifyExpectedControlResultsHash(hash string) error
 	SyncAnalysisRequests(workItemIDs []uuid.UUID, syncType string) error
+	SendConsoleLog(instrumentId uuid.UUID, logLevel LogLevel, message, messageType string) error
 }
 
 type cerberusClient struct {
@@ -138,13 +148,29 @@ type WorkItemResultImageTO struct {
 	Image               ImageTO    `json:"image"`
 }
 
+type LogLevel string // @Name LogLevel
+
+const (
+	Debug LogLevel = "debug"
+	Info  LogLevel = "info"
+	Error LogLevel = "error"
+)
+
+type consoleLogDTO struct {
+	InstrumentID uuid.UUID `json:"instrumentId" swaggertype:"string" format:"uuid"`   // The instrument ID
+	CreatedAt    time.Time `json:"timestamp" swaggertype:"string" format:"date-time"` // The log timestamp
+	Level        LogLevel  `json:"messageCategory"`                                   // The log level
+	Message      string    `json:"message"`                                           // The log message
+	MessageType  string    `json:"messageType"`                                       // The log message type
+} // @Name consoleLogDTO
+
 type VerifyInstrumentTO struct {
 	Hash string `json:"hash"`
 }
 
 func NewCerberusClient(cerberusUrl string, restyClient *resty.Client) (CerberusClient, error) {
 	if cerberusUrl == "" {
-		return nil, fmt.Errorf("basepath for cerberus must be set. check your configurationf or CerberusURL")
+		return nil, ErrBasePathNotSet
 	}
 
 	return &cerberusClient{
@@ -169,7 +195,7 @@ func (c *cerberusClient) RegisterInstrumentDriver(name, displayName string, extr
 		Post(c.cerberusUrl + "/v1/instrument-drivers")
 
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to call Cerberus API")
+		log.Error().Err(err).Msg(MsgFailedToCallCerberusAPI)
 		return err
 	}
 
@@ -177,7 +203,7 @@ func (c *cerberusClient) RegisterInstrumentDriver(name, displayName string, extr
 		errReps := middleware.ClientError{}
 		err = json.Unmarshal(resp.Body(), &errReps)
 		if err != nil {
-			log.Error().Err(err).Msg("Failed to unmarshal error of response")
+			log.Error().Err(err).Msg(MsgFailedToUnmarshalError)
 			return err
 		}
 		return errors.New(errReps.Message)
@@ -189,7 +215,7 @@ func (c *cerberusClient) RegisterInstrumentDriver(name, displayName string, extr
 // SendAnalysisResultBatch Submit a list of AnalysisResults to Cerberus
 func (c *cerberusClient) SendAnalysisResultBatch(analysisResults []AnalysisResultTO) (AnalysisResultBatchResponse, error) {
 	if len(analysisResults) < 1 {
-		log.Warn().Msg("Send analysis results batch called with empty array")
+		log.Warn().Msg(MsgEmptyAnalysisResultsBatch)
 		return AnalysisResultBatchResponse{}, nil
 	}
 
@@ -205,7 +231,7 @@ func (c *cerberusClient) SendAnalysisResultBatch(analysisResults []AnalysisResul
 	if hasError {
 		response := AnalysisResultBatchResponse{
 			AnalysisResultBatchItemInfoList: analysisResultBatchItemInfoList,
-			ErrorMessage:                    "Failed to prepare data for sending",
+			ErrorMessage:                    MsgFailedToPrepareData,
 		}
 		return response, nil
 	}
@@ -276,7 +302,7 @@ func (c *cerberusClient) SendAnalysisResultBatch(analysisResults []AnalysisResul
 		}
 		return response, err
 	default:
-		err = fmt.Errorf("unexpected error from cerberus %d", resp.StatusCode())
+		err = fmt.Errorf("%s %d", MsgUnexpectedErrorFromCerberus, resp.StatusCode())
 		response := AnalysisResultBatchResponse{
 			AnalysisResultBatchItemInfoList: analysisResultBatchItemInfoList,
 			HTTPStatusCode:                  resp.StatusCode(),
@@ -294,27 +320,30 @@ func (c *cerberusClient) SendAnalysisResultImageBatch(images []WorkItemResultIma
 		Post(c.cerberusUrl + "/v1/analysis-results/image/batch")
 
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to call Cerberus API (/v1/analysis-results/image/batch)")
+		log.Error().Err(err).Msg(MsgFailedToCallImageBatchAPI)
 		return err
 	}
 
 	return nil
 }
+
 func (c *cerberusClient) VerifyInstrumentHash(hash string) error {
 	verifyTO := VerifyInstrumentTO{Hash: hash}
+	var errResponse clientError
 	resp, err := c.client.R().
 		SetHeader("Content-Type", "application/json").
 		SetBody(verifyTO).
+		SetError(&errResponse).
 		Post(c.cerberusUrl + "/v1/instruments/verify")
 
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to call Cerberus API (/v1/instrument/verify)")
+		log.Error().Err(err).Msg(MsgFailedToCallVerifyAPI)
 		return err
 	}
 
 	if resp.IsError() {
-		log.Error().Int("Code", resp.StatusCode()).Msg("Failed to call Cerberus API (/v1/instrument/verify)")
-		return fmt.Errorf("unexpected error from cerberus %d", resp.StatusCode())
+		log.Error().Str("Message", errResponse.Message).Msg(MsgFailedToCallVerifyAPI)
+		return errors.New(errResponse.Message)
 	}
 
 	return nil
@@ -322,19 +351,21 @@ func (c *cerberusClient) VerifyInstrumentHash(hash string) error {
 
 func (c *cerberusClient) VerifyExpectedControlResultsHash(hash string) error {
 	verifyTO := VerifyInstrumentTO{Hash: hash}
+	var errResponse clientError
 	resp, err := c.client.R().
 		SetHeader("Content-Type", "application/json").
 		SetBody(verifyTO).
+		SetError(&errResponse).
 		Post(c.cerberusUrl + "/v1/expected-control-results/verify")
 
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to call Cerberus API (/v1/expected-control-results/verify)")
+		log.Error().Err(err).Msg(MsgFailedToCallExpectedControlResultsAPI)
 		return err
 	}
 
 	if resp.IsError() {
-		log.Error().Int("Code", resp.StatusCode()).Msg("Failed to call Cerberus API (/v1/expected-control-results/verify)")
-		return fmt.Errorf("unexpected error from cerberus %d", resp.StatusCode())
+		log.Error().Str("Message", errResponse.Message).Msg(MsgFailedToCallExpectedControlResultsAPI)
+		return errors.New(errResponse.Message)
 	}
 
 	return nil
@@ -351,8 +382,35 @@ func (c *cerberusClient) SyncAnalysisRequests(workItemIDs []uuid.UUID, syncType 
 		Post(c.cerberusUrl + "/v1/instrument-drivers/analysis-requests/sync")
 
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to call Cerberus API (/v1/instrument-drivers/analysis-requests/sync)")
-		return fmt.Errorf("unexpected error from cerberus %d", resp.StatusCode())
+		log.Error().Err(err).Msg(MsgFailedToCallSyncAPI)
+		return fmt.Errorf("%s %d", MsgUnexpectedErrorFromCerberus, resp.StatusCode())
+	}
+
+	return nil
+}
+
+func (c *cerberusClient) SendConsoleLog(instrumentId uuid.UUID, logLevel LogLevel, message, messageType string) error {
+	var errResponse clientError
+	resp, err := c.client.R().
+		SetHeader("Content-Type", "application/json").
+		SetBody(consoleLogDTO{
+			InstrumentID: instrumentId,
+			CreatedAt:    time.Now().UTC(),
+			Level:        logLevel,
+			Message:      message,
+			MessageType:  messageType,
+		}).
+		SetError(&errResponse).
+		Post(c.cerberusUrl + "/v1/instruments/" + instrumentId.String() + "/logs")
+
+	if err != nil {
+		log.Error().Err(err).Str("InstrumentId", instrumentId.String()).Msg(MsgFailedToCallLogsAPI)
+		return err
+	}
+
+	if resp.IsError() {
+		log.Error().Str("Message", errResponse.Message).Str("InstrumentId", instrumentId.String()).Msg(MsgFailedToCallLogsAPI)
+		return errors.New(errResponse.Message)
 	}
 
 	return nil

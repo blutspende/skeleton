@@ -14,8 +14,6 @@ import (
 	"github.com/blutspende/skeleton/config"
 	"github.com/blutspende/skeleton/utils"
 
-	"github.com/blutspende/skeleton/consolelog/service"
-
 	"github.com/blutspende/skeleton/migrator"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
@@ -32,7 +30,7 @@ type skeleton struct {
 	analysisRepository                         AnalysisRepository
 	analysisService                            AnalysisService
 	instrumentService                          InstrumentService
-	consoleLogService                          service.ConsoleLogService
+	consoleLogService                          ConsoleLogService
 	sortingRuleService                         SortingRuleService
 	resultsBuffer                              []AnalysisResult
 	resultBatchesChan                          chan []AnalysisResult
@@ -1334,7 +1332,7 @@ func (s *skeleton) startAnalysisRequestRevocationReexamineJob(ctx context.Contex
 	}
 }
 
-func NewSkeleton(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, reagentManufacturers []string, sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService service.ConsoleLogService, manager Manager, cerberusClient CerberusClient, longPollClient LongPollClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
+func NewSkeleton(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, reagentManufacturers []string, sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService ConsoleLogService, manager Manager, cerberusClient CerberusClient, longPollClient LongPollClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
 	skeleton := &skeleton{
 		ctx:                                    ctx,
 		serviceName:                            serviceName,

@@ -84,6 +84,8 @@ type longPollClient struct {
 	serviceName                string
 	cerberusUrl                string
 	timeoutSeconds             uint
+	reattemptSeconds           uint
+	loggingEnabled             bool
 	instrumentsChan            chan InstrumentMessageTO
 	expectedControlResultsChan chan ExpectedControlResultMessageTO
 	reprocessChan              chan ReprocessMessageTO
@@ -92,7 +94,7 @@ type longPollClient struct {
 	reexaminedWorkItemIDsChan  chan []uuid.UUID
 }
 
-func NewLongPollClient(restyClient *resty.Client, serviceName, cerberusUrl string, timeoutSeconds uint) LongPollClient {
+func NewLongPollClient(restyClient *resty.Client, serviceName, cerberusUrl string, timeoutSeconds, reattemptSeconds uint, loggingEnabled bool) LongPollClient {
 	return &longPollClient{
 		restyClient:                restyClient,
 		serviceName:                serviceName,
@@ -104,6 +106,8 @@ func NewLongPollClient(restyClient *resty.Client, serviceName, cerberusUrl strin
 		revokedWorkItemIDsChan:     make(chan []uuid.UUID),
 		reexaminedWorkItemIDsChan:  make(chan []uuid.UUID),
 		timeoutSeconds:             timeoutSeconds,
+		reattemptSeconds:           reattemptSeconds,
+		loggingEnabled:             loggingEnabled,
 	}
 }
 
@@ -142,10 +146,12 @@ func (l *longPollClient) StartInstrumentConfigsLongPolling(ctx context.Context) 
 	}
 
 	c, err := longpollclient.NewClient(longpollclient.ClientOptions{
-		SubscribeUrl:       *u,
-		Category:           fmt.Sprintf("%s:%s", l.serviceName, syncTypeInstrument),
-		PollTimeoutSeconds: l.timeoutSeconds,
-		HttpClient:         httpClient,
+		SubscribeUrl:         *u,
+		Category:             fmt.Sprintf("%s:%s", l.serviceName, syncTypeInstrument),
+		PollTimeoutSeconds:   l.timeoutSeconds,
+		ReattemptWaitSeconds: l.reattemptSeconds,
+		HttpClient:           httpClient,
+		LoggingEnabled:       l.loggingEnabled,
 	})
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to create long-poll client")
@@ -197,10 +203,12 @@ func (l *longPollClient) StartExpectedControlResultsLongPolling(ctx context.Cont
 	}
 
 	c, err := longpollclient.NewClient(longpollclient.ClientOptions{
-		SubscribeUrl:       *u,
-		Category:           fmt.Sprintf("%s:%s", l.serviceName, syncTypeExpectedControlResults),
-		PollTimeoutSeconds: l.timeoutSeconds,
-		HttpClient:         httpClient,
+		SubscribeUrl:         *u,
+		Category:             fmt.Sprintf("%s:%s", l.serviceName, syncTypeExpectedControlResults),
+		PollTimeoutSeconds:   l.timeoutSeconds,
+		ReattemptWaitSeconds: l.reattemptSeconds,
+		HttpClient:           httpClient,
+		LoggingEnabled:       l.loggingEnabled,
 	})
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to create long-poll client")
@@ -247,10 +255,12 @@ func (l *longPollClient) StartReprocessEventsLongPolling(ctx context.Context) {
 	}
 
 	c, err := longpollclient.NewClient(longpollclient.ClientOptions{
-		SubscribeUrl:       *u,
-		Category:           fmt.Sprintf("%s:%s", l.serviceName, syncTypeReprocess),
-		PollTimeoutSeconds: l.timeoutSeconds,
-		HttpClient:         httpClient,
+		SubscribeUrl:         *u,
+		Category:             fmt.Sprintf("%s:%s", l.serviceName, syncTypeReprocess),
+		PollTimeoutSeconds:   l.timeoutSeconds,
+		ReattemptWaitSeconds: l.reattemptSeconds,
+		HttpClient:           httpClient,
+		LoggingEnabled:       l.loggingEnabled,
 	})
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to create long-poll client")
@@ -302,10 +312,12 @@ func (l *longPollClient) StartAnalysisRequestLongPolling(ctx context.Context) {
 	}
 
 	c, err := longpollclient.NewClient(longpollclient.ClientOptions{
-		SubscribeUrl:       *u,
-		Category:           fmt.Sprintf("%s:%s", l.serviceName, syncTypeNewWorkItem),
-		PollTimeoutSeconds: l.timeoutSeconds,
-		HttpClient:         httpClient,
+		SubscribeUrl:         *u,
+		Category:             fmt.Sprintf("%s:%s", l.serviceName, syncTypeNewWorkItem),
+		PollTimeoutSeconds:   l.timeoutSeconds,
+		ReattemptWaitSeconds: l.reattemptSeconds,
+		HttpClient:           httpClient,
+		LoggingEnabled:       l.loggingEnabled,
 	})
 	if err != nil {
 		log.Error().Err(err).Msg("create longpoll client failed")
@@ -357,10 +369,12 @@ func (l *longPollClient) StartRevokedReexaminedWorkItemIDsLongPolling(ctx contex
 	}
 
 	c, err := longpollclient.NewClient(longpollclient.ClientOptions{
-		SubscribeUrl:       *u,
-		Category:           fmt.Sprintf("%s:%s", l.serviceName, revokedReexaminedCategory),
-		PollTimeoutSeconds: l.timeoutSeconds,
-		HttpClient:         httpClient,
+		SubscribeUrl:         *u,
+		Category:             fmt.Sprintf("%s:%s", l.serviceName, revokedReexaminedCategory),
+		PollTimeoutSeconds:   l.timeoutSeconds,
+		ReattemptWaitSeconds: l.reattemptSeconds,
+		HttpClient:           httpClient,
+		LoggingEnabled:       l.loggingEnabled,
 	})
 	if err != nil {
 		log.Error().Err(err).Msg("create longpoll client failed")
