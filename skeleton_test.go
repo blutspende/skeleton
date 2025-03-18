@@ -1162,7 +1162,7 @@ func (m *cerberusClientMock) SyncAnalysisRequests(workItemIDs []uuid.UUID, syncT
 	return nil
 }
 
-func (m *cerberusClientMock) SendConsoleLog(instrumentId uuid.UUID, consoleLogDTO ConsoleLogDTO) error {
+func (m *cerberusClientMock) SendConsoleLog(instrumentId uuid.UUID, logLevel LogLevel, message string, messageType string) error {
 	return nil
 }
 

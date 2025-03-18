@@ -2,7 +2,6 @@ package skeleton
 
 import (
 	"context"
-	"fmt"
 	"github.com/blutspende/skeleton/db"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
@@ -28,8 +27,8 @@ type conditionService struct {
 func (s *conditionService) UpsertConditionWithTx(ctx context.Context, condition Condition) (uuid.UUID, error) {
 	tx := s.getTransaction()
 	if tx == nil {
-		log.Error().Msg("required transaction not found when handling sorting rules")
-		return uuid.Nil, fmt.Errorf("required transaction not found when handling sorting rules")
+		log.Error().Msg(msgRequiredConditionTransactionNotFound)
+		return uuid.Nil, ErrorRequiredConditionTransactionNotFound
 	}
 
 	id, err := s.upsertConditionWithTx(ctx, tx, condition)
@@ -284,8 +283,8 @@ func ConditionHasOperator(condition *Condition, operators ...ConditionOperator) 
 func (s *conditionService) DeleteConditionWithTx(ctx context.Context, id uuid.UUID) error {
 	tx := s.getTransaction()
 	if tx == nil {
-		log.Error().Msg("required transaction not found when handling sorting rules")
-		return fmt.Errorf("required transaction not found when handling sorting rules")
+		log.Error().Msg(msgRequiredConditionTransactionNotFound)
+		return ErrorRequiredConditionTransactionNotFound
 	}
 
 	err := s.deleteConditionWithTx(ctx, tx, id)

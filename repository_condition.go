@@ -375,36 +375,38 @@ func convertDAOToCondition(dao conditionDAO) Condition {
 }
 
 const (
-	msgConditionNotFound                  = "condition not found"
-	msgConditionOperandNotFound           = "condition operand not found"
-	msgCreateConditionFailed              = "create condition failed"
-	msgCreateConditionOperandFailed       = "create condition operand failed"
-	msgDecimalFieldValueParseFailed       = "parse fieldvalue as a decimal number failed"
-	msgDeleteConditionFailed              = "delete condition failed"
-	msgDeleteConditionOperandFailed       = "delete condition operand failed"
-	msgGetConditionFailed                 = "get condition failed"
-	msgGetConditionOperandFailed          = "get condition operand failed"
-	msgGetNamedConditionsFailed           = "get named condition failed"
-	msgIsConditionOperandReferencedFailed = "check if condition operand is referenced failed"
-	msgIsConditionReferencedFailed        = "check if condition is referenced failed"
-	msgUpdateConditionFailed              = "update condition failed"
-	msgUpdateConditionOperandFailed       = "update condition operand failed"
+	msgConditionNotFound                    = "condition not found"
+	msgConditionOperandNotFound             = "condition operand not found"
+	msgCreateConditionFailed                = "create condition failed"
+	msgCreateConditionOperandFailed         = "create condition operand failed"
+	msgDecimalFieldValueParseFailed         = "parse fieldvalue as a decimal number failed"
+	msgDeleteConditionFailed                = "delete condition failed"
+	msgDeleteConditionOperandFailed         = "delete condition operand failed"
+	msgGetConditionFailed                   = "get condition failed"
+	msgGetConditionOperandFailed            = "get condition operand failed"
+	msgGetNamedConditionsFailed             = "get named condition failed"
+	msgIsConditionOperandReferencedFailed   = "check if condition operand is referenced failed"
+	msgIsConditionReferencedFailed          = "check if condition is referenced failed"
+	msgUpdateConditionFailed                = "update condition failed"
+	msgUpdateConditionOperandFailed         = "update condition operand failed"
+	msgRequiredConditionTransactionNotFound = "required transaction not found when handling conditions"
 )
 
 var (
-	ErrConditionNotFound                  = errors.New(msgConditionNotFound)
-	ErrConditionOperandNotFound           = errors.New(msgConditionOperandNotFound)
-	ErrCreateConditionFailed              = errors.New(msgCreateConditionFailed)
-	ErrCreateConditionOperandFailed       = errors.New(msgCreateConditionOperandFailed)
-	ErrDeleteConditionFailed              = errors.New(msgDeleteConditionFailed)
-	ErrDeleteConditionOperandFailed       = errors.New(msgDeleteConditionOperandFailed)
-	ErrGetConditionFailed                 = errors.New(msgGetConditionFailed)
-	ErrGetConditionOperandFailed          = errors.New(msgGetConditionOperandFailed)
-	ErrGetNamedConditionsFailed           = errors.New(msgGetNamedConditionsFailed)
-	ErrIsConditionOperandReferencedFailed = errors.New(msgIsConditionOperandReferencedFailed)
-	ErrIsConditionReferencedFailed        = errors.New(msgIsConditionReferencedFailed)
-	ErrUpdateConditionFailed              = errors.New(msgUpdateConditionFailed)
-	ErrUpdateConditionOperandFailed       = errors.New(msgUpdateConditionOperandFailed)
+	ErrConditionNotFound                      = errors.New(msgConditionNotFound)
+	ErrConditionOperandNotFound               = errors.New(msgConditionOperandNotFound)
+	ErrCreateConditionFailed                  = errors.New(msgCreateConditionFailed)
+	ErrCreateConditionOperandFailed           = errors.New(msgCreateConditionOperandFailed)
+	ErrDeleteConditionFailed                  = errors.New(msgDeleteConditionFailed)
+	ErrDeleteConditionOperandFailed           = errors.New(msgDeleteConditionOperandFailed)
+	ErrGetConditionFailed                     = errors.New(msgGetConditionFailed)
+	ErrGetConditionOperandFailed              = errors.New(msgGetConditionOperandFailed)
+	ErrGetNamedConditionsFailed               = errors.New(msgGetNamedConditionsFailed)
+	ErrIsConditionOperandReferencedFailed     = errors.New(msgIsConditionOperandReferencedFailed)
+	ErrIsConditionReferencedFailed            = errors.New(msgIsConditionReferencedFailed)
+	ErrUpdateConditionFailed                  = errors.New(msgUpdateConditionFailed)
+	ErrUpdateConditionOperandFailed           = errors.New(msgUpdateConditionOperandFailed)
+	ErrorRequiredConditionTransactionNotFound = errors.New(msgRequiredConditionTransactionNotFound)
 )
 
 const (
@@ -413,7 +415,6 @@ const (
 	msgInvalidOperandForExistOrNotExist             = "invalid operand for exists or not exists operator"
 	msgInvalidOperatorForArithmeticFilter           = "invalid operator for arithmetic filter"
 	msgInvalidOperatorForLogicFilter                = "invalid operator for logic filter"
-	msgIsAnalyteUsedAsConditionOperandFailed        = "check if analyte is used as condition operand failed"
 	msgMissingExtraValueKey                         = "extravaluekey missing from condition"
 	msgOperand1Missing                              = "operand 1 missing"
 	msgOperand2Missing                              = "operand 2 missing"

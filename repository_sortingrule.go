@@ -59,8 +59,8 @@ func (r *sortingRuleRepository) GetById(ctx context.Context, id uuid.UUID) (*Sor
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
-		log.Error().Err(err).Msg("get sorting rule by ID failed")
-		return nil, errors.New("get sorting rule by ID failed")
+		log.Error().Err(err).Msg(msgGetSortingRuleByIDFailed)
+		return nil, ErrGetSortingRuleByIDFailed
 	}
 
 	sortingRule := convertDAOToSortingRule(dao)
@@ -298,21 +298,25 @@ func convertDAOToSortingRule(dao sortingRuleDAO) SortingRule {
 }
 
 const (
-	msgApplySortingRuleTargetFailed       = "apply sorting rule target failed"
-	msgCreateSortingRuleFailed            = "create sorting rule failed"
-	msgGetSortingRuleByInstrumentIDFailed = "get sorting rule by instrument ID failed"
-	msgGetAppliedSortingRuleTargetsFailed = "get applied sorting rule targets failed"
-	msgGetSampleSequenceNumberFailed      = "get sample sequence number failed"
-	msgUpdateSortingRuleFailed            = "update sorting rule failed"
-	msgDeleteSortingRulesFailed           = "delete sorting rules failed"
+	msgApplySortingRuleTargetFailed           = "apply sorting rule target failed"
+	msgCreateSortingRuleFailed                = "create sorting rule failed"
+	msgGetSortingRuleByInstrumentIDFailed     = "get sorting rule by instrument ID failed"
+	msgGetAppliedSortingRuleTargetsFailed     = "get applied sorting rule targets failed"
+	msgGetSampleSequenceNumberFailed          = "get sample sequence number failed"
+	msgUpdateSortingRuleFailed                = "update sorting rule failed"
+	msgDeleteSortingRulesFailed               = "delete sorting rules failed"
+	msgGetSortingRuleByIDFailed               = "get sorting rule by ID failed"
+	msgRequiredSortingRuleTransactionNotFound = "required transaction not found when handling sorting rules"
 )
 
 var (
-	ErrApplySortingRuleTargetFailed       = errors.New(msgApplySortingRuleTargetFailed)
-	ErrCreateSortingRuleFailed            = errors.New(msgCreateSortingRuleFailed)
-	ErrGetSortingRuleByInstrumentIDFailed = errors.New(msgGetSortingRuleByInstrumentIDFailed)
-	ErrGetAppliedSortingRuleTargetsFailed = errors.New(msgGetAppliedSortingRuleTargetsFailed)
-	ErrGetSampleSequenceNumberFailed      = errors.New(msgGetSampleSequenceNumberFailed)
-	ErrUpdateSortingRuleFailed            = errors.New(msgUpdateSortingRuleFailed)
-	ErrDeleteSortingRulesFailed           = errors.New(msgDeleteSortingRulesFailed)
+	ErrApplySortingRuleTargetFailed             = errors.New(msgApplySortingRuleTargetFailed)
+	ErrCreateSortingRuleFailed                  = errors.New(msgCreateSortingRuleFailed)
+	ErrGetSortingRuleByInstrumentIDFailed       = errors.New(msgGetSortingRuleByInstrumentIDFailed)
+	ErrGetAppliedSortingRuleTargetsFailed       = errors.New(msgGetAppliedSortingRuleTargetsFailed)
+	ErrGetSampleSequenceNumberFailed            = errors.New(msgGetSampleSequenceNumberFailed)
+	ErrUpdateSortingRuleFailed                  = errors.New(msgUpdateSortingRuleFailed)
+	ErrDeleteSortingRulesFailed                 = errors.New(msgDeleteSortingRulesFailed)
+	ErrGetSortingRuleByIDFailed                 = errors.New(msgGetSortingRuleByIDFailed)
+	ErrorRequiredSortingRuleTransactionNotFound = errors.New(msgRequiredSortingRuleTransactionNotFound)
 )

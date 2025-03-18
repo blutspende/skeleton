@@ -3,7 +3,6 @@ package skeleton
 import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
-	"time"
 )
 
 type ConsoleLogService interface {
@@ -22,29 +21,23 @@ func NewConsoleLogService(cerberusClient CerberusClient) ConsoleLogService {
 	}
 }
 
-func (s *consoleLogService) createConsoleLog(level LogLevel, instrumentID uuid.UUID, messageType string, message string) {
-	consoleLog := ConsoleLogDTO{
-		InstrumentID: instrumentID,
-		Level:        level,
-		CreatedAt:    time.Now().UTC(),
-		Message:      message,
-		MessageType:  messageType,
-	}
-
-	err := s.cerberusClient.SendConsoleLog(instrumentID, consoleLog)
+func (s *consoleLogService) Debug(instrumentID uuid.UUID, messageType string, message string) {
+	err := s.cerberusClient.SendConsoleLog(instrumentID, Debug, messageType, message)
 	if err != nil {
 		log.Error().Err(err).Str("InstrumentId", instrumentID.String()).Msg("Error sending console log")
 	}
 }
 
-func (s *consoleLogService) Debug(instrumentID uuid.UUID, messageType string, message string) {
-	s.createConsoleLog(Debug, instrumentID, messageType, message)
-}
-
 func (s *consoleLogService) Info(instrumentID uuid.UUID, messageType string, message string) {
-	s.createConsoleLog(Info, instrumentID, messageType, message)
+	err := s.cerberusClient.SendConsoleLog(instrumentID, Info, messageType, message)
+	if err != nil {
+		log.Error().Err(err).Str("InstrumentId", instrumentID.String()).Msg("Error sending console log")
+	}
 }
 
 func (s *consoleLogService) Error(instrumentID uuid.UUID, messageType string, message string) {
-	s.createConsoleLog(Error, instrumentID, messageType, message)
+	err := s.cerberusClient.SendConsoleLog(instrumentID, Error, messageType, message)
+	if err != nil {
+		log.Error().Err(err).Str("InstrumentId", instrumentID.String()).Msg("Error sending console log")
+	}
 }

@@ -67,8 +67,8 @@ func (s *sortingRuleService) GetSampleSequenceNumber(ctx context.Context, sample
 func (s *sortingRuleService) UpsertWithTx(ctx context.Context, sortingRule *SortingRule) error {
 	tx := s.getTransaction()
 	if tx == nil {
-		log.Error().Msg("required transaction not found when handling sorting rules")
-		return fmt.Errorf("required transaction not found when handling sorting rules")
+		log.Error().Msg(msgRequiredSortingRuleTransactionNotFound)
+		return ErrorRequiredSortingRuleTransactionNotFound
 	}
 
 	existingSortingRule, err := s.sortingRuleRepository.WithTransaction(tx).GetById(ctx, sortingRule.ID)
@@ -167,8 +167,8 @@ func (s *sortingRuleService) GetByInstrumentIDAndProgramme(ctx context.Context, 
 func (s *sortingRuleService) DeleteSortingRulesWithTx(ctx context.Context, sortingRules []SortingRule) error {
 	tx := s.getTransaction()
 	if tx == nil {
-		log.Error().Msg("required transaction not found when handling sorting rules")
-		return fmt.Errorf("required transaction not found when handling sorting rules")
+		log.Error().Msg(msgRequiredSortingRuleTransactionNotFound)
+		return ErrorRequiredSortingRuleTransactionNotFound
 	}
 
 	sortingRuleIDs := make([]uuid.UUID, len(sortingRules))
