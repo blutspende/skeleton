@@ -14,18 +14,20 @@ import (
 )
 
 const (
-	MsgSendResultBatchFailed                 = "send result batch failed"
-	MsgBasepathNotSet                        = "basepath for cerberus must be set. check your configuration for CerberusURL"
-	MsgFailedToCallCerberusAPI               = "Failed to call Cerberus API"
-	MsgFailedToUnmarshalError                = "Failed to unmarshal error of response"
-	MsgUnexpectedErrorFromCerberus           = "unexpected error from cerberus"
-	MsgEmptyAnalysisResultsBatch             = "Send analysis results batch called with empty array"
-	MsgFailedToPrepareData                   = "Failed to prepare data for sending"
-	MsgFailedToCallImageBatchAPI             = "Failed to call Cerberus API (/v1/analysis-results/image/batch)"
-	MsgFailedToCallVerifyAPI                 = "Failed to call Cerberus API (/v1/instrument/verify)"
-	MsgFailedToCallExpectedControlResultsAPI = "Failed to call Cerberus API (/v1/expected-control-results/verify)"
-	MsgFailedToCallSyncAPI                   = "Failed to call Cerberus API (/v1/instrument-drivers/analysis-requests/sync)"
-	MsgFailedToCallLogsAPI                   = "Failed to call Cerberus API (/v1/instruments/{instrumentId}/logs)"
+	MsgSendResultBatchFailed                    = "send result batch failed"
+	MsgBasepathNotSet                           = "basepath for cerberus must be set. check your configuration for CerberusURL"
+	MsgFailedToCallCerberusAPI                  = "Failed to call Cerberus API"
+	MsgFailedToUnmarshalError                   = "Failed to unmarshal error of response"
+	MsgUnexpectedErrorFromCerberus              = "unexpected error from cerberus"
+	MsgEmptyAnalysisResultsBatch                = "Send analysis results batch called with empty array"
+	MsgFailedToPrepareData                      = "Failed to prepare data for sending"
+	MsgFailedToSetOnlineStatus                  = "Failed to set instrument online status"
+	MsgFailedToCallImageBatchAPI                = "Failed to call Cerberus API (/v1/analysis-results/image/batch)"
+	MsgFailedToCallVerifyAPI                    = "Failed to call Cerberus API (/v1/instrument/verify)"
+	MsgFailedToCallExpectedControlResultsAPI    = "Failed to call Cerberus API (/v1/expected-control-results/verify)"
+	MsgFailedToCallSyncAPI                      = "Failed to call Cerberus API (/v1/instrument-drivers/analysis-requests/sync)"
+	MsgFailedToCallLogsAPI                      = "Failed to call Cerberus API (/v1/instruments/{instrumentId}/logs)"
+	MsgFailedToCallRegisterManufacturerTestsAPI = "Failed to call Cerberus API (/v1/instrument-drivers/manufacturer-tests)"
 )
 
 var (
@@ -35,12 +37,14 @@ var (
 
 type CerberusClient interface {
 	RegisterInstrumentDriver(name, displayName string, extraValueKeys []string, protocols []supportedProtocolTO, tests []supportedManufacturerTestTO, encodings []string, reagentManufacturers []string) error
+	RegisterManufacturerTests(driverName string, tests []supportedManufacturerTestTO) error
 	SendAnalysisResultBatch(analysisResults []AnalysisResultTO) (AnalysisResultBatchResponse, error)
 	SendAnalysisResultImageBatch(images []WorkItemResultImageTO) error
 	VerifyInstrumentHash(hash string) error
 	VerifyExpectedControlResultsHash(hash string) error
 	SyncAnalysisRequests(workItemIDs []uuid.UUID, syncType string) error
 	SendConsoleLog(instrumentId uuid.UUID, logLevel LogLevel, message, messageType string) error
+	SetInstrumentOnlineStatus(instrumentId uuid.UUID, status InstrumentStatus) error
 }
 
 type cerberusClient struct {
@@ -57,6 +61,11 @@ type registerInstrumentDriverTO struct {
 	ManufacturerTests    []supportedManufacturerTestTO `json:"manufacturerTests"`
 	Encodings            []string                      `json:"encodings"`
 	ReagentManufacturers []string                      `json:"reagentManufacturers"`
+}
+
+type registerManufacturerTestTO struct {
+	DriverName        string                        `json:"driverName"`
+	ManufacturerTests []supportedManufacturerTestTO `json:"manufacturerTests"`
 }
 
 type ExtraValueTO struct {
@@ -168,6 +177,10 @@ type VerifyInstrumentTO struct {
 	Hash string `json:"hash"`
 }
 
+type instrumentStatusTO struct {
+	Status InstrumentStatus `json:"status"`
+}
+
 func NewCerberusClient(cerberusUrl string, restyClient *resty.Client) (CerberusClient, error) {
 	if cerberusUrl == "" {
 		return nil, ErrBasePathNotSet
@@ -209,6 +222,30 @@ func (c *cerberusClient) RegisterInstrumentDriver(name, displayName string, extr
 		return errors.New(errReps.Message)
 	}
 	c.driverName = name
+	return nil
+}
+
+func (c *cerberusClient) RegisterManufacturerTests(driverName string, tests []supportedManufacturerTestTO) error {
+	var errResponse clientError
+	resp, err := c.client.R().
+		SetHeader("Content-Type", "application/json").
+		SetBody(registerManufacturerTestTO{
+			DriverName:        driverName,
+			ManufacturerTests: tests,
+		}).
+		SetError(&errResponse).
+		Post(c.cerberusUrl + "/v1/instrument-drivers/manufacturer-tests")
+
+	if err != nil {
+		log.Error().Err(err).Msg(MsgFailedToCallRegisterManufacturerTestsAPI)
+		return err
+	}
+
+	if resp.IsError() {
+		log.Error().Str("Message", errResponse.Message).Msg(MsgFailedToCallRegisterManufacturerTestsAPI)
+		return errors.New(errResponse.Message)
+	}
+
 	return nil
 }
 
@@ -410,6 +447,27 @@ func (c *cerberusClient) SendConsoleLog(instrumentId uuid.UUID, logLevel LogLeve
 
 	if resp.IsError() {
 		log.Error().Str("Message", errResponse.Message).Str("InstrumentId", instrumentId.String()).Msg(MsgFailedToCallLogsAPI)
+		return errors.New(errResponse.Message)
+	}
+
+	return nil
+}
+
+func (c *cerberusClient) SetInstrumentOnlineStatus(instrumentId uuid.UUID, status InstrumentStatus) error {
+	var errResponse clientError
+	resp, err := c.client.R().
+		SetHeader("Content-Type", "application/json").
+		SetBody(instrumentStatusTO{Status: status}).
+		SetError(&errResponse).
+		Put(c.cerberusUrl + "/v1/instruments/" + instrumentId.String() + "/status")
+
+	if err != nil {
+		log.Error().Err(err).Str("InstrumentId", instrumentId.String()).Msg(MsgFailedToSetOnlineStatus)
+		return err
+	}
+
+	if resp.IsError() {
+		log.Error().Str("Message", errResponse.Message).Str("InstrumentId", instrumentId.String()).Msg(MsgFailedToSetOnlineStatus)
 		return errors.New(errResponse.Message)
 	}
 

@@ -2,7 +2,6 @@ package skeleton
 
 import (
 	"github.com/google/uuid"
-	"time"
 )
 
 // models
@@ -136,22 +135,6 @@ type supportedManufacturerTestTO struct {
 	TestName          string   `json:"testName"`
 	Channels          []string `json:"channels"`
 	ValidResultValues []string `json:"validResultValues"`
-}
-
-type expectedControlResultTO struct {
-	ID               uuid.UUID         `json:"id"`
-	AnalyteMappingId uuid.UUID         `json:"analyteMappingId"`
-	SampleCode       string            `json:"sampleCode"`
-	Operator         ConditionOperator `json:"operator"`
-	ExpectedValue    string            `json:"expectedValue"`
-	ExpectedValue2   *string           `json:"expectedValue2"`
-	CreatedBy        *uuid.UUID        `json:"createdBy"`
-	CreatedAt        *time.Time        `json:"createdAt"`
-}
-
-type notSpecifiedExpectedControlResultTO struct {
-	AnalyteMappingId uuid.UUID `json:"analyteMappingId"`
-	SampleCode       string    `json:"sampleCode"`
 }
 
 // converters

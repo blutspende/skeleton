@@ -102,7 +102,7 @@ type SkeletonAPI interface {
 	RegisterProtocol(ctx context.Context, id uuid.UUID, name string, description string, abilities []ProtocolAbility, settings []ProtocolSetting) error
 
 	// RegisterManufacturerTests - Registers the supported manufacturer tests of the driver
-	RegisterManufacturerTests(ctx context.Context, manufacturerTests []SupportedManufacturerTests) error
+	RegisterManufacturerTests(ctx context.Context, manufacturerTests []SupportedManufacturerTests, sendToCerberus bool) error
 
 	// SetOnlineStatus - Sets the current status of an instrument. Possible values:
 	// - ONLINE - instrument is actively connected
