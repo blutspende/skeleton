@@ -1166,6 +1166,14 @@ func (m *cerberusClientMock) SendConsoleLog(instrumentId uuid.UUID, logLevel Log
 	return nil
 }
 
+func (m *cerberusClientMock) RegisterManufacturerTests(driverName string, tests []supportedManufacturerTestTO) error {
+	return nil
+}
+
+func (m *cerberusClientMock) SetInstrumentOnlineStatus(instrumentId uuid.UUID, status InstrumentStatus) error {
+	return nil
+}
+
 func (m *cerberusClientMock) RegisterInstrument(instrument Instrument) error {
 	if m.registerInstrumentFunc == nil {
 		return errors.New("not implemented")
@@ -1453,7 +1461,7 @@ func (m *analysisRepositoryMock) CreateAnalysisResultReagentRelations(ctx contex
 func (m *analysisRepositoryMock) GetAnalysisResultsBySampleCodeAndAnalyteID(ctx context.Context, sampleCode string, analyteID uuid.UUID) ([]AnalysisResult, error) {
 	return nil, nil
 }
-func (m *analysisRepositoryMock) GetAnalysisResultByID(ctx context.Context, id uuid.UUID, allowDeletedAnalyteMapping bool) (AnalysisResult, error) {
+func (m *analysisRepositoryMock) GetAnalysisResultByCerberusID(ctx context.Context, id uuid.UUID, allowDeletedAnalyteMapping bool) (AnalysisResult, error) {
 	return AnalysisResult{}, nil
 }
 func (m *analysisRepositoryMock) GetAnalysisResultsByBatchIDs(ctx context.Context, batchIDs []uuid.UUID) ([]AnalysisResult, error) {

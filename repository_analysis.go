@@ -458,7 +458,7 @@ type AnalysisRepository interface {
 	UpdateStatusAnalysisResultsBatch(ctx context.Context, analysisResultsToUpdate []AnalysisResult) error
 	CreateAnalysisResultReagentRelations(ctx context.Context, relationDAOs []analysisResultReagentRelationDAO) error
 	GetAnalysisResultsBySampleCodeAndAnalyteID(ctx context.Context, sampleCode string, analyteID uuid.UUID) ([]AnalysisResult, error)
-	GetAnalysisResultByID(ctx context.Context, id uuid.UUID, allowDeletedAnalyteMapping bool) (AnalysisResult, error)
+	GetAnalysisResultByCerberusID(ctx context.Context, id uuid.UUID, allowDeletedAnalyteMapping bool) (AnalysisResult, error)
 	GetAnalysisResultsByIDs(ctx context.Context, ids []uuid.UUID) ([]AnalysisResult, error)
 	GetAnalysisResultsByBatchIDs(ctx context.Context, batchIDs []uuid.UUID) ([]AnalysisResult, error)
 	GetAnalysisResultIdsForStatusRecalculationByControlIds(ctx context.Context, controlResultIds []uuid.UUID) ([]uuid.UUID, error)
@@ -1332,7 +1332,7 @@ func (r *analysisRepository) GetAnalysisResultsBySampleCodeAndAnalyteID(ctx cont
 	return r.gatherAndAttachAllConnectedDataToAnalysisResults(ctx, analysisResultDAOs)
 }
 
-func (r *analysisRepository) GetAnalysisResultByID(ctx context.Context, id uuid.UUID, allowDeletedAnalyteMapping bool) (AnalysisResult, error) {
+func (r *analysisRepository) GetAnalysisResultByCerberusID(ctx context.Context, id uuid.UUID, allowDeletedAnalyteMapping bool) (AnalysisResult, error) {
 	query := `SELECT sar.id, sar.analyte_mapping_id, sar.instrument_id, sar.sample_code, sar.instrument_run_id, sar.dea_raw_message_id, sar.batch_id, sar."result", sar.status, sar.result_mode, sar.yielded_at, sar.valid_until, sar.operator, sar.edited, sar.edit_reason, sar.is_invalid,
 					sam.id AS "analyte_mapping.id", sam.instrument_id AS "analyte_mapping.instrument_id", sam.instrument_analyte AS "analyte_mapping.instrument_analyte", sam.analyte_id AS "analyte_mapping.analyte_id", sam.result_type AS "analyte_mapping.result_type", 
 					sam.control_instrument_analyte AS "analyte_mapping.control_instrument_analyte", sam.control_result_required AS "analyte_mapping.control_result_required", sam.created_at AS "analyte_mapping.created_at", sam.modified_at AS "analyte_mapping.modified_at"
@@ -1343,7 +1343,7 @@ func (r *analysisRepository) GetAnalysisResultByID(ctx context.Context, id uuid.
 		query += ` AND sam.deleted_at IS NULL`
 	}
 
-	query += ` WHERE sar.id = $1;`
+	query += ` WHERE sar.cerberus_id = $1;`
 
 	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
 
@@ -4090,7 +4090,7 @@ func (r *analysisRepository) GetControlResultsToValidate(ctx context.Context, an
     INNER JOIN %s.sk_expected_control_result secr ON sam.id = secr.analyte_mapping_id AND skcr.sample_code = secr.sample_code
 	WHERE skcr.expected_control_result_id IS NULL`, r.dbSchema, r.dbSchema, r.dbSchema)
 	if len(analyteMappingIds) > 0 {
-		query += " AND scr.analyte_mapping_id IN (?) "
+		query += " AND skcr.analyte_mapping_id IN (?) "
 	}
 
 	var rows *sqlx.Rows

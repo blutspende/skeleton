@@ -182,7 +182,7 @@ func (sr *SkeletonTestRig) MarkSortingTargetAsApplied(ctx context.Context, instr
 	return nil
 }
 
-func (sr *SkeletonTestRig) RegisterManufacturerTests(ctx context.Context, manufacturerTests []SupportedManufacturerTests) error {
+func (sr *SkeletonTestRig) RegisterManufacturerTests(ctx context.Context, manufacturerTests []SupportedManufacturerTests, sendToCerberus bool) error {
 	return nil
 }
 

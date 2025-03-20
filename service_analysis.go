@@ -807,7 +807,7 @@ func (as *analysisService) QueueAnalysisResults(ctx context.Context, results []A
 }
 
 func (as *analysisService) RetransmitResult(ctx context.Context, resultID uuid.UUID) error {
-	analysisResult, err := as.analysisRepository.GetAnalysisResultByID(ctx, resultID, true)
+	analysisResult, err := as.analysisRepository.GetAnalysisResultByCerberusID(ctx, resultID, true)
 	if err != nil {
 		return err
 	}
