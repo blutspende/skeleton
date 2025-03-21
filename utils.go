@@ -183,10 +183,15 @@ func HashInstrument(instrument Instrument) string {
 
 	// Hash nested struct FTPConfig
 	if instrument.FTPConfig != nil {
-		builder.WriteString(instrument.FTPConfig.ID.String())
 		builder.WriteString(instrument.FTPConfig.Username)
+		builder.WriteString(instrument.FTPConfig.Password)
 		builder.WriteString(instrument.FTPConfig.OrderPath)
+		builder.WriteString(instrument.FTPConfig.OrderFileMask)
+		builder.WriteString(instrument.FTPConfig.OrderFileSuffix)
 		builder.WriteString(instrument.FTPConfig.ResultPath)
+		builder.WriteString(instrument.FTPConfig.ResultFileMask)
+		builder.WriteString(instrument.FTPConfig.ResultFileSuffix)
+		builder.WriteString(instrument.FTPConfig.FtpServerType)
 	}
 
 	// Hash slices AnalyteMappings, RequestMappings, SortingRules, and Settings

@@ -899,26 +899,23 @@ func (s *instrumentService) UpdateExpectedControlResults(ctx context.Context, in
 		for _, expectedControlResult := range expectedControlResults {
 			if existingExpectedControlResult.ID == expectedControlResult.ID {
 				updateExpectedControlResults = append(updateExpectedControlResults, expectedControlResult)
-
-				delete(existingExpectedControlResultMapByID, existingExpectedControlResult.ID)
 			}
 		}
 	}
 
 	for _, expectedControlResult := range expectedControlResults {
-		if (expectedControlResult.ID == uuid.UUID{} || expectedControlResult.ID == uuid.Nil) {
-			alreadyExists := false
-			for _, existingExpectedControlResult := range existingExpectedControlResultMapByID {
-				if existingExpectedControlResult.SampleCode == expectedControlResult.SampleCode && existingExpectedControlResult.AnalyteMappingId == expectedControlResult.AnalyteMappingId {
-					alreadyExists = true
-					break
-				}
+		alreadyExists := false
+		for id, existingExpectedControlResult := range existingExpectedControlResultMapByID {
+			if id == expectedControlResult.ID || (existingExpectedControlResult.SampleCode == expectedControlResult.SampleCode && existingExpectedControlResult.AnalyteMappingId == expectedControlResult.AnalyteMappingId) {
+				alreadyExists = true
+				delete(existingExpectedControlResultMapByID, existingExpectedControlResult.ID)
+				break
 			}
+		}
 
-			if !alreadyExists {
-				expectedControlResult.CreatedBy = userId
-				createExpectedControlResults = append(createExpectedControlResults, expectedControlResult)
-			}
+		if !alreadyExists {
+			expectedControlResult.CreatedBy = userId
+			createExpectedControlResults = append(createExpectedControlResults, expectedControlResult)
 		}
 	}
 
