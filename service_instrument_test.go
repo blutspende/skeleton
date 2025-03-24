@@ -2,6 +2,7 @@ package skeleton
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -279,6 +280,9 @@ func TestUpdateInstrument(t *testing.T) {
 		registerInstrumentFunc: func(instrument Instrument) error {
 			return nil
 		},
+		verifyInstrumentHashFunc: func(hash string) error {
+			return nil
+		},
 	}
 	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
 
@@ -293,7 +297,7 @@ func TestUpdateInstrument(t *testing.T) {
 	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
 
 	var protocolID uuid.UUID
-	err := dbConn.QueryRowx(`INSERT INTO instrument_test.sk_supported_protocols (name, description) VALUES('Test Protocol', 'Test Protocol Description') RETURNING id;`).Scan(&protocolID)
+	err := dbConn.QueryRowx(`INSERT INTO instrument_test.sk_supported_protocols (name, description) VALUES('TestProtocol', 'Test Protocol Description') RETURNING id;`).Scan(&protocolID)
 	assert.Nil(t, err)
 
 	clientPort := 1234
@@ -301,7 +305,8 @@ func TestUpdateInstrument(t *testing.T) {
 	ctx = context.Background()
 	ctx = context.WithValue(ctx, "Authorization", "BearerToken")
 
-	instrumentID, err := instrumentService.CreateInstrument(ctx, Instrument{
+	instr := Instrument{
+		ID:                 uuid.New(),
 		Name:               "TestInstrument",
 		Type:               Analyzer,
 		ProtocolID:         protocolID,
@@ -317,19 +322,21 @@ func TestUpdateInstrument(t *testing.T) {
 		Timezone:           "Europe/Berlin",
 		Hostname:           "TestHost",
 		ClientPort:         &clientPort,
-	})
+	}
+	instrumentID, err := instrumentService.CreateInstrument(ctx, instr)
 	assert.Nil(t, err)
 
 	instrument, err := instrumentService.GetInstrumentByID(ctx, nil, instrumentID, false)
 	assert.Nil(t, err)
 	assert.Equal(t, "TestInstrument", instrument.Name)
 	assert.Equal(t, protocolID, instrument.ProtocolID)
+	assert.Contains(t, cerberusClientMock.VerifiedInstrumentHashes, HashInstrument(instr))
 
 	analyteID1 := uuid.New()
 	analyteMappingID1 := uuid.New()
 	channelID1 := uuid.New()
 
-	err = instrumentService.UpdateInstrument(ctx, Instrument{
+	instr = Instrument{
 		ID:                 instrumentID,
 		Name:               "TestInstrumentUpdated",
 		Type:               Analyzer,
@@ -381,9 +388,11 @@ func TestUpdateInstrument(t *testing.T) {
 				},
 			},
 		},
-	}, uuid.MustParse("9d5fb5e9-65a1-4479-8f82-25b04145bfe1"))
-
+	}
+	err = instrumentService.UpdateInstrument(ctx, instr, uuid.MustParse("9d5fb5e9-65a1-4479-8f82-25b04145bfe1"))
 	assert.Nil(t, err)
+	assert.Contains(t, cerberusClientMock.VerifiedInstrumentHashes, HashInstrument(instr))
+
 	instrument, err = instrumentService.GetInstrumentByID(ctx, nil, instrumentID, false)
 	assert.Equal(t, "TestInstrumentUpdated", instrument.Name)
 	assert.Len(t, instrument.AnalyteMappings, 1)
@@ -416,7 +425,7 @@ func TestUpdateInstrument(t *testing.T) {
 	analyteID3 := uuid.New()
 	channelID2 := uuid.New()
 
-	err = instrumentService.UpdateInstrument(ctx, Instrument{
+	instr = Instrument{
 		ID:                 instrumentID,
 		Name:               "TestInstrumentUpdated2",
 		Type:               Analyzer,
@@ -492,9 +501,11 @@ func TestUpdateInstrument(t *testing.T) {
 				},
 			},
 		},
-	}, uuid.MustParse("9d5fb5e9-65a1-4479-8f82-25b04145bfe1"))
-
+	}
+	err = instrumentService.UpdateInstrument(ctx, instr, uuid.MustParse("9d5fb5e9-65a1-4479-8f82-25b04145bfe1"))
 	assert.Nil(t, err)
+	assert.Contains(t, cerberusClientMock.VerifiedInstrumentHashes, HashInstrument(instr))
+
 	instrument, err = instrumentService.GetInstrumentByID(ctx, nil, instrumentID, false)
 	assert.Equal(t, "TestInstrumentUpdated2", instrument.Name)
 	assert.Len(t, instrument.AnalyteMappings, 2)
@@ -551,6 +562,72 @@ func TestUpdateInstrument(t *testing.T) {
 	assert.Contains(t, instrument.RequestMappings[0].AnalyteIDs, analyteID3)
 }
 
+func TestNotVerifiedInstrument(t *testing.T) {
+	sqlConn, _ := sqlx.Connect("postgres", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
+	schemaName := "instrument_test"
+	_, _ = sqlConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
+	_, _ = sqlConn.Exec(fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schemaName))
+	_, _ = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
+	skeletonMigrator := migrator.NewSkeletonMigrator()
+	_ = skeletonMigrator.Run(context.Background(), sqlConn, schemaName)
+	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
+
+	dbConn := db.CreateDbConnector(sqlConn)
+	cerberusClientMock := &cerberusClientMock{
+		registerInstrumentFunc: func(instrument Instrument) error {
+			return nil
+		},
+		verifyInstrumentHashFunc: func(hash string) error {
+			return errors.New("instrument hash verification failed")
+		},
+	}
+	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
+
+	ctx, cancelSkeleton := context.WithCancel(context.Background())
+	defer cancelSkeleton()
+
+	conditionRepository := NewConditionRepository(dbConn, schemaName)
+	conditionService := NewConditionService(conditionRepository)
+	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
+	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
+	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
+	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
+
+	var protocolID uuid.UUID
+	err := dbConn.QueryRowx(`INSERT INTO instrument_test.sk_supported_protocols (name, description) VALUES('TestProtocol', 'Test Protocol Description') RETURNING id;`).Scan(&protocolID)
+	assert.Nil(t, err)
+
+	clientPort := 1234
+
+	ctx = context.Background()
+	ctx = context.WithValue(ctx, "Authorization", "BearerToken")
+
+	instrId := uuid.New()
+	instr := Instrument{
+		ID:                 instrId,
+		Name:               "TestInstrument",
+		Type:               Analyzer,
+		ProtocolID:         protocolID,
+		ProtocolName:       "TestProtocol",
+		Enabled:            true,
+		ConnectionMode:     TCPMixed,
+		ResultMode:         Simulation,
+		CaptureResults:     true,
+		CaptureDiagnostics: false,
+		ReplyToQuery:       false,
+		Status:             "TestStatus",
+		FileEncoding:       "UTF8",
+		Timezone:           "Europe/Berlin",
+		Hostname:           "TestHost",
+		ClientPort:         &clientPort,
+	}
+	_, err = instrumentService.CreateInstrument(ctx, instr)
+	assert.NotNil(t, err)
+
+	_, err = instrumentService.GetInstrumentByID(ctx, nil, instrId, true)
+	assert.Equal(t, ErrInstrumentNotFound, err)
+}
+
 func TestUpdateExpectedControlResult(t *testing.T) {
 	sqlConn, _ := sqlx.Connect("postgres", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
 	schemaName := "expectedcontrolresult_test"
@@ -564,6 +641,9 @@ func TestUpdateExpectedControlResult(t *testing.T) {
 	dbConn := db.CreateDbConnector(sqlConn)
 	cerberusClientMock := &cerberusClientMock{
 		registerInstrumentFunc: func(instrument Instrument) error {
+			return nil
+		},
+		verifyExpectedControlResultHashFunc: func(hash string) error {
 			return nil
 		},
 	}
@@ -688,6 +768,7 @@ func TestUpdateExpectedControlResult(t *testing.T) {
 
 	err := instrumentService.UpdateExpectedControlResults(ctxWithCancel, instrumentId, expectedControlResults, uuid.New())
 	assert.Nil(t, err)
+	assert.Contains(t, cerberusClientMock.VerifiedExpectedControlResultHashes, HashExpectedControlResults(expectedControlResults))
 
 	assert.Equal(t, 2, len(instrumentRepositoryMock.createdExpectedControlResults))
 	assert.Equal(t, "sampleCode0", instrumentRepositoryMock.createdExpectedControlResults[0].SampleCode)
@@ -721,6 +802,9 @@ func TestUpdateExpectedControlResult2(t *testing.T) {
 	dbConn := db.CreateDbConnector(sqlConn)
 	cerberusClientMock := &cerberusClientMock{
 		registerInstrumentFunc: func(instrument Instrument) error {
+			return nil
+		},
+		verifyExpectedControlResultHashFunc: func(hash string) error {
 			return nil
 		},
 	}
@@ -892,6 +976,7 @@ func TestUpdateExpectedControlResult2(t *testing.T) {
 
 	err := instrumentService.UpdateExpectedControlResults(ctxWithCancel, instrumentId, expectedControlResults, uuid.New())
 	assert.Nil(t, err)
+	assert.Contains(t, cerberusClientMock.VerifiedExpectedControlResultHashes, HashExpectedControlResults(expectedControlResults))
 
 	assert.Equal(t, 2, len(instrumentRepositoryMock.createdExpectedControlResults))
 	assert.Equal(t, analyteMappingId, instrumentRepositoryMock.createdExpectedControlResults[0].AnalyteMappingId)
@@ -910,6 +995,92 @@ func TestUpdateExpectedControlResult2(t *testing.T) {
 
 	assert.Equal(t, 1, len(instrumentRepositoryMock.deletedExpectedControlResultIds))
 	assert.Equal(t, expectedControlResultId4, instrumentRepositoryMock.deletedExpectedControlResultIds[0])
+}
+
+func TestNotVerifiedExpectedControlResults(t *testing.T) {
+	sqlConn, _ := sqlx.Connect("postgres", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
+	schemaName := "expectedcontrolresult_test"
+	_, _ = sqlConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
+	_, _ = sqlConn.Exec(fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schemaName))
+	_, _ = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
+	migrator := migrator.NewSkeletonMigrator()
+	_ = migrator.Run(context.Background(), sqlConn, schemaName)
+	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
+
+	dbConn := db.CreateDbConnector(sqlConn)
+	cerberusClientMock := &cerberusClientMock{
+		registerInstrumentFunc: func(instrument Instrument) error {
+			return nil
+		},
+		verifyExpectedControlResultHashFunc: func(hash string) error {
+			return nil
+		},
+	}
+	instrumentRepositoryMock := &instrumentRepositoryMock{
+		db: dbConn,
+	}
+
+	ctxWithCancel, cancel := context.WithCancel(context.Background())
+
+	defer cancel()
+	conditionRepository := NewConditionRepository(dbConn, schemaName)
+	conditionService := NewConditionService(conditionRepository)
+	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
+	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
+	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
+	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepositoryMock, NewSkeletonManager(ctxWithCancel), NewInstrumentCache(), cerberusClientMock)
+
+	analyteMappingId := uuid.MustParse("e97b3b33-6b2e-4da2-9883-11a3fe4a93bc")
+	expectedControlResultId := uuid.MustParse("0edf9c18-42e4-4ce0-ba4a-9c03ec1e775a")
+	instrumentId := uuid.MustParse("8dbf35f8-f029-4c28-bf60-42a9c6c24261")
+
+	analyteMappings := make([]AnalyteMapping, 0)
+	analyteMappings = append(analyteMappings, AnalyteMapping{
+		InstrumentAnalyte: "TESTANALYTE",
+		ID:                analyteMappingId,
+		AnalyteID:         uuid.MustParse("5018bcf2-21c9-4e97-b595-4ae993497d8c"),
+		ChannelMappings: []ChannelMapping{
+			{
+				InstrumentChannel: "TestInstrumentChannel",
+				ChannelID:         uuid.MustParse("e5d9907f-3f48-4860-afb9-18ac12fcc87e"),
+			},
+		},
+		ResultType: "int",
+	})
+
+	resultMappings := make([]ResultMapping, 0)
+	resultMappings = append(resultMappings, ResultMapping{
+		Key:   "1",
+		Value: "1",
+		Index: 0,
+	})
+	resultMappings = append(resultMappings, ResultMapping{
+		Key:   "2",
+		Value: "2",
+		Index: 1,
+	})
+	instrumentRepositoryMock.analyteMappings = make(map[uuid.UUID][]AnalyteMapping)
+	instrumentRepositoryMock.analyteMappings[instrumentId] = analyteMappings
+	instrumentRepositoryMock.resultMappings = make(map[uuid.UUID][]ResultMapping)
+	instrumentRepositoryMock.resultMappings[analyteMappingId] = resultMappings
+
+	instrumentRepositoryMock.existingExpectedControlResults = make([]ExpectedControlResult, 0)
+
+	expectedControlResults := make([]ExpectedControlResult, 0)
+	expectedControlResults = append(expectedControlResults, ExpectedControlResult{
+		ID:               expectedControlResultId,
+		AnalyteMappingId: analyteMappingId,
+		SampleCode:       "sampleCode",
+		Operator:         ">",
+		ExpectedValue:    "2",
+		ExpectedValue2:   nil,
+	})
+
+	err := instrumentService.CreateExpectedControlResults(ctxWithCancel, expectedControlResults, uuid.New())
+	assert.Nil(t, err)
+
+	ecrs, _ := instrumentService.GetExpectedControlResultsByInstrumentId(ctxWithCancel, instrumentId)
+	assert.Empty(t, ecrs)
 }
 
 type instrumentRepositoryMock struct {

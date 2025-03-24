@@ -173,13 +173,7 @@ func HashInstrument(instrument Instrument) string {
 	if instrument.ClientPort != nil {
 		builder.WriteString(fmt.Sprintf("%d", *instrument.ClientPort))
 	}
-	builder.WriteString(instrument.CreatedAt.Format(time.RFC3339))
-	if instrument.ModifiedAt != nil {
-		builder.WriteString(instrument.ModifiedAt.Format(time.RFC3339))
-	}
-	if instrument.DeletedAt != nil {
-		builder.WriteString(instrument.DeletedAt.Format(time.RFC3339))
-	}
+	builder.WriteString(fmt.Sprintf("%t", instrument.DeletedAt != nil))
 
 	// Hash nested struct FTPConfig
 	if instrument.FTPConfig != nil {
@@ -285,10 +279,7 @@ func HashExpectedControlResults(expectedControlResults []ExpectedControlResult) 
 			resultBuilder.WriteString(*e.ExpectedValue2)
 		}
 		resultBuilder.WriteString(string(e.Operator))
-		resultBuilder.WriteString(e.CreatedAt.Format(time.RFC3339))
-		if e.DeletedAt != nil {
-			resultBuilder.WriteString(e.DeletedAt.Format(time.RFC3339))
-		}
+		resultBuilder.WriteString(fmt.Sprintf("%t", e.DeletedAt != nil))
 		resultBuilder.WriteString(e.CreatedBy.String())
 		if e.DeletedBy.Valid {
 			resultBuilder.WriteString(e.DeletedBy.UUID.String())

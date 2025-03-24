@@ -1196,7 +1196,7 @@ func (s *skeleton) processExpectedControlResult(ctx context.Context, controlResu
 	case MessageTypeCreate:
 		log.Info().Msgf("Processing expected control result creation event for InstrumentId: %s", controlResultMessage.InstrumentId)
 		expectedControlResult := convertTOsToExpectedControlResults(controlResultMessage.ExpectedControlResults)
-		err := s.instrumentService.CreateExpectedControlResults(ctx, *controlResultMessage.InstrumentId, expectedControlResult, controlResultMessage.UserId)
+		err := s.instrumentService.CreateExpectedControlResults(ctx, expectedControlResult, controlResultMessage.UserId)
 		if err != nil {
 			return err
 		}
