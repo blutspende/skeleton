@@ -253,7 +253,7 @@ type sortingRuleDAO struct {
 	InstrumentID uuid.UUID     `db:"instrument_id"`
 	Priority     int           `db:"priority"`
 	Target       string        `db:"target"`
-	ConditionID  uuid.NullUUID `db:"condition_id""`
+	ConditionID  uuid.NullUUID `db:"condition_id"`
 	Programme    string        `db:"programme"`
 	CreatedAt    time.Time     `db:"created_at"`
 	ModifiedAt   sql.NullTime  `db:"modified_at"`

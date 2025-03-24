@@ -395,38 +395,6 @@ func convertTOToConditionOperand(to conditionOperandTO) ConditionOperand {
 	}
 }
 
-func convertExpectedControlResultListToTOList(expectedControlResults []ExpectedControlResult) []ExpectedControlResultTO {
-	tos := make([]ExpectedControlResultTO, 0)
-	for _, expectedControlResult := range expectedControlResults {
-		tos = append(tos, convertExpectedControlResultToExpectedControlResultTO(expectedControlResult))
-	}
-	return tos
-}
-
-func convertExpectedControlResultToExpectedControlResultTO(expectedControlResult ExpectedControlResult) ExpectedControlResultTO {
-	return ExpectedControlResultTO{
-		ID:               expectedControlResult.ID,
-		AnalyteMappingId: expectedControlResult.AnalyteMappingId,
-		SampleCode:       expectedControlResult.SampleCode,
-		Operator:         expectedControlResult.Operator,
-		ExpectedValue:    expectedControlResult.ExpectedValue,
-		ExpectedValue2:   expectedControlResult.ExpectedValue2,
-		CreatedBy:        &expectedControlResult.CreatedBy,
-		CreatedAt:        &expectedControlResult.CreatedAt,
-	}
-}
-
-func convertNotSpecifiedExpectedControlResultListToTOList(notSpecifiedExpectedControlResults []NotSpecifiedExpectedControlResult) []NotSpecifiedExpectedControlResultTO {
-	tos := make([]NotSpecifiedExpectedControlResultTO, 0)
-	for _, notSpecifiedExpectedControlResult := range notSpecifiedExpectedControlResults {
-		tos = append(tos, NotSpecifiedExpectedControlResultTO{
-			AnalyteMappingId: notSpecifiedExpectedControlResult.AnalyteMappingId,
-			SampleCode:       notSpecifiedExpectedControlResult.SampleCode,
-		})
-	}
-	return tos
-}
-
 func convertTOsToExpectedControlResults(expectedControlResultTOs []ExpectedControlResultTO) []ExpectedControlResult {
 	expectedControlResults := make([]ExpectedControlResult, 0)
 	for i := range expectedControlResultTOs {
