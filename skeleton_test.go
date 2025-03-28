@@ -1122,20 +1122,31 @@ func (m *deaClientMock) UploadImage(fileData []byte, name string) (uuid.UUID, er
 }
 
 type cerberusClientMock struct {
-	registerInstrumentFunc           func(instrument Instrument) error
-	registerInstrumentDriverFunc     func(name, displayName string, extraValueKeys []string, protocols []supportedProtocolTO, tests []supportedManufacturerTestTO, encodings []string, reagentManufacturers []string) error
-	sendAnalysisResultBatchFunc      func(analysisResults []AnalysisResultTO) (AnalysisResultBatchResponse, error)
-	sendControlResultBatchFunc       func(controlResults []StandaloneControlResultTO) (ControlResultBatchResponse, error)
-	sendAnalysisResultImageBatchFunc func(images []WorkItemResultImageTO) error
+	registerInstrumentFunc              func(instrument Instrument) error
+	registerInstrumentDriverFunc        func(name, displayName string, extraValueKeys []string, protocols []supportedProtocolTO, tests []supportedManufacturerTestTO, encodings []string, reagentManufacturers []string) error
+	sendAnalysisResultBatchFunc         func(analysisResults []AnalysisResultTO) (AnalysisResultBatchResponse, error)
+	sendControlResultBatchFunc          func(controlResults []StandaloneControlResultTO) (ControlResultBatchResponse, error)
+	sendAnalysisResultImageBatchFunc    func(images []WorkItemResultImageTO) error
+	verifyInstrumentHashFunc            func(hash string) error
+	verifyExpectedControlResultHashFunc func(hash string) error
 
-	AnalysisResults      []AnalysisResultTO
-	ControlResults       []StandaloneControlResultTO
-	BatchResponse        AnalysisResultBatchResponse
-	ControlBatchResponse ControlResultBatchResponse
+	AnalysisResults                     []AnalysisResultTO
+	ControlResults                      []StandaloneControlResultTO
+	BatchResponse                       AnalysisResultBatchResponse
+	ControlBatchResponse                ControlResultBatchResponse
+	VerifiedInstrumentHashes            []string
+	VerifiedExpectedControlResultHashes []string
 }
 
 func (m *cerberusClientMock) VerifyExpectedControlResultsHash(hash string) error {
-	return nil
+	if m.verifyExpectedControlResultHashFunc == nil {
+		return nil
+	}
+	err := m.verifyExpectedControlResultHashFunc(hash)
+	if err == nil {
+		m.VerifiedExpectedControlResultHashes = append(m.VerifiedExpectedControlResultHashes, hash)
+	}
+	return err
 }
 
 func (m *cerberusClientMock) SendControlResultBatch(controlResults []StandaloneControlResultTO) (ControlResultBatchResponse, error) {
@@ -1156,13 +1167,29 @@ func (m *cerberusClientMock) RegisterInstrumentDriver(name, displayName string, 
 }
 
 func (m *cerberusClientMock) VerifyInstrumentHash(hash string) error {
-	return nil
+	if m.verifyInstrumentHashFunc == nil {
+		return nil
+	}
+	err := m.verifyInstrumentHashFunc(hash)
+	if err == nil {
+		m.VerifiedInstrumentHashes = append(m.VerifiedInstrumentHashes, hash)
+	}
+	return err
 }
+
 func (m *cerberusClientMock) SyncAnalysisRequests(workItemIDs []uuid.UUID, syncType string) error {
 	return nil
 }
 
 func (m *cerberusClientMock) SendConsoleLog(instrumentId uuid.UUID, logLevel LogLevel, message string, messageType string) error {
+	return nil
+}
+
+func (m *cerberusClientMock) RegisterManufacturerTests(driverName string, tests []supportedManufacturerTestTO) error {
+	return nil
+}
+
+func (m *cerberusClientMock) SetInstrumentOnlineStatus(instrumentId uuid.UUID, status InstrumentStatus) error {
 	return nil
 }
 
@@ -1453,7 +1480,7 @@ func (m *analysisRepositoryMock) CreateAnalysisResultReagentRelations(ctx contex
 func (m *analysisRepositoryMock) GetAnalysisResultsBySampleCodeAndAnalyteID(ctx context.Context, sampleCode string, analyteID uuid.UUID) ([]AnalysisResult, error) {
 	return nil, nil
 }
-func (m *analysisRepositoryMock) GetAnalysisResultByID(ctx context.Context, id uuid.UUID, allowDeletedAnalyteMapping bool) (AnalysisResult, error) {
+func (m *analysisRepositoryMock) GetAnalysisResultByCerberusID(ctx context.Context, id uuid.UUID, allowDeletedAnalyteMapping bool) (AnalysisResult, error) {
 	return AnalysisResult{}, nil
 }
 func (m *analysisRepositoryMock) GetAnalysisResultsByBatchIDs(ctx context.Context, batchIDs []uuid.UUID) ([]AnalysisResult, error) {

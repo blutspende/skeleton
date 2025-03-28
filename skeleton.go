@@ -528,8 +528,20 @@ func (s *skeleton) FindResultEntities(ctx context.Context, InstrumentID uuid.UUI
 	return instrument, analysisRequests, analyteMapping, nil
 }
 
-func (s *skeleton) RegisterManufacturerTests(ctx context.Context, manufacturerTests []SupportedManufacturerTests) error {
-	return s.instrumentService.UpsertManufacturerTests(ctx, manufacturerTests)
+func (s *skeleton) RegisterManufacturerTests(ctx context.Context, manufacturerTests []SupportedManufacturerTests, sendToCerberus bool) error {
+	err := s.instrumentService.UpsertManufacturerTests(ctx, manufacturerTests)
+	if err != nil {
+		return err
+	}
+
+	if sendToCerberus {
+		err = s.cerberusClient.RegisterManufacturerTests(s.serviceName, convertSupportedManufacturerTestsToSupportedManufacturerTestTOs(manufacturerTests))
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (s *skeleton) RegisterProtocol(ctx context.Context, id uuid.UUID, name string, description string, abilities []ProtocolAbility, settings []ProtocolSetting) error {
@@ -537,7 +549,12 @@ func (s *skeleton) RegisterProtocol(ctx context.Context, id uuid.UUID, name stri
 }
 
 func (s *skeleton) SetOnlineStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error {
-	return s.instrumentService.UpdateInstrumentStatus(ctx, id, status)
+	err := s.instrumentService.UpdateInstrumentStatus(ctx, id, status)
+	if err != nil {
+		return err
+	}
+
+	return s.cerberusClient.SetInstrumentOnlineStatus(id, status)
 }
 
 func (s *skeleton) migrateUp(ctx context.Context, db *sqlx.DB, schemaName string) error {
@@ -1179,7 +1196,7 @@ func (s *skeleton) processExpectedControlResult(ctx context.Context, controlResu
 	case MessageTypeCreate:
 		log.Info().Msgf("Processing expected control result creation event for InstrumentId: %s", controlResultMessage.InstrumentId)
 		expectedControlResult := convertTOsToExpectedControlResults(controlResultMessage.ExpectedControlResults)
-		err := s.instrumentService.CreateExpectedControlResults(ctx, *controlResultMessage.InstrumentId, expectedControlResult, controlResultMessage.UserId)
+		err := s.instrumentService.CreateExpectedControlResults(ctx, expectedControlResult, controlResultMessage.UserId)
 		if err != nil {
 			return err
 		}

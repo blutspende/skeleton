@@ -2,24 +2,9 @@ package skeleton
 
 import (
 	"context"
-	"errors"
 	"github.com/blutspende/skeleton/db"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
-)
-
-const (
-	msgValidationValueEmpty               = "Value is empty for"
-	msgValidationValueInvalid             = "Value invalid for"
-	msgValidationIntervalEndingValueEmpty = "Interval ending value is empty for"
-	msgValidationAnalyteMappingNotFound   = "AnalyteMapping not found!"
-)
-
-var (
-	ErrValidationValueEmpty               = errors.New(msgValidationValueEmpty)
-	ErrValidationValueInvalid             = errors.New(msgValidationValueInvalid)
-	ErrValidationIntervalEndingValueEmpty = errors.New(msgValidationIntervalEndingValueEmpty)
-	ErrValidationAnalyteMappingNotFound   = errors.New(msgValidationAnalyteMappingNotFound)
 )
 
 type InstrumentService interface {
@@ -31,7 +16,7 @@ type InstrumentService interface {
 	DeleteInstrument(ctx context.Context, id uuid.UUID) error
 	GetExpectedControlResultsByInstrumentId(ctx context.Context, instrumentId uuid.UUID) ([]ExpectedControlResult, error)
 	GetNotSpecifiedExpectedControlResultsByInstrumentId(ctx context.Context, instrumentId uuid.UUID) ([]NotSpecifiedExpectedControlResult, error)
-	CreateExpectedControlResults(ctx context.Context, instrumentId uuid.UUID, expectedControlResults []ExpectedControlResult, userId uuid.UUID) error
+	CreateExpectedControlResults(ctx context.Context, expectedControlResults []ExpectedControlResult, userId uuid.UUID) error
 	UpdateExpectedControlResults(ctx context.Context, instrumentId uuid.UUID, expectedControlResultMapByID []ExpectedControlResult, userId uuid.UUID) error
 	DeleteExpectedControlResult(ctx context.Context, expectedControlResultId uuid.UUID, userId uuid.UUID) error
 	GetSupportedProtocols(ctx context.Context) ([]SupportedProtocol, error)
@@ -316,6 +301,12 @@ func (s *instrumentService) GetInstrumentByID(ctx context.Context, tx db.DbConne
 			return instrument, err
 		}
 	}
+
+	protocol, err := s.instrumentRepository.GetProtocolByID(ctx, instrument.ProtocolID)
+	if err != nil {
+		return instrument, err
+	}
+	instrument.ProtocolName = protocol.Name
 
 	instrumentIDs := []uuid.UUID{instrument.ID}
 	analyteMappingsByInstrumentID, err := s.instrumentRepository.WithTransaction(tx).GetAnalyteMappings(ctx, instrumentIDs)
@@ -836,7 +827,7 @@ func (s *instrumentService) GetNotSpecifiedExpectedControlResultsByInstrumentId(
 	return notSpecifiedExpectedControlResults, nil
 }
 
-func (s *instrumentService) CreateExpectedControlResults(ctx context.Context, instrumentId uuid.UUID, expectedControlResults []ExpectedControlResult, userId uuid.UUID) error {
+func (s *instrumentService) CreateExpectedControlResults(ctx context.Context, expectedControlResults []ExpectedControlResult, userId uuid.UUID) error {
 	tx, err := s.instrumentRepository.CreateTransaction()
 
 	analyteMappingIds := make([]uuid.UUID, 0)
@@ -899,26 +890,23 @@ func (s *instrumentService) UpdateExpectedControlResults(ctx context.Context, in
 		for _, expectedControlResult := range expectedControlResults {
 			if existingExpectedControlResult.ID == expectedControlResult.ID {
 				updateExpectedControlResults = append(updateExpectedControlResults, expectedControlResult)
-
-				delete(existingExpectedControlResultMapByID, existingExpectedControlResult.ID)
 			}
 		}
 	}
 
 	for _, expectedControlResult := range expectedControlResults {
-		if (expectedControlResult.ID == uuid.UUID{} || expectedControlResult.ID == uuid.Nil) {
-			alreadyExists := false
-			for _, existingExpectedControlResult := range existingExpectedControlResultMapByID {
-				if existingExpectedControlResult.SampleCode == expectedControlResult.SampleCode && existingExpectedControlResult.AnalyteMappingId == expectedControlResult.AnalyteMappingId {
-					alreadyExists = true
-					break
-				}
+		alreadyExists := false
+		for id, existingExpectedControlResult := range existingExpectedControlResultMapByID {
+			if id == expectedControlResult.ID || (existingExpectedControlResult.SampleCode == expectedControlResult.SampleCode && existingExpectedControlResult.AnalyteMappingId == expectedControlResult.AnalyteMappingId) {
+				alreadyExists = true
+				delete(existingExpectedControlResultMapByID, existingExpectedControlResult.ID)
+				break
 			}
+		}
 
-			if !alreadyExists {
-				expectedControlResult.CreatedBy = userId
-				createExpectedControlResults = append(createExpectedControlResults, expectedControlResult)
-			}
+		if !alreadyExists {
+			expectedControlResult.CreatedBy = userId
+			createExpectedControlResults = append(createExpectedControlResults, expectedControlResult)
 		}
 	}
 

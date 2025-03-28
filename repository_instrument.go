@@ -1652,14 +1652,6 @@ func convertRequestMappingToDAO(requestMapping RequestMapping, instrumentID uuid
 	}
 }
 
-func convertRequestMappingsToDAOs(requestMappings []RequestMapping, instrumentID uuid.UUID) []requestMappingDAO {
-	requestMappingDAOs := make([]requestMappingDAO, len(requestMappings))
-	for i := range requestMappings {
-		requestMappingDAOs[i] = convertRequestMappingToDAO(requestMappings[i], instrumentID)
-	}
-	return requestMappingDAOs
-}
-
 func convertSupportedProtocolDAOToSupportedProtocol(dao supportedProtocolDAO) SupportedProtocol {
 	return SupportedProtocol{
 		ID:          dao.ID,
