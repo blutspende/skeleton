@@ -716,8 +716,17 @@ func (s *skeleton) enqueueUnprocessedAnalysisResults(ctx context.Context) {
 					return err
 				}
 
-				for _, result := range results {
-					s.manager.SendResultForProcessing(result)
+				for i := range results {
+					analysisRequests, err := s.analysisRepository.GetAnalysisRequestsBySampleCodeAndAnalyteID(ctx, results[i].SampleCode, results[i].AnalyteMapping.AnalyteID)
+					if err != nil {
+						failed = append(failed, partition...)
+						return err
+					}
+
+					for j := range analysisRequests {
+						results[i].AnalysisRequest = analysisRequests[j]
+						s.manager.SendResultForProcessing(results[i])
+					}
 				}
 
 				return nil
