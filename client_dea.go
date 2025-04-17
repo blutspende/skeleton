@@ -23,22 +23,36 @@ func NewDEAClient(deaUrl string, restyClient *resty.Client) (DeaClientV1, error)
 	if deaUrl == "" {
 		return nil, fmt.Errorf("basepath for dea must be set. check your configuration or DeaURL")
 	}
-
+	client := *restyClient
+	clientCopy := client.SetRetryResetReaders(true)
 	return &deaClientV1{
 		deaUrl: deaUrl,
-		client: restyClient,
+		client: clientCopy,
 	}, nil
 }
 
-func (dea *deaClientV1) UploadImage(fileData []byte, name string) (uuid.UUID, error) {
-	var imageID uuid.UUID
-
-	resp, err := dea.client.R().
+func (dea *deaClientV1) UploadImage(fileData []byte, name string) (imageID uuid.UUID, err error) {
+	// TODO - as soon as Resty v3 is released, remove this.
+	// When the service 2 service auth retry mechanism triggers, but OIDC provider is not available (response is nil),
+	// and the request has multi-part form data that is wrapped in an io.Reader that needs to be reset,
+	// then due to a bug in Resty library, a panic occurs.
+	defer func() {
+		r := recover()
+		var ok bool
+		if err, ok = r.(error); ok {
+			log.Error().Err(err).Msg("panic recovered")
+		}
+	}()
+	var resp *resty.Response
+	resp, err = dea.client.R().
 		SetFileReader("file", name, bytes.NewReader(fileData)).
 		Post(dea.deaUrl + "/v1/image/upload")
 	if err != nil {
 		log.Error().Err(err).Msg("Can not call internal dea api")
-		return imageID, err
+		return
+	}
+	if resp == nil {
+		return
 	}
 
 	if resp.StatusCode() != http.StatusOK {
@@ -49,10 +63,10 @@ func (dea *deaClientV1) UploadImage(fileData []byte, name string) (uuid.UUID, er
 	imageID, err = uuid.Parse(string(resp.Body()))
 	if err != nil {
 		log.Error().Err(err).Str("responseBody", string(resp.Body())).Msg("Can not parse bytes into uuid.")
-		return imageID, err
+		return
 	}
 
-	return imageID, nil
+	return
 }
 
 type savedFileResponseItem struct {
@@ -60,26 +74,45 @@ type savedFileResponseItem struct {
 	FileName string    `json:"fileName"`
 }
 
-func (dea *deaClientV1) UploadFile(fileData []byte, name string) (uuid.UUID, error) {
+func (dea *deaClientV1) UploadFile(fileData []byte, name string) (fileID uuid.UUID, err error) {
 	var response []savedFileResponseItem
 	var errResponse clientError
-	resp, err := dea.client.R().
+	// TODO - as soon as Resty v3 is released, remove this.
+	// When the service 2 service auth retry mechanism triggers, but OIDC provider is not available (response is nil),
+	// and the request has multi-part form data that is wrapped in an io.Reader that needs to be reset,
+	// then due to a bug in Resty library, a panic occurs.
+	defer func() {
+		r := recover()
+		var ok bool
+		if err, ok = r.(error); ok {
+			log.Error().Err(err).Msg("panic recovered")
+		}
+	}()
+	var resp *resty.Response
+	resp, err = dea.client.SetRetryResetReaders(true).R().
 		SetFileReader("file", name, bytes.NewReader(fileData)).
 		SetResult(&response).
 		SetError(&errResponse).
 		Post(dea.deaUrl + "/v1/files")
 	if err != nil {
 		log.Error().Err(err).Msg("upload file to DEA failed")
-		return uuid.Nil, err
+		return
+	}
+	if resp == nil {
+		return
 	}
 
 	if resp.StatusCode() != http.StatusCreated {
 		log.Error().Int("lenOfFileBytes", len(fileData)).Str("message", errResponse.Message).Msg("upload file to DEA failed")
-		return uuid.Nil, fmt.Errorf(errResponse.Message)
+		err = fmt.Errorf(errResponse.Message)
+		return
 	}
 
 	if len(response) != 1 {
-		return uuid.Nil, fmt.Errorf("DEA returned %d response items for single file upload", len(response))
+		err = fmt.Errorf("DEA returned %d response items for single file upload", len(response))
+		return
 	}
-	return response[0].ID, nil
+	fileID = response[0].ID
+
+	return
 }
