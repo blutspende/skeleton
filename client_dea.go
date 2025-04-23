@@ -38,9 +38,9 @@ func (dea *deaClientV1) UploadImage(fileData []byte, name string) (imageID uuid.
 	// then due to a bug in Resty library, a panic occurs.
 	defer func() {
 		r := recover()
-		var ok bool
-		if err, ok = r.(error); ok {
+		if panicErr, ok := r.(error); ok {
 			log.Error().Err(err).Msg("panic recovered")
+			err = panicErr
 		}
 	}()
 	var resp *resty.Response
@@ -83,9 +83,9 @@ func (dea *deaClientV1) UploadFile(fileData []byte, name string) (fileID uuid.UU
 	// then due to a bug in Resty library, a panic occurs.
 	defer func() {
 		r := recover()
-		var ok bool
-		if err, ok = r.(error); ok {
+		if panicErr, ok := r.(error); ok {
 			log.Error().Err(err).Msg("panic recovered")
+			err = panicErr
 		}
 	}()
 	var resp *resty.Response
