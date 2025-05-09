@@ -17,27 +17,6 @@ func TestContractOfTestRigWithSkeletonAPI(t *testing.T) {
 	}(rig)
 }
 
-// Feature: Can submit to Testrig and access the transmitted Results
-func TestSubmitResultCanBeQueried(t *testing.T) {
-	rig := NewTestRig()
-
-	ar := AnalysisResult{
-		ID:     uuid.New(),
-		Result: "pos",
-	}
-	err := rig.SubmitAnalysisResult(context.Background(), AnalysisResultSet{
-		Results: []AnalysisResult{ar},
-	})
-	assert.Nil(t, err)
-
-	assert.Equal(t, 1, len(rig.StoredAnalysisResults))
-	assert.Equal(t, 1, len(rig.StoredAnalysisResults[0].Results))
-	assert.Equal(t, ar.ID, rig.StoredAnalysisResults[0].Results[0].ID)
-	assert.Equal(t, ar.Result, rig.StoredAnalysisResults[0].Results[0].Result)
-
-	rig.ClearStoredAnalysisResults()
-}
-
 func TestCreateAnalysisRequest(t *testing.T) {
 
 	rig := NewTestRig()

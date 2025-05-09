@@ -24,9 +24,7 @@ type SkeletonCallbackHandlerV1 interface {
 
 	ReexamineAnalysisRequests(request []AnalysisRequest)
 
-	ReprocessInstrumentData(batchIDs []uuid.UUID) error
-
-	ReprocessInstrumentDataBySampleCode(sampleCode string) error
+	HandleResultMessage(messageIn MessageIn) (AnalysisResultSet, []StandaloneControlResult, error)
 }
 
 // SkeletonAPI is the interface for accessing the skeleton driver capabilities
@@ -59,29 +57,14 @@ type SkeletonAPI interface {
 	GetSortingTarget(ctx context.Context, instrumentIP string, sampleCode string, programme string) (string, error)
 	// MarkSortingTargetAsApplied - should be called after sorting instructions were successfully passed from driver to instrument
 	MarkSortingTargetAsApplied(ctx context.Context, instrumentIP, sampleCode, programme, target string) error
-	// SubmitAnalysisResult - Submit result to Skeleton and Cerberus,
-	// By default this function batches the transmissions by collecting them and
-	// use the batch-endpoint of cerberus for performance reasons.
-	// Analysis results must have their DEARawMessageID set, therefore calling UploadRawMessageToDEA
-	// on the raw instrument message is a prerequisite to submitting analysis results.
-	//SubmitAnalysisResult(ctx context.Context, resultData AnalysisResultSet) error
 
-	// SubmitAnalysisResultBatch - Submit result batch to Skeleton and Cerberus,
-	// By default this function batches the transmissions by collecting them and
-	// use the batch-endpoint of cerberus for performance reasons.
-	// Analysis results must have their DEARawMessageID set, therefore calling UploadRawMessageToDEA
-	// on the raw instrument message is a prerequisite to submitting analysis results.
-	// use the batch-endpoint of cerberus for performance reasons
-	SubmitAnalysisResultBatch(ctx context.Context, resultBatch AnalysisResultSet) error
-
-	SubmitControlResults(ctx context.Context, controlResults []StandaloneControlResult) error
+	// SaveMessageIn - persists an incoming instrument message (e.g. result) and handles the long term archiving of it
+	SaveMessageIn(ctx context.Context, messageIn MessageIn) error
+	// SaveMessageOut - persists an outgoing instrument message (e.g. order) and handles the long term archiving of it
+	SaveMessageOut(ctx context.Context, messageIn MessageOut) error
 
 	GetAnalysisResultIdsSinceLastControlByReagent(ctx context.Context, reagent Reagent, examinedAt time.Time, analyteMappingId uuid.UUID, instrumentId uuid.UUID) ([]uuid.UUID, error)
 	GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMappingId uuid.UUID, instrumentId uuid.UUID) ([]ControlResult, error)
-
-	// UploadRawMessageToDEA - Uploads raw instrument message to DEA, and returns its ID. Must be called before
-	// submitting analysis result, as every analysis result must have a reference to it.
-	UploadRawMessageToDEA(rawMessage []byte) (uuid.UUID, error)
 
 	// GetInstrument returns all the settings regarding an instrument
 	// contains AnalyteMappings[] and RequestMappings[]

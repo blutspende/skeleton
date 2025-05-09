@@ -21,6 +21,16 @@ type SkeletonTestRig struct {
 	AnalysisRequestExtraValues        map[string]string
 }
 
+func (sr *SkeletonTestRig) SaveMessageIn(ctx context.Context, messageIn MessageIn) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (sr *SkeletonTestRig) SaveMessageOut(ctx context.Context, messageIn MessageOut) error {
+	//TODO implement me
+	panic("implement me")
+}
+
 func NewTestRig() *SkeletonTestRig {
 	return &SkeletonTestRig{
 		storedInstrumentsMap:       make(map[string]Instrument),
@@ -75,21 +85,6 @@ func (sr *SkeletonTestRig) GetAnalysisRequestsBySampleCodes(ctx context.Context,
 }
 
 func (sr *SkeletonTestRig) SaveAnalysisRequestsInstrumentTransmissions(ctx context.Context, analysisRequestIDs []uuid.UUID, instrumentID uuid.UUID) error {
-	return nil
-}
-
-func (sr *SkeletonTestRig) SubmitAnalysisResult(ctx context.Context, resultData AnalysisResultSet) error {
-	sr.StoredAnalysisResults = append(sr.StoredAnalysisResults, resultData)
-	return nil
-}
-
-func (sr *SkeletonTestRig) SubmitAnalysisResultBatch(ctx context.Context, resultBatch AnalysisResultSet) error {
-	sr.StoredAnalysisResults = append(sr.StoredAnalysisResults, resultBatch)
-	return nil
-}
-
-func (sr *SkeletonTestRig) SubmitControlResults(ctx context.Context, controlResults []StandaloneControlResult) error {
-	sr.StoredStandaloneControlResultSets = append(sr.StoredStandaloneControlResultSets, controlResults...)
 	return nil
 }
 
@@ -184,8 +179,4 @@ func (sr *SkeletonTestRig) MarkSortingTargetAsApplied(ctx context.Context, instr
 
 func (sr *SkeletonTestRig) RegisterManufacturerTests(ctx context.Context, manufacturerTests []SupportedManufacturerTests, sendToCerberus bool) error {
 	return nil
-}
-
-func (sr *SkeletonTestRig) UploadRawMessageToDEA(rawMessage []byte) (uuid.UUID, error) {
-	return uuid.Nil, nil
 }

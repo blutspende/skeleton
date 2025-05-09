@@ -250,6 +250,8 @@ type AnalysisResultSet struct {
 	Results        []AnalysisResult
 	Reagents       []Reagent
 	ControlResults []ControlResult
+
+	MessageInID uuid.UUID // filled by skeleton
 }
 
 // AnalysisResult - The final result on 'per-workitem' basis to return the result to cerberus.
@@ -260,8 +262,8 @@ type AnalysisResult struct {
 	AnalyteMapping           AnalyteMapping
 	Instrument               Instrument
 	SampleCode               string
-	DEARawMessageID          uuid.UUID
-	BatchID                  uuid.UUID
+	MessageInID              uuid.UUID
+	DEARawMessageID          uuid.NullUUID
 	Result                   string
 	ResultMode               ResultMode
 	Status                   ResultStatus
@@ -583,3 +585,57 @@ const (
 	InOpenInterval   ConditionOperator = "inOpenInterval"
 	InClosedInterval ConditionOperator = "inClosedInterval"
 )
+
+type MessageStatus string
+
+const (
+	MessageStatusStored    MessageStatus = "Stored"
+	MessageStatusProcessed MessageStatus = "Processed"
+	MessageStatusError     MessageStatus = "Error"
+	MessageStatusSent      MessageStatus = "Sent"
+)
+
+type MessageType string
+
+const (
+	MessageTypeQuery           MessageType = "Query"
+	MessageTypeOrder           MessageType = "Order"
+	MessageTypeResult          MessageType = "Result"
+	MessageTypeAcknowledgement MessageType = "Acknowledgement"
+	MessageTypeCancellation    MessageType = "Cancellation"
+	MessageTypeReorder         MessageType = "Reorder"
+	MessageTypeDiagnostics     MessageType = "Diagnostics"
+	MessageTypeUnidentified    MessageType = "Unidentified"
+)
+
+type MessageIn struct {
+	ID              uuid.UUID
+	InstrumentID    uuid.UUID
+	Status          MessageStatus
+	DEARawMessageID uuid.NullUUID
+	ProtocolID      uuid.UUID
+	Type            MessageType
+	Encoding        string // TODO - when bloodlab-common is finished, replace with enum
+	Raw             []byte
+	Error           *string
+	RetryCount      int
+	CreatedAt       time.Time
+	ModifiedAt      *time.Time
+}
+
+type MessageOut struct {
+	ID                  uuid.UUID
+	InstrumentID        uuid.UUID
+	Status              MessageStatus
+	DEARawMessageID     uuid.NullUUID
+	ProtocolID          uuid.UUID
+	Type                MessageType
+	Encoding            string // TODO - when bloodlab-common is finished, replace with enum
+	Raw                 []byte
+	Error               *string
+	RetryCount          int
+	TriggerMessageInID  uuid.NullUUID
+	ResponseMessageInID uuid.NullUUID
+	CreatedAt           time.Time
+	ModifiedAt          *time.Time
+}
