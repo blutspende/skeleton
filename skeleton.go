@@ -6,19 +6,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/blutspende/skeleton/db"
-	"regexp"
-	"strings"
-	"sync"
-	"time"
-
+	"github.com/blutspende/bloodlab-common/util"
 	"github.com/blutspende/skeleton/config"
-	"github.com/blutspende/skeleton/utils"
-
+	"github.com/blutspende/skeleton/db"
 	"github.com/blutspende/skeleton/migrator"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/rs/zerolog/log"
+	"regexp"
+	"strings"
+	"sync"
+	"time"
 )
 
 type skeleton struct {
@@ -662,7 +660,7 @@ func (s *skeleton) enqueueUnprocessedAnalysisRequests(ctx context.Context) {
 		for {
 			failed := make([]AnalysisRequest, 0)
 
-			err = utils.Partition(len(requests), 500, func(low int, high int) error {
+			err = util.Partition(len(requests), 500, func(low int, high int) error {
 				partition := requests[low:high]
 
 				requestIDs := make([]uuid.UUID, 0)
@@ -714,7 +712,7 @@ func (s *skeleton) enqueueUnprocessedAnalysisResults(ctx context.Context) {
 		for {
 			failed := make([]uuid.UUID, 0)
 
-			err = utils.Partition(len(resultIDs), 500, func(low int, high int) error {
+			err = util.Partition(len(resultIDs), 500, func(low int, high int) error {
 				partition := resultIDs[low:high]
 
 				results, err := s.analysisRepository.GetAnalysisResultsByIDs(ctx, partition)
@@ -1374,7 +1372,7 @@ func (s *skeleton) GetDbConnection() (*sqlx.DB, error) {
 	return dbConn, nil
 }
 
-func (s *skeleton) Shutdown() error {
+func (s *skeleton) Stop() error {
 	err := s.postgres.Close()
 	if err != nil {
 		log.Error().Err(err).Msg("failed to close database connection")

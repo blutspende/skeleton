@@ -123,7 +123,7 @@ type SkeletonAPI interface {
 
 	// Shutdown - MUST BE CALLED ON (GRACEFUL) SHUTDOWN
 	// - closes database connection
-	Shutdown() error
+	Stop() error
 }
 
 func New(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, reagentManufacturers []string, dbSchema string) (SkeletonAPI, error) {

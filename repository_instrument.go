@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/blutspende/skeleton/utils"
+	"github.com/blutspende/bloodlab-common/util"
 	"strings"
 	"time"
 
@@ -1656,7 +1656,7 @@ func convertSupportedProtocolDAOToSupportedProtocol(dao supportedProtocolDAO) Su
 	return SupportedProtocol{
 		ID:          dao.ID,
 		Name:        dao.Name,
-		Description: utils.SqlNullStringToStringPointer(dao.Description),
+		Description: util.SqlNullStringToStringPointer(dao.Description),
 	}
 }
 
@@ -1664,7 +1664,7 @@ func convertProtocolAbilityToDAO(protocolAbility ProtocolAbility, protocolID uui
 	return protocolAbilityDAO{
 		ProtocolID:              protocolID,
 		ConnectionMode:          string(protocolAbility.ConnectionMode),
-		Abilities:               utils.JoinEnumsAsString(protocolAbility.Abilities, ","),
+		Abilities:               util.JoinEnumsAsString(protocolAbility.Abilities, ","),
 		RequestMappingAvailable: protocolAbility.RequestMappingAvailable,
 	}
 }

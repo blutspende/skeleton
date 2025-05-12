@@ -35,12 +35,6 @@ type dbConnector struct {
 	tx *sqlx.Tx
 }
 
-func CreateDbConnector(db *sqlx.DB) DbConnector {
-	return &dbConnector{
-		db: db,
-	}
-}
-
 func NewDbConnector(pg Postgres) DbConnector {
 	return &dbConnector{
 		pg: pg,
