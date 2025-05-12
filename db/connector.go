@@ -30,19 +30,38 @@ type DbConnector interface {
 }
 
 type dbConnector struct {
+	pg Postgres
 	db *sqlx.DB
 	tx *sqlx.Tx
 }
 
+func CreateDbConnector(db *sqlx.DB) DbConnector {
+	return &dbConnector{
+		db: db,
+	}
+}
+
+func NewDbConnector(pg Postgres) DbConnector {
+	return &dbConnector{
+		pg: pg,
+	}
+}
+
 func (c *dbConnector) CreateTransactionConnector() (DbConnector, error) {
-	tx, err := c.db.Beginx()
+	dbConn, err := c.pg.GetDbConnection()
+	if err != nil {
+		log.Error().Err(err).Msg(ErrDbConnectionNotAvailable.Error())
+		return nil, ErrDbConnectionNotAvailable
+	}
+	c.db = dbConn
+
+	c.tx, err = c.db.Beginx()
 	if err != nil {
 		log.Error().Err(err).Msg(MsgBeginTransactionFailed)
 		return nil, ErrBeginTransactionFailed
 	}
-	connCopy := *c
-	connCopy.tx = tx
-	return &connCopy, err
+
+	return c, err
 }
 
 func (c *dbConnector) Exec(query string, args ...interface{}) (sql.Result, error) {
@@ -163,10 +182,4 @@ func (c *dbConnector) PrepareNamed(query string) (*sqlx.NamedStmt, error) {
 
 func (c *dbConnector) Ping() error {
 	return c.db.Ping()
-}
-
-func CreateDbConnector(db *sqlx.DB) DbConnector {
-	return &dbConnector{
-		db: db,
-	}
 }

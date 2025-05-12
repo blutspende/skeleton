@@ -2,13 +2,13 @@ package skeleton
 
 import (
 	"context"
+	"github.com/jmoiron/sqlx"
 	"time"
 
 	config2 "github.com/blutspende/skeleton/config"
 	"github.com/blutspende/skeleton/db"
 	"github.com/blutspende/skeleton/migrator"
 	"github.com/google/uuid"
-	"github.com/jmoiron/sqlx"
 )
 
 type SkeletonError error
@@ -111,13 +111,22 @@ type SkeletonAPI interface {
 	SetOnlineStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error
 
 	// Start - MUST BE CALLED ON STARTUP
+	// - connects to database
 	// - migrates skeleton database
 	// - launches goroutines for analysis request/result processing
 	// - registers driver class in cerberus
 	Start() error
+
+	// GetDbConnection - Provides access to internal database connection
+	// - returns postgres database connection
+	GetDbConnection() (*sqlx.DB, error)
+
+	// Shutdown - MUST BE CALLED ON (GRACEFUL) SHUTDOWN
+	// - closes database connection
+	Shutdown() error
 }
 
-func New(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, reagentManufacturers []string, sqlConn *sqlx.DB, dbSchema string) (SkeletonAPI, error) {
+func New(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, reagentManufacturers []string, dbSchema string) (SkeletonAPI, error) {
 	config, err := config2.ReadConfiguration()
 	if err != nil {
 		return nil, err
@@ -134,7 +143,8 @@ func New(ctx context.Context, serviceName, displayName string, requestedExtraVal
 	if err != nil {
 		return nil, err
 	}
-	dbConn := db.CreateDbConnector(sqlConn)
+	postgres := db.NewPostgres(ctx, &config)
+	dbConn := db.NewDbConnector(postgres)
 	manager := NewSkeletonManager(ctx)
 	instrumentCache := NewInstrumentCache()
 	analysisRepository := NewAnalysisRepository(dbConn, dbSchema)
@@ -150,5 +160,5 @@ func New(ctx context.Context, serviceName, displayName string, requestedExtraVal
 
 	longpollClient := NewLongPollClient(longPollingApiRestyClient, serviceName, config.CerberusURL, config.LongPollingAPIClientTimeoutSeconds, config.LongPollingReattemptWaitSeconds, config.LongPollingLoggingEnabled)
 
-	return NewSkeleton(ctx, serviceName, displayName, requestedExtraValueKeys, encodings, reagentManufacturers, sqlConn, dbSchema, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, manager, cerberusClient, longpollClient, deaClient, config)
+	return NewSkeleton(ctx, serviceName, displayName, requestedExtraValueKeys, encodings, reagentManufacturers, postgres, dbSchema, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, manager, cerberusClient, longpollClient, deaClient, config)
 }
