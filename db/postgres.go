@@ -34,13 +34,8 @@ func (p *postgres) Connect() error {
 	pgDB, err := sqlx.ConnectContext(p.ctx, "postgres", url)
 	if err != nil {
 		return err
-	} else {
-		err = pgDB.Ping()
-		if err != nil {
-			return err
-		}
-		log.Info().Msgf("Postgres available, connected to %s / %s", p.config.PostgresDB.Host, p.config.PostgresDB.Database)
 	}
+	log.Info().Msgf("Postgres available, connected to %s / %s", p.config.PostgresDB.Host, p.config.PostgresDB.Database)
 	p.pgConn = pgDB
 	return nil
 }

@@ -566,6 +566,22 @@ func (s *skeleton) Start() error {
 		log.Error().Err(err).Msg("failed to connect to database")
 		return err
 	}
+	dbConn, err := s.postgres.GetDbConnection()
+	if err != nil {
+		log.Error().Err(err).Msg("failed to get database connection")
+		return err
+	}
+
+	s.unprocessedHandlingWaitGroup.Add(waitGroupSize)
+
+	err = s.migrateUp(s.ctx, dbConn, s.dbSchema)
+	if err != nil {
+		log.Error().Err(err).Msg("migrate up failed")
+		return err
+	}
+
+	// Note: Cache instruments on startup
+	_, _ = s.instrumentService.GetInstruments(context.Background())
 
 	err = s.registerDriverToCerberus(s.ctx)
 	if err != nil {
@@ -946,63 +962,81 @@ func (s *skeleton) runCleanupJobs() {
 
 func (s *skeleton) cleanupCerberusQueueItems() {
 	for {
-		deletedRows, err := s.analysisRepository.DeleteOldCerberusQueueItems(s.ctx, s.config.CleanupDays, limit)
-		if err != nil {
-			log.Error().Err(err).Msg("cleanup old cerberus queue items failed")
+		select {
+		case <-s.ctx.Done():
+			log.Trace().Msg("stopping to cleanup cerberus queue items")
 			return
-		}
-		if int(deletedRows) < limit {
-			return
+		default:
+			deletedRows, err := s.analysisRepository.DeleteOldCerberusQueueItems(s.ctx, s.config.CleanupDays, limit)
+			if err != nil {
+				log.Error().Err(err).Msg("cleanup old cerberus queue items failed")
+				return
+			}
+			if int(deletedRows) < limit {
+				return
+			}
 		}
 	}
 }
 
 func (s *skeleton) cleanupAnalysisRequests() {
 	for {
-		tx, err := s.analysisRepository.CreateTransaction()
-		if err != nil {
-			log.Error().Err(err).Msg("cleanup old analysis requests failed")
+		select {
+		case <-s.ctx.Done():
+			log.Trace().Msg("stopping to cleanup analysis requests")
 			return
-		}
-		deletedRows, err := s.analysisRepository.DeleteOldAnalysisRequestsWithTx(s.ctx, s.config.CleanupDays, limit, tx)
-		if err != nil {
-			_ = tx.Rollback()
-			log.Error().Err(err).Msg("cleanup old analysis requests failed")
-			return
-		}
-		err = tx.Commit()
-		if err != nil {
-			_ = tx.Rollback()
-			log.Error().Err(err).Msg("cleanup old analysis requests failed")
-			return
-		}
-		if int(deletedRows) < limit {
-			return
+		default:
+			tx, err := s.analysisRepository.CreateTransaction()
+			if err != nil {
+				log.Error().Err(err).Msg("cleanup old analysis requests failed")
+				return
+			}
+			deletedRows, err := s.analysisRepository.DeleteOldAnalysisRequestsWithTx(s.ctx, s.config.CleanupDays, limit, tx)
+			if err != nil {
+				_ = tx.Rollback()
+				log.Error().Err(err).Msg("cleanup old analysis requests failed")
+				return
+			}
+			err = tx.Commit()
+			if err != nil {
+				_ = tx.Rollback()
+				log.Error().Err(err).Msg("cleanup old analysis requests failed")
+				return
+			}
+			if int(deletedRows) < limit {
+				return
+			}
 		}
 	}
 }
 
 func (s *skeleton) cleanupAnalysisResults() {
 	for {
-		tx, err := s.analysisRepository.CreateTransaction()
-		if err != nil {
-			log.Error().Err(err).Msg("cleanup old analysis results failed")
+		select {
+		case <-s.ctx.Done():
+			log.Trace().Msg("stopping to cleanup analysis results")
 			return
-		}
-		deletedRows, err := s.analysisRepository.DeleteOldAnalysisResultsWithTx(s.ctx, s.config.CleanupDays, limit, tx)
-		if err != nil {
-			_ = tx.Rollback()
-			log.Error().Err(err).Msg("cleanup old analysis results failed")
-			return
-		}
-		err = tx.Commit()
-		if err != nil {
-			_ = tx.Rollback()
-			log.Error().Err(err).Msg("cleanup old analysis results failed")
-			return
-		}
-		if int(deletedRows) < limit {
-			return
+		default:
+			tx, err := s.analysisRepository.CreateTransaction()
+			if err != nil {
+				log.Error().Err(err).Msg("cleanup old analysis results failed")
+				return
+			}
+			deletedRows, err := s.analysisRepository.DeleteOldAnalysisResultsWithTx(s.ctx, s.config.CleanupDays, limit, tx)
+			if err != nil {
+				_ = tx.Rollback()
+				log.Error().Err(err).Msg("cleanup old analysis results failed")
+				return
+			}
+			err = tx.Commit()
+			if err != nil {
+				_ = tx.Rollback()
+				log.Error().Err(err).Msg("cleanup old analysis results failed")
+				return
+			}
+			if int(deletedRows) < limit {
+				return
+			}
 		}
 	}
 }
@@ -1410,30 +1444,6 @@ func NewSkeleton(ctx context.Context, serviceName, displayName string, requested
 		resultTransferFlushTimeout:                 config.ResultTransferFlushTimeout,
 		imageRetrySeconds:                          config.ImageRetrySeconds,
 	}
-
-	skeleton.unprocessedHandlingWaitGroup.Add(waitGroupSize)
-
-	err := postgres.Connect()
-	if err != nil {
-		return nil, err
-	}
-	dbConn, err := postgres.GetDbConnection()
-	if err != nil {
-		return nil, err
-	}
-	err = skeleton.migrateUp(ctx, dbConn, skeleton.dbSchema)
-	if err != nil {
-		return nil, err
-	}
-	err = postgres.Close()
-	if err != nil {
-		return nil, err
-	}
-
-	// Note: Cache instruments on startup
-	go func() {
-		_, _ = instrumentService.GetInstruments(context.Background())
-	}()
 
 	return skeleton, nil
 }
