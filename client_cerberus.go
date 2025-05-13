@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/blutspende/bloodlab-common/util"
 	"github.com/blutspende/skeleton/middleware"
 	"net/http"
 	"time"
@@ -306,8 +307,8 @@ func (c *cerberusClient) SendAnalysisResultBatch(analysisResults []AnalysisResul
 		}
 
 		for i, responseItem := range responseItems {
-			analysisResultBatchItemInfoList[i].ErrorMessage = stringPointerToString(responseItem.Error)
-			analysisResultBatchItemInfoList[i].CerberusAnalysisResultID = nullUUIDToUUIDPointer(responseItem.ID)
+			analysisResultBatchItemInfoList[i].ErrorMessage = util.StringPointerToString(responseItem.Error)
+			analysisResultBatchItemInfoList[i].CerberusAnalysisResultID = util.NullUUIDToUUIDPointer(responseItem.ID)
 		}
 
 		response := AnalysisResultBatchResponse{

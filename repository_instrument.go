@@ -1656,7 +1656,7 @@ func convertSupportedProtocolDAOToSupportedProtocol(dao supportedProtocolDAO) Su
 	return SupportedProtocol{
 		ID:          dao.ID,
 		Name:        dao.Name,
-		Description: util.SqlNullStringToStringPointer(dao.Description),
+		Description: util.NullStringToStringPointer(dao.Description),
 	}
 }
 

@@ -4279,7 +4279,7 @@ func convertAnalysisResultDAOToAnalysisResult(analysisResultDAO analysisResultDA
 		Operator:        analysisResultDAO.Operator,
 		InstrumentRunID: analysisResultDAO.InstrumentRunID,
 		Edited:          analysisResultDAO.Edited,
-		EditReason:      nullStringToString(analysisResultDAO.EditReason),
+		EditReason:      util.NullStringToString(analysisResultDAO.EditReason),
 		IsInvalid:       analysisResultDAO.IsInvalid,
 		Warnings:        convertAnalysisWarningDAOsToWarnings(analysisResultDAO.Warnings),
 		ChannelResults:  convertChannelResultDAOsToChannelResults(analysisResultDAO.ChannelResults),
@@ -4494,14 +4494,14 @@ func convertRequestInfoDAOToRequestInfo(analysisRequestInfoDAO analysisRequestIn
 		AnalyteID:         analysisRequestInfoDAO.AnalyteID,
 		SampleCode:        analysisRequestInfoDAO.SampleCode,
 		RequestCreatedAt:  analysisRequestInfoDAO.RequestCreatedAt,
-		ResultID:          nullUUIDToUUIDPointer(analysisRequestInfoDAO.ResultID),
-		AnalyteMappingsID: nullUUIDToUUIDPointer(analysisRequestInfoDAO.AnalyteMappingsID),
-		TestName:          nullStringToStringPointer(analysisRequestInfoDAO.TestName),
-		TestResult:        nullStringToStringPointer(analysisRequestInfoDAO.TestResult),
-		BatchCreatedAt:    nullTimeToTimePointer(analysisRequestInfoDAO.BatchCreatedAt),
+		ResultID:          util.NullUUIDToUUIDPointer(analysisRequestInfoDAO.ResultID),
+		AnalyteMappingsID: util.NullUUIDToUUIDPointer(analysisRequestInfoDAO.AnalyteMappingsID),
+		TestName:          util.NullStringToStringPointer(analysisRequestInfoDAO.TestName),
+		TestResult:        util.NullStringToStringPointer(analysisRequestInfoDAO.TestResult),
+		BatchCreatedAt:    util.NullTimeToTimePointer(analysisRequestInfoDAO.BatchCreatedAt),
 		Status:            AnalysisRequestStatusOpen,
-		SourceIP:          nullStringToString(analysisRequestInfoDAO.SourceIP),
-		InstrumentID:      nullUUIDToUUIDPointer(analysisRequestInfoDAO.InstrumentID),
+		SourceIP:          util.NullStringToString(analysisRequestInfoDAO.SourceIP),
+		InstrumentID:      util.NullUUIDToUUIDPointer(analysisRequestInfoDAO.InstrumentID),
 	}
 
 	// Todo - Check conditions
@@ -4523,14 +4523,14 @@ func convertRequestInfoDAOToRequestInfo(analysisRequestInfoDAO analysisRequestIn
 func convertResultInfoDAOToResultInfo(analysisResultInfoDAO analysisResultInfoDAO) AnalysisResultInfo {
 	analysisResultInfo := AnalysisResultInfo{
 		ID:               analysisResultInfoDAO.ID,
-		BatchID:          nullUUIDToUUIDPointer(analysisResultInfoDAO.BatchID),
-		RequestCreatedAt: nullTimeToTimePointer(analysisResultInfoDAO.RequestCreatedAt),
-		WorkItemID:       nullUUIDToUUIDPointer(analysisResultInfoDAO.WorkItemID),
+		BatchID:          util.NullUUIDToUUIDPointer(analysisResultInfoDAO.BatchID),
+		RequestCreatedAt: util.NullTimeToTimePointer(analysisResultInfoDAO.RequestCreatedAt),
+		WorkItemID:       util.NullUUIDToUUIDPointer(analysisResultInfoDAO.WorkItemID),
 		AnalyteID:        analysisResultInfoDAO.AnalyteID,
 		SampleCode:       analysisResultInfoDAO.SampleCode,
 		ResultCreatedAt:  analysisResultInfoDAO.ResultCreatedAt,
-		TestName:         nullStringToStringPointer(analysisResultInfoDAO.TestName),
-		TestResult:       nullStringToStringPointer(analysisResultInfoDAO.TestResult),
+		TestName:         util.NullStringToStringPointer(analysisResultInfoDAO.TestName),
+		TestResult:       util.NullStringToStringPointer(analysisResultInfoDAO.TestResult),
 		Status:           analysisResultInfoDAO.Status,
 	}
 
@@ -4559,7 +4559,7 @@ func convertCerberusQueueItemToCerberusQueueItemDAO(cerberusQueueItem CerberusQu
 		JsonMessage:         cerberusQueueItem.JsonMessage,
 		LastHTTPStatus:      cerberusQueueItem.LastHTTPStatus,
 		LastError:           cerberusQueueItem.LastError,
-		LastErrorAt:         timePointerToNullTime(cerberusQueueItem.LastErrorAt),
+		LastErrorAt:         util.TimePointerToNullTime(cerberusQueueItem.LastErrorAt),
 		TrialCount:          cerberusQueueItem.TrialCount,
 		RetryNotBefore:      cerberusQueueItem.RetryNotBefore,
 		RawResponse:         cerberusQueueItem.RawResponse,
@@ -4573,7 +4573,7 @@ func convertCerberusQueueItemDAOToCerberusQueueItem(cerberusQueueItemDAO cerberu
 		JsonMessage:         cerberusQueueItemDAO.JsonMessage,
 		LastHTTPStatus:      cerberusQueueItemDAO.LastHTTPStatus,
 		LastError:           cerberusQueueItemDAO.LastError,
-		LastErrorAt:         nullTimeToTimePointer(cerberusQueueItemDAO.LastErrorAt),
+		LastErrorAt:         util.NullTimeToTimePointer(cerberusQueueItemDAO.LastErrorAt),
 		TrialCount:          cerberusQueueItemDAO.TrialCount,
 		RetryNotBefore:      cerberusQueueItemDAO.RetryNotBefore,
 		RawResponse:         cerberusQueueItemDAO.RawResponse,
@@ -4727,7 +4727,7 @@ func convertImageDAOsToImages(imageDAOs []imageDAO) []Image {
 		images[i] = Image{
 			ID:          imageDAO.ID,
 			Name:        imageDAO.Name,
-			Description: nullStringToStringPointer(imageDAO.Description),
+			Description: util.NullStringToStringPointer(imageDAO.Description),
 			DeaImageID:  imageDAO.DeaImageID,
 		}
 	}
@@ -4740,7 +4740,7 @@ func convertControlResultImageDAOsToImages(imageDAOs []controlResultImageDAO) []
 		images[i] = Image{
 			ID:          imageDAO.ID,
 			Name:        imageDAO.Name,
-			Description: nullStringToStringPointer(imageDAO.Description),
+			Description: util.NullStringToStringPointer(imageDAO.Description),
 			DeaImageID:  imageDAO.DeaImageID,
 		}
 	}

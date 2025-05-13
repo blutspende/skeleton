@@ -4,27 +4,44 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"testing"
-	"time"
-
+	"github.com/blutspende/skeleton/config"
 	"github.com/blutspende/skeleton/db"
 	"github.com/blutspende/skeleton/migrator"
 	"github.com/google/uuid"
-	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/assert"
+	"testing"
+	"time"
 )
 
-func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
-	sqlConn, _ := sqlx.Connect("postgres", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
-	schemaName := "instrument_test"
+func setupDbConnectorAndRunMigration(schemaName string) (db.DbConnector, string) {
+	configuration := config.Configuration{}
+	configuration.PostgresDB.Host = "localhost"
+	configuration.PostgresDB.Port = 5551
+	configuration.PostgresDB.User = "postgres"
+	configuration.PostgresDB.Pass = "postgres"
+	configuration.PostgresDB.Database = "postgres"
+	configuration.PostgresDB.SSLMode = "disable"
+	postgres := db.NewPostgres(context.Background(), &configuration)
+	//sqlConn, _ := sqlx.Connect("postgres", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
+	_ = postgres.Connect()
+	sqlConn, _ := postgres.GetDbConnection()
+
 	_, _ = sqlConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
 	_, _ = sqlConn.Exec(fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schemaName))
 	_, _ = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
+
+	dbConn, _ := setupDbConnector(schemaName)
+
 	migrator := migrator.NewSkeletonMigrator()
 	_ = migrator.Run(context.Background(), sqlConn, schemaName)
 	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
 
-	dbConn := db.CreateDbConnector(sqlConn)
+	return dbConn, schemaName
+}
+
+func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
+	dbConn, schemaName := setupDbConnectorAndRunMigration("instrument_test")
+
 	cerberusClientMock := &cerberusClientMock{
 		registerInstrumentFunc: func(instrument Instrument) error {
 			return nil
@@ -144,16 +161,8 @@ func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
 }
 
 func TestFtpConfigConnectionModeChange(t *testing.T) {
-	sqlConn, _ := sqlx.Connect("postgres", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
-	schemaName := "instrument_test"
-	_, _ = sqlConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
-	_, _ = sqlConn.Exec(fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schemaName))
-	_, _ = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
-	migrator := migrator.NewSkeletonMigrator()
-	_ = migrator.Run(context.Background(), sqlConn, schemaName)
-	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
+	dbConn, schemaName := setupDbConnectorAndRunMigration("instrument_test")
 
-	dbConn := db.CreateDbConnector(sqlConn)
 	cerberusClientMock := &cerberusClientMock{
 		registerInstrumentFunc: func(instrument Instrument) error {
 			return nil
@@ -266,16 +275,8 @@ func TestFtpConfigConnectionModeChange(t *testing.T) {
 }
 
 func TestUpdateInstrument(t *testing.T) {
-	sqlConn, _ := sqlx.Connect("postgres", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
-	schemaName := "instrument_test"
-	_, _ = sqlConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
-	_, _ = sqlConn.Exec(fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schemaName))
-	_, _ = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
-	skeletonMigrator := migrator.NewSkeletonMigrator()
-	_ = skeletonMigrator.Run(context.Background(), sqlConn, schemaName)
-	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
+	dbConn, schemaName := setupDbConnectorAndRunMigration("instrument_test")
 
-	dbConn := db.CreateDbConnector(sqlConn)
 	cerberusClientMock := &cerberusClientMock{
 		registerInstrumentFunc: func(instrument Instrument) error {
 			return nil
@@ -563,16 +564,8 @@ func TestUpdateInstrument(t *testing.T) {
 }
 
 func TestNotVerifiedInstrument(t *testing.T) {
-	sqlConn, _ := sqlx.Connect("postgres", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
-	schemaName := "instrument_test"
-	_, _ = sqlConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
-	_, _ = sqlConn.Exec(fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schemaName))
-	_, _ = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
-	skeletonMigrator := migrator.NewSkeletonMigrator()
-	_ = skeletonMigrator.Run(context.Background(), sqlConn, schemaName)
-	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
+	dbConn, schemaName := setupDbConnectorAndRunMigration("instrument_test")
 
-	dbConn := db.CreateDbConnector(sqlConn)
 	cerberusClientMock := &cerberusClientMock{
 		registerInstrumentFunc: func(instrument Instrument) error {
 			return nil
@@ -629,16 +622,8 @@ func TestNotVerifiedInstrument(t *testing.T) {
 }
 
 func TestUpdateExpectedControlResult(t *testing.T) {
-	sqlConn, _ := sqlx.Connect("postgres", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
-	schemaName := "expectedcontrolresult_test"
-	_, _ = sqlConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
-	_, _ = sqlConn.Exec(fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schemaName))
-	_, _ = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
-	migrator := migrator.NewSkeletonMigrator()
-	_ = migrator.Run(context.Background(), sqlConn, schemaName)
-	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
+	dbConn, schemaName := setupDbConnectorAndRunMigration("expectedcontrolresult_test")
 
-	dbConn := db.CreateDbConnector(sqlConn)
 	cerberusClientMock := &cerberusClientMock{
 		registerInstrumentFunc: func(instrument Instrument) error {
 			return nil
@@ -790,16 +775,8 @@ func TestUpdateExpectedControlResult(t *testing.T) {
 }
 
 func TestUpdateExpectedControlResult2(t *testing.T) {
-	sqlConn, _ := sqlx.Connect("postgres", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
-	schemaName := "expectedcontrolresult_test"
-	_, _ = sqlConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
-	_, _ = sqlConn.Exec(fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schemaName))
-	_, _ = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
-	migrator := migrator.NewSkeletonMigrator()
-	_ = migrator.Run(context.Background(), sqlConn, schemaName)
-	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
+	dbConn, schemaName := setupDbConnectorAndRunMigration("expectedcontrolresult_test")
 
-	dbConn := db.CreateDbConnector(sqlConn)
 	cerberusClientMock := &cerberusClientMock{
 		registerInstrumentFunc: func(instrument Instrument) error {
 			return nil
@@ -998,16 +975,8 @@ func TestUpdateExpectedControlResult2(t *testing.T) {
 }
 
 func TestNotVerifiedExpectedControlResults(t *testing.T) {
-	sqlConn, _ := sqlx.Connect("postgres", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
-	schemaName := "expectedcontrolresult_test"
-	_, _ = sqlConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
-	_, _ = sqlConn.Exec(fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schemaName))
-	_, _ = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
-	migrator := migrator.NewSkeletonMigrator()
-	_ = migrator.Run(context.Background(), sqlConn, schemaName)
-	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
+	dbConn, schemaName := setupDbConnectorAndRunMigration("expectedcontrolresult_test")
 
-	dbConn := db.CreateDbConnector(sqlConn)
 	cerberusClientMock := &cerberusClientMock{
 		registerInstrumentFunc: func(instrument Instrument) error {
 			return nil

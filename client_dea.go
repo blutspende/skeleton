@@ -104,7 +104,7 @@ func (dea *deaClientV1) UploadFile(fileData []byte, name string) (fileID uuid.UU
 
 	if resp.StatusCode() != http.StatusCreated {
 		log.Error().Int("lenOfFileBytes", len(fileData)).Str("message", errResponse.Message).Msg("upload file to DEA failed")
-		err = fmt.Errorf(errResponse.Message)
+		err = fmt.Errorf("%s", errResponse.Message)
 		return
 	}
 

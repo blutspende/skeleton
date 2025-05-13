@@ -1,16 +1,38 @@
 package skeleton
 
 import (
+	"context"
 	"crypto/sha256"
-	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"github.com/blutspende/bloodlab-common/util"
+	"github.com/blutspende/skeleton/config"
+	"github.com/blutspende/skeleton/db"
 	"github.com/google/uuid"
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 )
+
+func setupDbConnector(schemaName string) (db.DbConnector, string) {
+	configuration := config.Configuration{}
+	configuration.PostgresDB.Host = "localhost"
+	configuration.PostgresDB.Port = 5551
+	configuration.PostgresDB.User = "postgres"
+	configuration.PostgresDB.Pass = "postgres"
+	configuration.PostgresDB.Database = "postgres"
+	configuration.PostgresDB.SSLMode = "disable"
+	postgres := db.NewPostgres(context.Background(), &configuration)
+	//sqlConn, _ := sqlx.Connect("postgres", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
+	_ = postgres.Connect()
+	sqlConn, _ := postgres.GetDbConnection()
+
+	_, _ = sqlConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
+	_, _ = sqlConn.Exec(fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schemaName))
+	_, _ = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
+
+	return db.NewDbConnector(postgres), schemaName
+}
 
 // StandardizeUSDecimalValue removes all thousands-seperators and normalizes to the form 123123.00 having the "." the decimal separator
 func StandardizeUSDecimalValue(in string) string {
@@ -51,58 +73,6 @@ func LookupResultMapping(analyteMapping AnalyteMapping, valueFromInstrument stri
 	}
 
 	return valueFromInstrument
-}
-
-func stringPointerToString(value *string) string {
-	if value != nil {
-		return *value
-	}
-	return ""
-}
-
-func stringPointerToStringWithDefault(value *string, defaultValue string) string {
-	if value != nil {
-		return *value
-	}
-	return defaultValue
-}
-
-func nullStringToString(value sql.NullString) string {
-	if value.Valid {
-		return value.String
-	}
-	return ""
-}
-
-func nullStringToStringPointer(value sql.NullString) *string {
-	if value.Valid {
-		return &value.String
-	}
-	return nil
-}
-
-func nullUUIDToUUIDPointer(value uuid.NullUUID) *uuid.UUID {
-	if value.Valid {
-		return &value.UUID
-	}
-	return nil
-}
-
-func nullTimeToTimePointer(value sql.NullTime) *time.Time {
-	if value.Valid {
-		return &value.Time
-	}
-	return nil
-}
-
-func timePointerToNullTime(value *time.Time) sql.NullTime {
-	if value != nil {
-		return sql.NullTime{
-			Time:  *value,
-			Valid: true,
-		}
-	}
-	return sql.NullTime{}
 }
 
 func isSorted(pageable Pageable) bool {
@@ -194,7 +164,7 @@ func HashInstrument(instrument Instrument) string {
 		analyteBuilder.WriteString(a.AnalyteID.String())
 		analyteBuilder.WriteString(a.InstrumentAnalyte)
 		analyteBuilder.WriteString(string(a.ResultType))
-		analyteBuilder.WriteString(stringPointerToString(a.ControlInstrumentAnalyte))
+		analyteBuilder.WriteString(util.StringPointerToString(a.ControlInstrumentAnalyte))
 		analyteBuilder.WriteString(fmt.Sprintf("%t", a.ControlResultRequired))
 
 		// Hash nested ChannelMappings

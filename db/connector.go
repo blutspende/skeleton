@@ -12,6 +12,7 @@ import (
 
 type DbConnector interface {
 	CreateTransactionConnector() (DbConnector, error)
+	GetPostgres() Postgres
 	Exec(query string, args ...interface{}) (sql.Result, error)
 	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
 	NamedExec(query string, arg interface{}) (sql.Result, error)
@@ -56,6 +57,14 @@ func (c *dbConnector) CreateTransactionConnector() (DbConnector, error) {
 	}
 
 	return c, err
+}
+
+func (c *dbConnector) GetPostgres() Postgres {
+	if c.pg == nil {
+		log.Error().Msg(ErrDbConnectionNotAvailable.Error())
+		return nil
+	}
+	return c.pg
 }
 
 func (c *dbConnector) Exec(query string, args ...interface{}) (sql.Result, error) {
