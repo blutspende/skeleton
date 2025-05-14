@@ -413,6 +413,8 @@ func TestSubmitAnalysisResultWithoutDEARawMessageID(t *testing.T) {
 		_ = skeletonInstance.Start()
 	}()
 
+	time.Sleep(time.Second * 2)
+
 	analysisRequests := []AnalysisRequest{
 		{
 			ID:             uuid.New(),
