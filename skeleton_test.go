@@ -2,6 +2,7 @@ package skeleton
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"net/http"
@@ -1584,8 +1585,88 @@ func (m *analysisRepositoryMock) MarkAnalysisResultsAsProcessed(ctx context.Cont
 	return nil
 }
 func (m *analysisRepositoryMock) CreateTransaction() (db.DbConnector, error) {
-	return db.NewDbConnector(db.NewPostgres(context.Background(), &config.Configuration{})), nil
+	return &MockDbConnectorStruct{}, nil
+	//return db.NewDbConnector(db.NewPostgres(context.Background(), &config.Configuration{})), nil
+	//return db.NewDbConnector(&db.postgres{}), nil
 }
+
+type MockDbConnectorStruct struct {
+}
+
+func (m MockDbConnectorStruct) CreateTransactionConnector() (db.DbConnector, error) {
+	return m, nil
+}
+
+func (m MockDbConnectorStruct) GetPostgres() db.Postgres {
+	return nil
+}
+
+func (m MockDbConnectorStruct) Exec(query string, args ...interface{}) (sql.Result, error) {
+	return nil, nil
+}
+
+func (m MockDbConnectorStruct) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+	return nil, nil
+}
+
+func (m MockDbConnectorStruct) NamedExec(query string, arg interface{}) (sql.Result, error) {
+	return nil, nil
+}
+
+func (m MockDbConnectorStruct) NamedExecContext(ctx context.Context, query string, arg interface{}) (sql.Result, error) {
+	return nil, nil
+}
+
+func (m MockDbConnectorStruct) NamedQuery(query string, arg interface{}) (*sqlx.Rows, error) {
+	return nil, nil
+}
+
+func (m MockDbConnectorStruct) NamedQueryContext(ctx context.Context, query string, arg interface{}) (*sqlx.Rows, error) {
+	return nil, nil
+
+}
+
+func (m MockDbConnectorStruct) Queryx(query string, args ...interface{}) (*sqlx.Rows, error) {
+	return nil, nil
+
+}
+
+func (m MockDbConnectorStruct) QueryxContext(ctx context.Context, query string, args ...interface{}) (*sqlx.Rows, error) {
+	return nil, nil
+
+}
+
+func (m MockDbConnectorStruct) QueryRowx(query string, args ...interface{}) *sqlx.Row {
+	return nil
+
+}
+
+func (m MockDbConnectorStruct) QueryRowxContext(ctx context.Context, query string, args ...interface{}) *sqlx.Row {
+	return nil
+
+}
+
+func (m MockDbConnectorStruct) PrepareNamed(query string) (*sqlx.NamedStmt, error) {
+	return nil, nil
+
+}
+
+func (m MockDbConnectorStruct) Rebind(query string) string {
+	return ""
+}
+
+func (m MockDbConnectorStruct) Commit() error {
+	return nil
+}
+
+func (m MockDbConnectorStruct) Rollback() error {
+	return nil
+}
+
+func (m MockDbConnectorStruct) Ping() error {
+	return nil
+}
+
 func (m *analysisRepositoryMock) WithTransaction(tx db.DbConnector) AnalysisRepository {
 	return m
 }

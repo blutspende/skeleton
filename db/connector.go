@@ -37,26 +37,29 @@ type dbConnector struct {
 }
 
 func NewDbConnector(pg Postgres) DbConnector {
+	dbConn, err := pg.GetDbConnection()
+	if err != nil {
+		log.Error().Err(err).Msg(ErrDbConnectionNotAvailable.Error())
+		return nil //ErrDbConnectionNotAvailable
+		//return nil, ErrDbConnectionNotAvailable
+		//TODO
+	}
+
 	return &dbConnector{
 		pg: pg,
+		db: dbConn,
 	}
 }
 
 func (c *dbConnector) CreateTransactionConnector() (DbConnector, error) {
-	dbConn, err := c.pg.GetDbConnection()
-	if err != nil {
-		log.Error().Err(err).Msg(ErrDbConnectionNotAvailable.Error())
-		return nil, ErrDbConnectionNotAvailable
-	}
-	c.db = dbConn
-
-	c.tx, err = c.db.Beginx()
+	tx, err := c.db.Beginx()
 	if err != nil {
 		log.Error().Err(err).Msg(MsgBeginTransactionFailed)
 		return nil, ErrBeginTransactionFailed
 	}
-
-	return c, err
+	connCopy := *c
+	connCopy.tx = tx
+	return &connCopy, err
 }
 
 func (c *dbConnector) GetPostgres() Postgres {

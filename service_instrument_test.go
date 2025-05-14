@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/blutspende/skeleton/config"
 	"github.com/blutspende/skeleton/db"
 	"github.com/blutspende/skeleton/migrator"
 	"github.com/google/uuid"
@@ -14,23 +13,8 @@ import (
 )
 
 func setupDbConnectorAndRunMigration(schemaName string) (db.DbConnector, string) {
-	configuration := config.Configuration{}
-	configuration.PostgresDB.Host = "localhost"
-	configuration.PostgresDB.Port = 5551
-	configuration.PostgresDB.User = "postgres"
-	configuration.PostgresDB.Pass = "postgres"
-	configuration.PostgresDB.Database = "postgres"
-	configuration.PostgresDB.SSLMode = "disable"
-	postgres := db.NewPostgres(context.Background(), &configuration)
-	//sqlConn, _ := sqlx.Connect("postgres", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
-	_ = postgres.Connect()
-	sqlConn, _ := postgres.GetDbConnection()
-
-	_, _ = sqlConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
-	_, _ = sqlConn.Exec(fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schemaName))
-	_, _ = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
-
 	dbConn, _ := setupDbConnector(schemaName)
+	sqlConn, _ := dbConn.GetPostgres().GetDbConnection()
 
 	migrator := migrator.NewSkeletonMigrator()
 	_ = migrator.Run(context.Background(), sqlConn, schemaName)
@@ -61,6 +45,7 @@ func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
 
 	clientPort := 22
 	instrumentWithFtp := Instrument{
+		//_ = Instrument{
 		Name:           "TestInstrument",
 		Type:           Analyzer,
 		ProtocolID:     uuid.MustParse("abb539a3-286f-4c15-a7b7-2e9adf6eab91"),
@@ -91,6 +76,7 @@ func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
 	instrumentId, err := instrumentService.CreateInstrument(ctx, instrumentWithFtp)
 	assert.Nil(t, err)
 
+	//instrumentId, _ := uuid.NewUUID()
 	// test that the FTP config created properly
 	instrument, err := instrumentService.GetInstrumentByID(ctx, nil, instrumentId, false)
 	assert.Nil(t, err)
