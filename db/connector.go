@@ -36,19 +36,17 @@ type dbConnector struct {
 	tx *sqlx.Tx
 }
 
-func NewDbConnector(pg Postgres) DbConnector {
+func NewDbConnector(pg Postgres) (DbConnector, error) {
 	dbConn, err := pg.GetDbConnection()
 	if err != nil {
 		log.Error().Err(err).Msg(ErrDbConnectionNotAvailable.Error())
-		return nil //ErrDbConnectionNotAvailable
-		//return nil, ErrDbConnectionNotAvailable
-		//TODO
+		return nil, ErrDbConnectionNotAvailable
 	}
 
 	return &dbConnector{
 		pg: pg,
 		db: dbConn,
-	}
+	}, nil
 }
 
 func (c *dbConnector) CreateTransactionConnector() (DbConnector, error) {

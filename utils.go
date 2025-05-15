@@ -1,38 +1,15 @@
 package skeleton
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"github.com/blutspende/bloodlab-common/util"
-	"github.com/blutspende/skeleton/config"
-	"github.com/blutspende/skeleton/db"
 	"github.com/google/uuid"
 	"sort"
 	"strconv"
 	"strings"
 )
-
-func setupDbConnector(schemaName string) (db.DbConnector, string) {
-	configuration := config.Configuration{}
-	configuration.PostgresDB.Host = "localhost"
-	configuration.PostgresDB.Port = 5551
-	configuration.PostgresDB.User = "postgres"
-	configuration.PostgresDB.Pass = "postgres"
-	configuration.PostgresDB.Database = "postgres"
-	configuration.PostgresDB.SSLMode = "disable"
-	postgres := db.NewPostgres(context.Background(), &configuration)
-	//sqlConn, _ := sqlx.Connect("postgres", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
-	_ = postgres.Connect()
-	sqlConn, _ := postgres.GetDbConnection()
-
-	_, _ = sqlConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
-	_, _ = sqlConn.Exec(fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schemaName))
-	_, _ = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
-
-	return db.NewDbConnector(postgres), schemaName
-}
 
 // StandardizeUSDecimalValue removes all thousands-seperators and normalizes to the form 123123.00 having the "." the decimal separator
 func StandardizeUSDecimalValue(in string) string {

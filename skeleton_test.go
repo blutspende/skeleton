@@ -48,13 +48,6 @@ func TestSkeletonStart(t *testing.T) {
 	}
 }
 
-func setupDbConnectorAndGetPgAndDb(schemaName string) (db.DbConnector, string, db.Postgres, *sqlx.DB) {
-	dbConn, _ := setupDbConnector(schemaName)
-	pg := dbConn.GetPostgres()
-	sql, _ := pg.GetDbConnection()
-	return dbConn, schemaName, pg, sql
-}
-
 func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 	//sqlConn, _ := sqlx.Connect("pgx", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
 	dbConn, schemaName, pg, sqlConn := setupDbConnectorAndGetPgAndDb("testSubmitAnalysisRequestsParallel")
@@ -1587,88 +1580,63 @@ func (m *analysisRepositoryMock) MarkAnalysisResultsAsProcessed(ctx context.Cont
 	return nil
 }
 func (m *analysisRepositoryMock) CreateTransaction() (db.DbConnector, error) {
-	return &MockDbConnectorStruct{}, nil
-	//return db.NewDbConnector(db.NewPostgres(context.Background(), &config.Configuration{})), nil
-	//return db.NewDbConnector(&db.postgres{}), nil
+	return &dbConnectorMock{}, nil
 }
 
-type MockDbConnectorStruct struct {
+type dbConnectorMock struct {
 }
 
-func (m MockDbConnectorStruct) CreateTransactionConnector() (db.DbConnector, error) {
+func (m dbConnectorMock) CreateTransactionConnector() (db.DbConnector, error) {
 	return m, nil
 }
-
-func (m MockDbConnectorStruct) GetPostgres() db.Postgres {
+func (m dbConnectorMock) GetPostgres() db.Postgres {
 	return nil
 }
-
-func (m MockDbConnectorStruct) Exec(query string, args ...interface{}) (sql.Result, error) {
+func (m dbConnectorMock) Exec(query string, args ...interface{}) (sql.Result, error) {
 	return nil, nil
 }
-
-func (m MockDbConnectorStruct) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+func (m dbConnectorMock) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
 	return nil, nil
 }
-
-func (m MockDbConnectorStruct) NamedExec(query string, arg interface{}) (sql.Result, error) {
+func (m dbConnectorMock) NamedExec(query string, arg interface{}) (sql.Result, error) {
 	return nil, nil
 }
-
-func (m MockDbConnectorStruct) NamedExecContext(ctx context.Context, query string, arg interface{}) (sql.Result, error) {
+func (m dbConnectorMock) NamedExecContext(ctx context.Context, query string, arg interface{}) (sql.Result, error) {
 	return nil, nil
 }
-
-func (m MockDbConnectorStruct) NamedQuery(query string, arg interface{}) (*sqlx.Rows, error) {
+func (m dbConnectorMock) NamedQuery(query string, arg interface{}) (*sqlx.Rows, error) {
 	return nil, nil
 }
-
-func (m MockDbConnectorStruct) NamedQueryContext(ctx context.Context, query string, arg interface{}) (*sqlx.Rows, error) {
+func (m dbConnectorMock) NamedQueryContext(ctx context.Context, query string, arg interface{}) (*sqlx.Rows, error) {
 	return nil, nil
-
 }
-
-func (m MockDbConnectorStruct) Queryx(query string, args ...interface{}) (*sqlx.Rows, error) {
+func (m dbConnectorMock) Queryx(query string, args ...interface{}) (*sqlx.Rows, error) {
 	return nil, nil
-
 }
-
-func (m MockDbConnectorStruct) QueryxContext(ctx context.Context, query string, args ...interface{}) (*sqlx.Rows, error) {
+func (m dbConnectorMock) QueryxContext(ctx context.Context, query string, args ...interface{}) (*sqlx.Rows, error) {
 	return nil, nil
-
 }
-
-func (m MockDbConnectorStruct) QueryRowx(query string, args ...interface{}) *sqlx.Row {
+func (m dbConnectorMock) QueryRowx(query string, args ...interface{}) *sqlx.Row {
 	return nil
-
 }
-
-func (m MockDbConnectorStruct) QueryRowxContext(ctx context.Context, query string, args ...interface{}) *sqlx.Row {
+func (m dbConnectorMock) QueryRowxContext(ctx context.Context, query string, args ...interface{}) *sqlx.Row {
 	return nil
-
 }
-
-func (m MockDbConnectorStruct) PrepareNamed(query string) (*sqlx.NamedStmt, error) {
+func (m dbConnectorMock) PrepareNamed(query string) (*sqlx.NamedStmt, error) {
 	return nil, nil
-
 }
-
-func (m MockDbConnectorStruct) Rebind(query string) string {
+func (m dbConnectorMock) Rebind(query string) string {
 	return ""
 }
-
-func (m MockDbConnectorStruct) Commit() error {
+func (m dbConnectorMock) Commit() error {
 	return nil
 }
-
-func (m MockDbConnectorStruct) Rollback() error {
+func (m dbConnectorMock) Rollback() error {
 	return nil
 }
-
-func (m MockDbConnectorStruct) Ping() error {
+func (m dbConnectorMock) Ping() error {
 	return nil
 }
-
 func (m *analysisRepositoryMock) WithTransaction(tx db.DbConnector) AnalysisRepository {
 	return m
 }

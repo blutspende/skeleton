@@ -3,25 +3,12 @@ package skeleton
 import (
 	"context"
 	"errors"
-	"fmt"
 	"github.com/blutspende/skeleton/db"
-	"github.com/blutspende/skeleton/migrator"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
 )
-
-func setupDbConnectorAndRunMigration(schemaName string) (db.DbConnector, string) {
-	dbConn, _ := setupDbConnector(schemaName)
-	sqlConn, _ := dbConn.GetPostgres().GetDbConnection()
-
-	migrator := migrator.NewSkeletonMigrator()
-	_ = migrator.Run(context.Background(), sqlConn, schemaName)
-	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
-
-	return dbConn, schemaName
-}
 
 func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
 	dbConn, schemaName := setupDbConnectorAndRunMigration("instrument_test")
