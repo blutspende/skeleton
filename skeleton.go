@@ -6,24 +6,23 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"regexp"
-	"strings"
-	"sync"
-	"time"
-
+	"github.com/blutspende/bloodlab-common/util"
 	"github.com/blutspende/skeleton/config"
-	"github.com/blutspende/skeleton/utils"
-
+	"github.com/blutspende/skeleton/db"
 	"github.com/blutspende/skeleton/migrator"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/rs/zerolog/log"
+	"regexp"
+	"strings"
+	"sync"
+	"time"
 )
 
 type skeleton struct {
 	ctx                                        context.Context
 	config                                     config.Configuration
-	sqlConn                                    *sqlx.DB
+	postgres                                   db.Postgres
 	dbSchema                                   string
 	migrator                                   migrator.SkeletonMigrator
 	api                                        GinApi
@@ -562,7 +561,29 @@ func (s *skeleton) migrateUp(ctx context.Context, db *sqlx.DB, schemaName string
 }
 
 func (s *skeleton) Start() error {
-	err := s.registerDriverToCerberus(s.ctx)
+	err := s.postgres.Connect()
+	if err != nil {
+		log.Error().Err(err).Msg("failed to connect to database")
+		return err
+	}
+	dbConn, err := s.postgres.GetDbConnection()
+	if err != nil {
+		log.Error().Err(err).Msg("failed to get database connection")
+		return err
+	}
+
+	s.unprocessedHandlingWaitGroup.Add(waitGroupSize)
+
+	err = s.migrateUp(s.ctx, dbConn, s.dbSchema)
+	if err != nil {
+		log.Error().Err(err).Msg("migrate up failed")
+		return err
+	}
+
+	// Note: Cache instruments on startup
+	_, _ = s.instrumentService.GetInstruments(context.Background())
+
+	err = s.registerDriverToCerberus(s.ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("starting skeleton failed due to failed registration of instrument driver to cerberus")
 		return err
@@ -655,7 +676,7 @@ func (s *skeleton) enqueueUnprocessedAnalysisRequests(ctx context.Context) {
 		for {
 			failed := make([]AnalysisRequest, 0)
 
-			err = utils.Partition(len(requests), 500, func(low int, high int) error {
+			err = util.Partition(len(requests), 500, func(low int, high int) error {
 				partition := requests[low:high]
 
 				requestIDs := make([]uuid.UUID, 0)
@@ -707,7 +728,7 @@ func (s *skeleton) enqueueUnprocessedAnalysisResults(ctx context.Context) {
 		for {
 			failed := make([]uuid.UUID, 0)
 
-			err = utils.Partition(len(resultIDs), 500, func(low int, high int) error {
+			err = util.Partition(len(resultIDs), 500, func(low int, high int) error {
 				partition := resultIDs[low:high]
 
 				results, err := s.analysisRepository.GetAnalysisResultsByIDs(ctx, partition)
@@ -941,63 +962,81 @@ func (s *skeleton) runCleanupJobs() {
 
 func (s *skeleton) cleanupCerberusQueueItems() {
 	for {
-		deletedRows, err := s.analysisRepository.DeleteOldCerberusQueueItems(s.ctx, s.config.CleanupDays, limit)
-		if err != nil {
-			log.Error().Err(err).Msg("cleanup old cerberus queue items failed")
+		select {
+		case <-s.ctx.Done():
+			log.Trace().Msg("stopping to cleanup cerberus queue items")
 			return
-		}
-		if int(deletedRows) < limit {
-			return
+		default:
+			deletedRows, err := s.analysisRepository.DeleteOldCerberusQueueItems(s.ctx, s.config.CleanupDays, limit)
+			if err != nil {
+				log.Error().Err(err).Msg("cleanup old cerberus queue items failed")
+				return
+			}
+			if int(deletedRows) < limit {
+				return
+			}
 		}
 	}
 }
 
 func (s *skeleton) cleanupAnalysisRequests() {
 	for {
-		tx, err := s.analysisRepository.CreateTransaction()
-		if err != nil {
-			log.Error().Err(err).Msg("cleanup old analysis requests failed")
+		select {
+		case <-s.ctx.Done():
+			log.Trace().Msg("stopping to cleanup analysis requests")
 			return
-		}
-		deletedRows, err := s.analysisRepository.DeleteOldAnalysisRequestsWithTx(s.ctx, s.config.CleanupDays, limit, tx)
-		if err != nil {
-			_ = tx.Rollback()
-			log.Error().Err(err).Msg("cleanup old analysis requests failed")
-			return
-		}
-		err = tx.Commit()
-		if err != nil {
-			_ = tx.Rollback()
-			log.Error().Err(err).Msg("cleanup old analysis requests failed")
-			return
-		}
-		if int(deletedRows) < limit {
-			return
+		default:
+			tx, err := s.analysisRepository.CreateTransaction()
+			if err != nil {
+				log.Error().Err(err).Msg("cleanup old analysis requests failed")
+				return
+			}
+			deletedRows, err := s.analysisRepository.DeleteOldAnalysisRequestsWithTx(s.ctx, s.config.CleanupDays, limit, tx)
+			if err != nil {
+				_ = tx.Rollback()
+				log.Error().Err(err).Msg("cleanup old analysis requests failed")
+				return
+			}
+			err = tx.Commit()
+			if err != nil {
+				_ = tx.Rollback()
+				log.Error().Err(err).Msg("cleanup old analysis requests failed")
+				return
+			}
+			if int(deletedRows) < limit {
+				return
+			}
 		}
 	}
 }
 
 func (s *skeleton) cleanupAnalysisResults() {
 	for {
-		tx, err := s.analysisRepository.CreateTransaction()
-		if err != nil {
-			log.Error().Err(err).Msg("cleanup old analysis results failed")
+		select {
+		case <-s.ctx.Done():
+			log.Trace().Msg("stopping to cleanup analysis results")
 			return
-		}
-		deletedRows, err := s.analysisRepository.DeleteOldAnalysisResultsWithTx(s.ctx, s.config.CleanupDays, limit, tx)
-		if err != nil {
-			_ = tx.Rollback()
-			log.Error().Err(err).Msg("cleanup old analysis results failed")
-			return
-		}
-		err = tx.Commit()
-		if err != nil {
-			_ = tx.Rollback()
-			log.Error().Err(err).Msg("cleanup old analysis results failed")
-			return
-		}
-		if int(deletedRows) < limit {
-			return
+		default:
+			tx, err := s.analysisRepository.CreateTransaction()
+			if err != nil {
+				log.Error().Err(err).Msg("cleanup old analysis results failed")
+				return
+			}
+			deletedRows, err := s.analysisRepository.DeleteOldAnalysisResultsWithTx(s.ctx, s.config.CleanupDays, limit, tx)
+			if err != nil {
+				_ = tx.Rollback()
+				log.Error().Err(err).Msg("cleanup old analysis results failed")
+				return
+			}
+			err = tx.Commit()
+			if err != nil {
+				_ = tx.Rollback()
+				log.Error().Err(err).Msg("cleanup old analysis results failed")
+				return
+			}
+			if int(deletedRows) < limit {
+				return
+			}
 		}
 	}
 }
@@ -1358,7 +1397,25 @@ func (s *skeleton) startAnalysisRequestRevocationReexamineJob(ctx context.Contex
 	}
 }
 
-func NewSkeleton(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, reagentManufacturers []string, sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService ConsoleLogService, manager Manager, cerberusClient CerberusClient, longPollClient LongPollClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
+func (s *skeleton) GetDbConnection() (*sqlx.DB, error) {
+	dbConn, err := s.postgres.GetDbConnection()
+	if err != nil {
+		log.Error().Err(err).Msg("failed to get database connection")
+		return nil, err
+	}
+	return dbConn, nil
+}
+
+func (s *skeleton) Stop() error {
+	err := s.postgres.Close()
+	if err != nil {
+		log.Error().Err(err).Msg("failed to close database connection")
+		return err
+	}
+	return nil
+}
+
+func NewSkeleton(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, reagentManufacturers []string, postgres db.Postgres, dbSchema string, migrator migrator.SkeletonMigrator, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService ConsoleLogService, manager Manager, cerberusClient CerberusClient, longPollClient LongPollClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
 	skeleton := &skeleton{
 		ctx:                                    ctx,
 		serviceName:                            serviceName,
@@ -1367,7 +1424,7 @@ func NewSkeleton(ctx context.Context, serviceName, displayName string, requested
 		encodings:                              encodings,
 		reagentManufacturers:                   reagentManufacturers,
 		config:                                 config,
-		sqlConn:                                sqlConn,
+		postgres:                               postgres,
 		dbSchema:                               dbSchema,
 		migrator:                               migrator,
 		analysisRepository:                     analysisRepository,
@@ -1387,18 +1444,6 @@ func NewSkeleton(ctx context.Context, serviceName, displayName string, requested
 		resultTransferFlushTimeout:                 config.ResultTransferFlushTimeout,
 		imageRetrySeconds:                          config.ImageRetrySeconds,
 	}
-
-	skeleton.unprocessedHandlingWaitGroup.Add(waitGroupSize)
-
-	err := skeleton.migrateUp(context.Background(), skeleton.sqlConn, skeleton.dbSchema)
-	if err != nil {
-		return nil, err
-	}
-
-	// Note: Cache instruments on startup
-	go func() {
-		_, _ = instrumentService.GetInstruments(context.Background())
-	}()
 
 	return skeleton, nil
 }

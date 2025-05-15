@@ -3,6 +3,7 @@ package skeleton
 import (
 	"context"
 	"fmt"
+	"github.com/jmoiron/sqlx"
 	"time"
 
 	"github.com/google/uuid"
@@ -188,4 +189,12 @@ func (sr *SkeletonTestRig) RegisterManufacturerTests(ctx context.Context, manufa
 
 func (sr *SkeletonTestRig) UploadRawMessageToDEA(rawMessage []byte) (uuid.UUID, error) {
 	return uuid.Nil, nil
+}
+
+func (s *SkeletonTestRig) GetDbConnection() (*sqlx.DB, error) {
+	return nil, nil
+}
+
+func (sr *SkeletonTestRig) Stop() error {
+	return nil
 }

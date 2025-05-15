@@ -2,6 +2,7 @@ package skeleton
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"net/http"
@@ -27,14 +28,11 @@ const serviceName = "testInstrumentDriver"
 const displayName = "testDisplayName"
 
 func TestSkeletonStart(t *testing.T) {
-	sqlConn, err := sqlx.Connect("pgx", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
-	assert.Nil(t, err)
-
 	ctx, cancel := context.WithCancel(context.Background())
 
 	defer cancel()
 
-	skeletonApi, err := New(ctx, serviceName, displayName, []string{}, []string{}, []string{}, sqlConn, "skeleton")
+	skeletonApi, err := New(ctx, serviceName, displayName, []string{}, []string{}, []string{}, "skeleton")
 	if err != nil {
 		return
 	}
@@ -51,12 +49,8 @@ func TestSkeletonStart(t *testing.T) {
 }
 
 func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
-	sqlConn, _ := sqlx.Connect("pgx", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
-
-	schemaName := "testSubmitAnalysisRequestsParallel"
-	_, _ = sqlConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
-	_, _ = sqlConn.Exec(fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schemaName))
-	_, _ = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
+	//sqlConn, _ := sqlx.Connect("pgx", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
+	dbConn, schemaName, pg, sqlConn := setupDbConnectorAndGetPgAndDb("testSubmitAnalysisRequestsParallel")
 
 	configuration := config.Configuration{
 		APIPort:                          5000,
@@ -69,7 +63,6 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 		ImageRetrySeconds:                60,
 		AnalysisRequestWorkerPoolSize:    1,
 	}
-	dbConn := db.CreateDbConnector(sqlConn)
 
 	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
 	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
@@ -119,7 +112,7 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
 	consoleLogService := NewConsoleLogService(cerberusClientMock)
 
-	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, []string{}, sqlConn, schemaName, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, skeletonManager, cerberusClientMock, &longPollClientMock{AnalysisRequests: analysisResultsWithoutAnalysisRequestsTest_AnalysisRequests}, deaClientMock, configuration)
+	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, []string{}, pg, schemaName, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, skeletonManager, cerberusClientMock, &longPollClientMock{AnalysisRequests: analysisResultsWithoutAnalysisRequestsTest_AnalysisRequests}, deaClientMock, configuration)
 
 	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description)
 		VALUES ('abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
@@ -167,12 +160,7 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 
 // Todo - Complete the test
 func TestSubmitAnalysisResultWithRequests(t *testing.T) {
-	sqlConn, _ := sqlx.Connect("pgx", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
-
-	schemaName := "testSubmitAnalysisResultsWithRequests"
-	_, _ = sqlConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
-	_, _ = sqlConn.Exec(fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schemaName))
-	_, _ = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
+	dbConn, schemaName, pg, sqlConn := setupDbConnectorAndGetPgAndDb("testSubmitAnalysisResultsWithRequests")
 
 	configuration := config.Configuration{
 		APIPort:                          5000,
@@ -184,7 +172,6 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 		ResultTransferFlushTimeout:       5,
 		ImageRetrySeconds:                60,
 	}
-	dbConn := db.CreateDbConnector(sqlConn)
 
 	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
 	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
@@ -215,7 +202,7 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
 	consoleLogService := NewConsoleLogService(cerberusClientMock)
 
-	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, []string{}, sqlConn, schemaName, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, skeletonManager, cerberusClientMock, longPollClientMock, deaClientMock, configuration)
+	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, []string{}, pg, schemaName, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, skeletonManager, cerberusClientMock, longPollClientMock, deaClientMock, configuration)
 	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('9bec3063-435d-490f-bec0-88a6633ef4c2', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
 
 	go func() {
@@ -370,12 +357,7 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 }
 
 func TestSubmitAnalysisResultWithoutDEARawMessageID(t *testing.T) {
-	sqlConn, _ := sqlx.Connect("pgx", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
-
-	schemaName := "testSubmitAnalysisResultsWithRequests"
-	_, _ = sqlConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
-	_, _ = sqlConn.Exec(fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schemaName))
-	_, _ = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
+	dbConn, schemaName, pg, sqlConn := setupDbConnectorAndGetPgAndDb("testSubmitAnalysisResultsWithRequests")
 
 	configuration := config.Configuration{
 		APIPort:                          5000,
@@ -387,7 +369,6 @@ func TestSubmitAnalysisResultWithoutDEARawMessageID(t *testing.T) {
 		ResultTransferFlushTimeout:       5,
 		ImageRetrySeconds:                60,
 	}
-	dbConn := db.CreateDbConnector(sqlConn)
 
 	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
 	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
@@ -418,12 +399,14 @@ func TestSubmitAnalysisResultWithoutDEARawMessageID(t *testing.T) {
 	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
 	consoleLogService := NewConsoleLogService(cerberusClientMock)
 
-	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, []string{}, sqlConn, schemaName, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, skeletonManager, cerberusClientMock, longPollClientMock, deaClientMock, configuration)
+	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, []string{}, pg, schemaName, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, skeletonManager, cerberusClientMock, longPollClientMock, deaClientMock, configuration)
 	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('9bec3063-435d-490f-bec0-88a6633ef4c2', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
 
 	go func() {
 		_ = skeletonInstance.Start()
 	}()
+
+	time.Sleep(time.Second * 2)
 
 	analysisRequests := []AnalysisRequest{
 		{
@@ -571,12 +554,7 @@ func TestRegisterProtocol(t *testing.T) {
 }
 
 func TestAnalysisResultsReprocessing(t *testing.T) {
-	sqlConn, _ := sqlx.Connect("pgx", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
-
-	schemaName := "testAnalysisResultsReprocessing"
-	_, _ = sqlConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
-	_, _ = sqlConn.Exec(fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schemaName))
-	_, _ = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
+	dbConn, schemaName, _, _ := setupDbConnectorAndGetPgAndDb("testAnalysisResultsReprocessing")
 
 	configuration := config.Configuration{
 		APIPort:                          5679,
@@ -588,7 +566,6 @@ func TestAnalysisResultsReprocessing(t *testing.T) {
 		ResultTransferFlushTimeout:       5,
 		ImageRetrySeconds:                60,
 	}
-	dbConn := db.CreateDbConnector(sqlConn)
 
 	analysisRepositoryMock := &analysisRepositoryMock{}
 	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
@@ -626,7 +603,7 @@ func TestAnalysisResultsReprocessing(t *testing.T) {
 
 	ginEngine.Use(timeout.Timeout(timeout.WithTimeout(5*time.Second), timeout.WithErrorHttpCode(http.StatusRequestTimeout)))
 
-	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, []string{}, sqlConn, schemaName, migrator.NewSkeletonMigrator(), analysisRepositoryMock, analysisServiceMock, instrumentService, consoleLogService, skeletonManager, cerberusClientMock, longPollClient, deaClientMock, configuration)
+	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, []string{}, dbConn.GetPostgres(), schemaName, migrator.NewSkeletonMigrator(), analysisRepositoryMock, analysisServiceMock, instrumentService, consoleLogService, skeletonManager, cerberusClientMock, longPollClient, deaClientMock, configuration)
 	go func() {
 		_ = skeletonInstance.Start()
 	}()
@@ -643,12 +620,7 @@ func TestGenerateRawMessageFilename(t *testing.T) {
 }
 
 func TestSubmitControlResultsProcessing(t *testing.T) {
-	sqlConn, _ := sqlx.Connect("pgx", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
-
-	schemaName := "testSubmitControlResultsProcessing"
-	_, _ = sqlConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
-	_, _ = sqlConn.Exec(fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schemaName))
-	_, _ = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
+	dbConn, schemaName, _, _ := setupDbConnectorAndGetPgAndDb("testSubmitControlResultsProcessing")
 
 	configuration := config.Configuration{
 		APIPort:                          5679,
@@ -660,7 +632,6 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 		ResultTransferFlushTimeout:       5,
 		ImageRetrySeconds:                60,
 	}
-	dbConn := db.CreateDbConnector(sqlConn)
 
 	analysisRepositoryMock := &analysisRepositoryMock{}
 	conditionRepository := NewConditionRepository(dbConn, schemaName)
@@ -693,7 +664,7 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 
 	ginEngine.Use(timeout.Timeout(timeout.WithTimeout(5*time.Second), timeout.WithErrorHttpCode(http.StatusRequestTimeout)))
 
-	skeletonInstance, _ := NewSkeleton(ctx, serviceName, "", []string{}, []string{}, []string{}, sqlConn, schemaName, migrator.NewSkeletonMigrator(), analysisRepositoryMock, analysisService, instrumentService, consoleLogService, skeletonManagerMock, cerberusClientMock, &longPollClientMock{AnalysisRequests: analysisResultsWithoutAnalysisRequestsTest_AnalysisRequests}, deaClientMock, configuration)
+	skeletonInstance, _ := NewSkeleton(ctx, serviceName, "", []string{}, []string{}, []string{}, dbConn.GetPostgres(), schemaName, migrator.NewSkeletonMigrator(), analysisRepositoryMock, analysisService, instrumentService, consoleLogService, skeletonManagerMock, cerberusClientMock, &longPollClientMock{AnalysisRequests: analysisResultsWithoutAnalysisRequestsTest_AnalysisRequests}, deaClientMock, configuration)
 	go func() {
 		_ = skeletonInstance.Start()
 	}()
@@ -1609,7 +1580,62 @@ func (m *analysisRepositoryMock) MarkAnalysisResultsAsProcessed(ctx context.Cont
 	return nil
 }
 func (m *analysisRepositoryMock) CreateTransaction() (db.DbConnector, error) {
-	return db.CreateDbConnector(&sqlx.DB{}), nil
+	return &dbConnectorMock{}, nil
+}
+
+type dbConnectorMock struct {
+}
+
+func (m dbConnectorMock) CreateTransactionConnector() (db.DbConnector, error) {
+	return m, nil
+}
+func (m dbConnectorMock) GetPostgres() db.Postgres {
+	return nil
+}
+func (m dbConnectorMock) Exec(query string, args ...interface{}) (sql.Result, error) {
+	return nil, nil
+}
+func (m dbConnectorMock) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+	return nil, nil
+}
+func (m dbConnectorMock) NamedExec(query string, arg interface{}) (sql.Result, error) {
+	return nil, nil
+}
+func (m dbConnectorMock) NamedExecContext(ctx context.Context, query string, arg interface{}) (sql.Result, error) {
+	return nil, nil
+}
+func (m dbConnectorMock) NamedQuery(query string, arg interface{}) (*sqlx.Rows, error) {
+	return nil, nil
+}
+func (m dbConnectorMock) NamedQueryContext(ctx context.Context, query string, arg interface{}) (*sqlx.Rows, error) {
+	return nil, nil
+}
+func (m dbConnectorMock) Queryx(query string, args ...interface{}) (*sqlx.Rows, error) {
+	return nil, nil
+}
+func (m dbConnectorMock) QueryxContext(ctx context.Context, query string, args ...interface{}) (*sqlx.Rows, error) {
+	return nil, nil
+}
+func (m dbConnectorMock) QueryRowx(query string, args ...interface{}) *sqlx.Row {
+	return nil
+}
+func (m dbConnectorMock) QueryRowxContext(ctx context.Context, query string, args ...interface{}) *sqlx.Row {
+	return nil
+}
+func (m dbConnectorMock) PrepareNamed(query string) (*sqlx.NamedStmt, error) {
+	return nil, nil
+}
+func (m dbConnectorMock) Rebind(query string) string {
+	return ""
+}
+func (m dbConnectorMock) Commit() error {
+	return nil
+}
+func (m dbConnectorMock) Rollback() error {
+	return nil
+}
+func (m dbConnectorMock) Ping() error {
+	return nil
 }
 func (m *analysisRepositoryMock) WithTransaction(tx db.DbConnector) AnalysisRepository {
 	return m
