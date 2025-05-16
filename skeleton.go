@@ -623,12 +623,8 @@ func (s *skeleton) Start() error {
 	go s.validateAnalysisResultStatusAndSend(s.ctx)
 
 	s.unprocessedHandlingWaitGroup.Wait()
-	for {
-		select {
-		case <-s.ctx.Done():
-			return nil
-		}
-	}
+
+	return nil
 }
 
 func (s *skeleton) registerDriverToCerberus(ctx context.Context) error {

@@ -402,11 +402,7 @@ func TestSubmitAnalysisResultWithoutDEARawMessageID(t *testing.T) {
 	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, []string{}, pg, schemaName, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, skeletonManager, cerberusClientMock, longPollClientMock, deaClientMock, configuration)
 	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('9bec3063-435d-490f-bec0-88a6633ef4c2', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
 
-	go func() {
-		_ = skeletonInstance.Start()
-	}()
-
-	time.Sleep(time.Second * 2)
+	_ = skeletonInstance.Start()
 
 	analysisRequests := []AnalysisRequest{
 		{

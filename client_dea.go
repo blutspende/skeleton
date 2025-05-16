@@ -2,11 +2,19 @@ package skeleton
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"github.com/go-resty/resty/v2"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"net/http"
+)
+
+var (
+	ErrPanicRecovered                  = errors.New("panic recovered")
+	ErrUploadFileToDEA                 = errors.New("upload file to DEA failed")
+	ErrDEAResponseItemsForSingleUpload = errors.New("for single file upload DEA did not return one response item")
+	ErrUploadImageToDEA                = errors.New("upload image to DEA failed")
 )
 
 type DeaClientV1 interface {
@@ -84,8 +92,8 @@ func (dea *deaClientV1) UploadFile(fileData []byte, name string) (fileID uuid.UU
 	defer func() {
 		r := recover()
 		if panicErr, ok := r.(error); ok {
-			log.Error().Err(err).Msg("panic recovered")
-			err = panicErr
+			log.Error().Err(panicErr).Msg(ErrPanicRecovered.Error())
+			err = ErrPanicRecovered
 		}
 	}()
 	var resp *resty.Response
@@ -95,7 +103,8 @@ func (dea *deaClientV1) UploadFile(fileData []byte, name string) (fileID uuid.UU
 		SetError(&errResponse).
 		Post(dea.deaUrl + "/v1/files")
 	if err != nil {
-		log.Error().Err(err).Msg("upload file to DEA failed")
+		log.Error().Err(err).Msg(ErrUploadFileToDEA.Error())
+		err = ErrUploadFileToDEA
 		return
 	}
 	if resp == nil {
@@ -103,13 +112,13 @@ func (dea *deaClientV1) UploadFile(fileData []byte, name string) (fileID uuid.UU
 	}
 
 	if resp.StatusCode() != http.StatusCreated {
-		log.Error().Int("lenOfFileBytes", len(fileData)).Str("message", errResponse.Message).Msg("upload file to DEA failed")
-		err = fmt.Errorf("%s", errResponse.Message)
+		log.Error().Int("lenOfFileBytes", len(fileData)).Str("message", errResponse.Message).Msg(ErrUploadImageToDEA.Error())
+		err = ErrUploadImageToDEA
 		return
 	}
 
 	if len(response) != 1 {
-		err = fmt.Errorf("DEA returned %d response items for single file upload", len(response))
+		err = fmt.Errorf("%w, items: %d", ErrDEAResponseItemsForSingleUpload, len(response))
 		return
 	}
 	fileID = response[0].ID
