@@ -186,6 +186,26 @@ func (sr *SkeletonTestRig) RegisterManufacturerTests(ctx context.Context, manufa
 	return nil
 }
 
-func (sr *SkeletonTestRig) UploadRawMessageToDEA(rawMessage []byte) (uuid.UUID, error) {
+func (sr *SkeletonTestRig) SaveMessageIn(ctx context.Context, messageIn MessageIn) (uuid.UUID, error) {
 	return uuid.Nil, nil
+}
+
+func (sr *SkeletonTestRig) UpdateMessageIn(ctx context.Context, messageIn MessageIn) error {
+	return nil
+}
+
+func (sr *SkeletonTestRig) GetUnprocessedMessageIns(ctx context.Context) ([]MessageIn, error) {
+	return nil, nil
+}
+
+func (sr *SkeletonTestRig) SaveMessageOut(ctx context.Context, messageOut MessageOut) (uuid.UUID, error) {
+	return uuid.Nil, nil
+}
+
+func (sr *SkeletonTestRig) UpdateMessageOut(ctx context.Context, messageOut MessageOut) error {
+	return nil
+}
+
+func (sr *SkeletonTestRig) GetUnprocessedMessageOuts(ctx context.Context) ([]MessageOut, error) {
+	return nil, nil
 }

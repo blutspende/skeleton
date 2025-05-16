@@ -1310,7 +1310,7 @@ func (r *instrumentRepositoryMock) GetExpectedControlResultsByAnalyteMappingIds(
 func (r *instrumentRepositoryMock) UpsertRequestMappingAnalytes(ctx context.Context, analyteIDsByRequestMappingID map[uuid.UUID][]uuid.UUID) error {
 	return nil
 }
-func (r *instrumentRepositoryMock) GetRequestMappings(ctx context.Context, instrumentIDs []uuid.UUID) (map[uuid.UUID][]RequestMapping, error) {
+func (r *instrumentRepositoryMock) GetRequestMappingsByInstrumentIDs(ctx context.Context, instrumentIDs []uuid.UUID) (map[uuid.UUID][]RequestMapping, error) {
 	return make(map[uuid.UUID][]RequestMapping), nil
 }
 func (r *instrumentRepositoryMock) GetRequestMappingAnalytes(ctx context.Context, requestMappingIDs []uuid.UUID) (map[uuid.UUID][]uuid.UUID, error) {

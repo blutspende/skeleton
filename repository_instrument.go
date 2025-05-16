@@ -52,7 +52,8 @@ const (
 	msgGetExpectedControlResultsFailed             = "get expected control results failed"
 	msgGetNotSpecifiedExpectedControlResultsFailed = "get not specified expected control results failed"
 	msgDeleteExpectedControlResultFailed           = "delete expected control result failed"
-	msgGetRequestMappingsFailed                    = "get request mappings failed"
+	msgGetRequestMappingsByInstrumentIDsFailed     = "get request mappings by instrument IDs failed failed"
+	msgGetRequestMappingsByIDsFailed               = "get request mappings by IDs failed"
 	msgGetRequestMappingAnalytesFailed             = "get request mapping analytes failed"
 	msgDeleteRequestMappingsFailed                 = "delete request mappings failed"
 	msgUpdateRequestMappingFailed                  = "update request mapping failed"
@@ -107,7 +108,8 @@ var (
 	ErrGetExpectedControlResultsFailed             = errors.New(msgGetExpectedControlResultsFailed)
 	ErrGetNotSpecifiedExpectedControlResultsFailed = errors.New(msgGetNotSpecifiedExpectedControlResultsFailed)
 	ErrDeleteExpectedControlResultFailed           = errors.New(msgDeleteExpectedControlResultFailed)
-	ErrGetRequestMappingsFailed                    = errors.New(msgGetRequestMappingsFailed)
+	ErrGetRequestMappingsByInstrumentIDsFailed     = errors.New(msgGetRequestMappingsByInstrumentIDsFailed)
+	ErrGetRequestMappingsByIDsFailed               = errors.New(msgGetRequestMappingsByIDsFailed)
 	ErrGetRequestMappingAnalytesFailed             = errors.New(msgGetRequestMappingAnalytesFailed)
 	ErrDeleteRequestMappingsFailed                 = errors.New(msgDeleteRequestMappingsFailed)
 	ErrUpdateRequestMappingFailed                  = errors.New(msgUpdateRequestMappingFailed)
@@ -324,7 +326,8 @@ type InstrumentRepository interface {
 	DeleteExpectedControlResultsByAnalyteMappingIDs(ctx context.Context, ids []uuid.UUID, deletedByUserId uuid.UUID) error
 	UpsertRequestMappingAnalytes(ctx context.Context, analyteIDsByRequestMappingID map[uuid.UUID][]uuid.UUID) error
 	UpsertRequestMappings(ctx context.Context, requestMappings []RequestMapping, instrumentID uuid.UUID) error
-	GetRequestMappings(ctx context.Context, instrumentIDs []uuid.UUID) (map[uuid.UUID][]RequestMapping, error)
+	GetRequestMappingsByInstrumentIDs(ctx context.Context, instrumentIDs []uuid.UUID) (map[uuid.UUID][]RequestMapping, error)
+	GetRequestMappingsByIDs(ctx context.Context, ids []uuid.UUID) ([]RequestMapping, error)
 	GetRequestMappingAnalytes(ctx context.Context, requestMappingIDs []uuid.UUID) (map[uuid.UUID][]uuid.UUID, error)
 	DeleteRequestMappings(ctx context.Context, requestMappingIDs []uuid.UUID) error
 	DeleteRequestMappingAnalytes(ctx context.Context, requestMappingID uuid.UUID, analyteIDs []uuid.UUID) error
@@ -1168,7 +1171,7 @@ func (r *instrumentRepository) UpsertRequestMappings(ctx context.Context, reques
 	return nil
 }
 
-func (r *instrumentRepository) GetRequestMappings(ctx context.Context, instrumentIDs []uuid.UUID) (map[uuid.UUID][]RequestMapping, error) {
+func (r *instrumentRepository) GetRequestMappingsByInstrumentIDs(ctx context.Context, instrumentIDs []uuid.UUID) (map[uuid.UUID][]RequestMapping, error) {
 	analyteMappingsByInstrumentID := make(map[uuid.UUID][]RequestMapping)
 	if len(instrumentIDs) == 0 {
 		return analyteMappingsByInstrumentID, nil
@@ -1178,20 +1181,47 @@ func (r *instrumentRepository) GetRequestMappings(ctx context.Context, instrumen
 	query = r.db.Rebind(query)
 	rows, err := r.db.QueryxContext(ctx, query, args...)
 	if err != nil {
-		log.Error().Err(err).Msg(msgGetRequestMappingsFailed)
-		return nil, ErrGetRequestMappingsFailed
+		log.Error().Err(err).Msg(msgGetRequestMappingsByInstrumentIDsFailed)
+		return nil, ErrGetRequestMappingsByInstrumentIDsFailed
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var dao requestMappingDAO
 		err = rows.StructScan(&dao)
 		if err != nil {
-			log.Error().Err(err).Msg(msgGetRequestMappingsFailed)
-			return nil, ErrGetRequestMappingsFailed
+			log.Error().Err(err).Msg(msgGetRequestMappingsByInstrumentIDsFailed)
+			return nil, ErrGetRequestMappingsByInstrumentIDsFailed
 		}
 		analyteMappingsByInstrumentID[dao.InstrumentID] = append(analyteMappingsByInstrumentID[dao.InstrumentID], convertRequestMappingDaoToAnalyteMapping(dao))
 	}
 	return analyteMappingsByInstrumentID, nil
+}
+
+func (r *instrumentRepository) GetRequestMappingsByIDs(ctx context.Context, ids []uuid.UUID) ([]RequestMapping, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	query := fmt.Sprintf(`SELECT * FROM %s.sk_request_mappings WHERE id IN (?);`, r.dbSchema)
+	query, args, _ := sqlx.In(query, ids)
+	query = r.db.Rebind(query)
+	rows, err := r.db.QueryxContext(ctx, query, args...)
+	if err != nil {
+		log.Error().Err(err).Msg(msgGetRequestMappingsByIDsFailed)
+		return nil, ErrGetRequestMappingsByIDsFailed
+	}
+	defer rows.Close()
+	requestMappings := make([]RequestMapping, 0)
+	for rows.Next() {
+		var dao requestMappingDAO
+		err = rows.StructScan(&dao)
+		if err != nil {
+			log.Error().Err(err).Msg(msgGetRequestMappingsByIDsFailed)
+			return nil, ErrGetRequestMappingsByIDsFailed
+		}
+		requestMappings = append(requestMappings, convertRequestMappingDaoToAnalyteMapping(dao))
+	}
+
+	return requestMappings, nil
 }
 
 func (r *instrumentRepository) GetRequestMappingAnalytes(ctx context.Context, requestMappingIDs []uuid.UUID) (map[uuid.UUID][]uuid.UUID, error) {

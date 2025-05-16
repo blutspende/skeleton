@@ -230,7 +230,7 @@ func (s *instrumentService) GetInstruments(ctx context.Context) ([]Instrument, e
 		analyteMappingsByIDs[analyteMappingID].ExpectedControlResults = expectedControlResults
 	}
 
-	requestMappingsByInstrumentID, err := s.instrumentRepository.GetRequestMappings(ctx, instrumentIDs)
+	requestMappingsByInstrumentID, err := s.instrumentRepository.GetRequestMappingsByInstrumentIDs(ctx, instrumentIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -349,7 +349,7 @@ func (s *instrumentService) GetInstrumentByID(ctx context.Context, tx db.DbConne
 		analyteMappingsByIDs[analyteMappingID].ExpectedControlResults = expectedControlResults
 	}
 
-	requestMappingsByInstrumentID, err := s.instrumentRepository.WithTransaction(tx).GetRequestMappings(ctx, instrumentIDs)
+	requestMappingsByInstrumentID, err := s.instrumentRepository.WithTransaction(tx).GetRequestMappingsByInstrumentIDs(ctx, instrumentIDs)
 	if err != nil {
 		return instrument, err
 	}
@@ -460,7 +460,7 @@ func (s *instrumentService) GetInstrumentByIP(ctx context.Context, ip string) (I
 		analyteMappingsByIDs[analyteMappingID].ExpectedControlResults = expectedControlResults
 	}
 
-	requestMappingsByInstrumentID, err := s.instrumentRepository.GetRequestMappings(ctx, instrumentIDs)
+	requestMappingsByInstrumentID, err := s.instrumentRepository.GetRequestMappingsByInstrumentIDs(ctx, instrumentIDs)
 	if err != nil {
 		return instrument, err
 	}

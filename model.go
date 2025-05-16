@@ -1,9 +1,12 @@
 package skeleton
 
 import (
+	"github.com/blutspende/bloodlab-common/encoding"
+	"github.com/blutspende/bloodlab-common/messagetype"
 	"net/http"
 	"time"
 
+	"github.com/blutspende/bloodlab-common/messagestatus"
 	"github.com/google/uuid"
 )
 
@@ -250,6 +253,8 @@ type AnalysisResultSet struct {
 	Results        []AnalysisResult
 	Reagents       []Reagent
 	ControlResults []ControlResult
+
+	MessageInID uuid.UUID // filled by skeleton
 }
 
 // AnalysisResult - The final result on 'per-workitem' basis to return the result to cerberus.
@@ -260,7 +265,8 @@ type AnalysisResult struct {
 	AnalyteMapping           AnalyteMapping
 	Instrument               Instrument
 	SampleCode               string
-	DEARawMessageID          uuid.UUID
+	MessageInID              uuid.UUID
+	DEARawMessageID          uuid.NullUUID
 	BatchID                  uuid.UUID
 	Result                   string
 	ResultMode               ResultMode
@@ -583,3 +589,47 @@ const (
 	InOpenInterval   ConditionOperator = "inOpenInterval"
 	InClosedInterval ConditionOperator = "inClosedInterval"
 )
+
+type MessageIn struct {
+	ID                 uuid.UUID
+	InstrumentID       uuid.UUID
+	InstrumentModuleID uuid.NullUUID
+	Status             messagestatus.MessageStatus
+	DEARawMessageID    uuid.NullUUID
+	ProtocolID         uuid.UUID
+	Type               messagetype.MessageType
+	Encoding           encoding.Encoding
+	Raw                []byte
+	Error              *string
+	RetryCount         int
+	CreatedAt          time.Time
+	ModifiedAt         *time.Time
+}
+
+type MessageOut struct {
+	ID                  uuid.UUID
+	InstrumentID        uuid.UUID
+	Status              messagestatus.MessageStatus
+	DEARawMessageID     uuid.NullUUID
+	ProtocolID          uuid.UUID
+	Type                messagetype.MessageType
+	Encoding            encoding.Encoding
+	Raw                 []byte
+	Error               *string
+	RetryCount          int
+	TriggerMessageInID  uuid.NullUUID
+	ResponseMessageInID uuid.NullUUID
+	CreatedAt           time.Time
+	ModifiedAt          *time.Time
+
+	MessageOutOrders []MessageOutOrder
+}
+
+type MessageOutOrder struct {
+	ID               uuid.UUID
+	MessageOutID     uuid.UUID
+	SampleCode       string
+	RequestMappingID uuid.UUID
+
+	AnalysisRequestIDs []uuid.UUID
+}
