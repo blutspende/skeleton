@@ -10,9 +10,9 @@ import (
 	_ "github.com/lib/pq"
 )
 
-type DbConnector interface {
-	SetDbConnection(db *sqlx.DB)
-	CreateTransactionConnector() (DbConnector, error)
+type DbConnection interface {
+	SetSqlConnection(db *sqlx.DB)
+	CreateTransactionConnector() (DbConnection, error)
 	Exec(query string, args ...interface{}) (sql.Result, error)
 	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
 	NamedExec(query string, arg interface{}) (sql.Result, error)
@@ -30,20 +30,20 @@ type DbConnector interface {
 	Ping() error
 }
 
-type dbConnector struct {
+type dbConnection struct {
 	db *sqlx.DB
 	tx *sqlx.Tx
 }
 
-func NewDbConnector() DbConnector {
-	return &dbConnector{}
+func NewDbConnection() DbConnection {
+	return &dbConnection{}
 }
 
-func (c *dbConnector) SetDbConnection(db *sqlx.DB) {
+func (c *dbConnection) SetSqlConnection(db *sqlx.DB) {
 	c.db = db
 }
 
-func (c *dbConnector) CreateTransactionConnector() (DbConnector, error) {
+func (c *dbConnection) CreateTransactionConnector() (DbConnection, error) {
 	tx, err := c.db.Beginx()
 	if err != nil {
 		log.Error().Err(err).Msg(MsgBeginTransactionFailed)
@@ -54,7 +54,7 @@ func (c *dbConnector) CreateTransactionConnector() (DbConnector, error) {
 	return &connCopy, err
 }
 
-func (c *dbConnector) Exec(query string, args ...interface{}) (sql.Result, error) {
+func (c *dbConnection) Exec(query string, args ...interface{}) (sql.Result, error) {
 	if c.tx != nil {
 		return c.tx.Exec(query, args...)
 	} else {
@@ -62,7 +62,7 @@ func (c *dbConnector) Exec(query string, args ...interface{}) (sql.Result, error
 	}
 }
 
-func (c *dbConnector) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+func (c *dbConnection) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
 	if c.tx != nil {
 		return c.tx.ExecContext(ctx, query, args...)
 	} else {
@@ -70,7 +70,7 @@ func (c *dbConnector) ExecContext(ctx context.Context, query string, args ...int
 	}
 }
 
-func (c *dbConnector) NamedExec(query string, arg interface{}) (sql.Result, error) {
+func (c *dbConnection) NamedExec(query string, arg interface{}) (sql.Result, error) {
 	if c.tx != nil {
 		return c.tx.NamedExec(query, arg)
 	} else {
@@ -78,7 +78,7 @@ func (c *dbConnector) NamedExec(query string, arg interface{}) (sql.Result, erro
 	}
 }
 
-func (c *dbConnector) NamedExecContext(ctx context.Context, query string, arg interface{}) (sql.Result, error) {
+func (c *dbConnection) NamedExecContext(ctx context.Context, query string, arg interface{}) (sql.Result, error) {
 	if c.tx != nil {
 		return c.tx.NamedExecContext(ctx, query, arg)
 	} else {
@@ -86,7 +86,7 @@ func (c *dbConnector) NamedExecContext(ctx context.Context, query string, arg in
 	}
 }
 
-func (c *dbConnector) NamedQuery(query string, arg interface{}) (*sqlx.Rows, error) {
+func (c *dbConnection) NamedQuery(query string, arg interface{}) (*sqlx.Rows, error) {
 	if c.tx != nil {
 		return c.tx.NamedQuery(query, arg)
 	} else {
@@ -94,14 +94,14 @@ func (c *dbConnector) NamedQuery(query string, arg interface{}) (*sqlx.Rows, err
 	}
 }
 
-func (c *dbConnector) NamedQueryContext(ctx context.Context, query string, arg interface{}) (*sqlx.Rows, error) {
+func (c *dbConnection) NamedQueryContext(ctx context.Context, query string, arg interface{}) (*sqlx.Rows, error) {
 	if c.tx != nil {
 		return c.tx.NamedQuery(query, arg)
 	}
 	return c.db.NamedQueryContext(ctx, query, arg)
 }
 
-func (c *dbConnector) Queryx(query string, args ...interface{}) (*sqlx.Rows, error) {
+func (c *dbConnection) Queryx(query string, args ...interface{}) (*sqlx.Rows, error) {
 	if c.tx != nil {
 		return c.tx.Queryx(query, args...)
 	} else {
@@ -109,7 +109,7 @@ func (c *dbConnector) Queryx(query string, args ...interface{}) (*sqlx.Rows, err
 	}
 }
 
-func (c *dbConnector) QueryxContext(ctx context.Context, query string, args ...interface{}) (*sqlx.Rows, error) {
+func (c *dbConnection) QueryxContext(ctx context.Context, query string, args ...interface{}) (*sqlx.Rows, error) {
 	if c.tx != nil {
 		return c.tx.QueryxContext(ctx, query, args...)
 	} else {
@@ -117,7 +117,7 @@ func (c *dbConnector) QueryxContext(ctx context.Context, query string, args ...i
 	}
 }
 
-func (c *dbConnector) QueryRowx(query string, args ...interface{}) *sqlx.Row {
+func (c *dbConnection) QueryRowx(query string, args ...interface{}) *sqlx.Row {
 	if c.tx != nil {
 		return c.tx.QueryRowx(query, args...)
 	} else {
@@ -125,7 +125,7 @@ func (c *dbConnector) QueryRowx(query string, args ...interface{}) *sqlx.Row {
 	}
 }
 
-func (c *dbConnector) QueryRowxContext(ctx context.Context, query string, args ...interface{}) *sqlx.Row {
+func (c *dbConnection) QueryRowxContext(ctx context.Context, query string, args ...interface{}) *sqlx.Row {
 	if c.tx != nil {
 		return c.tx.QueryRowxContext(ctx, query, args...)
 	} else {
@@ -133,7 +133,7 @@ func (c *dbConnector) QueryRowxContext(ctx context.Context, query string, args .
 	}
 }
 
-func (c *dbConnector) Commit() error {
+func (c *dbConnection) Commit() error {
 	if c.tx != nil {
 		err := c.tx.Commit()
 		if err != nil {
@@ -144,7 +144,7 @@ func (c *dbConnector) Commit() error {
 	return nil
 }
 
-func (c *dbConnector) Rollback() error {
+func (c *dbConnection) Rollback() error {
 	if c.tx != nil {
 		err := c.tx.Rollback()
 		if err != nil {
@@ -155,14 +155,14 @@ func (c *dbConnector) Rollback() error {
 	return nil
 }
 
-func (c *dbConnector) Rebind(query string) string {
+func (c *dbConnection) Rebind(query string) string {
 	if c.tx != nil {
 		return c.tx.Rebind(query)
 	}
 	return c.db.Rebind(query)
 }
 
-func (c *dbConnector) PrepareNamed(query string) (*sqlx.NamedStmt, error) {
+func (c *dbConnection) PrepareNamed(query string) (*sqlx.NamedStmt, error) {
 	if c.tx != nil {
 		return c.tx.PrepareNamed(query)
 	} else {
@@ -170,6 +170,6 @@ func (c *dbConnector) PrepareNamed(query string) (*sqlx.NamedStmt, error) {
 	}
 }
 
-func (c *dbConnector) Ping() error {
+func (c *dbConnection) Ping() error {
 	return c.db.Ping()
 }

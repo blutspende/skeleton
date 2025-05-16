@@ -32,7 +32,6 @@ func (p *postgres) Connect() error {
 	url := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s application_name=%s",
 		p.config.PostgresDB.Host, p.config.PostgresDB.Port, p.config.PostgresDB.User,
 		p.config.PostgresDB.Pass, p.config.PostgresDB.Database, p.config.PostgresDB.SSLMode, p.config.ApplicationName)
-	//pgDB, err := sqlx.ConnectContext(p.ctx, "postgres", url)
 	pgDB, err := sqlx.ConnectContext(p.ctx, "pgx", url)
 	if err != nil {
 		return err

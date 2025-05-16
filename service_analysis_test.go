@@ -1392,6 +1392,6 @@ func (r *extendedMockAnalysisRepo) MarkAnalysisResultControlResultRelationsAsPro
 	return nil
 }
 
-func (r *extendedMockAnalysisRepo) WithTransaction(tx db.DbConnector) AnalysisRepository {
+func (r *extendedMockAnalysisRepo) WithTransaction(tx db.DbConnection) AnalysisRepository {
 	return r
 }

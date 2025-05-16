@@ -23,7 +23,7 @@ type skeleton struct {
 	ctx                                        context.Context
 	config                                     config.Configuration
 	postgres                                   db.Postgres
-	dbConn                                     db.DbConnector
+	dbConn                                     db.DbConnection
 	dbSchema                                   string
 	migrator                                   migrator.SkeletonMigrator
 	api                                        GinApi
@@ -572,7 +572,7 @@ func (s *skeleton) Start() error {
 		log.Error().Err(err).Msg("failed to get database connection")
 		return err
 	}
-	s.dbConn.SetDbConnection(sqlConn)
+	s.dbConn.SetSqlConnection(sqlConn)
 
 	s.unprocessedHandlingWaitGroup.Add(waitGroupSize)
 
@@ -1413,7 +1413,7 @@ func (s *skeleton) Stop() error {
 	return nil
 }
 
-func NewSkeleton(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, reagentManufacturers []string, postgres db.Postgres, dbConn db.DbConnector, dbSchema string, migrator migrator.SkeletonMigrator, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService ConsoleLogService, manager Manager, cerberusClient CerberusClient, longPollClient LongPollClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
+func NewSkeleton(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, reagentManufacturers []string, postgres db.Postgres, dbConn db.DbConnection, dbSchema string, migrator migrator.SkeletonMigrator, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService ConsoleLogService, manager Manager, cerberusClient CerberusClient, longPollClient LongPollClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
 	skeleton := &skeleton{
 		ctx:                                    ctx,
 		serviceName:                            serviceName,

@@ -279,7 +279,7 @@ type protocolSettingDAO struct {
 }
 
 type instrumentRepository struct {
-	db       db.DbConnector
+	db       db.DbConnection
 	dbSchema string
 }
 
@@ -333,8 +333,8 @@ type InstrumentRepository interface {
 	UpsertInstrumentSetting(ctx context.Context, instrumentID uuid.UUID, setting InstrumentSetting) error
 	DeleteInstrumentSettings(ctx context.Context, ids []uuid.UUID) error
 	CheckAnalytesUsage(ctx context.Context, analyteIDs []uuid.UUID) (map[uuid.UUID][]Instrument, error)
-	CreateTransaction() (db.DbConnector, error)
-	WithTransaction(tx db.DbConnector) InstrumentRepository
+	CreateTransaction() (db.DbConnection, error)
+	WithTransaction(tx db.DbConnection) InstrumentRepository
 }
 
 func (r *instrumentRepository) CreateInstrument(ctx context.Context, instrument Instrument) (uuid.UUID, error) {
@@ -1346,11 +1346,11 @@ func (r *instrumentRepository) CheckAnalytesUsage(ctx context.Context, analyteID
 	return analyteUsageMap, nil
 }
 
-func (r *instrumentRepository) CreateTransaction() (db.DbConnector, error) {
+func (r *instrumentRepository) CreateTransaction() (db.DbConnection, error) {
 	return r.db.CreateTransactionConnector()
 }
 
-func (r *instrumentRepository) WithTransaction(tx db.DbConnector) InstrumentRepository {
+func (r *instrumentRepository) WithTransaction(tx db.DbConnection) InstrumentRepository {
 	if tx == nil {
 		return r
 	}
@@ -1709,7 +1709,7 @@ func convertProtocolAbilityDAOToProtocolAbility(dao protocolAbilityDAO) Protocol
 	}
 }
 
-func NewInstrumentRepository(db db.DbConnector, dbSchema string) InstrumentRepository {
+func NewInstrumentRepository(db db.DbConnection, dbSchema string) InstrumentRepository {
 	return &instrumentRepository{
 		db:       db,
 		dbSchema: dbSchema,

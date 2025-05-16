@@ -40,7 +40,7 @@ func configureLogger() {
 	zerolog.SetGlobalLevel(zerolog.DebugLevel)
 }
 
-func setupDbConnector(schemaName string) (db.DbConnector, string, db.Postgres, *sqlx.DB) {
+func setupDbConnector(schemaName string) (db.DbConnection, string, db.Postgres, *sqlx.DB) {
 	configuration := config.Configuration{}
 	configuration.PostgresDB.Host = "localhost"
 	configuration.PostgresDB.Port = 5551
@@ -56,13 +56,13 @@ func setupDbConnector(schemaName string) (db.DbConnector, string, db.Postgres, *
 	_, _ = sqlConn.Exec(fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schemaName))
 	_, _ = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
 
-	dbConn := db.NewDbConnector()
-	dbConn.SetDbConnection(sqlConn)
+	dbConn := db.NewDbConnection()
+	dbConn.SetSqlConnection(sqlConn)
 
 	return dbConn, schemaName, postgres, sqlConn
 }
 
-func setupDbConnectorAndRunMigration(schemaName string) (db.DbConnector, string) {
+func setupDbConnectorAndRunMigration(schemaName string) (db.DbConnection, string) {
 	dbConn, _, _, sqlConn := setupDbConnector(schemaName)
 
 	mig := migrator.NewSkeletonMigrator()

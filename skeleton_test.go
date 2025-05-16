@@ -1277,11 +1277,11 @@ func (m *analysisRepositoryMock) DeleteOldCerberusQueueItems(ctx context.Context
 	return 0, nil
 }
 
-func (m *analysisRepositoryMock) DeleteOldAnalysisRequestsWithTx(ctx context.Context, cleanupDays, limit int, tx db.DbConnector) (int64, error) {
+func (m *analysisRepositoryMock) DeleteOldAnalysisRequestsWithTx(ctx context.Context, cleanupDays, limit int, tx db.DbConnection) (int64, error) {
 	return 0, nil
 }
 
-func (m *analysisRepositoryMock) DeleteOldAnalysisResultsWithTx(ctx context.Context, cleanupDays, limit int, tx db.DbConnector) (int64, error) {
+func (m *analysisRepositoryMock) DeleteOldAnalysisResultsWithTx(ctx context.Context, cleanupDays, limit int, tx db.DbConnection) (int64, error) {
 	return 0, nil
 }
 
@@ -1570,10 +1570,10 @@ func (m *analysisRepositoryMock) MarkAnalysisRequestsAsProcessed(ctx context.Con
 func (m *analysisRepositoryMock) MarkAnalysisResultsAsProcessed(ctx context.Context, analysisRequestIDs []uuid.UUID) error {
 	return nil
 }
-func (m *analysisRepositoryMock) CreateTransaction() (db.DbConnector, error) {
-	return db.NewDbConnector(), nil
+func (m *analysisRepositoryMock) CreateTransaction() (db.DbConnection, error) {
+	return db.NewDbConnection(), nil
 }
-func (m *analysisRepositoryMock) WithTransaction(tx db.DbConnector) AnalysisRepository {
+func (m *analysisRepositoryMock) WithTransaction(tx db.DbConnection) AnalysisRepository {
 	return m
 }
 

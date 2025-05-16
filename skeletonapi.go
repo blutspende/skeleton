@@ -144,7 +144,7 @@ func New(ctx context.Context, serviceName, displayName string, requestedExtraVal
 		return nil, err
 	}
 	postgres := db.NewPostgres(ctx, &config)
-	dbConn := db.NewDbConnector()
+	dbConn := db.NewDbConnection()
 	manager := NewSkeletonManager(ctx)
 	instrumentCache := NewInstrumentCache()
 	analysisRepository := NewAnalysisRepository(dbConn, dbSchema)

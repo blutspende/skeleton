@@ -491,8 +491,8 @@ type AnalysisRepository interface {
 	MarkAnalysisResultsAsProcessed(ctx context.Context, analysisRequestIDs []uuid.UUID) error
 
 	DeleteOldCerberusQueueItems(ctx context.Context, cleanupDays, limit int) (int64, error)
-	DeleteOldAnalysisRequestsWithTx(ctx context.Context, cleanupDays, limit int, tx db.DbConnector) (int64, error)
-	DeleteOldAnalysisResultsWithTx(ctx context.Context, cleanupDays, limit int, tx db.DbConnector) (int64, error)
+	DeleteOldAnalysisRequestsWithTx(ctx context.Context, cleanupDays, limit int, tx db.DbConnection) (int64, error)
+	DeleteOldAnalysisResultsWithTx(ctx context.Context, cleanupDays, limit int, tx db.DbConnection) (int64, error)
 
 	CreateReagents(ctx context.Context, reagents []Reagent) ([]uuid.UUID, error)
 	GetReagentsByIDs(ctx context.Context, reagentIDs []uuid.UUID) (map[uuid.UUID]Reagent, error)
@@ -511,16 +511,16 @@ type AnalysisRepository interface {
 	MarkReagentControlResultRelationsAsProcessed(ctx context.Context, controlResultID uuid.UUID, reagentIDs []uuid.UUID) error
 	MarkAnalysisResultControlResultRelationsAsProcessed(ctx context.Context, controlResultID uuid.UUID, analysisResultIDs []uuid.UUID) error
 
-	CreateTransaction() (db.DbConnector, error)
-	WithTransaction(tx db.DbConnector) AnalysisRepository
+	CreateTransaction() (db.DbConnection, error)
+	WithTransaction(tx db.DbConnection) AnalysisRepository
 }
 
 type analysisRepository struct {
-	db       db.DbConnector
+	db       db.DbConnection
 	dbSchema string
 }
 
-func NewAnalysisRepository(db db.DbConnector, dbSchema string) AnalysisRepository {
+func NewAnalysisRepository(db db.DbConnection, dbSchema string) AnalysisRepository {
 	return &analysisRepository{
 		db:       db,
 		dbSchema: dbSchema,
@@ -2729,7 +2729,7 @@ func (r *analysisRepository) DeleteOldCerberusQueueItems(ctx context.Context, cl
 	return result.RowsAffected()
 }
 
-func (r *analysisRepository) DeleteOldAnalysisRequestsWithTx(ctx context.Context, cleanupDays, limit int, tx db.DbConnector) (int64, error) {
+func (r *analysisRepository) DeleteOldAnalysisRequestsWithTx(ctx context.Context, cleanupDays, limit int, tx db.DbConnection) (int64, error) {
 	txR := *r
 	txR.db = tx
 	query := fmt.Sprintf(`SELECT id, sample_code FROM %s.sk_analysis_requests WHERE valid_until_time < (current_date - make_interval(days := $1)) AND is_processed LIMIT $2;`, r.dbSchema)
@@ -2866,7 +2866,7 @@ func (r *analysisRepository) deleteAppliedSortingRuleTargetsBySampleCodes(ctx co
 	return err
 }
 
-func (r *analysisRepository) DeleteOldAnalysisResultsWithTx(ctx context.Context, cleanupDays, limit int, tx db.DbConnector) (int64, error) {
+func (r *analysisRepository) DeleteOldAnalysisResultsWithTx(ctx context.Context, cleanupDays, limit int, tx db.DbConnection) (int64, error) {
 	txR := *r
 	txR.db = tx
 
@@ -4174,11 +4174,11 @@ func (r *analysisRepository) MarkAnalysisResultControlResultRelationsAsProcessed
 	return err
 }
 
-func (r *analysisRepository) CreateTransaction() (db.DbConnector, error) {
+func (r *analysisRepository) CreateTransaction() (db.DbConnection, error) {
 	return r.db.CreateTransactionConnector()
 }
 
-func (r *analysisRepository) WithTransaction(tx db.DbConnector) AnalysisRepository {
+func (r *analysisRepository) WithTransaction(tx db.DbConnection) AnalysisRepository {
 	txRepo := *r
 	txRepo.db = tx
 	return &txRepo

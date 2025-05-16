@@ -16,12 +16,12 @@ type ConditionService interface {
 	UpsertConditionWithTx(ctx context.Context, condition Condition) (uuid.UUID, error)
 	GetCondition(ctx context.Context, id uuid.UUID) (Condition, error)
 	DeleteConditionWithTx(ctx context.Context, id uuid.UUID) error
-	WithTransaction(tx db.DbConnector) ConditionService
+	WithTransaction(tx db.DbConnection) ConditionService
 }
 
 type conditionService struct {
 	conditionRepository ConditionRepository
-	externalTx          db.DbConnector
+	externalTx          db.DbConnection
 }
 
 func (s *conditionService) UpsertConditionWithTx(ctx context.Context, condition Condition) (uuid.UUID, error) {
@@ -38,7 +38,7 @@ func (s *conditionService) UpsertConditionWithTx(ctx context.Context, condition 
 	return id, nil
 }
 
-func (s *conditionService) upsertConditionWithTx(ctx context.Context, tx db.DbConnector, condition Condition) (uuid.UUID, error) {
+func (s *conditionService) upsertConditionWithTx(ctx context.Context, tx db.DbConnection, condition Condition) (uuid.UUID, error) {
 	if condition.SubCondition1 != nil {
 		subCondition1ID, err := s.upsertConditionWithTx(ctx, tx, *condition.SubCondition1)
 		if err != nil {
@@ -83,7 +83,7 @@ func (s *conditionService) GetCondition(ctx context.Context, id uuid.UUID) (cond
 	return condition, nil
 }
 
-func (s *conditionService) getConditionRecursively(ctx context.Context, tx db.DbConnector, id uuid.UUID) (Condition, error) {
+func (s *conditionService) getConditionRecursively(ctx context.Context, tx db.DbConnection, id uuid.UUID) (Condition, error) {
 	condition, err := s.conditionRepository.WithTransaction(tx).GetConditionByID(ctx, id)
 	if err != nil {
 		return Condition{}, err
@@ -160,7 +160,7 @@ func (s *conditionService) DeleteConditionWithTx(ctx context.Context, id uuid.UU
 	return nil
 }
 
-func (s *conditionService) deleteConditionWithTx(ctx context.Context, tx db.DbConnector, id uuid.UUID) error {
+func (s *conditionService) deleteConditionWithTx(ctx context.Context, tx db.DbConnection, id uuid.UUID) error {
 	conditionTxRepo := s.conditionRepository.WithTransaction(tx)
 	err := s.deleteConditionRecursively(ctx, conditionTxRepo, id)
 	if err != nil {
@@ -226,11 +226,11 @@ func (s *conditionService) deleteConditionRecursively(ctx context.Context, condi
 	return conditionTxRepo.DeleteCondition(ctx, id)
 }
 
-func (s *conditionService) getTransaction() db.DbConnector {
+func (s *conditionService) getTransaction() db.DbConnection {
 	return s.externalTx
 }
 
-func (s *conditionService) WithTransaction(tx db.DbConnector) ConditionService {
+func (s *conditionService) WithTransaction(tx db.DbConnection) ConditionService {
 	if tx == nil {
 		return s
 	}

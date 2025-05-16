@@ -1032,7 +1032,7 @@ type instrumentRepositoryMock struct {
 	deletedExpectedControlResultIds []uuid.UUID
 	analyteMappings                 map[uuid.UUID][]AnalyteMapping
 	resultMappings                  map[uuid.UUID][]ResultMapping
-	db                              db.DbConnector
+	db                              db.DbConnection
 }
 
 func (r *instrumentRepositoryMock) UpsertRequestMappings(ctx context.Context, requestMappings []RequestMapping, instrumentID uuid.UUID) error {
@@ -1279,9 +1279,9 @@ func (r *instrumentRepositoryMock) DeleteInstrumentSettings(ctx context.Context,
 func (r *instrumentRepositoryMock) CheckAnalytesUsage(ctx context.Context, analyteIDs []uuid.UUID) (map[uuid.UUID][]Instrument, error) {
 	return make(map[uuid.UUID][]Instrument), nil
 }
-func (r *instrumentRepositoryMock) CreateTransaction() (db.DbConnector, error) {
+func (r *instrumentRepositoryMock) CreateTransaction() (db.DbConnection, error) {
 	return r.db, nil
 }
-func (r *instrumentRepositoryMock) WithTransaction(tx db.DbConnector) InstrumentRepository {
+func (r *instrumentRepositoryMock) WithTransaction(tx db.DbConnection) InstrumentRepository {
 	return r
 }
