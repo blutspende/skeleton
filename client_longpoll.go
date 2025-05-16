@@ -13,23 +13,23 @@ import (
 	"time"
 )
 
-type MessageType string
+type CommandType string
 
 const (
-	MessageTypeCreate MessageType = "CREATE"
-	MessageTypeUpdate MessageType = "UPDATE"
-	MessageTypeDelete MessageType = "DELETE"
+	CommandTypeCreate CommandType = "CREATE"
+	CommandTypeUpdate CommandType = "UPDATE"
+	CommandTypeDelete CommandType = "DELETE"
 )
 
 type InstrumentMessageTO struct {
-	MessageType  MessageType   `json:"messageType" binding:"required"`
+	MessageType  CommandType   `json:"messageType" binding:"required"`
 	InstrumentId uuid.UUID     `json:"instrumentId" binding:"required"`
 	UserId       *uuid.UUID    `json:"userId,omitempty" binding:"required"`
 	Instrument   *instrumentTO `json:"instrument,omitempty"`
 }
 
 type ExpectedControlResultMessageTO struct {
-	MessageType                    MessageType               `json:"messageType" binding:"required"`
+	MessageType                    CommandType               `json:"messageType" binding:"required"`
 	InstrumentId                   *uuid.UUID                `json:"instrumentId,omitempty" binding:"required"`
 	UserId                         uuid.UUID                 `json:"userId" binding:"required"`
 	ExpectedControlResults         []ExpectedControlResultTO `json:"expectedControlResult,omitempty"`
@@ -183,7 +183,7 @@ func (l *longPollClient) StartInstrumentConfigsLongPolling(ctx context.Context) 
 			}
 
 			log.Debug().
-				Str("MessageType", string(instrumentMessageTO.MessageType)).
+				Str("CommandType", string(instrumentMessageTO.MessageType)).
 				Str("InstrumentId", instrumentMessageTO.InstrumentId.String()).
 				Msg("Received event mapped to InstrumentMessageTO")
 
@@ -292,7 +292,7 @@ func (l *longPollClient) StartReprocessEventsLongPolling(ctx context.Context) {
 			}
 
 			log.Debug().
-				Str("MessageType", string(reprocessMessageTO.MessageType)).
+				Str("CommandType", string(reprocessMessageTO.MessageType)).
 				Interface("ReprocessId", reprocessMessageTO.ReprocessId).
 				Msg("Received event mapped to ReprocessMessageTO")
 

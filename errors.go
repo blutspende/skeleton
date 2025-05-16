@@ -2,7 +2,7 @@ package skeleton
 
 import (
 	"bytes"
-	"errors"
+	"github.com/pkg/errors"
 	"strings"
 
 	pgx "github.com/jackc/pgconn"
@@ -13,10 +13,12 @@ const (
 	ForeignKeyViolationErrorCode = pq.ErrorCode("23503")
 	UniqueViolationErrorCode     = pq.ErrorCode("23505")
 	MsgFailedToAudit             = "failed to audit"
+	MsgInvalidInstrumentMessage  = "invalid instrument message"
 )
 
 var (
-	ErrFailedToAudit = errors.New(MsgFailedToAudit)
+	ErrFailedToAudit            = errors.New(MsgFailedToAudit)
+	ErrInvalidInstrumentMessage = errors.New(MsgInvalidInstrumentMessage)
 )
 
 type ParameterizedError struct {

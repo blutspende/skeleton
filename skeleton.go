@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -32,6 +31,7 @@ type skeleton struct {
 	instrumentService                          InstrumentService
 	consoleLogService                          ConsoleLogService
 	sortingRuleService                         SortingRuleService
+	messageService                             MessageService
 	resultsBuffer                              []AnalysisResult
 	resultBatchesChan                          chan []AnalysisResult
 	controlValidationAnalyteMappingsBuffer     []uuid.UUID
@@ -50,6 +50,9 @@ type skeleton struct {
 	reagentManufacturers                       []string
 	unprocessedHandlingWaitGroup               sync.WaitGroup
 	encodings                                  []string
+	messageInProcessingChan                    chan []MessageIn
+	messageOutProcessingChan                   chan []MessageOut
+	messageOutHandling                         MessageOutHandling
 }
 
 const waitGroupSize = 3
@@ -119,18 +122,6 @@ func (s *skeleton) SaveAnalysisRequestsInstrumentTransmissions(ctx context.Conte
 		return err
 	}
 	return nil
-}
-
-var nonSpecialCharactersRegex = regexp.MustCompile("[^A-Za-z0-9]+")
-
-func (s *skeleton) UploadRawMessageToDEA(rawMessageBytes []byte) (uuid.UUID, error) {
-	return s.deaClient.UploadFile(rawMessageBytes, generateRawMessageFileName(s.serviceName, time.Now().UTC()))
-}
-
-func generateRawMessageFileName(serviceName string, ts time.Time) string {
-	strippedServiceName := nonSpecialCharactersRegex.ReplaceAllString(serviceName, "_")
-	formattedTs := strings.ReplaceAll(ts.Format("2006-01-02-15-04-05.000000"), ".", "_")
-	return fmt.Sprintf("%s_%s", strippedServiceName, formattedTs)
 }
 
 func (s *skeleton) SubmitAnalysisResult(ctx context.Context, resultData AnalysisResultSet) error {
@@ -557,6 +548,43 @@ func (s *skeleton) SetOnlineStatus(ctx context.Context, id uuid.UUID, status Ins
 	return s.cerberusClient.SetInstrumentOnlineStatus(id, status)
 }
 
+func (s *skeleton) ProcessMessageIn(ctx context.Context, messageIn MessageIn) (uuid.UUID, *MessageOut, error) {
+	var err error
+	messageIn.Status = MessageStatusStored
+	messageIn.ID, err = s.messageService.SaveMessageIn(ctx, messageIn)
+	if err != nil {
+		return uuid.Nil, nil, err
+	}
+	switch messageIn.Type {
+	case MessageTypeResult:
+		s.enqueueResultMessages(messageIn)
+	case MessageTypeQuery:
+		// TODO - callback for returning message out raw, which can be sent by the driver implementation and only have messageOutSave published
+	case MessageTypeUnidentified:
+		log.Warn().Interface("messageInID", messageIn.ID).Msg("message could not be identified")
+	default:
+	}
+	s.messageService.EnqueueMessageInsForArchiving(messageIn)
+	messageOut, err := s.GetCallbackHandler().CreateResponseMessageOutToMessageIn(messageIn)
+	messageOut.TriggerMessageInID = uuid.NullUUID{UUID: messageIn.ID, Valid: true}
+
+	return messageIn.ID, messageOut, nil
+}
+
+func (s *skeleton) SaveMessageOut(ctx context.Context, messageOut MessageOut) (uuid.UUID, error) {
+	var err error
+	messageOut.Status = MessageStatusStored
+	messageOut.ID, err = s.messageService.SaveMessageOut(ctx, messageOut)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	if s.messageOutHandling == MessageOutHandlingDeferred {
+		s.enqueueMessageOuts(messageOut)
+	}
+
+	return messageOut.ID, nil
+}
+
 func (s *skeleton) migrateUp(ctx context.Context, db *sqlx.DB, schemaName string) error {
 	return s.migrator.Run(ctx, db, schemaName)
 }
@@ -581,6 +609,7 @@ func (s *skeleton) Start() error {
 	for i := 0; i < s.config.AnalysisRequestWorkerPoolSize; i++ {
 		go s.processAnalysisRequests(s.ctx)
 	}
+	go s.messageService.StartDEAArchiving(s.ctx)
 	go s.processAnalysisResults(s.ctx)
 	go s.processAnalysisResultBatches(s.ctx)
 	go s.submitAnalysisResultsToCerberus(s.ctx)
@@ -590,6 +619,8 @@ func (s *skeleton) Start() error {
 	go s.validateControlResultsByAnalyteMappingBatches(s.ctx)
 	go s.analysisResultStatusRecalculationAndSendForProcessing(s.ctx)
 	go s.analysisResultStatusRecalculationAndSendForProcessingBatches(s.ctx)
+	go s.startResultMessageProcessing(s.ctx)
+	go s.startMessageOutProcessing(s.ctx)
 
 	go s.enqueueUnprocessedAnalysisRequests(s.ctx)
 	go s.enqueueUnprocessedAnalysisResults(s.ctx)
@@ -745,6 +776,47 @@ func (s *skeleton) enqueueUnprocessedAnalysisResults(ctx context.Context) {
 	}
 }
 
+const messageInBatchSize = 500
+
+func (s *skeleton) enqueueUnprocessedMessageIns(ctx context.Context) {
+	counter := 0
+	messagesToProcess := make([][]MessageIn, 0)
+	for {
+		messages, err := s.messageService.GetUnprocessedResultMessageIns(ctx, s.config.MessageMaxRetries, s.config.LookBackDays, messageInBatchSize, messageInBatchSize*counter)
+		if err != nil {
+			log.Error().Err(err).Msg("enqueue unprocessed message ins failed")
+			time.Sleep(time.Minute)
+			continue
+		}
+		if len(messages) == 0 {
+			break
+		}
+		messagesToProcess = append(messagesToProcess, messages)
+		if len(messages) < messageInBatchSize {
+			break
+		}
+		counter++
+	}
+	if len(messagesToProcess) == 0 {
+		return
+	}
+	for i := range messagesToProcess {
+		s.enqueueResultMessages(messagesToProcess[i]...)
+	}
+}
+
+func (s *skeleton) enqueueUnprocessedMessageOuts(ctx context.Context) {
+	if s.messageOutHandling == MessageOutHandlingRealtime {
+		return
+	}
+	counter := 0
+	for {
+		messages, err := s.messageService.GetUnprocessedMessageOuts(ctx, s.config.LookBackDays, s.config.MessageOutProcessingBatchSize)
+
+		counter++
+	}
+}
+
 func (s *skeleton) processAnalysisRequests(ctx context.Context) {
 	log.Trace().Msg("Starting to process analysis requests")
 
@@ -809,14 +881,56 @@ func (s *skeleton) processAnalysisResultBatches(ctx context.Context) {
 		if len(resultsBatch) < 1 {
 			continue
 		}
-
-		err := s.analysisService.QueueAnalysisResults(ctx, resultsBatch)
+		results := make([]AnalysisResult, 0)
+		resultsNotYetSyncedToDEA := make([]AnalysisResult, 0)
+		resultsToRetry := make([]AnalysisResult, 0)
+		messageInIDs := make([]uuid.UUID, 0)
+		for i := range resultsBatch {
+			if resultsBatch[i].DEARawMessageID.Valid {
+				results = append(results, resultsBatch[i])
+				continue
+			}
+			messageInIDs = append(messageInIDs, resultsBatch[i].MessageInID)
+			resultsNotYetSyncedToDEA = append(resultsNotYetSyncedToDEA, resultsBatch[i])
+		}
+		messagesByIDs, err := s.messageService.GetMessageInsByIDs(ctx, messageInIDs)
 		if err != nil {
-			time.AfterFunc(30*time.Second, func() {
-				s.resultBatchesChan <- resultsBatch
+			time.AfterFunc(time.Duration(s.resultTransferFlushTimeout)*time.Second, func() {
+				s.resultBatchesChan <- results
 			})
 			continue
 		}
+		for _, result := range resultsNotYetSyncedToDEA {
+			message, ok := messagesByIDs[result.MessageInID]
+			if !ok {
+				log.Error().Interface("messageInID", result.MessageInID).Msg("message ID of analysis result not found in database")
+				continue
+			}
+			if !message.DEARawMessageID.Valid {
+				resultsToRetry = append(resultsToRetry, result)
+				continue
+			}
+
+			result.DEARawMessageID = message.DEARawMessageID
+			err = s.analysisRepository.UpdateAnalysisResultDEARawMessageID(ctx, result.ID, result.DEARawMessageID)
+			if err != nil {
+				resultsToRetry = append(resultsToRetry, result)
+				continue
+			}
+			results = append(results, result)
+		}
+		if len(results) > 0 {
+			err = s.analysisService.QueueAnalysisResults(ctx, results)
+			if err != nil {
+				resultsToRetry = append(resultsToRetry, results...)
+			}
+		}
+		if len(resultsToRetry) == 0 {
+			continue
+		}
+		time.AfterFunc(time.Duration(s.resultTransferFlushTimeout)*time.Second, func() {
+			s.resultBatchesChan <- resultsToRetry
+		})
 	}
 }
 
@@ -928,6 +1042,88 @@ func (s *skeleton) validateAnalysisResultStatusAndSend(ctx context.Context) {
 			log.Error().Err(err).Msg("startup process of recalculating analysis result statuses and send FINAL ones for processing")
 		}
 		return
+	}
+}
+
+func (s *skeleton) startMessageOutProcessing(ctx context.Context) {
+	if s.messageOutHandling != MessageOutHandlingDeferred {
+		return
+	}
+	messageOutBatch := make([]MessageOut, 0)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case messageOutPart := <-s.messageOutProcessingChan:
+			messageOutBatch = append(messageOutBatch, messageOutPart...)
+			if len(messageOutBatch) < s.config.MessageOutProcessingBatchSize {
+				continue
+			}
+			messagesToUpdate, failedMessages, err := s.GetCallbackHandler().ProcessOutgoingInstrumentMessages(messageOutBatch)
+			if err != nil {
+				messagesToUpdate = make([]MessageOut, len(messageOutBatch))
+				failedMessages = make([]MessageOut, 0)
+				log.Error().Err(err).Msg("handle outgoing messages failed")
+				for i := range messageOutBatch {
+					errMsg := err.Error()
+					messageOutBatch[i].Status = MessageStatusError
+					messageOutBatch[i].RetryCount += 1
+					messageOutBatch[i].Error = &errMsg
+					if messageOutBatch[i].RetryCount < s.config.MessageMaxRetries {
+						failedMessages = append(failedMessages, messageOutBatch[i])
+					}
+					messagesToUpdate[i] = messageOutBatch[i]
+				}
+			}
+			for i := range messageOutBatch {
+				err := s.messageService.UpdateMessageOut(ctx, messageOutBatch[i])
+				if err != nil {
+					log.Error().Err(err).Msg("update message out failed")
+				}
+			}
+			messageOutBatch = make([]MessageOut, 0)
+			if len(failedMessages) == 0 {
+				continue
+			}
+			go func(messages []MessageOut) {
+				time.Sleep(time.Second * s.config.MessageOutFlushIntervalSeconds)
+				s.enqueueMessageOuts(messages...)
+			}(failedMessages)
+		case <-time.After(time.Second * s.config.MessageOutFlushIntervalSeconds):
+			if len(messageOutBatch) == 0 {
+				continue
+			}
+			messagesToUpdate, failedMessages, err := s.GetCallbackHandler().ProcessOutgoingInstrumentMessages(messageOutBatch)
+			if err != nil {
+				messagesToUpdate = make([]MessageOut, len(messageOutBatch))
+				failedMessages = make([]MessageOut, 0)
+				log.Error().Err(err).Msg("handle outgoing messages failed")
+				for i := range messageOutBatch {
+					errMsg := err.Error()
+					messageOutBatch[i].Status = MessageStatusError
+					messageOutBatch[i].RetryCount += 1
+					messageOutBatch[i].Error = &errMsg
+					if messageOutBatch[i].RetryCount < s.config.MessageMaxRetries {
+						failedMessages = append(failedMessages, messageOutBatch[i])
+					}
+					messagesToUpdate[i] = messageOutBatch[i]
+				}
+			}
+			for i := range messageOutBatch {
+				err := s.messageService.UpdateMessageOut(ctx, messageOutBatch[i])
+				if err != nil {
+					log.Error().Err(err).Msg("update message out failed")
+				}
+			}
+			messageOutBatch = make([]MessageOut, 0)
+			if len(failedMessages) == 0 {
+				continue
+			}
+			go func(messages []MessageOut) {
+				time.Sleep(time.Second * s.config.MessageOutFlushIntervalSeconds)
+				s.enqueueMessageOuts(messages...)
+			}(failedMessages)
+		}
 	}
 }
 
@@ -1171,7 +1367,7 @@ func (s *skeleton) startExpectedControlResultsFetchJob(ctx context.Context) {
 
 func (s *skeleton) processInstrumentMessage(ctx context.Context, message InstrumentMessageTO) error {
 	switch message.MessageType {
-	case MessageTypeCreate:
+	case CommandTypeCreate:
 		log.Info().Msgf("Processing creation event for InstrumentId: %s", message.InstrumentId)
 		instrument := convertInstrumentTOToInstrument(*message.Instrument)
 		id, err := s.instrumentService.CreateInstrument(ctx, instrument)
@@ -1179,7 +1375,7 @@ func (s *skeleton) processInstrumentMessage(ctx context.Context, message Instrum
 			return err
 		}
 		log.Info().Interface("UUID", id).Msg("Created instrument")
-	case MessageTypeUpdate:
+	case CommandTypeUpdate:
 		log.Info().Msgf("Processing update event for InstrumentId: %s", message.InstrumentId)
 		instrument := convertInstrumentTOToInstrument(*message.Instrument)
 		err := s.instrumentService.UpdateInstrument(ctx, instrument, *message.UserId)
@@ -1187,7 +1383,7 @@ func (s *skeleton) processInstrumentMessage(ctx context.Context, message Instrum
 			return err
 		}
 		log.Info().Msg("Updated instrument")
-	case MessageTypeDelete:
+	case CommandTypeDelete:
 		log.Info().Msgf("Processing deletion event for InstrumentId: %s", message.InstrumentId)
 		err := s.instrumentService.DeleteInstrument(ctx, message.InstrumentId)
 		if err != nil {
@@ -1202,21 +1398,21 @@ func (s *skeleton) processInstrumentMessage(ctx context.Context, message Instrum
 
 func (s *skeleton) processExpectedControlResult(ctx context.Context, controlResultMessage ExpectedControlResultMessageTO) error {
 	switch controlResultMessage.MessageType {
-	case MessageTypeCreate:
+	case CommandTypeCreate:
 		log.Info().Msgf("Processing expected control result creation event for InstrumentId: %s", controlResultMessage.InstrumentId)
 		expectedControlResult := convertTOsToExpectedControlResults(controlResultMessage.ExpectedControlResults)
 		err := s.instrumentService.CreateExpectedControlResults(ctx, expectedControlResult, controlResultMessage.UserId)
 		if err != nil {
 			return err
 		}
-	case MessageTypeUpdate:
+	case CommandTypeUpdate:
 		log.Info().Msgf("Processing expected control result update event for InstrumentId: %s", controlResultMessage.InstrumentId)
 		expectedControlResult := convertTOsToExpectedControlResults(controlResultMessage.ExpectedControlResults)
 		err := s.instrumentService.UpdateExpectedControlResults(ctx, *controlResultMessage.InstrumentId, expectedControlResult, controlResultMessage.UserId)
 		if err != nil {
 			return err
 		}
-	case MessageTypeDelete:
+	case CommandTypeDelete:
 		log.Info().Msgf("Processing deletion event for ExpectedControlResultId: %s", controlResultMessage.DeletedExpectedControlResultId)
 		err := s.instrumentService.DeleteExpectedControlResult(ctx, *controlResultMessage.DeletedExpectedControlResultId, controlResultMessage.UserId)
 		if err != nil {
@@ -1262,11 +1458,11 @@ func (s *skeleton) processReprocessMessage(ctx context.Context, message Reproces
 			return fmt.Errorf("unexpected reprocess id type for message type: %s", MessageTypeRetransmitResult)
 		}
 	case MessageTypeReprocessBySampleCode:
-		if sampleCode, ok := message.ReprocessId.(string); ok {
-			err := s.manager.GetCallbackHandler().ReprocessInstrumentDataBySampleCode(sampleCode)
-			if err != nil {
-				return err
-			}
+		if _, ok := message.ReprocessId.(string); ok {
+			//err := s.manager.GetCallbackHandler().ReprocessInstrumentDataBySampleCode(sampleCode)
+			//if err != nil {
+			//	return err // TODO
+			//}
 		} else {
 			return fmt.Errorf("unexpected reprocess id type for message type: %s", MessageTypeReprocessBySampleCode)
 		}
@@ -1286,10 +1482,10 @@ func (s *skeleton) processReprocessMessage(ctx context.Context, message Reproces
 					continue
 				}
 			}
-			err := s.manager.GetCallbackHandler().ReprocessInstrumentData(batchIds)
-			if err != nil {
-				return err
-			}
+			//err := s.manager.GetCallbackHandler().ReprocessInstrumentData(batchIds)
+			//if err != nil {
+			//	return err
+			//}
 		} else {
 			return fmt.Errorf("unexpected reprocess id type for message type: %s", MessageTypeReprocessByBatchIds)
 		}
@@ -1358,7 +1554,59 @@ func (s *skeleton) startAnalysisRequestRevocationReexamineJob(ctx context.Contex
 	}
 }
 
-func NewSkeleton(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, reagentManufacturers []string, sqlConn *sqlx.DB, dbSchema string, migrator migrator.SkeletonMigrator, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService ConsoleLogService, manager Manager, cerberusClient CerberusClient, longPollClient LongPollClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
+func (s *skeleton) enqueueResultMessages(messages ...MessageIn) {
+	s.messageInProcessingChan <- messages
+}
+
+func (s *skeleton) enqueueMessageOuts(messages ...MessageOut) {
+	s.messageOutProcessingChan <- messages
+}
+
+func (s *skeleton) startResultMessageProcessing(ctx context.Context) {
+	for {
+		select {
+		case resultMessages := <-s.messageInProcessingChan:
+			failedMessages := make([]MessageIn, 0)
+			for i := range resultMessages {
+				analysisResultSet, standAloneControlResults, err := s.GetCallbackHandler().ProcessResultMessage(resultMessages[i])
+				if err != nil {
+					errorMsg := err.Error()
+					resultMessages[i].Error = &errorMsg
+					resultMessages[i].Status = MessageStatusError
+					if err == ErrInvalidInstrumentMessage {
+						resultMessages[i].RetryCount = s.config.MessageMaxRetries
+					} else {
+						resultMessages[i].RetryCount += 1
+					}
+					if resultMessages[i].RetryCount < s.config.LongPollingRetrySeconds {
+						failedMessages = append(failedMessages, resultMessages[i])
+					}
+					continue
+				}
+				for j := range analysisResultSet.Results {
+					analysisResultSet.Results[j].MessageInID = resultMessages[i].ID
+				}
+				err = s.SubmitAnalysisResultBatch(ctx, analysisResultSet)
+				if err != nil {
+					failedMessages = append(failedMessages, resultMessages[i])
+					continue
+				}
+				err = s.SubmitControlResults(ctx, standAloneControlResults)
+				if err != nil {
+					failedMessages = append(failedMessages, resultMessages[i])
+					continue
+				}
+				resultMessages[i].Status = MessageStatusProcessed
+			}
+			for i := range resultMessages {
+				_ = s.messageService.UpdateMessageIn(ctx, resultMessages[i])
+			}
+		case <-ctx.Done():
+		}
+	}
+}
+
+func NewSkeleton(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, reagentManufacturers []string, sqlConn *sqlx.DB, dbSchema string, messageOutHandling MessageOutHandling, migrator migrator.SkeletonMigrator, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService ConsoleLogService, messageService MessageService, manager Manager, cerberusClient CerberusClient, longPollClient LongPollClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
 	skeleton := &skeleton{
 		ctx:                                    ctx,
 		serviceName:                            serviceName,
@@ -1374,6 +1622,7 @@ func NewSkeleton(ctx context.Context, serviceName, displayName string, requested
 		analysisService:                        analysisService,
 		instrumentService:                      instrumentService,
 		consoleLogService:                      consoleLogService,
+		messageService:                         messageService,
 		manager:                                manager,
 		cerberusClient:                         cerberusClient,
 		longPollClient:                         longPollClient,
@@ -1386,6 +1635,9 @@ func NewSkeleton(ctx context.Context, serviceName, displayName string, requested
 		analysisResultStatusControlIdBatchesChan:   make(chan []uuid.UUID, 10),
 		resultTransferFlushTimeout:                 config.ResultTransferFlushTimeout,
 		imageRetrySeconds:                          config.ImageRetrySeconds,
+		messageInProcessingChan:                    make(chan []MessageIn, 100),
+		messageOutProcessingChan:                   make(chan []MessageOut, 100),
+		messageOutHandling:                         messageOutHandling,
 	}
 
 	skeleton.unprocessedHandlingWaitGroup.Add(waitGroupSize)

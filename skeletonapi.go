@@ -24,9 +24,20 @@ type SkeletonCallbackHandlerV1 interface {
 
 	ReexamineAnalysisRequests(request []AnalysisRequest)
 
-	ReprocessInstrumentData(batchIDs []uuid.UUID) error
-
-	ReprocessInstrumentDataBySampleCode(sampleCode string) error
+	// ProcessResultMessage - callback for processing an incoming result message.
+	// Returning skeleton.ErrInvalidInstrumentMessage will prevent retries, any other error will trigger the retry logic.
+	// Updating messages is handled by skeleton.
+	ProcessResultMessage(messageIn MessageIn) (AnalysisResultSet, []StandaloneControlResult, error)
+	// ProcessOutgoingInstrumentMessages - callback for processing outgoing messages from driver to instrument when MessageOutHandling
+	// is set to MessageOutHandlingDeferred. Return error only for errors that prevent the processing of the entire batch.
+	//In that case the entire batch is updated to error status and retried. If only individual messages fail,
+	//then return those in messagesToRetry with a nil error, and only those will be retried.
+	// messagesToUpdate should contain all messages received as parameter with the proper error, status, retry count set, unless an error is returned.
+	//This callback is never called when MessageOutHandling is set to MessageOutHandlingRealtime.
+	ProcessOutgoingInstrumentMessages(messages []MessageOut) (messagesToUpdate []MessageOut, messagesToRetry []MessageOut, err error)
+	// CreateResponseMessageOutToMessageIn - callback for creating a MessageOut in response to an incoming message, such as
+	// a reply to a query, or an ACK message if necessary. If no response message applies, return nil.
+	CreateResponseMessageOutToMessageIn(messageIn MessageIn) (*MessageOut, error)
 }
 
 // SkeletonAPI is the interface for accessing the skeleton driver capabilities
@@ -59,29 +70,14 @@ type SkeletonAPI interface {
 	GetSortingTarget(ctx context.Context, instrumentIP string, sampleCode string, programme string) (string, error)
 	// MarkSortingTargetAsApplied - should be called after sorting instructions were successfully passed from driver to instrument
 	MarkSortingTargetAsApplied(ctx context.Context, instrumentIP, sampleCode, programme, target string) error
-	// SubmitAnalysisResult - Submit result to Skeleton and Cerberus,
-	// By default this function batches the transmissions by collecting them and
-	// use the batch-endpoint of cerberus for performance reasons.
-	// Analysis results must have their DEARawMessageID set, therefore calling UploadRawMessageToDEA
-	// on the raw instrument message is a prerequisite to submitting analysis results.
-	//SubmitAnalysisResult(ctx context.Context, resultData AnalysisResultSet) error
 
-	// SubmitAnalysisResultBatch - Submit result batch to Skeleton and Cerberus,
-	// By default this function batches the transmissions by collecting them and
-	// use the batch-endpoint of cerberus for performance reasons.
-	// Analysis results must have their DEARawMessageID set, therefore calling UploadRawMessageToDEA
-	// on the raw instrument message is a prerequisite to submitting analysis results.
-	// use the batch-endpoint of cerberus for performance reasons
-	SubmitAnalysisResultBatch(ctx context.Context, resultBatch AnalysisResultSet) error
-
-	SubmitControlResults(ctx context.Context, controlResults []StandaloneControlResult) error
+	// ProcessMessageIn - persists an incoming instrument message (e.g. result) and handles the long term archiving of it
+	ProcessMessageIn(ctx context.Context, messageIn MessageIn) (uuid.UUID, *MessageOut, error)
+	// SaveMessageOut - persists an outgoing instrument message (e.g. order) and handles the long term archiving of it
+	SaveMessageOut(ctx context.Context, messageOut MessageOut) (uuid.UUID, error)
 
 	GetAnalysisResultIdsSinceLastControlByReagent(ctx context.Context, reagent Reagent, examinedAt time.Time, analyteMappingId uuid.UUID, instrumentId uuid.UUID) ([]uuid.UUID, error)
 	GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMappingId uuid.UUID, instrumentId uuid.UUID) ([]ControlResult, error)
-
-	// UploadRawMessageToDEA - Uploads raw instrument message to DEA, and returns its ID. Must be called before
-	// submitting analysis result, as every analysis result must have a reference to it.
-	UploadRawMessageToDEA(rawMessage []byte) (uuid.UUID, error)
 
 	// GetInstrument returns all the settings regarding an instrument
 	// contains AnalyteMappings[] and RequestMappings[]
@@ -117,7 +113,7 @@ type SkeletonAPI interface {
 	Start() error
 }
 
-func New(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, reagentManufacturers []string, sqlConn *sqlx.DB, dbSchema string) (SkeletonAPI, error) {
+func New(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, reagentManufacturers []string, sqlConn *sqlx.DB, dbSchema string, messageOutHandling MessageOutHandling) (SkeletonAPI, error) {
 	config, err := config2.ReadConfiguration()
 	if err != nil {
 		return nil, err
@@ -145,10 +141,13 @@ func New(ctx context.Context, serviceName, displayName string, requestedExtraVal
 	sortingRuleRepository := NewSortingRuleRepository(dbConn, dbSchema)
 	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
 	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, manager, instrumentCache, cerberusClient)
+	messageInRepository := NewMessageInRepository(dbConn, dbSchema)
+	messageOutRepository := NewMessageOutRepository(dbConn, dbSchema)
+	messageService := NewMessageService(deaClient, messageInRepository, messageOutRepository, serviceName)
 
 	consoleLogService := NewConsoleLogService(cerberusClient)
 
 	longpollClient := NewLongPollClient(longPollingApiRestyClient, serviceName, config.CerberusURL, config.LongPollingAPIClientTimeoutSeconds, config.LongPollingReattemptWaitSeconds, config.LongPollingLoggingEnabled)
 
-	return NewSkeleton(ctx, serviceName, displayName, requestedExtraValueKeys, encodings, reagentManufacturers, sqlConn, dbSchema, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, manager, cerberusClient, longpollClient, deaClient, config)
+	return NewSkeleton(ctx, serviceName, displayName, requestedExtraValueKeys, encodings, reagentManufacturers, sqlConn, dbSchema, messageOutHandling, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, messageService, manager, cerberusClient, longpollClient, deaClient, config)
 }

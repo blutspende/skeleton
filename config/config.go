@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/base64"
 	"github.com/rs/zerolog"
+	"time"
 
 	"github.com/pkg/errors"
 
@@ -59,6 +60,9 @@ type Configuration struct {
 	LongPollingReattemptWaitSeconds            uint          `envconfig:"LONG_POLLING_REATTEMPT_WAIT_SECONDS" default:"5"`
 	LongPollingLoggingEnabled                  bool          `envconfig:"LONG_POLLING_LOGGING_ENABLED" default:"false"`
 	LongPollingRetrySeconds                    int           `envconfig:"LONG_POLLING_RETRY_SECONDS" default:"30"`
+	MessageMaxRetries                          int           `envconfig:"MESSAGE_MAX_RETRIES" default:"25"`
+	MessageOutProcessingBatchSize              int           `envconfig:"MESSAGE_OUT_PROCESSING_BATCH_SIZE" default:"100"`
+	MessageOutFlushIntervalSeconds             time.Duration `envconfig:"MESSAGE_OUT_FLUSH_INTERVAL_SECONDS" default:"25"`
 	ClientCredentialAuthHeaderValue            string
 }
 
