@@ -1,7 +1,7 @@
 package skeleton
 
 import (
-	"github.com/blutspende/bloodlab-common/util"
+	"github.com/blutspende/bloodlab-common/utils"
 	"github.com/google/uuid"
 )
 
@@ -167,15 +167,15 @@ func convertInstrumentTOToInstrument(instrumentTO instrumentTO) Instrument {
 	if instrumentTO.ConnectionMode == FTP {
 		model.FTPConfig = &FTPConfig{
 			InstrumentId:     instrumentTO.ID,
-			Username:         util.StringPointerToString(instrumentTO.FtpUsername),
-			Password:         util.StringPointerToString(instrumentTO.FtpPassword),
-			OrderPath:        util.StringPointerToStringWithDefault(instrumentTO.FtpOrderPath, "/"),
-			OrderFileMask:    util.StringPointerToString(instrumentTO.FtpOrderFileMask),
-			OrderFileSuffix:  util.StringPointerToString(instrumentTO.FtpOrderFileSuffix),
-			ResultPath:       util.StringPointerToStringWithDefault(instrumentTO.FtpResultPath, "/"),
-			ResultFileMask:   util.StringPointerToString(instrumentTO.FtpResultFileMask),
-			ResultFileSuffix: util.StringPointerToString(instrumentTO.FtpResultFileSuffix),
-			FtpServerType:    util.StringPointerToString(instrumentTO.FtpServerType),
+			Username:         utils.StringPointerToString(instrumentTO.FtpUsername),
+			Password:         utils.StringPointerToString(instrumentTO.FtpPassword),
+			OrderPath:        utils.StringPointerToStringWithDefault(instrumentTO.FtpOrderPath, "/"),
+			OrderFileMask:    utils.StringPointerToString(instrumentTO.FtpOrderFileMask),
+			OrderFileSuffix:  utils.StringPointerToString(instrumentTO.FtpOrderFileSuffix),
+			ResultPath:       utils.StringPointerToStringWithDefault(instrumentTO.FtpResultPath, "/"),
+			ResultFileMask:   utils.StringPointerToString(instrumentTO.FtpResultFileMask),
+			ResultFileSuffix: utils.StringPointerToString(instrumentTO.FtpResultFileSuffix),
+			FtpServerType:    utils.StringPointerToString(instrumentTO.FtpServerType),
 		}
 	}
 

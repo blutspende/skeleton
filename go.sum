@@ -5,8 +5,8 @@ github.com/Masterminds/semver/v3 v3.1.1 h1:hLg3sBzpNErnxhQtUy/mmLR2I9foDujNK030I
 github.com/Masterminds/semver/v3 v3.1.1/go.mod h1:VPu/7SZ7ePZ3QOrcuXROw5FAcLl4a0cBrbBpGY/8hQs=
 github.com/MicahParks/keyfunc v1.9.0 h1:lhKd5xrFHLNOWrDc4Tyb/Q1AJ4LCzQ48GVJyVIID3+o=
 github.com/MicahParks/keyfunc v1.9.0/go.mod h1:IdnCilugA0O/99dW+/MkvlyrsX8+L8+x95xuVNtM5jw=
-github.com/blutspende/bloodlab-common v0.0.0-20250513094114-21a971ae6bb9 h1:IF90KS9zb6z8+lolMSgtVAdjt+vKiQx//5Sb6XQpwbU=
-github.com/blutspende/bloodlab-common v0.0.0-20250513094114-21a971ae6bb9/go.mod h1:0KzDqIw3QvL8syKVehqLUcRjEk8HXIOV761puQxoza8=
+github.com/blutspende/bloodlab-common v0.0.0-20250515095709-2e82723b3d42 h1:J6+77YUkxKXelQSE5+UQiKnkGs1kQXFEU5uj3nDyd44=
+github.com/blutspende/bloodlab-common v0.0.0-20250515095709-2e82723b3d42/go.mod h1:0KzDqIw3QvL8syKVehqLUcRjEk8HXIOV761puQxoza8=
 github.com/bytedance/sonic v1.13.2 h1:8/H1FempDZqC4VqjptGo14QQlJx8VdZJegxs6wwfqpQ=
 github.com/bytedance/sonic v1.13.2/go.mod h1:o68xyaF9u2gvVBuGHPlUVCy+ZfmNNO5ETf1+KgkJhz4=
 github.com/bytedance/sonic/loader v0.1.1/go.mod h1:ncP89zfokxS5LZrJxl5z0UJcsk4M4yY2JpfqGeCtNLU=

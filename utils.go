@@ -4,7 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"github.com/blutspende/bloodlab-common/util"
+	"github.com/blutspende/bloodlab-common/utils"
 	"github.com/google/uuid"
 	"sort"
 	"strconv"
@@ -141,7 +141,7 @@ func HashInstrument(instrument Instrument) string {
 		analyteBuilder.WriteString(a.AnalyteID.String())
 		analyteBuilder.WriteString(a.InstrumentAnalyte)
 		analyteBuilder.WriteString(string(a.ResultType))
-		analyteBuilder.WriteString(util.StringPointerToString(a.ControlInstrumentAnalyte))
+		analyteBuilder.WriteString(utils.StringPointerToString(a.ControlInstrumentAnalyte))
 		analyteBuilder.WriteString(fmt.Sprintf("%t", a.ControlResultRequired))
 
 		// Hash nested ChannelMappings

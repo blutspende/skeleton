@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"github.com/blutspende/bloodlab-common/util"
+	"github.com/blutspende/bloodlab-common/utils"
 	"strconv"
 	"strings"
 	"time"
@@ -533,7 +533,7 @@ const analysisRequestsBatchSize = 9000
 // Returns the CerberusID and work item IDs of saved requests
 func (r *analysisRepository) CreateAnalysisRequestsBatch(ctx context.Context, analysisRequests []AnalysisRequest) ([]uuid.UUID, error) {
 	ids := make([]uuid.UUID, 0, len(analysisRequests))
-	err := util.Partition(len(analysisRequests), analysisRequestsBatchSize, func(low int, high int) error {
+	err := utils.Partition(len(analysisRequests), analysisRequestsBatchSize, func(low int, high int) error {
 		idsPart, err := r.createAnalysisRequestsBatch(ctx, analysisRequests[low:high])
 		if err != nil {
 			return err
@@ -552,7 +552,7 @@ func (r *analysisRepository) createAnalysisRequestsBatch(ctx context.Context, an
 		return nil, nil
 	}
 	ids := make([]uuid.UUID, 0)
-	err := util.Partition(len(analysisRequests), maxParams/8, func(low int, high int) error {
+	err := utils.Partition(len(analysisRequests), maxParams/8, func(low int, high int) error {
 		query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_requests(id, work_item_id, analyte_id, sample_code, material_id, laboratory_id, valid_until_time, created_at)
 				VALUES(:id, :work_item_id, :analyte_id, :sample_code, :material_id, :laboratory_id, :valid_until_time, :created_at)
 				ON CONFLICT (work_item_id) DO NOTHING RETURNING id;`, r.dbSchema)
@@ -594,7 +594,7 @@ func (r *analysisRepository) CreateSubjectsBatch(ctx context.Context, subjectInf
 		subjectDAOs = append(subjectDAOs, subjectDAO)
 	}
 
-	err := util.Partition(len(subjectDAOs), subjectBatchSize, func(low int, high int) error {
+	err := utils.Partition(len(subjectDAOs), subjectBatchSize, func(low int, high int) error {
 		err := r.createSubjects(ctx, subjectDAOs[low:high])
 		if err != nil {
 			return err
@@ -657,7 +657,7 @@ func (r *analysisRepository) GetAnalysisRequestsBySampleCodes(ctx context.Contex
 	if len(sampleCodes) == 0 {
 		return analysisRequestsBySampleCodes, nil
 	}
-	err := util.Partition(len(sampleCodes), maxParams, func(low int, high int) error {
+	err := utils.Partition(len(sampleCodes), maxParams, func(low int, high int) error {
 		query := fmt.Sprintf(`SELECT * FROM %s.sk_analysis_requests 
 					WHERE sample_code in (?)
 					AND valid_until_time >= timezone('utc',now())`, r.dbSchema)
@@ -988,7 +988,7 @@ func (r *analysisRepository) GetSubjectsByAnalysisRequestIDs(ctx context.Context
 	if len(analysisRequestIDs) == 0 {
 		return subjectsMap, nil
 	}
-	err := util.Partition(len(analysisRequestIDs), maxParams, func(low int, high int) error {
+	err := utils.Partition(len(analysisRequestIDs), maxParams, func(low int, high int) error {
 		query := fmt.Sprintf(`SELECT * FROM %s.sk_subject_infos WHERE analysis_request_id IN (?);`, r.dbSchema)
 		query, args, _ := sqlx.In(query, analysisRequestIDs[low:high])
 		query = r.db.Rebind(query)
@@ -1018,7 +1018,7 @@ func (r *analysisRepository) GetAnalysisRequestsByWorkItemIDs(ctx context.Contex
 	if len(workItemIds) == 0 {
 		return analysisRequests, nil
 	}
-	err := util.Partition(len(workItemIds), maxParams, func(low int, high int) error {
+	err := utils.Partition(len(workItemIds), maxParams, func(low int, high int) error {
 		query := fmt.Sprintf(`SELECT * FROM %s.sk_analysis_requests WHERE work_item_id in (?);`, r.dbSchema)
 		query, args, _ := sqlx.In(query, workItemIds[low:high])
 		query = r.db.Rebind(query)
@@ -1051,7 +1051,7 @@ func (r *analysisRepository) RevokeAnalysisRequests(ctx context.Context, workIte
 	if len(workItemIds) == 0 {
 		return nil
 	}
-	err := util.Partition(len(workItemIds), maxParams, func(low int, high int) error {
+	err := utils.Partition(len(workItemIds), maxParams, func(low int, high int) error {
 		query := fmt.Sprintf(`DELETE FROM %s.sk_analysis_requests WHERE work_item_id IN (?);`, r.dbSchema)
 
 		query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
@@ -1072,7 +1072,7 @@ func (r *analysisRepository) DeleteAnalysisRequestExtraValues(ctx context.Contex
 	if len(workItemIDs) == 0 {
 		return nil
 	}
-	err := util.Partition(len(workItemIDs), maxParams, func(low int, high int) error {
+	err := utils.Partition(len(workItemIDs), maxParams, func(low int, high int) error {
 		query := fmt.Sprintf(`DELETE FROM %s.sk_analysis_request_extra_values WHERE analysis_request_id IN
  			(SELECT id FROM %s.sk_analysis_requests WHERE work_item_id IN (?));`, r.dbSchema, r.dbSchema)
 
@@ -1093,7 +1093,7 @@ func (r *analysisRepository) IncreaseReexaminationRequestedCount(ctx context.Con
 	if len(workItemIDs) == 0 {
 		return nil
 	}
-	err := util.Partition(len(workItemIDs), maxParams, func(low int, high int) error {
+	err := utils.Partition(len(workItemIDs), maxParams, func(low int, high int) error {
 		query := fmt.Sprintf(`UPDATE %s.sk_analysis_requests SET reexamination_requested_count = reexamination_requested_count + 1, modified_at = timezone('utc', now()) WHERE work_item_id IN (?);`, r.dbSchema)
 
 		query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
@@ -1115,7 +1115,7 @@ func (r *analysisRepository) IncreaseSentToInstrumentCounter(ctx context.Context
 	if len(analysisRequestIDs) == 0 {
 		return nil
 	}
-	err := util.Partition(len(analysisRequestIDs), maxParams, func(low int, high int) error {
+	err := utils.Partition(len(analysisRequestIDs), maxParams, func(low int, high int) error {
 		query := fmt.Sprintf(`UPDATE %s.sk_analysis_requests SET sent_to_instrument_count = sent_to_instrument_count + 1 WHERE id IN (?);`, r.dbSchema)
 
 		query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
@@ -1171,7 +1171,7 @@ func (r *analysisRepository) createAnalysisResultsBatch(ctx context.Context, ana
 		}
 	}
 
-	err := util.Partition(len(analysisResults), analysisResultBatchSize, func(low int, high int) error {
+	err := utils.Partition(len(analysisResults), analysisResultBatchSize, func(low int, high int) error {
 		query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_results(id, analyte_mapping_id, instrument_id, sample_code, instrument_run_id, dea_raw_message_id, batch_id, "result", status, result_mode, yielded_at, valid_until, operator, technical_release_datetime, edited, edit_reason, is_invalid)
 			VALUES(:id, :analyte_mapping_id, :instrument_id, :sample_code, :instrument_run_id, :dea_raw_message_id, :batch_id, :result, :status, :result_mode, :yielded_at, :valid_until, :operator, :technical_release_datetime, :edited, :edit_reason, :is_invalid);`, r.dbSchema)
 		_, err := r.db.NamedExecContext(ctx, query, convertAnalysisResultsToDAOs(analysisResults[low:high]))
@@ -1201,7 +1201,7 @@ func (r *analysisRepository) UpdateStatusAnalysisResultsBatch(ctx context.Contex
 
 	var err error
 	for status := range statusMap {
-		err = util.Partition(len(statusMap[status]), analysisResultBatchSize, func(low int, high int) error {
+		err = utils.Partition(len(statusMap[status]), analysisResultBatchSize, func(low int, high int) error {
 			query := fmt.Sprintf(`UPDATE %s.sk_analysis_results SET status = ? WHERE id in (?);`, r.dbSchema)
 			query, ars, _ := sqlx.In(query, status, statusMap[status][low:high])
 			query = r.db.Rebind(query)
@@ -1223,7 +1223,7 @@ func (r *analysisRepository) CreateAnalysisResultReagentRelations(ctx context.Co
 		return nil
 	}
 
-	err := util.Partition(len(relationDAOs), analysisResultRelationBatch, func(low int, high int) error {
+	err := utils.Partition(len(relationDAOs), analysisResultRelationBatch, func(low int, high int) error {
 		query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_result_reagent_relations(analysis_result_id, reagent_id)
 		VALUES(:analysis_result_id, :reagent_id) ON CONFLICT DO NOTHING`, r.dbSchema)
 
@@ -1247,7 +1247,7 @@ func (r *analysisRepository) CreateReagentControlResultRelations(ctx context.Con
 		return nil
 	}
 
-	err := util.Partition(len(relationDAOs), analysisResultRelationBatch, func(low int, high int) error {
+	err := utils.Partition(len(relationDAOs), analysisResultRelationBatch, func(low int, high int) error {
 		query := fmt.Sprintf(`INSERT INTO %s.sk_reagent_control_result_relations(reagent_id, control_result_id, is_processed)
 		VALUES(:reagent_id, :control_result_id, :is_processed) ON CONFLICT DO NOTHING`, r.dbSchema)
 
@@ -1272,7 +1272,7 @@ func (r *analysisRepository) CreateAnalysisResultControlResultRelations(ctx cont
 		return nil
 	}
 
-	err := util.Partition(len(relationDAOs), analysisResultRelationBatch, func(low int, high int) error {
+	err := utils.Partition(len(relationDAOs), analysisResultRelationBatch, func(low int, high int) error {
 		query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_result_control_result_relations(analysis_result_id, control_result_id, is_processed)
 		VALUES(:analysis_result_id, :control_result_id, :is_processed) ON CONFLICT DO NOTHING`, r.dbSchema)
 
@@ -1424,7 +1424,7 @@ func (r *analysisRepository) GetAnalysisResultsByBatchIDs(ctx context.Context, b
 	}
 	analysisResultDAOs := make([]analysisResultDAO, 0)
 
-	err := util.Partition(len(batchIDs), maxParams, func(low int, high int) error {
+	err := utils.Partition(len(batchIDs), maxParams, func(low int, high int) error {
 		query := `SELECT sar.id, sar.analyte_mapping_id, sar.instrument_id, sar.sample_code, sar.instrument_run_id, sar.dea_raw_message_id, sar.batch_id, sar."result", sar.status, sar.result_mode, sar.yielded_at, sar.valid_until, sar.operator, sar.edited, sar.edit_reason, sar.is_invalid,
 					sam.id AS "analyte_mapping.id", sam.instrument_id AS "analyte_mapping.instrument_id", sam.instrument_analyte AS "analyte_mapping.instrument_analyte", sam.analyte_id AS "analyte_mapping.analyte_id", sam.result_type AS "analyte_mapping.result_type", 
 					sam.control_instrument_analyte AS "analyte_mapping.control_instrument_analyte", sam.control_result_required AS "analyte_mapping.control_result_required", sam.created_at AS "analyte_mapping.created_at", sam.modified_at AS "analyte_mapping.modified_at"
@@ -1688,7 +1688,7 @@ func (r *analysisRepository) GetAnalysisResultsByBatchIDsMapped(ctx context.Cont
 		return resultMap, nil
 	}
 
-	err := util.Partition(len(batchIDs), maxParams, func(low int, high int) error {
+	err := utils.Partition(len(batchIDs), maxParams, func(low int, high int) error {
 		query := `SELECT res.id AS result_id,
        res.batch_id AS batch_id,
 	   res.sample_code AS sample_code,
@@ -1735,7 +1735,7 @@ WHERE res.batch_id IN (?)`
 
 func (r *analysisRepository) getChannelMappings(ctx context.Context, analyteMappingIDs []uuid.UUID) (map[uuid.UUID][]ChannelMapping, error) {
 	channelMappingsMap := make(map[uuid.UUID][]ChannelMapping)
-	err := util.Partition(len(analyteMappingIDs), maxParams, func(low int, high int) error {
+	err := utils.Partition(len(analyteMappingIDs), maxParams, func(low int, high int) error {
 		query := fmt.Sprintf(`SELECT * FROM %s.sk_channel_mappings WHERE analyte_mapping_id IN (?) AND deleted_at IS NULL;`, r.dbSchema)
 		query, args, _ := sqlx.In(query, analyteMappingIDs[low:high])
 		query = r.db.Rebind(query)
@@ -1762,7 +1762,7 @@ func (r *analysisRepository) getChannelMappings(ctx context.Context, analyteMapp
 
 func (r *analysisRepository) getResultMappings(ctx context.Context, analyteMappingIDs []uuid.UUID) (map[uuid.UUID][]ResultMapping, error) {
 	resultMappingsMap := make(map[uuid.UUID][]ResultMapping)
-	err := util.Partition(len(analyteMappingIDs), maxParams, func(low int, high int) error {
+	err := utils.Partition(len(analyteMappingIDs), maxParams, func(low int, high int) error {
 		query := fmt.Sprintf(`SELECT * FROM %s.sk_result_mappings WHERE analyte_mapping_id IN (?) AND deleted_at IS NULL;`, r.dbSchema)
 		query, args, _ := sqlx.In(query, analyteMappingIDs[low:high])
 		query = r.db.Rebind(query)
@@ -1791,7 +1791,7 @@ const maxParams = 65000
 
 func (r *analysisRepository) getAnalysisResultExtraValues(ctx context.Context, analysisResultIDs []uuid.UUID) (map[uuid.UUID][]resultExtraValueDAO, error) {
 	extraValuesMap := make(map[uuid.UUID][]resultExtraValueDAO)
-	err := util.Partition(len(analysisResultIDs), maxParams, func(low int, high int) error {
+	err := utils.Partition(len(analysisResultIDs), maxParams, func(low int, high int) error {
 		query := fmt.Sprintf(`SELECT sare.id, sare.analysis_result_id, sare."key", sare."value"
 		FROM %s.sk_analysis_result_extravalues sare WHERE sare.analysis_result_id IN (?);`, r.dbSchema)
 		query, args, _ := sqlx.In(query, analysisResultIDs[low:high])
@@ -1868,7 +1868,7 @@ func (r *analysisRepository) CreateAnalysisRequestExtraValues(ctx context.Contex
 }
 
 func (r *analysisRepository) createAnalysisResultExtraValues(ctx context.Context, extraValues []resultExtraValueDAO) error {
-	err := util.Partition(len(extraValues), extraValueBatchSize, func(low int, high int) error {
+	err := utils.Partition(len(extraValues), extraValueBatchSize, func(low int, high int) error {
 		query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_result_extravalues(id, analysis_result_id, "key", "value")
 		VALUES(:id, :analysis_result_id, :key, :value)`, r.dbSchema)
 		_, err := r.db.NamedExecContext(ctx, query, extraValues[low:high])
@@ -1885,7 +1885,7 @@ func (r *analysisRepository) createAnalysisResultExtraValues(ctx context.Context
 }
 
 func (r *analysisRepository) createAnalysisRequestExtraValues(ctx context.Context, extraValues []requestExtraValueDAO) error {
-	err := util.Partition(len(extraValues), extraValueBatchSize, func(low int, high int) error {
+	err := utils.Partition(len(extraValues), extraValueBatchSize, func(low int, high int) error {
 		query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_request_extra_values(id, analysis_request_id, "key", "value")
 		VALUES(:id, :analysis_request_id, :key, :value)`, r.dbSchema)
 		_, err := r.db.NamedExecContext(ctx, query, extraValues[low:high])
@@ -1902,7 +1902,7 @@ func (r *analysisRepository) createAnalysisRequestExtraValues(ctx context.Contex
 }
 
 func (r *analysisRepository) createControlResultExtraValues(ctx context.Context, extraValues []controlResultExtraValueDAO) error {
-	err := util.Partition(len(extraValues), extraValueBatchSize, func(low int, high int) error {
+	err := utils.Partition(len(extraValues), extraValueBatchSize, func(low int, high int) error {
 		query := fmt.Sprintf(`INSERT INTO %s.sk_control_result_extravalues(id, control_resilt_id, "key", "value")
 		VALUES(:id, :control_resilt_id, :key, :value)`, r.dbSchema)
 		_, err := r.db.NamedExecContext(ctx, query, extraValues[low:high])
@@ -1920,7 +1920,7 @@ func (r *analysisRepository) createControlResultExtraValues(ctx context.Context,
 
 func (r *analysisRepository) getChannelResults(ctx context.Context, analysisResultIDs []uuid.UUID) (map[uuid.UUID][]channelResultDAO, error) {
 	channelResultsMap := make(map[uuid.UUID][]channelResultDAO)
-	err := util.Partition(len(analysisResultIDs), maxParams, func(low int, high int) error {
+	err := utils.Partition(len(analysisResultIDs), maxParams, func(low int, high int) error {
 		query := fmt.Sprintf(`SELECT scr.id, scr.analysis_result_id, scr.channel_id, scr.qualitative_result, scr.qualitative_result_edited
 		FROM %s.sk_channel_results scr WHERE scr.analysis_result_id IN (?);`, r.dbSchema)
 		query, args, _ := sqlx.In(query, analysisResultIDs[low:high])
@@ -1978,7 +1978,7 @@ func (r *analysisRepository) createChannelResults(ctx context.Context, channelRe
 		ids[i] = channelResults[i].ID
 	}
 
-	err := util.Partition(len(channelResults), channelResultBatchSize, func(low int, high int) error {
+	err := utils.Partition(len(channelResults), channelResultBatchSize, func(low int, high int) error {
 		query := fmt.Sprintf(`INSERT INTO %s.sk_channel_results(id, analysis_result_id, channel_id, qualitative_result, qualitative_result_edited)
 		VALUES(:id, :analysis_result_id, :channel_id, :qualitative_result, :qualitative_result_edited);`, r.dbSchema)
 		_, err := r.db.NamedExecContext(ctx, query, convertChannelResultsToDAOs(channelResults[low:high], analysisResultID))
@@ -2007,7 +2007,7 @@ func (r *analysisRepository) createControlResultChannelResults(ctx context.Conte
 		ids[i] = channelResults[i].ID
 	}
 
-	err := util.Partition(len(channelResults), channelResultBatchSize, func(low int, high int) error {
+	err := utils.Partition(len(channelResults), channelResultBatchSize, func(low int, high int) error {
 		query := fmt.Sprintf(`INSERT INTO %s.sk_control_result_channel_results(id, control_result_id, channel_id, qualitative_result, qualitative_result_edited)
 		VALUES(:id, :control_result_id, :channel_id, :qualitative_result, :qualitative_result_edited);`, r.dbSchema)
 		_, err := r.db.NamedExecContext(ctx, query, convertChannelResultsToControlResultChannelResultDAOs(channelResults[low:high], controlResultID))
@@ -2026,7 +2026,7 @@ func (r *analysisRepository) createControlResultChannelResults(ctx context.Conte
 
 func (r *analysisRepository) getChannelResultQuantitativeValues(ctx context.Context, channelResultIDs []uuid.UUID) (map[uuid.UUID][]quantitativeChannelResultDAO, error) {
 	valuesByChannelResultID := make(map[uuid.UUID][]quantitativeChannelResultDAO)
-	err := util.Partition(len(channelResultIDs), maxParams, func(low int, high int) error {
+	err := utils.Partition(len(channelResultIDs), maxParams, func(low int, high int) error {
 		query := fmt.Sprintf(`SELECT scrqv.id, scrqv.channel_result_id, scrqv.metric, scrqv."value"
 		FROM %s.sk_channel_result_quantitative_values scrqv WHERE scrqv.channel_result_id IN (?);`, r.dbSchema)
 		query, args, _ := sqlx.In(query, channelResultIDs[low:high])
@@ -2083,7 +2083,7 @@ func (r *analysisRepository) createChannelResultQuantitativeValues(ctx context.C
 	if len(quantitativeChannelResults) == 0 {
 		return nil
 	}
-	err := util.Partition(len(quantitativeChannelResults), channelResultQVBatchSize, func(low int, high int) error {
+	err := utils.Partition(len(quantitativeChannelResults), channelResultQVBatchSize, func(low int, high int) error {
 		query := fmt.Sprintf(`INSERT INTO %s.sk_channel_result_quantitative_values(id, channel_result_id, metric, "value")
 		VALUES(:id, :channel_result_id, :metric, :value);`, r.dbSchema)
 		_, err := r.db.NamedExecContext(ctx, query, quantitativeChannelResults[low:high])
@@ -2121,7 +2121,7 @@ func (r *analysisRepository) createControlResultChannelResultQuantitativeValues(
 		return nil
 	}
 
-	err := util.Partition(len(quantitativeChannelResults), channelResultQVBatchSize, func(low int, high int) error {
+	err := utils.Partition(len(quantitativeChannelResults), channelResultQVBatchSize, func(low int, high int) error {
 		query := fmt.Sprintf(`INSERT INTO %s.sk_control_result_channel_result_quantitative_values(id, channel_result_id, metric, "value")
 		VALUES(:id, :channel_result_id, :metric, :value);`, r.dbSchema)
 		_, err := r.db.NamedExecContext(ctx, query, quantitativeChannelResults[low:high])
@@ -2140,7 +2140,7 @@ func (r *analysisRepository) createControlResultChannelResultQuantitativeValues(
 
 func (r *analysisRepository) getAnalysisResultReagentRelations(ctx context.Context, analysisResultIDs []uuid.UUID) (map[uuid.UUID][]uuid.UUID, error) {
 	reagentIDsMap := make(map[uuid.UUID][]uuid.UUID)
-	err := util.Partition(len(analysisResultIDs), maxParams, func(low int, high int) error {
+	err := utils.Partition(len(analysisResultIDs), maxParams, func(low int, high int) error {
 		query := fmt.Sprintf(`SELECT analysis_result_id, reagent_id FROM %s.sk_analysis_result_reagent_relations sarrr WHERE sarrr.analysis_result_id IN (?);`, r.dbSchema)
 		query, args, _ := sqlx.In(query, analysisResultIDs[low:high])
 		query = r.db.Rebind(query)
@@ -2173,7 +2173,7 @@ func (r *analysisRepository) getAnalysisResultReagentRelations(ctx context.Conte
 
 func (r *analysisRepository) getReagentControlResultRelations(ctx context.Context, reagentIDs []uuid.UUID) (map[uuid.UUID][]uuid.UUID, error) {
 	controlResultIDsMap := make(map[uuid.UUID][]uuid.UUID)
-	err := util.Partition(len(reagentIDs), maxParams, func(low int, high int) error {
+	err := utils.Partition(len(reagentIDs), maxParams, func(low int, high int) error {
 		query := fmt.Sprintf(`SELECT reagent_id, control_result_id FROM %s.sk_reagent_control_result_relations srcrr WHERE srcrr.reagent_id IN (?);`, r.dbSchema)
 		query, args, _ := sqlx.In(query, reagentIDs[low:high])
 		query = r.db.Rebind(query)
@@ -2206,7 +2206,7 @@ func (r *analysisRepository) getReagentControlResultRelations(ctx context.Contex
 
 func (r *analysisRepository) getAnalysisResultControlResultRelations(ctx context.Context, analysisResultIDs []uuid.UUID) (map[uuid.UUID][]uuid.UUID, error) {
 	controlResultIDsMap := make(map[uuid.UUID][]uuid.UUID)
-	err := util.Partition(len(analysisResultIDs), maxParams, func(low int, high int) error {
+	err := utils.Partition(len(analysisResultIDs), maxParams, func(low int, high int) error {
 		query := fmt.Sprintf(`SELECT analysis_result_id, control_result_id FROM %s.sk_analysis_result_control_result_relations sarcrr WHERE sarcrr.analysis_result_id IN (?);`, r.dbSchema)
 		query, args, _ := sqlx.In(query, analysisResultIDs[low:high])
 		query = r.db.Rebind(query)
@@ -2313,7 +2313,7 @@ func (r *analysisRepository) createReagents(ctx context.Context, reagentDAOs []r
 	}
 	insertedIds := make([]uuid.UUID, 0)
 
-	err := util.Partition(len(reagentsToSave), reagentBatchSize, func(low int, high int) error {
+	err := utils.Partition(len(reagentsToSave), reagentBatchSize, func(low int, high int) error {
 		query := fmt.Sprintf(`INSERT INTO %s.sk_reagents(id, manufacturer, serial, lot_no, type, name)
 		VALUES(:id, :manufacturer, :serial, :lot_no, :type, :name)
 		ON CONFLICT (manufacturer, serial, lot_no, name) DO UPDATE SET manufacturer = excluded.manufacturer RETURNING id;`, r.dbSchema)
@@ -2411,7 +2411,7 @@ func (r *analysisRepository) createControlResults(ctx context.Context, controlRe
 		controlResultIds = append(controlResultIds, controlResults[i].ID)
 	}
 
-	err := util.Partition(len(controlResults), controlResultBatchSize, func(low int, high int) error {
+	err := utils.Partition(len(controlResults), controlResultBatchSize, func(low int, high int) error {
 		query := fmt.Sprintf(`INSERT INTO %s.sk_control_results(id, sample_code, analyte_mapping_id, instrument_id, expected_control_result_id, is_valid, is_compared_to_expected_result, result, examined_at)
 		VALUES(:id, :sample_code, :analyte_mapping_id, :instrument_id, :expected_control_result_id, :is_valid, :is_compared_to_expected_result, :result, :examined_at)`, r.dbSchema)
 
@@ -2484,7 +2484,7 @@ func (r *analysisRepository) createControlResults(ctx context.Context, controlRe
 
 func (r *analysisRepository) getImages(ctx context.Context, analysisResultIDs []uuid.UUID) (map[uuid.UUID][]imageDAO, error) {
 	imagesMap := make(map[uuid.UUID][]imageDAO)
-	err := util.Partition(len(analysisResultIDs), maxParams, func(low int, high int) error {
+	err := utils.Partition(len(analysisResultIDs), maxParams, func(low int, high int) error {
 		query := fmt.Sprintf(`SELECT sari.id, sari.analysis_result_id, sari.channel_result_id, sari.name, sari.description, sari.dea_image_id FROM %s.sk_analysis_result_images sari WHERE sari.analysis_result_id IN (?);`, r.dbSchema)
 		query, args, _ := sqlx.In(query, analysisResultIDs[low:high])
 		query = r.db.Rebind(query)
@@ -2520,7 +2520,7 @@ const imageBatchSize = 8000
 
 func (r *analysisRepository) SaveImages(ctx context.Context, images []imageDAO) ([]uuid.UUID, error) {
 	ids := make([]uuid.UUID, 0, len(images))
-	err := util.Partition(len(images), imageBatchSize, func(low int, high int) error {
+	err := utils.Partition(len(images), imageBatchSize, func(low int, high int) error {
 		idsPart, err := r.saveImages(ctx, images[low:high])
 		if err != nil {
 			return err
@@ -2573,7 +2573,7 @@ func (r *analysisRepository) saveControlResultImages(ctx context.Context, contro
 		ids[i] = controlResultImages[i].ID
 	}
 
-	err := util.Partition(len(controlResultImages), imageBatchSize, func(low int, high int) error {
+	err := utils.Partition(len(controlResultImages), imageBatchSize, func(low int, high int) error {
 		query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_result_images(id, analysis_result_id, channel_result_id, "name", description, image_bytes, dea_image_id, uploaded_to_dea_at)
 		VALUES(:id, :analysis_result_id, :channel_result_id, :name, :description, :image_bytes, :dea_image_id, :uploaded_to_dea_at);`, r.dbSchema)
 		_, err := r.db.NamedExecContext(ctx, query, controlResultImages[low:high])
@@ -2592,7 +2592,7 @@ func (r *analysisRepository) saveControlResultImages(ctx context.Context, contro
 
 func (r *analysisRepository) getWarnings(ctx context.Context, analysisResultIDs []uuid.UUID) (map[uuid.UUID][]warningDAO, error) {
 	warningsMap := make(map[uuid.UUID][]warningDAO)
-	err := util.Partition(len(analysisResultIDs), maxParams, func(low int, high int) error {
+	err := utils.Partition(len(analysisResultIDs), maxParams, func(low int, high int) error {
 		query := fmt.Sprintf(`SELECT sarw.id, sarw.analysis_result_id, sarw.warning FROM %s.sk_analysis_result_warnings sarw WHERE sarw.analysis_result_id IN (?);`, r.dbSchema)
 		query, args, _ := sqlx.In(query, analysisResultIDs[low:high])
 		query = r.db.Rebind(query)
@@ -2648,7 +2648,7 @@ func (r *analysisRepository) createWarnings(ctx context.Context, warningDAOs []w
 		return nil
 	}
 
-	err := util.Partition(len(warningDAOs), warningBatchCount, func(low int, high int) error {
+	err := utils.Partition(len(warningDAOs), warningBatchCount, func(low int, high int) error {
 		query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_result_warnings(id, analysis_result_id, warning)
 		VALUES(:id, :analysis_result_id, :warning)`, r.dbSchema)
 		_, err := r.db.NamedExecContext(ctx, query, warningDAOs[low:high])
@@ -2665,7 +2665,7 @@ func (r *analysisRepository) createWarnings(ctx context.Context, warningDAOs []w
 }
 
 func (r *analysisRepository) createControlResultWarnings(ctx context.Context, warnings []controlResultWarningDAO) error {
-	err := util.Partition(len(warnings), warningBatchCount, func(low int, high int) error {
+	err := utils.Partition(len(warnings), warningBatchCount, func(low int, high int) error {
 		query := fmt.Sprintf(`INSERT INTO %s.sk_control_result_warnings(id, control_result_id, warning)
 		VALUES(:id, :analysis_result_id, :warning)`, r.dbSchema)
 		_, err := r.db.NamedExecContext(ctx, query, warnings[low:high])
@@ -2790,7 +2790,7 @@ func (r *analysisRepository) deleteAnalysisRequestExtraValuesByAnalysisRequestID
 	if len(analysisRequestIDs) == 0 {
 		return nil
 	}
-	err := util.Partition(len(analysisRequestIDs), maxParams, func(low int, high int) error {
+	err := utils.Partition(len(analysisRequestIDs), maxParams, func(low int, high int) error {
 		query := fmt.Sprintf("DELETE FROM %s.sk_analysis_request_extra_values WHERE analysis_request_id IN (?);", r.dbSchema)
 		query, args, _ := sqlx.In(query, analysisRequestIDs[low:high])
 		query = r.db.Rebind(query)
@@ -2810,7 +2810,7 @@ func (r *analysisRepository) deleteSubjectInfosByAnalysisRequestIDs(ctx context.
 	if len(analysisRequestIDs) == 0 {
 		return nil
 	}
-	err := util.Partition(len(analysisRequestIDs), maxParams, func(low int, high int) error {
+	err := utils.Partition(len(analysisRequestIDs), maxParams, func(low int, high int) error {
 		query := fmt.Sprintf("DELETE FROM %s.sk_subject_infos WHERE analysis_request_id IN (?);", r.dbSchema)
 		query, args, _ := sqlx.In(query, analysisRequestIDs[low:high])
 		query = r.db.Rebind(query)
@@ -2830,7 +2830,7 @@ func (r *analysisRepository) deleteAnalysisRequestInstrumentTransmissionsByAnaly
 	if len(analysisRequestIDs) == 0 {
 		return nil
 	}
-	err := util.Partition(len(analysisRequestIDs), maxParams, func(low int, high int) error {
+	err := utils.Partition(len(analysisRequestIDs), maxParams, func(low int, high int) error {
 		query := fmt.Sprintf("DELETE FROM %s.sk_analysis_request_instrument_transmissions WHERE analysis_request_id IN (?);", r.dbSchema)
 		query, args, _ := sqlx.In(query, analysisRequestIDs[low:high])
 		query = r.db.Rebind(query)
@@ -2850,7 +2850,7 @@ func (r *analysisRepository) deleteAppliedSortingRuleTargetsBySampleCodes(ctx co
 	if len(sampleCodes) == 0 {
 		return nil
 	}
-	err := util.Partition(len(sampleCodes), maxParams, func(low int, high int) error {
+	err := utils.Partition(len(sampleCodes), maxParams, func(low int, high int) error {
 		query := fmt.Sprintf("DELETE FROM %s.sk_applied_sorting_rule_targets WHERE sample_code IN (?);", r.dbSchema)
 		query, args, _ := sqlx.In(query, sampleCodes[low:high])
 		query = r.db.Rebind(query)
@@ -2930,7 +2930,7 @@ func (r *analysisRepository) deleteChannelResultsByAnalysisResultIDs(ctx context
 	}
 
 	channelResultIDs := make([]uuid.UUID, 0)
-	err := util.Partition(len(analysisResultIDs), maxParams, func(low int, high int) error {
+	err := utils.Partition(len(analysisResultIDs), maxParams, func(low int, high int) error {
 		query := fmt.Sprintf(`SELECT id from %s.sk_channel_results WHERE analysis_result_id IN (?);`, r.dbSchema)
 		query, args, _ := sqlx.In(query, analysisResultIDs[low:high])
 		query = r.db.Rebind(query)
@@ -2958,7 +2958,7 @@ func (r *analysisRepository) deleteChannelResultsByAnalysisResultIDs(ctx context
 		return err
 	}
 
-	err = util.Partition(len(channelResultIDs), maxParams, func(low int, high int) error {
+	err = utils.Partition(len(channelResultIDs), maxParams, func(low int, high int) error {
 		query := fmt.Sprintf(`DELETE FROM %s.sk_channel_result_quantitative_values WHERE channel_result_id IN (?);`, r.dbSchema)
 		query, args, _ := sqlx.In(query, channelResultIDs[low:high])
 		query = r.db.Rebind(query)
@@ -2974,7 +2974,7 @@ func (r *analysisRepository) deleteChannelResultsByAnalysisResultIDs(ctx context
 		return err
 	}
 
-	err = util.Partition(len(channelResultIDs), maxParams, func(low int, high int) error {
+	err = utils.Partition(len(channelResultIDs), maxParams, func(low int, high int) error {
 		query := fmt.Sprintf(`DELETE FROM %s.sk_channel_results WHERE id IN (?);`, r.dbSchema)
 		query, args, _ := sqlx.In(query, channelResultIDs[low:high])
 		query = r.db.Rebind(query)
@@ -2995,7 +2995,7 @@ func (r *analysisRepository) deleteAnalysisResultWarningsByAnalysisResultIDs(ctx
 		return nil
 	}
 
-	err := util.Partition(len(analysisResultIDs), maxParams, func(low int, high int) error {
+	err := utils.Partition(len(analysisResultIDs), maxParams, func(low int, high int) error {
 		query := fmt.Sprintf("DELETE FROM %s.sk_analysis_result_warnings WHERE analysis_result_id IN (?);", r.dbSchema)
 		query, args, _ := sqlx.In(query, analysisResultIDs[low:high])
 		query = r.db.Rebind(query)
@@ -3016,7 +3016,7 @@ func (r *analysisRepository) deleteImagesByAnalysisResultIDs(ctx context.Context
 		return nil
 	}
 
-	err := util.Partition(len(analysisResultIDs), maxParams, func(low int, high int) error {
+	err := utils.Partition(len(analysisResultIDs), maxParams, func(low int, high int) error {
 		query := fmt.Sprintf("DELETE FROM %s.sk_analysis_result_images WHERE analysis_result_id IN (?);", r.dbSchema)
 		query, args, _ := sqlx.In(query, analysisResultIDs[low:high])
 		query = r.db.Rebind(query)
@@ -3037,7 +3037,7 @@ func (r *analysisRepository) deleteAnalysisResultExtraValuesByAnalysisResultIDs(
 		return nil
 	}
 
-	err := util.Partition(len(analysisResultIDs), maxParams, func(low int, high int) error {
+	err := utils.Partition(len(analysisResultIDs), maxParams, func(low int, high int) error {
 		query := fmt.Sprintf("DELETE FROM %s.sk_analysis_result_extravalues WHERE analysis_result_id IN (?);", r.dbSchema)
 		query, args, _ := sqlx.In(query, analysisResultIDs[low:high])
 		query = r.db.Rebind(query)
@@ -3057,7 +3057,7 @@ func (r *analysisRepository) deleteReagentInfosByAnalysisResultIDs(ctx context.C
 		return nil
 	}
 
-	err := util.Partition(len(analysisResultIDs), maxParams, func(low int, high int) error {
+	err := utils.Partition(len(analysisResultIDs), maxParams, func(low int, high int) error {
 		query := fmt.Sprintf("DELETE FROM %s.sk_analysis_result_reagent_infos WHERE analysis_result_id IN (?);", r.dbSchema)
 		query, args, _ := sqlx.In(query, analysisResultIDs[low:high])
 		query = r.db.Rebind(query)
@@ -3458,7 +3458,7 @@ func (r *analysisRepository) GetUnprocessedAnalysisResultIDs(ctx context.Context
 }
 
 func (r *analysisRepository) MarkAnalysisRequestsAsProcessed(ctx context.Context, analysisRequestIDs []uuid.UUID) error {
-	err := util.Partition(len(analysisRequestIDs), maxParams, func(low int, high int) error {
+	err := utils.Partition(len(analysisRequestIDs), maxParams, func(low int, high int) error {
 		query := fmt.Sprintf(`UPDATE %s.sk_analysis_requests SET is_processed = true WHERE id IN (?);`, r.dbSchema)
 
 		query, args, _ := sqlx.In(query, analysisRequestIDs[low:high])
@@ -3477,7 +3477,7 @@ func (r *analysisRepository) MarkAnalysisRequestsAsProcessed(ctx context.Context
 }
 
 func (r *analysisRepository) MarkAnalysisResultsAsProcessed(ctx context.Context, analysisRequestIDs []uuid.UUID) error {
-	err := util.Partition(len(analysisRequestIDs), maxParams, func(low int, high int) error {
+	err := utils.Partition(len(analysisRequestIDs), maxParams, func(low int, high int) error {
 		query := fmt.Sprintf(`UPDATE %s.sk_analysis_results SET is_processed = true WHERE id IN (?);`, r.dbSchema)
 
 		query, args, _ := sqlx.In(query, analysisRequestIDs[low:high])
@@ -3724,7 +3724,7 @@ func (r *analysisRepository) gatherAndAttachAllConnectedDataToControlResults(ctx
 
 func (r *analysisRepository) getControlResultExtraValues(ctx context.Context, controlResultIDs []uuid.UUID) (map[uuid.UUID][]controlResultExtraValueDAO, error) {
 	extraValuesMap := make(map[uuid.UUID][]controlResultExtraValueDAO)
-	err := util.Partition(len(controlResultIDs), maxParams, func(low int, high int) error {
+	err := utils.Partition(len(controlResultIDs), maxParams, func(low int, high int) error {
 		query := fmt.Sprintf(`SELECT scre.id, scre.control_result_id, scre."key", scre."value"
 		FROM %s.sk_control_result_extravalues scre WHERE scre.control_result_id IN (?);`, r.dbSchema)
 		query, args, _ := sqlx.In(query, controlResultIDs[low:high])
@@ -3758,7 +3758,7 @@ func (r *analysisRepository) getControlResultExtraValues(ctx context.Context, co
 
 func (r *analysisRepository) getControlResultWarnings(ctx context.Context, controlResultIDs []uuid.UUID) (map[uuid.UUID][]controlResultWarningDAO, error) {
 	warningsMap := make(map[uuid.UUID][]controlResultWarningDAO)
-	err := util.Partition(len(controlResultIDs), maxParams, func(low int, high int) error {
+	err := utils.Partition(len(controlResultIDs), maxParams, func(low int, high int) error {
 		query := fmt.Sprintf(`SELECT scrw.id, scrw.control_result_id, scrw.warning FROM %s.sk_control_result_warnings scrw WHERE scrw.control_result_id IN (?);`, r.dbSchema)
 		query, args, _ := sqlx.In(query, controlResultIDs[low:high])
 		query = r.db.Rebind(query)
@@ -3791,7 +3791,7 @@ func (r *analysisRepository) getControlResultWarnings(ctx context.Context, contr
 
 func (r *analysisRepository) getControlResultChannelResults(ctx context.Context, controlResultIDs []uuid.UUID) (map[uuid.UUID][]controlResultChannelResultDAO, error) {
 	channelResultsMap := make(map[uuid.UUID][]controlResultChannelResultDAO)
-	err := util.Partition(len(controlResultIDs), maxParams, func(low int, high int) error {
+	err := utils.Partition(len(controlResultIDs), maxParams, func(low int, high int) error {
 		query := fmt.Sprintf(`SELECT scrcr.id, scrcr.control_result_id, scrcr.channel_id, scrcr.qualitative_result, scrcr.qualitative_result_edited
 		FROM %s.sk_control_result_channel_results scrcr WHERE scrcr.control_result_id IN (?);`, r.dbSchema)
 		query, args, _ := sqlx.In(query, controlResultIDs[low:high])
@@ -3826,7 +3826,7 @@ func (r *analysisRepository) getControlResultChannelResults(ctx context.Context,
 func (r *analysisRepository) getControlResultChannelResultQuantitativeValues(ctx context.Context, channelResultIDs []uuid.UUID) (map[uuid.UUID][]quantitativeChannelResultDAO, error) {
 	valuesByChannelResultID := make(map[uuid.UUID][]quantitativeChannelResultDAO)
 
-	err := util.Partition(len(channelResultIDs), maxParams, func(low int, high int) error {
+	err := utils.Partition(len(channelResultIDs), maxParams, func(low int, high int) error {
 		query := fmt.Sprintf(`SELECT scrcrqv.id, scrcrqv.channel_result_id, scrcrqv.metric, scrcrqv."value"
 		FROM %s.sk_control_result_channel_result_quantitative_values scrcrqv WHERE scrcrqv.channel_result_id IN (?);`, r.dbSchema)
 		query, args, _ := sqlx.In(query, channelResultIDs[low:high])
@@ -3861,7 +3861,7 @@ func (r *analysisRepository) getControlResultChannelResultQuantitativeValues(ctx
 
 func (r *analysisRepository) getControlResultImages(ctx context.Context, controlResultIDs []uuid.UUID) (map[uuid.UUID][]controlResultImageDAO, error) {
 	imagesMap := make(map[uuid.UUID][]controlResultImageDAO)
-	err := util.Partition(len(controlResultIDs), maxParams, func(low int, high int) error {
+	err := utils.Partition(len(controlResultIDs), maxParams, func(low int, high int) error {
 		query := fmt.Sprintf(`SELECT scri.id, scri.control_result_id, scri.channel_result_id, scri.name, scri.description, scri.dea_image_id FROM %s.sk_control_result_images scri WHERE scri.control_result_id IN (?);`, r.dbSchema)
 		query, args, _ := sqlx.In(query, controlResultIDs[low:high])
 		query = r.db.Rebind(query)
@@ -4139,7 +4139,7 @@ func (r *analysisRepository) GetControlResultsToValidate(ctx context.Context, an
 }
 
 func (r *analysisRepository) MarkReagentControlResultRelationsAsProcessed(ctx context.Context, controlResultID uuid.UUID, reagentIDs []uuid.UUID) error {
-	err := util.Partition(len(reagentIDs), maxParams, func(low int, high int) error {
+	err := utils.Partition(len(reagentIDs), maxParams, func(low int, high int) error {
 		query := fmt.Sprintf(`UPDATE %s.sk_reagent_control_result_relations SET is_processed = true WHERE control_result_id = ? AND reagent_id IN (?);`, r.dbSchema)
 
 		query, args, _ := sqlx.In(query, controlResultID, reagentIDs[low:high])
@@ -4157,7 +4157,7 @@ func (r *analysisRepository) MarkReagentControlResultRelationsAsProcessed(ctx co
 }
 
 func (r *analysisRepository) MarkAnalysisResultControlResultRelationsAsProcessed(ctx context.Context, controlResultID uuid.UUID, analysisResultIDs []uuid.UUID) error {
-	err := util.Partition(len(analysisResultIDs), maxParams, func(low int, high int) error {
+	err := utils.Partition(len(analysisResultIDs), maxParams, func(low int, high int) error {
 		query := fmt.Sprintf(`UPDATE %s.sk_analysis_result_control_result_relations SET is_processed = true WHERE control_result_id = ? AND analysis_result_id IN (?);`, r.dbSchema)
 
 		query, args, _ := sqlx.In(query, controlResultID, analysisResultIDs[low:high])
@@ -4279,7 +4279,7 @@ func convertAnalysisResultDAOToAnalysisResult(analysisResultDAO analysisResultDA
 		Operator:        analysisResultDAO.Operator,
 		InstrumentRunID: analysisResultDAO.InstrumentRunID,
 		Edited:          analysisResultDAO.Edited,
-		EditReason:      util.NullStringToString(analysisResultDAO.EditReason),
+		EditReason:      utils.NullStringToString(analysisResultDAO.EditReason),
 		IsInvalid:       analysisResultDAO.IsInvalid,
 		Warnings:        convertAnalysisWarningDAOsToWarnings(analysisResultDAO.Warnings),
 		ChannelResults:  convertChannelResultDAOsToChannelResults(analysisResultDAO.ChannelResults),
@@ -4494,14 +4494,14 @@ func convertRequestInfoDAOToRequestInfo(analysisRequestInfoDAO analysisRequestIn
 		AnalyteID:         analysisRequestInfoDAO.AnalyteID,
 		SampleCode:        analysisRequestInfoDAO.SampleCode,
 		RequestCreatedAt:  analysisRequestInfoDAO.RequestCreatedAt,
-		ResultID:          util.NullUUIDToUUIDPointer(analysisRequestInfoDAO.ResultID),
-		AnalyteMappingsID: util.NullUUIDToUUIDPointer(analysisRequestInfoDAO.AnalyteMappingsID),
-		TestName:          util.NullStringToStringPointer(analysisRequestInfoDAO.TestName),
-		TestResult:        util.NullStringToStringPointer(analysisRequestInfoDAO.TestResult),
-		BatchCreatedAt:    util.NullTimeToTimePointer(analysisRequestInfoDAO.BatchCreatedAt),
+		ResultID:          utils.NullUUIDToUUIDPointer(analysisRequestInfoDAO.ResultID),
+		AnalyteMappingsID: utils.NullUUIDToUUIDPointer(analysisRequestInfoDAO.AnalyteMappingsID),
+		TestName:          utils.NullStringToStringPointer(analysisRequestInfoDAO.TestName),
+		TestResult:        utils.NullStringToStringPointer(analysisRequestInfoDAO.TestResult),
+		BatchCreatedAt:    utils.NullTimeToTimePointer(analysisRequestInfoDAO.BatchCreatedAt),
 		Status:            AnalysisRequestStatusOpen,
-		SourceIP:          util.NullStringToString(analysisRequestInfoDAO.SourceIP),
-		InstrumentID:      util.NullUUIDToUUIDPointer(analysisRequestInfoDAO.InstrumentID),
+		SourceIP:          utils.NullStringToString(analysisRequestInfoDAO.SourceIP),
+		InstrumentID:      utils.NullUUIDToUUIDPointer(analysisRequestInfoDAO.InstrumentID),
 	}
 
 	// Todo - Check conditions
@@ -4523,14 +4523,14 @@ func convertRequestInfoDAOToRequestInfo(analysisRequestInfoDAO analysisRequestIn
 func convertResultInfoDAOToResultInfo(analysisResultInfoDAO analysisResultInfoDAO) AnalysisResultInfo {
 	analysisResultInfo := AnalysisResultInfo{
 		ID:               analysisResultInfoDAO.ID,
-		BatchID:          util.NullUUIDToUUIDPointer(analysisResultInfoDAO.BatchID),
-		RequestCreatedAt: util.NullTimeToTimePointer(analysisResultInfoDAO.RequestCreatedAt),
-		WorkItemID:       util.NullUUIDToUUIDPointer(analysisResultInfoDAO.WorkItemID),
+		BatchID:          utils.NullUUIDToUUIDPointer(analysisResultInfoDAO.BatchID),
+		RequestCreatedAt: utils.NullTimeToTimePointer(analysisResultInfoDAO.RequestCreatedAt),
+		WorkItemID:       utils.NullUUIDToUUIDPointer(analysisResultInfoDAO.WorkItemID),
 		AnalyteID:        analysisResultInfoDAO.AnalyteID,
 		SampleCode:       analysisResultInfoDAO.SampleCode,
 		ResultCreatedAt:  analysisResultInfoDAO.ResultCreatedAt,
-		TestName:         util.NullStringToStringPointer(analysisResultInfoDAO.TestName),
-		TestResult:       util.NullStringToStringPointer(analysisResultInfoDAO.TestResult),
+		TestName:         utils.NullStringToStringPointer(analysisResultInfoDAO.TestName),
+		TestResult:       utils.NullStringToStringPointer(analysisResultInfoDAO.TestResult),
 		Status:           analysisResultInfoDAO.Status,
 	}
 
@@ -4559,7 +4559,7 @@ func convertCerberusQueueItemToCerberusQueueItemDAO(cerberusQueueItem CerberusQu
 		JsonMessage:         cerberusQueueItem.JsonMessage,
 		LastHTTPStatus:      cerberusQueueItem.LastHTTPStatus,
 		LastError:           cerberusQueueItem.LastError,
-		LastErrorAt:         util.TimePointerToNullTime(cerberusQueueItem.LastErrorAt),
+		LastErrorAt:         utils.TimePointerToNullTime(cerberusQueueItem.LastErrorAt),
 		TrialCount:          cerberusQueueItem.TrialCount,
 		RetryNotBefore:      cerberusQueueItem.RetryNotBefore,
 		RawResponse:         cerberusQueueItem.RawResponse,
@@ -4573,7 +4573,7 @@ func convertCerberusQueueItemDAOToCerberusQueueItem(cerberusQueueItemDAO cerberu
 		JsonMessage:         cerberusQueueItemDAO.JsonMessage,
 		LastHTTPStatus:      cerberusQueueItemDAO.LastHTTPStatus,
 		LastError:           cerberusQueueItemDAO.LastError,
-		LastErrorAt:         util.NullTimeToTimePointer(cerberusQueueItemDAO.LastErrorAt),
+		LastErrorAt:         utils.NullTimeToTimePointer(cerberusQueueItemDAO.LastErrorAt),
 		TrialCount:          cerberusQueueItemDAO.TrialCount,
 		RetryNotBefore:      cerberusQueueItemDAO.RetryNotBefore,
 		RawResponse:         cerberusQueueItemDAO.RawResponse,
@@ -4727,7 +4727,7 @@ func convertImageDAOsToImages(imageDAOs []imageDAO) []Image {
 		images[i] = Image{
 			ID:          imageDAO.ID,
 			Name:        imageDAO.Name,
-			Description: util.NullStringToStringPointer(imageDAO.Description),
+			Description: utils.NullStringToStringPointer(imageDAO.Description),
 			DeaImageID:  imageDAO.DeaImageID,
 		}
 	}
@@ -4740,7 +4740,7 @@ func convertControlResultImageDAOsToImages(imageDAOs []controlResultImageDAO) []
 		images[i] = Image{
 			ID:          imageDAO.ID,
 			Name:        imageDAO.Name,
-			Description: util.NullStringToStringPointer(imageDAO.Description),
+			Description: utils.NullStringToStringPointer(imageDAO.Description),
 			DeaImageID:  imageDAO.DeaImageID,
 		}
 	}

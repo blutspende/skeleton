@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/blutspende/bloodlab-common/util"
+	"github.com/blutspende/bloodlab-common/utils"
 	"github.com/blutspende/skeleton/config"
 	"github.com/blutspende/skeleton/db"
 	"github.com/blutspende/skeleton/migrator"
@@ -674,7 +674,7 @@ func (s *skeleton) enqueueUnprocessedAnalysisRequests(ctx context.Context) {
 		for {
 			failed := make([]AnalysisRequest, 0)
 
-			err = util.Partition(len(requests), 500, func(low int, high int) error {
+			err = utils.Partition(len(requests), 500, func(low int, high int) error {
 				partition := requests[low:high]
 
 				requestIDs := make([]uuid.UUID, 0)
@@ -726,7 +726,7 @@ func (s *skeleton) enqueueUnprocessedAnalysisResults(ctx context.Context) {
 		for {
 			failed := make([]uuid.UUID, 0)
 
-			err = util.Partition(len(resultIDs), 500, func(low int, high int) error {
+			err = utils.Partition(len(resultIDs), 500, func(low int, high int) error {
 				partition := resultIDs[low:high]
 
 				results, err := s.analysisRepository.GetAnalysisResultsByIDs(ctx, partition)

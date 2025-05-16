@@ -14,5 +14,4 @@ var (
 	ErrBeginTransactionFailed    = errors.New(MsgBeginTransactionFailed)
 	ErrCommitTransactionFailed   = errors.New(MsgCommitTransactionFailed)
 	ErrRollbackTransactionFailed = errors.New(MsgRollbackTransactionFailed)
-	ErrDbConnectionNotAvailable  = errors.New("db connection not available")
 )

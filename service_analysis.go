@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/blutspende/bloodlab-common/util"
+	"github.com/blutspende/bloodlab-common/utils"
 	"github.com/blutspende/skeleton/db"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
@@ -846,7 +846,7 @@ func (as *analysisService) ProcessStuckImagesToDEA(ctx context.Context) {
 		return
 	}
 
-	_ = util.Partition(len(stuckImageIDs), stuckImageBatchSize, func(low int, high int) error {
+	_ = utils.Partition(len(stuckImageIDs), stuckImageBatchSize, func(low int, high int) error {
 		images, err := as.analysisRepository.GetImagesForDEAUploadByIDs(ctx, stuckImageIDs[low:high])
 		if err != nil {
 			return err
@@ -876,7 +876,7 @@ func (as *analysisService) ProcessStuckImagesToCerberus(ctx context.Context) {
 		return
 	}
 
-	_ = util.Partition(len(stuckImageIDs), stuckImageBatchSize, func(low int, high int) error {
+	_ = utils.Partition(len(stuckImageIDs), stuckImageBatchSize, func(low int, high int) error {
 		imageDAOs, err := as.analysisRepository.GetImagesForCerberusSyncByIDs(ctx, stuckImageIDs[low:high])
 		if err != nil {
 			return err

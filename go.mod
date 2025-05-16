@@ -4,7 +4,7 @@ go 1.24.3
 
 require (
 	github.com/MicahParks/keyfunc v1.9.0
-	github.com/blutspende/bloodlab-common v0.0.0-20250513094114-21a971ae6bb9
+	github.com/blutspende/bloodlab-common v0.0.0-20250515095709-2e82723b3d42
 	github.com/fergusstrange/embedded-postgres v1.30.0
 	github.com/gin-contrib/cors v1.7.5
 	github.com/gin-gonic/gin v1.10.0
