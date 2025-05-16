@@ -23,6 +23,7 @@ type skeleton struct {
 	ctx                                        context.Context
 	config                                     config.Configuration
 	postgres                                   db.Postgres
+	dbConn                                     db.DbConnector
 	dbSchema                                   string
 	migrator                                   migrator.SkeletonMigrator
 	api                                        GinApi
@@ -566,15 +567,16 @@ func (s *skeleton) Start() error {
 		log.Error().Err(err).Msg("failed to connect to database")
 		return err
 	}
-	dbConn, err := s.postgres.GetDbConnection()
+	sqlConn, err := s.postgres.GetSqlConnection()
 	if err != nil {
 		log.Error().Err(err).Msg("failed to get database connection")
 		return err
 	}
+	s.dbConn.SetDbConnection(sqlConn)
 
 	s.unprocessedHandlingWaitGroup.Add(waitGroupSize)
 
-	err = s.migrateUp(s.ctx, dbConn, s.dbSchema)
+	err = s.migrateUp(s.ctx, sqlConn, s.dbSchema)
 	if err != nil {
 		log.Error().Err(err).Msg("migrate up failed")
 		return err
@@ -1394,7 +1396,7 @@ func (s *skeleton) startAnalysisRequestRevocationReexamineJob(ctx context.Contex
 }
 
 func (s *skeleton) GetDbConnection() (*sqlx.DB, error) {
-	dbConn, err := s.postgres.GetDbConnection()
+	dbConn, err := s.postgres.GetSqlConnection()
 	if err != nil {
 		log.Error().Err(err).Msg("failed to get database connection")
 		return nil, err
@@ -1411,7 +1413,7 @@ func (s *skeleton) Stop() error {
 	return nil
 }
 
-func NewSkeleton(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, reagentManufacturers []string, postgres db.Postgres, dbSchema string, migrator migrator.SkeletonMigrator, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService ConsoleLogService, manager Manager, cerberusClient CerberusClient, longPollClient LongPollClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
+func NewSkeleton(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, reagentManufacturers []string, postgres db.Postgres, dbConn db.DbConnector, dbSchema string, migrator migrator.SkeletonMigrator, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService ConsoleLogService, manager Manager, cerberusClient CerberusClient, longPollClient LongPollClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
 	skeleton := &skeleton{
 		ctx:                                    ctx,
 		serviceName:                            serviceName,
@@ -1421,6 +1423,7 @@ func NewSkeleton(ctx context.Context, serviceName, displayName string, requested
 		reagentManufacturers:                   reagentManufacturers,
 		config:                                 config,
 		postgres:                               postgres,
+		dbConn:                                 dbConn,
 		dbSchema:                               dbSchema,
 		migrator:                               migrator,
 		analysisRepository:                     analysisRepository,

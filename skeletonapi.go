@@ -144,10 +144,7 @@ func New(ctx context.Context, serviceName, displayName string, requestedExtraVal
 		return nil, err
 	}
 	postgres := db.NewPostgres(ctx, &config)
-	dbConn, err := db.NewDbConnector(postgres)
-	if err != nil {
-		return nil, err
-	}
+	dbConn := db.NewDbConnector()
 	manager := NewSkeletonManager(ctx)
 	instrumentCache := NewInstrumentCache()
 	analysisRepository := NewAnalysisRepository(dbConn, dbSchema)
@@ -163,5 +160,5 @@ func New(ctx context.Context, serviceName, displayName string, requestedExtraVal
 
 	longpollClient := NewLongPollClient(longPollingApiRestyClient, serviceName, config.CerberusURL, config.LongPollingAPIClientTimeoutSeconds, config.LongPollingReattemptWaitSeconds, config.LongPollingLoggingEnabled)
 
-	return NewSkeleton(ctx, serviceName, displayName, requestedExtraValueKeys, encodings, reagentManufacturers, postgres, dbSchema, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, manager, cerberusClient, longpollClient, deaClient, config)
+	return NewSkeleton(ctx, serviceName, displayName, requestedExtraValueKeys, encodings, reagentManufacturers, postgres, dbConn, dbSchema, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, manager, cerberusClient, longpollClient, deaClient, config)
 }

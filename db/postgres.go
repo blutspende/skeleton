@@ -10,7 +10,7 @@ import (
 
 type Postgres interface {
 	Connect() error
-	GetDbConnection() (*sqlx.DB, error)
+	GetSqlConnection() (*sqlx.DB, error)
 	Close() error
 }
 
@@ -42,7 +42,7 @@ func (p *postgres) Connect() error {
 	return nil
 }
 
-func (p *postgres) GetDbConnection() (*sqlx.DB, error) {
+func (p *postgres) GetSqlConnection() (*sqlx.DB, error) {
 	if p.pgConn == nil {
 		return nil, fmt.Errorf("postgres connection is not established")
 	}
