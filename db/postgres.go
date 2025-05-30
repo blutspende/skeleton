@@ -8,7 +8,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-type Postgres interface {
+type DbConnector interface {
 	Connect() error
 	GetSqlConnection() (*sqlx.DB, error)
 	Close() error
@@ -20,7 +20,7 @@ type postgres struct {
 	pgConn *sqlx.DB
 }
 
-func NewPostgres(ctx context.Context, config *config.Configuration) Postgres {
+func NewPostgres(ctx context.Context, config *config.Configuration) DbConnector {
 	return &postgres{
 		ctx:    ctx,
 		config: config,

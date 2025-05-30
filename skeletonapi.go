@@ -118,7 +118,7 @@ type SkeletonAPI interface {
 	Start() error
 
 	// GetDbConnection - Provides access to internal database connection
-	// - returns postgres database connection
+	// - returns database connection
 	GetDbConnection() (*sqlx.DB, error)
 
 	// Shutdown - MUST BE CALLED ON (GRACEFUL) SHUTDOWN
@@ -143,7 +143,7 @@ func New(ctx context.Context, serviceName, displayName string, requestedExtraVal
 	if err != nil {
 		return nil, err
 	}
-	postgres := db.NewPostgres(ctx, &config)
+	dbConnector := db.NewPostgres(ctx, &config)
 	dbConn := db.NewDbConnection()
 	manager := NewSkeletonManager(ctx)
 	instrumentCache := NewInstrumentCache()
@@ -160,5 +160,5 @@ func New(ctx context.Context, serviceName, displayName string, requestedExtraVal
 
 	longpollClient := NewLongPollClient(longPollingApiRestyClient, serviceName, config.CerberusURL, config.LongPollingAPIClientTimeoutSeconds, config.LongPollingReattemptWaitSeconds, config.LongPollingLoggingEnabled)
 
-	return NewSkeleton(ctx, serviceName, displayName, requestedExtraValueKeys, encodings, reagentManufacturers, postgres, dbConn, dbSchema, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, manager, cerberusClient, longpollClient, deaClient, config)
+	return NewSkeleton(ctx, serviceName, displayName, requestedExtraValueKeys, encodings, reagentManufacturers, dbConnector, dbConn, dbSchema, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, manager, cerberusClient, longpollClient, deaClient, config)
 }

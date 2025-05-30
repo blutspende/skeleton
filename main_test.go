@@ -40,7 +40,7 @@ func configureLogger() {
 	zerolog.SetGlobalLevel(zerolog.DebugLevel)
 }
 
-func setupDbConnector(schemaName string) (db.DbConnection, string, db.Postgres, *sqlx.DB) {
+func setupDbConnector(schemaName string) (db.DbConnection, string, db.DbConnector, *sqlx.DB) {
 	configuration := config.Configuration{}
 	configuration.PostgresDB.Host = "localhost"
 	configuration.PostgresDB.Port = 5551
