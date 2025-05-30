@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/blutspende/bloodlab-common/utils"
 	"github.com/blutspende/skeleton/db"
-	"github.com/blutspende/skeleton/utils"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"time"
@@ -244,7 +244,7 @@ func (as *analysisService) CreateAnalysisResultsBatch(ctx context.Context, analy
 	return savedAnalysisResults, nil
 }
 
-func (as *analysisService) createAnalysisResultsBatch(ctx context.Context, tx db.DbConnector, analysisResultSet AnalysisResultSet) (AnalysisResultSet, error) {
+func (as *analysisService) createAnalysisResultsBatch(ctx context.Context, tx db.DbConnection, analysisResultSet AnalysisResultSet) (AnalysisResultSet, error) {
 	var err error
 	for i := range analysisResultSet.Results {
 		if analysisResultSet.Results[i].DEARawMessageID == uuid.Nil {
@@ -577,7 +577,7 @@ func (as *analysisService) CreateControlResultBatch(ctx context.Context, control
 	return controlResults, analysisResultIds, nil
 }
 
-func (as *analysisService) createControlResultBatch(ctx context.Context, tx db.DbConnector, standaloneControlResults []StandaloneControlResult) ([]StandaloneControlResult, []uuid.UUID, error) {
+func (as *analysisService) createControlResultBatch(ctx context.Context, tx db.DbConnection, standaloneControlResults []StandaloneControlResult) ([]StandaloneControlResult, []uuid.UUID, error) {
 	crs := make([]ControlResult, len(standaloneControlResults))
 	analysisResultIDs := make([]uuid.UUID, 0)
 	reagents := make([]Reagent, 0)

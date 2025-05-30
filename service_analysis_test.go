@@ -5,10 +5,20 @@ import (
 	"github.com/blutspende/skeleton/db"
 	"github.com/blutspende/skeleton/utils"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
 )
+
+func formatTimeStringToBerlinTime(timeString, format string) (time.Time, error) {
+	location, err := time.LoadLocation(string("Europe/Berlin"))
+	if err != nil {
+		log.Error().Err(err).Msg("Can not load Location")
+		return time.Time{}, err
+	}
+	return time.ParseInLocation(format, timeString, location)
+}
 
 func TestCreateAnalysisRequests(t *testing.T) {
 	mockManager := &mockManager{}
@@ -58,7 +68,7 @@ func TestCreateAnalysisResultStatusAndControlResultValid(t *testing.T) {
 }
 
 func TestCreateAnalysisResultStatusAndControlResultNotAllControlAvailable(t *testing.T) {
-	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
 		SampleCode:     "Sample2",
@@ -84,7 +94,7 @@ func TestCreateAnalysisResultStatusAndControlResultNotAllControlAvailable(t *tes
 }
 
 func TestCreateAnalysisResultStatusAndControlResultIncludingCommonControlResults(t *testing.T) {
-	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
 		SampleCode:     "Sample2",
@@ -157,7 +167,7 @@ func TestCreateAnalysisResultStatusAndControlResultWithoutExpectedControlResult(
 }
 
 func TestCalculateControlResultIsValidAndExpectedControlResultIdWhereControlIsValid(t *testing.T) {
-	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
 		SampleCode:     "Sample1",
@@ -183,7 +193,7 @@ func TestCalculateControlResultIsValidAndExpectedControlResultIdWhereControlIsVa
 }
 
 func TestCalculateControlResultIsValidAndExpectedControlResultIdWhereControlIsNotValid(t *testing.T) {
-	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
 		SampleCode:     "Sample1",
@@ -209,7 +219,7 @@ func TestCalculateControlResultIsValidAndExpectedControlResultIdWhereControlIsNo
 }
 
 func TestCalculateControlResultIsValidAndExpectedControlResultIdWhereErrorOnValidatingResult(t *testing.T) {
-	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
 		SampleCode:     "Sample1",
@@ -248,7 +258,7 @@ func TestCalculateControlResultIsValidAndExpectedControlResultIdWhereResultNotVa
 }
 
 func TestCalculateControlResultIsValidWithOperatorEqualsValid(t *testing.T) {
-	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
 		SampleCode:     "Sample1",
@@ -269,7 +279,7 @@ func TestCalculateControlResultIsValidWithOperatorEqualsValid(t *testing.T) {
 }
 
 func TestCalculateControlResultIsValidWithOperatorEqualsInvalid(t *testing.T) {
-	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
 		SampleCode:     "Sample1",
@@ -290,7 +300,7 @@ func TestCalculateControlResultIsValidWithOperatorEqualsInvalid(t *testing.T) {
 }
 
 func TestCalculateControlResultIsValidWithOperatorNotEqualsValid(t *testing.T) {
-	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
 		SampleCode:     "Sample1",
@@ -311,7 +321,7 @@ func TestCalculateControlResultIsValidWithOperatorNotEqualsValid(t *testing.T) {
 }
 
 func TestCalculateControlResultIsValidWithOperatorNotEqualsInvalid(t *testing.T) {
-	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
 		SampleCode:     "Sample1",
@@ -332,7 +342,7 @@ func TestCalculateControlResultIsValidWithOperatorNotEqualsInvalid(t *testing.T)
 }
 
 func TestCalculateControlResultIsValidWithOperatorGreaterOrEqualValid(t *testing.T) {
-	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
 		SampleCode:     "Sample1",
@@ -353,7 +363,7 @@ func TestCalculateControlResultIsValidWithOperatorGreaterOrEqualValid(t *testing
 }
 
 func TestCalculateControlResultIsValidWithOperatorGreaterOrEqualInvalid(t *testing.T) {
-	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
 		SampleCode:     "Sample1",
@@ -374,7 +384,7 @@ func TestCalculateControlResultIsValidWithOperatorGreaterOrEqualInvalid(t *testi
 }
 
 func TestCalculateControlResultIsValidWithOperatorGreaterValid(t *testing.T) {
-	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
 		SampleCode:     "Sample1",
@@ -395,7 +405,7 @@ func TestCalculateControlResultIsValidWithOperatorGreaterValid(t *testing.T) {
 }
 
 func TestCalculateControlResultIsValidWithOperatorGreaterInvalid(t *testing.T) {
-	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
 		SampleCode:     "Sample1",
@@ -416,7 +426,7 @@ func TestCalculateControlResultIsValidWithOperatorGreaterInvalid(t *testing.T) {
 }
 
 func TestCalculateControlResultIsValidWithOperatorLessOrEqualValid(t *testing.T) {
-	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
 		SampleCode:     "Sample1",
@@ -437,7 +447,7 @@ func TestCalculateControlResultIsValidWithOperatorLessOrEqualValid(t *testing.T)
 }
 
 func TestCalculateControlResultIsValidWithOperatorLessOrEqualInvalid(t *testing.T) {
-	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
 		SampleCode:     "Sample1",
@@ -458,7 +468,7 @@ func TestCalculateControlResultIsValidWithOperatorLessOrEqualInvalid(t *testing.
 }
 
 func TestCalculateControlResultIsValidWithOperatorLessValid(t *testing.T) {
-	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
 		SampleCode:     "Sample1",
@@ -479,7 +489,7 @@ func TestCalculateControlResultIsValidWithOperatorLessValid(t *testing.T) {
 }
 
 func TestCalculateControlResultIsValidWithOperatorLessInvalid(t *testing.T) {
-	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
 		SampleCode:     "Sample1",
@@ -500,7 +510,7 @@ func TestCalculateControlResultIsValidWithOperatorLessInvalid(t *testing.T) {
 }
 
 func TestCalculateControlResultIsValidWithOperatorInOpenIntervalValid(t *testing.T) {
-	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
 		SampleCode:     "Sample1",
@@ -521,7 +531,7 @@ func TestCalculateControlResultIsValidWithOperatorInOpenIntervalValid(t *testing
 }
 
 func TestCalculateControlResultIsValidWithOperatorInOpenIntervalInvalid(t *testing.T) {
-	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
 		SampleCode:     "Sample1",
@@ -542,7 +552,7 @@ func TestCalculateControlResultIsValidWithOperatorInOpenIntervalInvalid(t *testi
 }
 
 func TestCalculateControlResultIsValidWithOperatorInClosedIntervalValid(t *testing.T) {
-	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
 		SampleCode:     "Sample1",
@@ -563,7 +573,7 @@ func TestCalculateControlResultIsValidWithOperatorInClosedIntervalValid(t *testi
 }
 
 func TestCalculateControlResultIsValidWithOperatorInClosedIntervalInvalid(t *testing.T) {
-	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
 		SampleCode:     "Sample1",
@@ -584,7 +594,7 @@ func TestCalculateControlResultIsValidWithOperatorInClosedIntervalInvalid(t *tes
 }
 
 func TestCalculateControlResultIsValidWithUnsupportedOperator(t *testing.T) {
-	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
 		SampleCode:     "Sample1",
@@ -606,7 +616,7 @@ func TestCalculateControlResultIsValidWithUnsupportedOperator(t *testing.T) {
 }
 
 func TestCreateAnalysisResultControlRelationsWithControlAttachedToAnalysisResult(t *testing.T) {
-	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
 		SampleCode:     "Sample1",
@@ -649,7 +659,7 @@ func TestCreateAnalysisResultControlRelationsWithControlAttachedToAnalysisResult
 }
 
 func TestCreateMultipleAnalysisResultControlRelationsWithControlAttachedToAnalysisResultSet(t *testing.T) {
-	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
 		SampleCode:     "Sample1",
@@ -705,7 +715,7 @@ func TestCreateMultipleAnalysisResultControlRelationsWithControlAttachedToAnalys
 }
 
 func TestCreateAnalysisResultReagentControlRelations(t *testing.T) {
-	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
 		SampleCode:     "Sample1",
@@ -797,8 +807,8 @@ func TestCreateControlResultBatchWithOnlyPostControlResults(t *testing.T) {
 }
 
 func TestCreateControlResultBatch(t *testing.T) {
-	resultYieldedAt, _ := utils.FormatTimeStringToBerlinTime("20240927162727", "20060102150405")
-	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	resultYieldedAt, _ := formatTimeStringToBerlinTime("20240927162727", "20060102150405")
+	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	controlInstrumentAnalyte := "TESTCONTROLANALYTE"
 
 	expectedControlResult := ExpectedControlResult{
@@ -904,9 +914,9 @@ func TestCreateControlResultBatch(t *testing.T) {
 }
 
 func setupTestDataForAnalysisResultStatusAndControlResultValidCheck(addExpectedControlResult bool, result *ExpectedControlResult) AnalysisResult {
-	resultYieldedAt, _ := utils.FormatTimeStringToBerlinTime("20240927162727", "20060102150405")
-	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
-	validUntil, _ := utils.FormatTimeStringToBerlinTime("20240930162727", "20060102150405")
+	resultYieldedAt, _ := formatTimeStringToBerlinTime("20240927162727", "20060102150405")
+	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	validUntil, _ := formatTimeStringToBerlinTime("20240930162727", "20060102150405")
 
 	expectedControlResults := make([]ExpectedControlResult, 0)
 
@@ -1040,9 +1050,9 @@ func setupControlResultForValidation(analyteMapping AnalyteMapping, instrumentId
 }
 
 func setupTestDataForAnalysisResultReagentAndControlRelationCheck(addExpectedControlResult bool, useOnlyTheIncludedExpectedResult bool, result *ExpectedControlResult) []AnalysisResult {
-	resultYieldedAt, _ := utils.FormatTimeStringToBerlinTime("20240927162727", "20060102150405")
-	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
-	validUntil, _ := utils.FormatTimeStringToBerlinTime("20240930162727", "20060102150405")
+	resultYieldedAt, _ := formatTimeStringToBerlinTime("20240927162727", "20060102150405")
+	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	validUntil, _ := formatTimeStringToBerlinTime("20240930162727", "20060102150405")
 	controlInstrumentAnalyte := "TESTCONTROLANALYTE"
 
 	expectedControlResults := make([]ExpectedControlResult, 0)
@@ -1184,8 +1194,8 @@ func setupTestDataForAnalysisResultReagentAndControlRelationCheck(addExpectedCon
 }
 
 func setupTestDataForStandaloneControlProcessing() (ControlResult, Reagent) {
-	resultYieldedAt, _ := utils.FormatTimeStringToBerlinTime("20240927162727", "20060102150405")
-	expectedControlResultCreatedAt, _ := utils.FormatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	resultYieldedAt, _ := formatTimeStringToBerlinTime("20240927162727", "20060102150405")
+	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	controlInstrumentAnalyte := "TESTCONTROLANALYTE"
 
 	expectedControlResult := ExpectedControlResult{
@@ -1382,6 +1392,6 @@ func (r *extendedMockAnalysisRepo) MarkAnalysisResultControlResultRelationsAsPro
 	return nil
 }
 
-func (r *extendedMockAnalysisRepo) WithTransaction(tx db.DbConnector) AnalysisRepository {
+func (r *extendedMockAnalysisRepo) WithTransaction(tx db.DbConnection) AnalysisRepository {
 	return r
 }

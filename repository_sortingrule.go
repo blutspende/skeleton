@@ -24,12 +24,12 @@ type SortingRuleRepository interface {
 	Update(ctx context.Context, rule SortingRule) error
 	Delete(ctx context.Context, sortingRuleIDs []uuid.UUID) error
 
-	CreateTransaction() (db.DbConnector, error)
-	WithTransaction(tx db.DbConnector) SortingRuleRepository
+	CreateTransaction() (db.DbConnection, error)
+	WithTransaction(tx db.DbConnection) SortingRuleRepository
 }
 
 type sortingRuleRepository struct {
-	db       db.DbConnector
+	db       db.DbConnection
 	dbSchema string
 }
 
@@ -229,11 +229,11 @@ func (r *sortingRuleRepository) Delete(ctx context.Context, sortingRuleIDs []uui
 	return nil
 }
 
-func (r *sortingRuleRepository) CreateTransaction() (db.DbConnector, error) {
+func (r *sortingRuleRepository) CreateTransaction() (db.DbConnection, error) {
 	return r.db.CreateTransactionConnector()
 }
 
-func (r *sortingRuleRepository) WithTransaction(tx db.DbConnector) SortingRuleRepository {
+func (r *sortingRuleRepository) WithTransaction(tx db.DbConnection) SortingRuleRepository {
 	if tx == nil {
 		return r
 	}
@@ -241,7 +241,7 @@ func (r *sortingRuleRepository) WithTransaction(tx db.DbConnector) SortingRuleRe
 	txRepo.db = tx
 	return &txRepo
 }
-func NewSortingRuleRepository(db db.DbConnector, dbSchema string) SortingRuleRepository {
+func NewSortingRuleRepository(db db.DbConnection, dbSchema string) SortingRuleRepository {
 	return &sortingRuleRepository{
 		db:       db,
 		dbSchema: dbSchema,

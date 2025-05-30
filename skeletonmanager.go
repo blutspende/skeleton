@@ -39,7 +39,7 @@ type manager struct {
 func NewSkeletonManager(ctx context.Context) Manager {
 	skeletonManager := &manager{
 		resultsChan:                         make(chan AnalysisResult, 500),
-		processableAnalysisRequestBatchChan: make(chan []AnalysisRequest, 0),
+		processableAnalysisRequestBatchChan: make(chan []AnalysisRequest),
 		processableAnalysisRequestQueue:     utils.NewConcurrentQueue[[]AnalysisRequest](ctx),
 		analyteMappingIdBatchChan:           make(chan []uuid.UUID, 10),
 		controlResultIdBatchChan:            make(chan []uuid.UUID, 10),
