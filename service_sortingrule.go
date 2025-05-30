@@ -17,17 +17,17 @@ type SortingRuleService interface {
 	GetByInstrumentIDs(ctx context.Context, instrumentIDs []uuid.UUID) (map[uuid.UUID][]SortingRule, error)
 	GetSampleSequenceNumber(ctx context.Context, sampleCode string) (int, error)
 	DeleteSortingRulesWithTx(ctx context.Context, sortingRules []SortingRule) error
-	WithTransaction(tx db.DbConnector) SortingRuleService
+	WithTransaction(tx db.DbConnection) SortingRuleService
 }
 
 type sortingRuleService struct {
 	analysisRepository    AnalysisRepository
 	conditionService      ConditionService
 	sortingRuleRepository SortingRuleRepository
-	externalTx            db.DbConnector
+	externalTx            db.DbConnection
 }
 
-func (s *sortingRuleService) getTransaction() db.DbConnector {
+func (s *sortingRuleService) getTransaction() db.DbConnection {
 	return s.externalTx
 }
 
@@ -191,7 +191,7 @@ func (s *sortingRuleService) DeleteSortingRulesWithTx(ctx context.Context, sorti
 	return nil
 }
 
-func (s *sortingRuleService) WithTransaction(tx db.DbConnector) SortingRuleService {
+func (s *sortingRuleService) WithTransaction(tx db.DbConnection) SortingRuleService {
 	if tx == nil {
 		return s
 	}

@@ -2,14 +2,13 @@ package skeleton
 
 import (
 	"crypto/sha256"
-	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"github.com/blutspende/bloodlab-common/utils"
 	"github.com/google/uuid"
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // StandardizeUSDecimalValue removes all thousands-seperators and normalizes to the form 123123.00 having the "." the decimal separator
@@ -51,58 +50,6 @@ func LookupResultMapping(analyteMapping AnalyteMapping, valueFromInstrument stri
 	}
 
 	return valueFromInstrument
-}
-
-func stringPointerToString(value *string) string {
-	if value != nil {
-		return *value
-	}
-	return ""
-}
-
-func stringPointerToStringWithDefault(value *string, defaultValue string) string {
-	if value != nil {
-		return *value
-	}
-	return defaultValue
-}
-
-func nullStringToString(value sql.NullString) string {
-	if value.Valid {
-		return value.String
-	}
-	return ""
-}
-
-func nullStringToStringPointer(value sql.NullString) *string {
-	if value.Valid {
-		return &value.String
-	}
-	return nil
-}
-
-func nullUUIDToUUIDPointer(value uuid.NullUUID) *uuid.UUID {
-	if value.Valid {
-		return &value.UUID
-	}
-	return nil
-}
-
-func nullTimeToTimePointer(value sql.NullTime) *time.Time {
-	if value.Valid {
-		return &value.Time
-	}
-	return nil
-}
-
-func timePointerToNullTime(value *time.Time) sql.NullTime {
-	if value != nil {
-		return sql.NullTime{
-			Time:  *value,
-			Valid: true,
-		}
-	}
-	return sql.NullTime{}
 }
 
 func isSorted(pageable Pageable) bool {
@@ -194,7 +141,7 @@ func HashInstrument(instrument Instrument) string {
 		analyteBuilder.WriteString(a.AnalyteID.String())
 		analyteBuilder.WriteString(a.InstrumentAnalyte)
 		analyteBuilder.WriteString(string(a.ResultType))
-		analyteBuilder.WriteString(stringPointerToString(a.ControlInstrumentAnalyte))
+		analyteBuilder.WriteString(utils.StringPointerToString(a.ControlInstrumentAnalyte))
 		analyteBuilder.WriteString(fmt.Sprintf("%t", a.ControlResultRequired))
 
 		// Hash nested ChannelMappings

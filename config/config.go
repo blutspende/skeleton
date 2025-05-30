@@ -18,6 +18,14 @@ type Configuration struct {
 	InstrumentSettings struct {
 		MemoryLogSize int `envconfig:"TCP_MEMORY_LOG_SIZE" required:"true" default:"500"`
 	}
+	PostgresDB struct {
+		Host     string `envconfig:"DB_SERVER" required:"true" default:"127.0.0.1"`
+		Port     uint32 `envconfig:"DB_PORT" required:"true" default:"5432"`
+		User     string `envconfig:"DB_USER" required:"true" default:"postgres"`
+		Pass     string `envconfig:"DB_PASS" required:"true"`
+		Database string `envconfig:"DB_DATABASE" required:"true"`
+		SSLMode  string `envconfig:"DB_SSL_MODE" required:"true"`
+	}
 	APIPort                                    uint16        `envconfig:"API_PORT" default:"8080"`
 	Authorization                              bool          `envconfig:"AUTHORIZATION" default:"true"`
 	ClientID                                   string        `envconfig:"CLIENT_ID" required:"true"`

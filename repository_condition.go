@@ -26,12 +26,12 @@ type ConditionRepository interface {
 	UpdateCondition(ctx context.Context, condition Condition) error
 	UpdateConditionOperand(ctx context.Context, condition ConditionOperand) error
 
-	CreateTransaction() (db.DbConnector, error)
-	WithTransaction(db db.DbConnector) ConditionRepository
+	CreateTransaction() (db.DbConnection, error)
+	WithTransaction(db db.DbConnection) ConditionRepository
 }
 
 type conditionRepository struct {
-	db       db.DbConnector
+	db       db.DbConnection
 	dbSchema string
 }
 
@@ -260,11 +260,11 @@ func convertDAOToConditionOperand(dao conditionOperandDAO) ConditionOperand {
 	return conditionOperand
 }
 
-func (r *conditionRepository) CreateTransaction() (db.DbConnector, error) {
+func (r *conditionRepository) CreateTransaction() (db.DbConnection, error) {
 	return r.db.CreateTransactionConnector()
 }
 
-func (r *conditionRepository) WithTransaction(tx db.DbConnector) ConditionRepository {
+func (r *conditionRepository) WithTransaction(tx db.DbConnection) ConditionRepository {
 	if tx == nil {
 		return r
 	}
@@ -273,7 +273,7 @@ func (r *conditionRepository) WithTransaction(tx db.DbConnector) ConditionReposi
 	return &txRepo
 }
 
-func NewConditionRepository(db db.DbConnector, dbSchema string) ConditionRepository {
+func NewConditionRepository(db db.DbConnection, dbSchema string) ConditionRepository {
 	return &conditionRepository{
 		db:       db,
 		dbSchema: dbSchema,

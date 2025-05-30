@@ -10,7 +10,7 @@ import (
 type InstrumentService interface {
 	CreateInstrument(ctx context.Context, instrument Instrument) (uuid.UUID, error)
 	GetInstruments(ctx context.Context) ([]Instrument, error)
-	GetInstrumentByID(ctx context.Context, tx db.DbConnector, id uuid.UUID, bypassCache bool) (Instrument, error)
+	GetInstrumentByID(ctx context.Context, tx db.DbConnection, id uuid.UUID, bypassCache bool) (Instrument, error)
 	GetInstrumentByIP(ctx context.Context, ip string) (Instrument, error)
 	UpdateInstrument(ctx context.Context, instrument Instrument, userId uuid.UUID) error
 	DeleteInstrument(ctx context.Context, id uuid.UUID) error
@@ -280,7 +280,7 @@ func (s *instrumentService) GetInstruments(ctx context.Context) ([]Instrument, e
 	return instruments, nil
 }
 
-func (s *instrumentService) GetInstrumentByID(ctx context.Context, tx db.DbConnector, id uuid.UUID, bypassCache bool) (Instrument, error) {
+func (s *instrumentService) GetInstrumentByID(ctx context.Context, tx db.DbConnection, id uuid.UUID, bypassCache bool) (Instrument, error) {
 	var err error
 	if !bypassCache {
 		if instrument, ok := s.instrumentCache.GetByID(id); ok {
