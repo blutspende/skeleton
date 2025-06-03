@@ -157,12 +157,17 @@ func (r *messageInRepository) GetUnsynced(ctx context.Context, limit, offset int
 
 func (r *messageInRepository) Update(ctx context.Context, message MessageIn) error {
 	query := fmt.Sprintf(`UPDATE %s.sk_message_in SET status = :status, 
+<<<<<<< HEAD
 									retry_count = :retry_count, modified_at = timezone('utc', now())`, r.dbSchema)
 	if message.Error != nil {
 		query += ", error = :error"
 	}
 	query += " WHERE id = :id;"
 
+=======
+									error = :error, retry_count = :retry_count, modified_at = timezone('utc', now())
+									WHERE id = :id;`, r.dbSchema)
+>>>>>>> 0d18943 (Add MessageIn/Out handling to skeleton.)
 	_, err := r.db.NamedExecContext(ctx, query, convertMessageInToDAO(message))
 	if err != nil {
 		log.Error().Err(err).Msg(msgUpdateMessageInFailed)
@@ -173,12 +178,17 @@ func (r *messageInRepository) Update(ctx context.Context, message MessageIn) err
 }
 
 func (r *messageInRepository) UpdateDEAInfo(ctx context.Context, message MessageIn) error {
+<<<<<<< HEAD
 	query := fmt.Sprintf(`UPDATE %s.sk_message_in SET dea_raw_message_id = :dea_raw_message_id,
                             retry_count = :retry_count`, r.dbSchema)
 	if message.Error != nil {
 		query += ", error = :error"
 	}
 	query += " WHERE id = :id;"
+=======
+	query := fmt.Sprintf(`UPDATE %s.sk_message_in SET dea_raw_message_id = :dea_raw_message_id, error = :error,
+                            retry_count = :retry_count WHERE id = :id;`, r.dbSchema)
+>>>>>>> 0d18943 (Add MessageIn/Out handling to skeleton.)
 	_, err := r.db.NamedExecContext(ctx, query, convertMessageInToDAO(message))
 	if err != nil {
 		log.Error().Err(err).Msg(msgUpdateMessageInDEAInfoFailed)
