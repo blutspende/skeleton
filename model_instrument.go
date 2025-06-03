@@ -1,6 +1,8 @@
 package skeleton
 
 import (
+	"github.com/blutspende/bloodlab-common/encoding"
+	"github.com/blutspende/bloodlab-common/timezone"
 	"github.com/blutspende/bloodlab-common/utils"
 	"github.com/google/uuid"
 )
@@ -20,8 +22,8 @@ type instrumentTO struct {
 	CaptureDiagnostics  bool                  `json:"captureDiagnostics"`
 	ReplyToQuery        bool                  `json:"replyToQuery"`
 	Status              string                `json:"status"`
-	FileEncoding        string                `json:"fileEncoding"`
-	Timezone            string                `json:"timezone"`
+	FileEncoding        encoding.Encoding     `json:"fileEncoding"`
+	Timezone            timezone.TimeZone     `json:"timezone"`
 	Hostname            string                `json:"hostname"`
 	ClientPort          *int                  `json:"clientPort"`
 	FtpUsername         *string               `json:"ftpUserName"`

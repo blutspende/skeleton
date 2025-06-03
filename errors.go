@@ -2,7 +2,7 @@ package skeleton
 
 import (
 	"bytes"
-	"errors"
+	"github.com/pkg/errors"
 	"strings"
 
 	pgx "github.com/jackc/pgconn"
