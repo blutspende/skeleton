@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/blutspende/bloodlab-common/messagestatus"
-	"github.com/blutspende/bloodlab-common/messagetype"
 	"github.com/google/uuid"
 	"regexp"
 	"strings"
