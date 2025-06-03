@@ -106,6 +106,8 @@ const (
 	msgGetControlResultWarningsFailed                                = "Get control result warnings failed"
 	msgGetControlResultExtraValuesFailed                             = "Get control result extra values failed"
 	msgAnalyteMappingNotFound                                        = "Analyte Mapping not found"
+	msgUpdateAnalysisResultDEARawMessageIDFailed                     = "update analysis result DEARawMessageID failed"
+	msgMissingDEARawMessageID                                        = "missing DEA raw message ID"
 )
 
 var (
@@ -196,6 +198,8 @@ var (
 	ErrGetControlResultWarningsFailed                                = errors.New(msgGetControlResultWarningsFailed)
 	ErrGetControlResultExtraValuesFailed                             = errors.New(msgGetControlResultExtraValuesFailed)
 	ErrAnalyteMappingNotFound                                        = errors.New(msgAnalyteMappingNotFound)
+	ErrUpdateAnalysisResultDEARawMessageIDFailed                     = errors.New(msgUpdateAnalysisResultDEARawMessageIDFailed)
+	ErrMissingDEARawMessageID                                        = errors.New(msgMissingDEARawMessageID)
 )
 
 type analysisRequestDAO struct {
@@ -232,7 +236,8 @@ type analysisResultDAO struct {
 	InstrumentID             uuid.UUID         `db:"instrument_id"`
 	InstrumentRunID          uuid.UUID         `db:"instrument_run_id"`
 	SampleCode               string            `db:"sample_code"`
-	DEARawMessageID          uuid.UUID         `db:"dea_raw_message_id"`
+	DEARawMessageID          uuid.NullUUID     `db:"dea_raw_message_id"`
+	MessageInID              uuid.UUID         `db:"message_in_id"`
 	BatchID                  uuid.UUID         `db:"batch_id"`
 	Result                   string            `db:"result"`
 	Status                   ResultStatus      `db:"status"`
@@ -458,6 +463,7 @@ type AnalysisRepository interface {
 
 	CreateAnalysisResultsBatch(ctx context.Context, analysisResults []AnalysisResult) ([]AnalysisResult, error)
 	UpdateStatusAnalysisResultsBatch(ctx context.Context, analysisResultsToUpdate []AnalysisResult) error
+	UpdateAnalysisResultDEARawMessageID(ctx context.Context, analysisResultID uuid.UUID, deaRawMessageID uuid.NullUUID) error
 	CreateAnalysisResultReagentRelations(ctx context.Context, relationDAOs []analysisResultReagentRelationDAO) error
 	GetAnalysisResultsBySampleCodeAndAnalyteID(ctx context.Context, sampleCode string, analyteID uuid.UUID) ([]AnalysisResult, error)
 	GetAnalysisResultByCerberusID(ctx context.Context, id uuid.UUID, allowDeletedAnalyteMapping bool) (AnalysisResult, error)
@@ -1175,8 +1181,8 @@ func (r *analysisRepository) createAnalysisResultsBatch(ctx context.Context, ana
 	}
 
 	err := utils.Partition(len(analysisResults), analysisResultBatchSize, func(low int, high int) error {
-		query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_results(id, analyte_mapping_id, instrument_id, sample_code, instrument_run_id, dea_raw_message_id, batch_id, "result", status, result_mode, yielded_at, valid_until, operator, technical_release_datetime, edited, edit_reason, is_invalid)
-			VALUES(:id, :analyte_mapping_id, :instrument_id, :sample_code, :instrument_run_id, :dea_raw_message_id, :batch_id, :result, :status, :result_mode, :yielded_at, :valid_until, :operator, :technical_release_datetime, :edited, :edit_reason, :is_invalid);`, r.dbSchema)
+		query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_results(id, analyte_mapping_id, instrument_id, sample_code, instrument_run_id, dea_raw_message_id, message_in_id, batch_id, "result", status, result_mode, yielded_at, valid_until, operator, technical_release_datetime, edited, edit_reason, is_invalid)
+			VALUES(:id, :analyte_mapping_id, :instrument_id, :sample_code, :instrument_run_id, :dea_raw_message_id, :message_in_id, :batch_id, :result, :status, :result_mode, :yielded_at, :valid_until, :operator, :technical_release_datetime, :edited, :edit_reason, :is_invalid);`, r.dbSchema)
 		_, err := r.db.NamedExecContext(ctx, query, convertAnalysisResultsToDAOs(analysisResults[low:high]))
 		if err != nil {
 			log.Error().Err(err).Msg(msgCreateAnalysisResultBatchFailed)
@@ -1383,7 +1389,7 @@ func (r *analysisRepository) GetAnalysisResultsByIDs(ctx context.Context, ids []
 		return []AnalysisResult{}, nil
 	}
 
-	query := `SELECT sar.id, sar.analyte_mapping_id, sar.instrument_id, sar.sample_code, sar.instrument_run_id, sar.dea_raw_message_id, sar.batch_id, sar."result", sar.status, sar.result_mode, sar.yielded_at, sar.valid_until, sar.operator, sar.edited, sar.edit_reason, sar.is_invalid,
+	query := `SELECT sar.id, sar.analyte_mapping_id, sar.instrument_id, sar.message_in_id, sar.sample_code, sar.instrument_run_id, sar.dea_raw_message_id, sar.batch_id, sar."result", sar.status, sar.result_mode, sar.yielded_at, sar.valid_until, sar.operator, sar.edited, sar.edit_reason, sar.is_invalid,
 					sam.id AS "analyte_mapping.id", sam.instrument_id AS "analyte_mapping.instrument_id", sam.instrument_analyte AS "analyte_mapping.instrument_analyte", sam.analyte_id AS "analyte_mapping.analyte_id", sam.result_type AS "analyte_mapping.result_type", 
 					sam.control_instrument_analyte AS "analyte_mapping.control_instrument_analyte", sam.control_result_required AS "analyte_mapping.control_result_required", sam.created_at AS "analyte_mapping.created_at", sam.modified_at AS "analyte_mapping.modified_at"
 			FROM %schema_name%.sk_analysis_results sar
@@ -3092,11 +3098,10 @@ func convertAnalysisResultToTO(ar AnalysisResult) (AnalysisResultTO, error) {
 	analysisResultTO := AnalysisResultTO{
 		ID:                       ar.ID,
 		WorkingItemID:            ar.AnalysisRequest.WorkItemID,
-		DEARawMessageID:          ar.DEARawMessageID,
+		DEARawMessageID:          ar.DEARawMessageID.UUID,
 		ValidUntil:               ar.ValidUntil,
 		ResultYieldDateTime:      ar.ResultYieldDateTime,
 		ExaminedMaterial:         ar.AnalysisRequest.MaterialID,
-		BatchId:                  ar.BatchID,
 		Result:                   ar.Result,
 		Mode:                     string(ar.ResultMode),
 		Status:                   string(ar.Status),
@@ -3114,7 +3119,9 @@ func convertAnalysisResultToTO(ar AnalysisResult) (AnalysisResultTO, error) {
 		WarnFlag:                 ar.WarnFlag,
 		Warnings:                 ar.Warnings,
 	}
-
+	if !ar.DEARawMessageID.Valid {
+		return analysisResultTO, ErrMissingDEARawMessageID
+	}
 	switch ar.Status {
 	case Preliminary:
 		analysisResultTO.Status = "PRE"
@@ -3550,6 +3557,17 @@ func (r *analysisRepository) GetReagentsByIDs(ctx context.Context, reagentIDs []
 	}
 
 	return reagents, err
+}
+
+func (r *analysisRepository) UpdateAnalysisResultDEARawMessageID(ctx context.Context, analysisResultID uuid.UUID, deaRawMessageID uuid.NullUUID) error {
+	query := fmt.Sprintf(`UPDATE %s.sk_analysis_results SET dea_raw_message_id = $1 WHERE id = $2;`, r.dbSchema)
+	_, err := r.db.ExecContext(ctx, query, deaRawMessageID, analysisResultID)
+	if err != nil {
+		log.Error().Err(err).Msg(msgUpdateAnalysisResultDEARawMessageIDFailed)
+		return ErrUpdateAnalysisResultDEARawMessageIDFailed
+	}
+
+	return nil
 }
 
 func (r *analysisRepository) CreateControlResultBatch(ctx context.Context, controlResults []ControlResult) ([]ControlResult, error) {
@@ -4274,6 +4292,7 @@ func convertAnalysisResultToDAO(analysisResult AnalysisResult) analysisResultDAO
 		SampleCode:       analysisResult.SampleCode,
 		InstrumentRunID:  analysisResult.InstrumentRunID,
 		DEARawMessageID:  analysisResult.DEARawMessageID,
+		MessageInID:      analysisResult.MessageInID,
 		BatchID:          analysisResult.BatchID,
 		Result:           analysisResult.Result,
 		Status:           analysisResult.Status,
@@ -4321,6 +4340,7 @@ func convertAnalysisResultDAOToAnalysisResult(analysisResultDAO analysisResultDA
 		},
 		SampleCode:      analysisResultDAO.SampleCode,
 		DEARawMessageID: analysisResultDAO.DEARawMessageID,
+		MessageInID:     analysisResultDAO.MessageInID,
 		BatchID:         analysisResultDAO.BatchID,
 		Result:          analysisResultDAO.Result,
 		ResultMode:      analysisResultDAO.ResultMode,

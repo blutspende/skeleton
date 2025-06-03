@@ -75,14 +75,39 @@ type SkeletonAPI interface {
 	SubmitAnalysisResultBatch(ctx context.Context, resultBatch AnalysisResultSet) error
 
 	SubmitControlResults(ctx context.Context, controlResults []StandaloneControlResult) error
+	// SaveMessageIn - persists an incoming instrument message (e.g. result) and handles the long term archiving of it
+	SaveMessageIn(ctx context.Context, messageIn MessageIn) (uuid.UUID, error)
+	// UpdateMessageIn - updates an incoming instrument message
+	UpdateMessageIn(ctx context.Context, messageIn MessageIn) error
+	// GetUnprocessedMessageIns - get all unprocessed incoming instrument messages, up until the provided cutoff timestamp
+	GetUnprocessedMessageIns(ctx context.Context, cutoffTime time.Time) ([]MessageIn, error)
+	// GetUnprocessedMessageInsByInstrumentID - get all unprocessed incoming instrument messages up until the provided cutoff timestamp for a specific instrument
+	GetUnprocessedMessageInsByInstrumentID(ctx context.Context, instrumentID uuid.UUID) ([]MessageIn, error)
+	// SaveMessageOut - persist an outgoing instrument message
+	SaveMessageOut(ctx context.Context, messageOut MessageOut) (uuid.UUID, error)
+	// SaveMessageOutBatch - persists outgoing instrument messages (e.g. order) in a single transaction, and handles the long term archiving of them
+	SaveMessageOutBatch(ctx context.Context, messageOuts []MessageOut) ([]uuid.UUID, error)
+	// UpdateMessageOut - updates an outgoing instrument message
+	UpdateMessageOut(ctx context.Context, messageOut MessageOut) error
+	// GetUnprocessedMessageOuts - returns all unprocessed outgoing instrument messages, up until the provided cutoff timestamp
+	GetUnprocessedMessageOuts(ctx context.Context, cutoffTime time.Time) ([]MessageOut, error)
+	// GetUnprocessedMessageOutsByInstrumentID - returns all unprocessed outgoing instrument messages, up until the provided cutoff timestamp for a specific instrument
+	GetUnprocessedMessageOutsByInstrumentID(ctx context.Context, instrumentID uuid.UUID) ([]MessageOut, error)
+	// AddAnalysisRequestsToMessageOutOrder - adds analysis requests to an existing order
+	AddAnalysisRequestsToMessageOutOrder(ctx context.Context, messageOutOrderID uuid.UUID, analysisRequestIDs []uuid.UUID) error
+	// DeleteRevokedUnsentOrderMessagesByAnalysisRequestIDs - deletes order messages that were never sent to an instrument, contains the provided
+	// analysis request IDs, and all their analysis requests had been revoked. Returns the IDs of the deleted messages.
+	DeleteRevokedUnsentOrderMessagesByAnalysisRequestIDs(ctx context.Context, analysisRequestIDs []uuid.UUID) ([]uuid.UUID, error)
+	// GetTestCodesToRevokeBySampleCodes - returns a map where the key is the sample code, and the values are the test codes that need
+	// to be revoked as per the provided analysis request IDs
+	GetTestCodesToRevokeBySampleCodes(ctx context.Context, instrumentID uuid.UUID, analysisRequestIDs []uuid.UUID) (map[string][]string, error)
+	// GetMessageOutOrdersBySampleCodesAndRequestMappingIDs - returns all existing orders belonging to a MessageOut organized by sample codes and request mapping IDs.
+	// If the includePending parameter is set to true, orders are included where the message has not been sent out yet
+	GetMessageOutOrdersBySampleCodesAndRequestMappingIDs(ctx context.Context, sampleCodes []string, requestMappingIDs []uuid.UUID, includePending bool) (map[string]map[uuid.UUID][]MessageOutOrder, error)
 
 	GetAnalysisResultIdsWithoutControlByReagent(ctx context.Context, controlResult ControlResult, reagent Reagent) ([]uuid.UUID, error)
 	GetAnalysisResultIdsWhereLastestControlIsInvalid(ctx context.Context, controlResult ControlResult, reagent Reagent) ([]uuid.UUID, error)
 	GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMappingId uuid.UUID, instrumentId uuid.UUID) ([]ControlResult, error)
-
-	// UploadRawMessageToDEA - Uploads raw instrument message to DEA, and returns its ID. Must be called before
-	// submitting analysis result, as every analysis result must have a reference to it.
-	UploadRawMessageToDEA(rawMessage []byte) (uuid.UUID, error)
 
 	// GetInstrument returns all the settings regarding an instrument
 	// contains AnalyteMappings[] and RequestMappings[]
@@ -156,10 +181,14 @@ func New(ctx context.Context, serviceName, displayName string, requestedExtraVal
 	sortingRuleRepository := NewSortingRuleRepository(dbConn, dbSchema)
 	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
 	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, manager, instrumentCache, cerberusClient)
+	messageInRepository := NewMessageInRepository(dbConn, dbSchema, config.MessageMaxRetries, config.LookBackDays)
+	messageOutRepository := NewMessageOutRepository(dbConn, dbSchema, config.MessageMaxRetries, config.LookBackDays)
+	messageOutOrderRepository := NewMessageOutOrderRepository(dbConn, dbSchema, config.MessageMaxRetries)
+	messageService := NewMessageService(deaClient, messageInRepository, messageOutRepository, messageOutOrderRepository, serviceName)
 
 	consoleLogService := NewConsoleLogService(cerberusClient)
 
 	longpollClient := NewLongPollClient(longPollingApiRestyClient, serviceName, config.CerberusURL, config.LongPollingAPIClientTimeoutSeconds, config.LongPollingReattemptWaitSeconds, config.LongPollingLoggingEnabled)
 
-	return NewSkeleton(ctx, serviceName, displayName, requestedExtraValueKeys, encodings, reagentManufacturers, dbConnector, dbConn, dbSchema, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, manager, cerberusClient, longpollClient, deaClient, config)
+	return NewSkeleton(ctx, serviceName, displayName, requestedExtraValueKeys, encodings, reagentManufacturers, dbConnector, dbConn, dbSchema, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, messageService, manager, cerberusClient, longpollClient, deaClient, config)
 }

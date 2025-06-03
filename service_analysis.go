@@ -156,18 +156,21 @@ func (as *analysisService) ProcessAnalysisRequests(ctx context.Context, analysis
 
 func (as *analysisService) RevokeAnalysisRequests(ctx context.Context, workItemIDs []uuid.UUID) error {
 	log.Trace().Msgf("Revoking %d work-item(s) by IDs", len(workItemIDs))
-
 	analysisRequests, err := as.analysisRepository.GetAnalysisRequestsByWorkItemIDs(ctx, workItemIDs)
 	if err != nil {
 		return ErrRevokeAnalysisRequestsFailed
 	}
-
-	as.manager.GetCallbackHandler().RevokeAnalysisRequests(analysisRequests)
 	err = as.analysisRepository.DeleteAnalysisRequestExtraValues(ctx, workItemIDs)
 	if err != nil {
 		return ErrRevokeAnalysisRequestsFailed
 	}
-	return as.analysisRepository.RevokeAnalysisRequests(ctx, workItemIDs)
+	err = as.analysisRepository.RevokeAnalysisRequests(ctx, workItemIDs)
+	if err != nil {
+		return ErrRevokeAnalysisRequestsFailed
+	}
+	as.manager.GetCallbackHandler().RevokeAnalysisRequests(analysisRequests)
+
+	return nil
 }
 
 func (as *analysisService) ReexamineAnalysisRequestsBatch(ctx context.Context, workItemIDs []uuid.UUID) error {
@@ -247,9 +250,6 @@ func (as *analysisService) CreateAnalysisResultsBatch(ctx context.Context, analy
 func (as *analysisService) createAnalysisResultsBatch(ctx context.Context, tx db.DbConnection, analysisResultSet AnalysisResultSet) (AnalysisResultSet, error) {
 	var err error
 	for i := range analysisResultSet.Results {
-		if analysisResultSet.Results[i].DEARawMessageID == uuid.Nil {
-			return analysisResultSet, errors.New(fmt.Sprintf("DEA raw message ID is missing at index: %d", i))
-		}
 		if analysisResultSet.Results[i].AnalyteMapping.ID == uuid.Nil {
 			return analysisResultSet, errors.New(fmt.Sprintf("analyte mapping CerberusID is missing at index: %d", i))
 		}
