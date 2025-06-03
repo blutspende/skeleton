@@ -59,11 +59,6 @@ const (
 	msgGetAnalysisResultsFailed                                      = "Get analysis results failed"
 	msgGetAnalysisRequestsFailed                                     = "Get analysis requests failed"
 	msgGetUnprocessedAnalysisRequestsFailed                          = "Get unprocessed analysis requests failed"
-	msgGetAnalysisRequestInfosCountFailed                            = "Get analysis request infos counting failed"
-	msgGetAnalysisRequestInfosFailed                                 = "Get analysis request infos failed"
-	msgGetAnalysisResultInfosFailed                                  = "Get analysis result infos failed"
-	msgGetAnalysisResultInfosCountFailed                             = "Get analysis result infos counting failed"
-	msgGetAnalysisBatchIdsFailed                                     = "Get analysis batch ids failed"
 	msgGetSubjectInfosFailed                                         = "Get subject infos failed"
 	msgCreateAnalysisResultBatchFailed                               = "Create analysis result batch failed"
 	msgUpdateAnalysisResultStatusBatchFailed                         = "Update analysis result status batch failed"
@@ -151,11 +146,6 @@ var (
 	ErrGetAnalysisResultsFailed                                      = errors.New(msgGetAnalysisResultsFailed)
 	ErrGetAnalysisRequestsFailed                                     = errors.New(msgGetAnalysisRequestsFailed)
 	ErrGetUnprocessedAnalysisRequestsFailed                          = errors.New(msgGetUnprocessedAnalysisRequestsFailed)
-	ErrGetAnalysisRequestInfosFailed                                 = errors.New(msgGetAnalysisRequestInfosFailed)
-	ErrGetAnalysisRequestInfosCountFailed                            = errors.New(msgGetAnalysisRequestInfosCountFailed)
-	ErrGetAnalysisResultInfosFailed                                  = errors.New(msgGetAnalysisResultInfosFailed)
-	ErrGetAnalysisResultInfosCountFailed                             = errors.New(msgGetAnalysisResultInfosCountFailed)
-	ErrGetAnalysisBatchIds                                           = errors.New(msgGetAnalysisBatchIdsFailed)
 	ErrGetSubjectInfosFailed                                         = errors.New(msgGetSubjectInfosFailed)
 	ErrCreateAnalysisResultBatchFailed                               = errors.New(msgCreateAnalysisResultBatchFailed)
 	ErrUpdateAnalysisResultStatusBatchFailed                         = errors.New(msgUpdateAnalysisResultStatusBatchFailed)
@@ -445,11 +435,8 @@ type AnalysisRepository interface {
 	CreateAnalysisRequestExtraValues(ctx context.Context, extraValuesByAnalysisRequestIDs map[uuid.UUID][]ExtraValue) error
 	GetAnalysisRequestsBySampleCodeAndAnalyteID(ctx context.Context, sampleCodes string, analyteID uuid.UUID) ([]AnalysisRequest, error)
 	GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string, allowResending bool) (map[string][]AnalysisRequest, error)
-	GetAnalysisRequestsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisRequestInfo, int, error)
 	GetAnalysisRequestExtraValuesByAnalysisRequestID(ctx context.Context, analysisRequestID uuid.UUID) (map[string]string, error)
 	GetSampleCodesByOrderID(ctx context.Context, orderID uuid.UUID) ([]string, error)
-	GetAnalysisResultsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisResultInfo, int, error)
-	GetAnalysisBatches(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisBatch, int, error)
 	//GetAnalysisRequestsForVisualization(ctx context.Context) (map[string][]AnalysisRequest, error)
 	CreateSubjectsBatch(ctx context.Context, subjectInfosByAnalysisRequestID map[uuid.UUID]SubjectInfo) (map[uuid.UUID]uuid.UUID, error)
 	GetSubjectsByAnalysisRequestIDs(ctx context.Context, analysisRequestIDs []uuid.UUID) (map[uuid.UUID]SubjectInfo, error)
@@ -477,7 +464,6 @@ type AnalysisRepository interface {
 	CreateReagentBatch(ctx context.Context, reagents []Reagent) ([]Reagent, error)
 	CreateControlResults(ctx context.Context, controlResultsMap map[uuid.UUID]map[uuid.UUID][]ControlResult) (map[uuid.UUID]map[uuid.UUID][]uuid.UUID, error)
 	CreateWarnings(ctx context.Context, warningsByAnalysisResultID map[uuid.UUID][]string) error
-	GetAnalysisResultsByBatchIDsMapped(ctx context.Context, batchIDs []uuid.UUID) (map[uuid.UUID][]AnalysisResultInfo, error)
 
 	UpdateCerberusQueueItemStatus(ctx context.Context, queueItem CerberusQueueItem) error
 	GetAnalysisResultQueueItems(ctx context.Context) ([]CerberusQueueItem, error)
@@ -705,97 +691,6 @@ func (r *analysisRepository) GetAnalysisRequestsBySampleCodes(ctx context.Contex
 	return analysisRequestsBySampleCodes, err
 }
 
-func (r *analysisRepository) GetAnalysisRequestsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisRequestInfo, int, error) {
-	preparedValues := map[string]interface{}{
-		"instrument_id": instrumentID,
-	}
-
-	query := `select * from (
-        SELECT distinct on (req.created_at, req.id)
-       req.id AS request_id,
-	   req.sample_code AS sample_code,
-	   req.work_item_id AS work_item_id,
-	   req.analyte_id AS analyte_id,
-	   req.created_at as request_created_at,
-	   am.analyte_id as analyte_mapping_id,
-       am.instrument_analyte as test_name,
-	   res.id AS result_id,
-	   res."result" AS test_result,
-       COALESCE(res.yielded_at, res.created_at) AS result_created_at,
-	   i.hostname as source_ip,
-	   i.id as instrument_id
-FROM %schema_name%.sk_analysis_requests req
-LEFT JOIN %schema_name%.sk_analysis_results res ON (res.sample_code = req.sample_code and res.instrument_id = :instrument_id)
-LEFT JOIN %schema_name%.sk_analysis_results res2 ON (res2.sample_code = req.sample_code AND res2.instrument_id = :instrument_id AND res.created_at < res2.created_at)
-LEFT JOIN %schema_name%.sk_instruments i ON i.id = res.instrument_id
-LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = i.id AND req.analyte_id = am.analyte_id
-WHERE res2 IS NULL`
-
-	countQuery := `select count(request_id) from (
-    SELECT distinct on (req.created_at, req.id) req.id as request_id
-FROM %schema_name%.sk_analysis_requests req
-LEFT JOIN %schema_name%.sk_analysis_results res ON (res.sample_code = req.sample_code and res.instrument_id = :instrument_id)
-LEFT JOIN %schema_name%.sk_analysis_results res2 ON (res2.sample_code = req.sample_code AND res2.instrument_id = :instrument_id AND res.created_at < res2.created_at)
-LEFT JOIN %schema_name%.sk_instruments i ON i.id = res.instrument_id
-LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = i.id AND req.analyte_id = am.analyte_id
-WHERE res2 IS NULL`
-
-	if filter.TimeFrom != nil {
-		preparedValues["time_from"] = filter.TimeFrom.UTC()
-
-		query += ` AND req.created_at >= :time_from`
-		countQuery += ` AND req.created_at >= :time_from`
-	}
-
-	if filter.Filter != nil {
-		preparedValues["filter"] = "%" + strings.ToLower(*filter.Filter) + "%"
-
-		query += ` AND (LOWER(req.sample_code) LIKE :filter OR LOWER(am.instrument_analyte) LIKE :filter)`
-		countQuery += ` AND (LOWER(req.sample_code) LIKE :filter OR LOWER(am.instrument_analyte) LIKE :filter)`
-	}
-
-	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
-
-	query += ` order by req.created_at desc, req.id) as sub `
-	countQuery += `) as sub `
-
-	query += applyPagination(filter.Pageable, "", "") + `;`
-
-	countQuery = strings.ReplaceAll(countQuery, "%schema_name%", r.dbSchema)
-
-	log.Trace().Str("query", query).Interface("args", preparedValues).Msg("GetAnalysisRequestsInfo")
-	rows, err := r.db.NamedQueryContext(ctx, query, preparedValues)
-	if err != nil {
-		log.Error().Err(err).Msg(msgGetAnalysisRequestInfosFailed)
-		return nil, 0, ErrGetAnalysisRequestInfosFailed
-	}
-	defer rows.Close()
-
-	requestInfoList := make([]analysisRequestInfoDAO, 0)
-	for rows.Next() {
-		request := analysisRequestInfoDAO{}
-		err = rows.StructScan(&request)
-		if err != nil {
-			log.Error().Err(err).Msg(msgGetAnalysisRequestInfosFailed)
-			return nil, 0, ErrGetAnalysisRequestInfosFailed
-		}
-		requestInfoList = append(requestInfoList, request)
-	}
-
-	stmt, err := r.db.PrepareNamed(countQuery)
-	if err != nil {
-		log.Error().Err(err).Msg(msgGetAnalysisRequestInfosCountFailed)
-		return nil, 0, ErrGetAnalysisRequestInfosCountFailed
-	}
-	var count int
-	if err = stmt.QueryRowx(preparedValues).Scan(&count); err != nil {
-		log.Error().Err(err).Msg(msgGetAnalysisRequestInfosCountFailed)
-		return nil, 0, ErrGetAnalysisRequestInfosCountFailed
-	}
-
-	return convertRequestInfoDAOsToRequestInfos(requestInfoList), count, nil
-}
-
 func (r *analysisRepository) GetAnalysisRequestExtraValuesByAnalysisRequestID(ctx context.Context, analysisRequestID uuid.UUID) (map[string]string, error) {
 	query := fmt.Sprintf(`SELECT * FROM %s.sk_analysis_request_extra_values
 					WHERE analysis_request_id = $1;`, r.dbSchema)
@@ -845,151 +740,6 @@ func (r *analysisRepository) GetSampleCodesByOrderID(ctx context.Context, orderI
 	}
 
 	return sampleCodes, nil
-}
-
-func (r *analysisRepository) GetAnalysisResultsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisResultInfo, int, error) {
-	preparedValues := map[string]interface{}{
-		"instrument_id": instrumentID,
-	}
-
-	query := `SELECT res.id AS result_id,
-	   res.sample_code AS sample_code,
-	   am.analyte_id AS analyte_id,
-	   COALESCE(res.yielded_at, res.created_at) AS result_created_at,
-       am.instrument_analyte as test_name,
-	   res.result AS test_result,
-       res.status AS status,
-       req.created_at AS request_created_at,
-       req.work_item_id as work_item_id
-FROM %schema_name%.sk_analysis_results res
-LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = res.instrument_id AND res.analyte_mapping_id = am.id
-LEFT JOIN %schema_name%.sk_analysis_requests req ON req.sample_code = res.sample_code AND req.analyte_id = am.analyte_id
-WHERE res.instrument_id = :instrument_id`
-
-	countQuery := `SELECT count(res.id)
-FROM %schema_name%.sk_analysis_results res
-LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = res.instrument_id AND res.analyte_mapping_id = am.id
-LEFT JOIN %schema_name%.sk_analysis_requests req ON req.sample_code = res.sample_code AND req.analyte_id = am.analyte_id
-WHERE res.instrument_id = :instrument_id`
-
-	if filter.TimeFrom != nil {
-		preparedValues["time_from"] = filter.TimeFrom.UTC()
-
-		query += ` AND res.created_at >= :time_from`
-		countQuery += ` AND res.created_at >= :time_from`
-	}
-
-	if filter.Filter != nil {
-		preparedValues["filter"] = "%" + strings.ToLower(*filter.Filter) + "%"
-
-		query += ` AND (LOWER(res.sample_code) LIKE :filter OR LOWER(am.instrument_analyte) LIKE :filter)`
-		countQuery += ` AND (LOWER(res.sample_code) LIKE :filter OR LOWER(am.instrument_analyte) LIKE :filter)`
-	}
-
-	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
-	query += applyPagination(filter.Pageable, "res", "req.created_at DESC, res.id") + `;`
-
-	countQuery = strings.ReplaceAll(countQuery, "%schema_name%", r.dbSchema)
-	log.Trace().Str("query", query).Interface("args", preparedValues).Msg("GetAnalysisResultsInfo")
-
-	rows, err := r.db.NamedQueryContext(ctx, query, preparedValues)
-	if err != nil {
-		log.Error().Err(err).Msg(msgGetAnalysisResultInfosFailed)
-		return nil, 0, ErrGetAnalysisResultInfosFailed
-	}
-	defer rows.Close()
-
-	resultInfoList := make([]analysisResultInfoDAO, 0)
-	for rows.Next() {
-		result := analysisResultInfoDAO{}
-		err = rows.StructScan(&result)
-		if err != nil {
-			log.Error().Err(err).Msg(msgGetAnalysisResultInfosFailed)
-			return nil, 0, ErrGetAnalysisResultInfosFailed
-		}
-		resultInfoList = append(resultInfoList, result)
-	}
-
-	stmt, err := r.db.PrepareNamed(countQuery)
-	if err != nil {
-		log.Error().Err(err).Msg(msgGetAnalysisResultInfosCountFailed)
-		return nil, 0, ErrGetAnalysisResultInfosCountFailed
-	}
-	var count int
-	if err = stmt.QueryRowx(preparedValues).Scan(&count); err != nil {
-		log.Error().Err(err).Msg(msgGetAnalysisResultInfosCountFailed)
-		return nil, 0, ErrGetAnalysisResultInfosCountFailed
-	}
-
-	return convertResultInfoDAOsToResultInfos(resultInfoList), count, nil
-}
-
-func (r *analysisRepository) GetAnalysisBatches(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisBatch, int, error) {
-	preparedValues := map[string]interface{}{
-		"instrument_id": instrumentID,
-	}
-
-	query := `SELECT distinct res.batch_id
-FROM %schema_name%.sk_analysis_results res
-LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = res.instrument_id AND res.analyte_mapping_id = am.id
-LEFT JOIN %schema_name%.sk_analysis_requests req ON req.sample_code = res.sample_code AND req.analyte_id = am.analyte_id
-WHERE res.instrument_id = :instrument_id`
-
-	countQuery := `SELECT count(res.id)
-FROM %schema_name%.sk_analysis_results res
-LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = res.instrument_id AND res.analyte_mapping_id = am.id
-LEFT JOIN %schema_name%.sk_analysis_requests req ON req.sample_code = res.sample_code AND req.analyte_id = am.analyte_id
-WHERE res.instrument_id = :instrument_id`
-
-	if filter.TimeFrom != nil {
-		preparedValues["time_from"] = filter.TimeFrom.UTC()
-
-		query += ` AND req.created_at >= :time_from`
-		countQuery += ` AND req.created_at >= :time_from`
-	}
-
-	if filter.Filter != nil {
-		preparedValues["filter"] = "%" + strings.ToLower(*filter.Filter) + "%"
-
-		query += ` AND (LOWER(res.sample_code) LIKE :filter OR LOWER(am.instrument_analyte) LIKE :filter)`
-		countQuery += ` AND (LOWER(res.sample_code) LIKE :filter OR LOWER(am.instrument_analyte) LIKE :filter)`
-	}
-
-	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
-	query += applyPagination(filter.Pageable, "", "") + `;`
-
-	countQuery = strings.ReplaceAll(countQuery, "%schema_name%", r.dbSchema)
-	log.Trace().Str("query", query).Interface("args", preparedValues).Msg("GetAnalysisResultsInfo")
-	rows, err := r.db.NamedQueryContext(ctx, query, preparedValues)
-	if err != nil {
-		log.Error().Err(err).Msg(msgGetAnalysisBatchIdsFailed)
-		return nil, 0, ErrGetAnalysisBatchIds
-	}
-	defer rows.Close()
-
-	batchIDs := make([]uuid.UUID, 0)
-	for rows.Next() {
-		var batchID uuid.UUID
-		err = rows.Scan(&batchID)
-		if err != nil {
-			log.Error().Err(err).Msg(msgGetAnalysisBatchIdsFailed)
-			return nil, 0, ErrGetAnalysisBatchIds
-		}
-		batchIDs = append(batchIDs, batchID)
-	}
-
-	batches, err := r.GetAnalysisResultsByBatchIDsMapped(ctx, batchIDs)
-
-	analysisBatchList := make([]AnalysisBatch, 0)
-
-	for batchID, results := range batches {
-		analysisBatchList = append(analysisBatchList, AnalysisBatch{
-			ID:      batchID,
-			Results: results,
-		})
-	}
-
-	return analysisBatchList, len(batchIDs), err
 }
 
 func (r *analysisRepository) GetSubjectsByAnalysisRequestIDs(ctx context.Context, analysisRequestIDs []uuid.UUID) (map[uuid.UUID]SubjectInfo, error) {
@@ -1688,58 +1438,6 @@ func (r *analysisRepository) GetAnalysisResultIdsForStatusRecalculationByControl
 		analysisResultIds = append(analysisResultIds, analysisResultId)
 	}
 	return analysisResultIds, nil
-}
-
-func (r *analysisRepository) GetAnalysisResultsByBatchIDsMapped(ctx context.Context, batchIDs []uuid.UUID) (map[uuid.UUID][]AnalysisResultInfo, error) {
-	resultMap := make(map[uuid.UUID][]AnalysisResultInfo)
-
-	if len(batchIDs) < 1 {
-		return resultMap, nil
-	}
-
-	err := utils.Partition(len(batchIDs), maxParams, func(low int, high int) error {
-		query := `SELECT res.id AS result_id,
-       res.batch_id AS batch_id,
-	   res.sample_code AS sample_code,
-	   am.analyte_id AS analyte_id,
-	   COALESCE(res.yielded_at, res.created_at) AS result_created_at,
-       am.instrument_analyte as test_name,
-	   res.result AS test_result,
-       res.status AS status,
-       req.created_at AS request_created_at,
-       req.work_item_id as work_item_id
-FROM %schema_name%.sk_analysis_results res
-LEFT JOIN %schema_name%.sk_analyte_mappings am ON am.instrument_id = res.instrument_id AND res.analyte_mapping_id = am.id
-LEFT JOIN %schema_name%.sk_analysis_requests req ON req.sample_code = res.sample_code AND req.analyte_id = am.analyte_id
-WHERE res.batch_id IN (?)`
-
-		query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
-		query, args, _ := sqlx.In(query, batchIDs[low:high])
-		query = r.db.Rebind(query)
-
-		rows, err := r.db.QueryxContext(ctx, query, args...)
-		if err != nil {
-			log.Error().Err(err).Msg(msgGetAnalysisResultInfosFailed)
-			return ErrGetAnalysisResultInfosFailed
-		}
-		defer rows.Close()
-
-		for rows.Next() {
-			result := analysisResultInfoDAO{}
-			err = rows.StructScan(&result)
-			if err != nil {
-				log.Error().Err(err).Msg(msgGetAnalysisResultInfosFailed)
-				return ErrGetAnalysisResultInfosFailed
-			}
-
-			if result.BatchID.Valid {
-				resultMap[result.BatchID.UUID] = append(resultMap[result.BatchID.UUID], convertResultInfoDAOToResultInfo(result))
-			}
-		}
-		return nil
-	})
-
-	return resultMap, err
 }
 
 func (r *analysisRepository) getChannelMappings(ctx context.Context, analyteMappingIDs []uuid.UUID) (map[uuid.UUID][]ChannelMapping, error) {

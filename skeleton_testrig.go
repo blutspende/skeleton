@@ -191,11 +191,59 @@ func (sr *SkeletonTestRig) RegisterManufacturerTests(ctx context.Context, manufa
 	return nil
 }
 
-func (sr *SkeletonTestRig) UploadRawMessageToDEA(rawMessage []byte) (uuid.UUID, error) {
+func (sr *SkeletonTestRig) SaveMessageIn(ctx context.Context, messageIn MessageIn) (uuid.UUID, error) {
 	return uuid.Nil, nil
 }
 
-func (s *SkeletonTestRig) GetDbConnection() (*sqlx.DB, error) {
+func (sr *SkeletonTestRig) UpdateMessageIn(ctx context.Context, messageIn MessageIn) error {
+	return nil
+}
+
+func (sr *SkeletonTestRig) SaveMessageOut(ctx context.Context, messageOut MessageOut) (uuid.UUID, error) {
+	return uuid.Nil, nil
+}
+
+func (sr *SkeletonTestRig) UpdateMessageOut(ctx context.Context, messageOut MessageOut) error {
+	return nil
+}
+
+func (sr *SkeletonTestRig) GetUnprocessedMessageInsByInstrumentID(ctx context.Context, instrumentID uuid.UUID) ([]MessageIn, error) {
+	return nil, nil
+}
+
+func (sr *SkeletonTestRig) SaveMessageOutBatch(ctx context.Context, messageOuts []MessageOut) ([]uuid.UUID, error) {
+	return nil, nil
+}
+
+func (sr *SkeletonTestRig) GetUnprocessedMessageOutsByInstrumentID(ctx context.Context, instrumentID uuid.UUID) ([]MessageOut, error) {
+	return nil, nil
+}
+
+func (sr *SkeletonTestRig) AddAnalysisRequestsToMessageOutOrder(ctx context.Context, messageOutOrderID uuid.UUID, analysisRequestIDs []uuid.UUID) error {
+	return nil
+}
+
+func (sr *SkeletonTestRig) DeleteRevokedUnsentOrderMessagesByAnalysisRequestIDs(ctx context.Context, analysisRequestIDs []uuid.UUID) ([]uuid.UUID, error) {
+	return nil, nil
+}
+
+func (sr *SkeletonTestRig) GetTestCodesToRevokeBySampleCodes(ctx context.Context, instrumentID uuid.UUID, analysisRequestIDs []uuid.UUID) (map[string][]string, error) {
+	return nil, nil
+}
+
+func (sr *SkeletonTestRig) GetMessageOutOrdersBySampleCodesAndRequestMappingIDs(ctx context.Context, sampleCodes []string, requestMappingIDs []uuid.UUID, includePending bool) (map[string]map[uuid.UUID][]MessageOutOrder, error) {
+	return nil, nil
+}
+
+func (sr *SkeletonTestRig) GetUnprocessedMessageIns(ctx context.Context, cutoffTime time.Time) ([]MessageIn, error) {
+	return nil, nil
+}
+
+func (sr *SkeletonTestRig) GetUnprocessedMessageOuts(ctx context.Context, cutoffTime time.Time) ([]MessageOut, error) {
+	return nil, nil
+}
+
+func (sr *SkeletonTestRig) GetDbConnection() (*sqlx.DB, error) {
 	return nil, nil
 }
 
