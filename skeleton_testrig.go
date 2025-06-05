@@ -250,3 +250,11 @@ func (sr *SkeletonTestRig) GetDbConnection() (*sqlx.DB, error) {
 func (sr *SkeletonTestRig) Stop() error {
 	return nil
 }
+
+func (sr *SkeletonTestRig) RegisterSampleCodesToMessageIn(ctx context.Context, messageID uuid.UUID, sampleCodes []string) error {
+	return nil
+}
+
+func (sr *SkeletonTestRig) RegisterSampleCodesToMessageOut(ctx context.Context, messageID uuid.UUID, sampleCodes []string) error {
+	return nil
+}
