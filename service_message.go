@@ -2,11 +2,10 @@ package skeleton
 
 import (
 	"context"
-	"fmt"
+	"github.com/blutspende/bloodlab-common/encoding"
 	"github.com/blutspende/bloodlab-common/messagestatus"
 	"github.com/google/uuid"
-	"regexp"
-	"strings"
+	"github.com/rs/zerolog/log"
 	"time"
 )
 
@@ -210,7 +209,18 @@ func (s *messageService) StartDEAArchiving(ctx context.Context) {
 		case messagesToArchive := <-s.messageInArchivingChan:
 			failedMessagesByIDs := make(map[uuid.UUID]MessageIn)
 			for i := range messagesToArchive {
-				deaID, err := s.uploadRawMessageToDEA(messagesToArchive[i].Raw)
+				raw, err := encoding.ConvertFromEncodingToUtf8(messagesToArchive[i].Raw, messagesToArchive[i].Encoding)
+				if err != nil {
+					log.Error().Err(err).Interface("encoding", messagesToArchive[i].Encoding).Interface("messageID", messagesToArchive[i].ID).Msg("failed to encode instrument message to UTF-8")
+					raw = string(messagesToArchive[i].Raw)
+				}
+				deaID, err := s.uploadRawMessageToDEA(SaveInstrumentMessageTO{
+					ID:           messagesToArchive[i].ID,
+					InstrumentID: messagesToArchive[i].InstrumentID,
+					IsIncoming:   true,
+					Raw:          raw,
+					ReceivedAt:   messagesToArchive[i].CreatedAt,
+				})
 				if err != nil {
 					errorMsg := err.Error()
 					messagesToArchive[i].Status = messagestatus.Error
@@ -242,7 +252,18 @@ func (s *messageService) StartDEAArchiving(ctx context.Context) {
 		case messagesToArchive := <-s.messageOutArchivingChan:
 			failedMessagesByIDs := make(map[uuid.UUID]MessageOut)
 			for i := range messagesToArchive {
-				deaID, err := s.uploadRawMessageToDEA(messagesToArchive[i].Raw)
+				raw, err := encoding.ConvertFromEncodingToUtf8(messagesToArchive[i].Raw, messagesToArchive[i].Encoding)
+				if err != nil {
+					log.Error().Err(err).Interface("encoding", messagesToArchive[i].Encoding).Interface("messageID", messagesToArchive[i].ID).Msg("failed to encode instrument message to UTF-8")
+					raw = string(messagesToArchive[i].Raw)
+				}
+				deaID, err := s.uploadRawMessageToDEA(SaveInstrumentMessageTO{
+					ID:           messagesToArchive[i].ID,
+					InstrumentID: messagesToArchive[i].InstrumentID,
+					IsIncoming:   false,
+					Raw:          raw,
+					ReceivedAt:   messagesToArchive[i].CreatedAt,
+				})
 				if err != nil {
 					errorMsg := err.Error()
 					messagesToArchive[i].Error = &errorMsg
@@ -276,16 +297,8 @@ func (s *messageService) StartDEAArchiving(ctx context.Context) {
 	}
 }
 
-var nonSpecialCharactersRegex = regexp.MustCompile("[^A-Za-z0-9]+")
-
-func (s *messageService) uploadRawMessageToDEA(rawMessageBytes []byte) (uuid.UUID, error) {
-	return s.deaClient.UploadFile(rawMessageBytes, generateRawMessageFileName(s.serviceName, time.Now().UTC()))
-}
-
-func generateRawMessageFileName(serviceName string, ts time.Time) string {
-	strippedServiceName := nonSpecialCharactersRegex.ReplaceAllString(serviceName, "_")
-	formattedTs := strings.ReplaceAll(ts.Format("2006-01-02-15-04-05.000000"), ".", "_")
-	return fmt.Sprintf("%s_%s", strippedServiceName, formattedTs)
+func (s *messageService) uploadRawMessageToDEA(message SaveInstrumentMessageTO) (uuid.UUID, error) {
+	return s.deaClient.UploadInstrumentMessage(message)
 }
 
 func NewMessageService(deaClient DeaClientV1, messageInRepository MessageInRepository, messageOutRepository MessageOutRepository, messageOutOrderRepository MessageOutOrderRepository, serviceName string) MessageService {
