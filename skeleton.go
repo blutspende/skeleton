@@ -644,14 +644,14 @@ func (s *skeleton) AddAnalysisRequestsToMessageOutOrder(ctx context.Context, mes
 }
 
 func (s *skeleton) SaveMessageIn(ctx context.Context, messageIn MessageIn) (uuid.UUID, error) {
-	var err error
-	messageIn.ID, err = s.messageService.SaveMessageIn(ctx, messageIn)
-	if err != nil {
-		return uuid.Nil, err
-	}
-	s.messageService.EnqueueMessageInsForArchiving(messageIn)
+	return s.messageService.SaveMessageIn(ctx, messageIn)
+}
 
-	return messageIn.ID, nil
+func (s *skeleton) RegisterSampleCodesToMessageIn(ctx context.Context, messageID uuid.UUID, sampleCodes []string) error {
+	return s.messageService.RegisterSampleCodesToMessageIn(ctx, messageID, sampleCodes)
+}
+func (s *skeleton) RegisterSampleCodesToMessageOut(ctx context.Context, messageID uuid.UUID, sampleCodes []string) error {
+	return s.messageService.RegisterSampleCodesToMessageOut(ctx, messageID, sampleCodes)
 }
 
 func (s *skeleton) SaveMessageOut(ctx context.Context, messageOut MessageOut) (uuid.UUID, error) {
@@ -722,6 +722,7 @@ func (s *skeleton) Start() error {
 		go s.processAnalysisRequests(s.ctx)
 	}
 	go s.messageService.StartDEAArchiving(s.ctx)
+	go s.messageService.StartSampleCodeRegisteringToDEA(s.ctx)
 	s.enqueueUnsyncedMessages(s.ctx)
 	go s.processAnalysisResults(s.ctx)
 	go s.processAnalysisResultBatches(s.ctx)
