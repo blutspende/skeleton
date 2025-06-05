@@ -2,11 +2,12 @@ package skeleton
 
 import (
 	"context"
-	"fmt"
+	"github.com/blutspende/bloodlab-common/encoding"
 	"github.com/blutspende/bloodlab-common/messagestatus"
+	"github.com/blutspende/bloodlab-common/messagetype"
+	"github.com/blutspende/bloodlab-common/utils"
 	"github.com/google/uuid"
-	"regexp"
-	"strings"
+	"github.com/rs/zerolog/log"
 	"time"
 )
 
@@ -30,16 +31,21 @@ type MessageService interface {
 	EnqueueMessageInsForArchiving(messages ...MessageIn)
 	EnqueueMessageOutsForArchiving(messages ...MessageOut)
 	StartDEAArchiving(ctx context.Context)
+	RegisterSampleCodesToMessageIn(ctx context.Context, messageID uuid.UUID, sampleCodes []string) error
+	RegisterSampleCodesToMessageOut(ctx context.Context, messageID uuid.UUID, sampleCodes []string) error
+	StartSampleCodeRegisteringToDEA(ctx context.Context)
 }
 
 type messageService struct {
-	deaClient                 DeaClientV1
-	messageInRepository       MessageInRepository
-	messageOutRepository      MessageOutRepository
-	messageOutOrderRepository MessageOutOrderRepository
-	messageInArchivingChan    chan []MessageIn
-	messageOutArchivingChan   chan []MessageOut
-	serviceName               string
+	deaClient                  DeaClientV1
+	messageInRepository        MessageInRepository
+	messageOutRepository       MessageOutRepository
+	messageOutOrderRepository  MessageOutOrderRepository
+	messageInArchivingChan     chan []MessageIn
+	messageOutArchivingChan    chan []MessageOut
+	messageInSampleCodeIDChan  chan []sampleCodesWithIDsAndMessageID
+	messageOutSampleCodeIDChan chan []sampleCodesWithIDsAndMessageID
+	serviceName                string
 }
 
 func (s *messageService) AddAnalysisRequestsToMessageOutOrder(ctx context.Context, messageOutOrderID uuid.UUID, analysisRequestIDs []uuid.UUID) error {
@@ -96,17 +102,25 @@ func (s *messageService) GetUnsyncedMessageIns(ctx context.Context, limit, offse
 }
 
 func (s *messageService) SaveMessageIn(ctx context.Context, message MessageIn) (uuid.UUID, error) {
+	var err error
+	message.CreatedAt = time.Now().UTC()
 	if !isStatusValid(message.Status) {
 		message.Status = messagestatus.Stored
 	}
 	if !isTypeValid(message.Type) {
 		message.Type = messagetype.Unidentified
 	}
+	message.ID, err = s.messageInRepository.Create(ctx, message)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	s.EnqueueMessageInsForArchiving(message)
 
-	return s.messageInRepository.Create(ctx, message)
+	return message.ID, nil
 }
 
 func (s *messageService) SaveMessageOut(ctx context.Context, message MessageOut) (uuid.UUID, error) {
+	message.CreatedAt = time.Now().UTC()
 	if !isStatusValid(message.Status) {
 		message.Status = messagestatus.Stored
 	}
@@ -125,6 +139,7 @@ func (s *messageService) SaveMessageOut(ctx context.Context, message MessageOut)
 }
 
 func (s *messageService) SaveMessageOutBatch(ctx context.Context, messages []MessageOut) ([]uuid.UUID, error) {
+	ts := time.Now().UTC()
 	if len(messages) == 0 {
 		return nil, nil
 	}
@@ -144,6 +159,7 @@ func (s *messageService) SaveMessageOutBatch(ctx context.Context, messages []Mes
 		if !isTypeValid(messages[i].Type) {
 			messages[i].Type = messagetype.Unidentified
 		}
+		messages[i].CreatedAt = ts
 		messages[i].ID = messageIDs[i]
 		for j := range messages[i].MessageOutOrders {
 			if messages[i].MessageOutOrders[j].ID == uuid.Nil {
@@ -220,12 +236,24 @@ func (s *messageService) EnqueueMessageOutsForArchiving(messages ...MessageOut) 
 const deaArchivingRetryTimeoutSeconds = 30
 
 func (s *messageService) StartDEAArchiving(ctx context.Context) {
+
 	for {
 		select {
 		case messagesToArchive := <-s.messageInArchivingChan:
 			failedMessagesByIDs := make(map[uuid.UUID]MessageIn)
 			for i := range messagesToArchive {
-				deaID, err := s.uploadRawMessageToDEA(messagesToArchive[i].Raw)
+				raw, err := encoding.ConvertFromEncodingToUtf8(messagesToArchive[i].Raw, messagesToArchive[i].Encoding)
+				if err != nil {
+					log.Error().Err(err).Interface("encoding", messagesToArchive[i].Encoding).Interface("messageID", messagesToArchive[i].ID).Msg("failed to encode instrument message to UTF-8")
+					raw = string(messagesToArchive[i].Raw)
+				}
+				deaID, err := s.uploadRawMessageToDEA(SaveInstrumentMessageTO{
+					ID:           messagesToArchive[i].ID,
+					InstrumentID: messagesToArchive[i].InstrumentID,
+					IsIncoming:   true,
+					Raw:          raw,
+					ReceivedAt:   messagesToArchive[i].CreatedAt,
+				})
 				if err != nil {
 					errorMsg := err.Error()
 					messagesToArchive[i].Status = messagestatus.Error
@@ -257,7 +285,18 @@ func (s *messageService) StartDEAArchiving(ctx context.Context) {
 		case messagesToArchive := <-s.messageOutArchivingChan:
 			failedMessagesByIDs := make(map[uuid.UUID]MessageOut)
 			for i := range messagesToArchive {
-				deaID, err := s.uploadRawMessageToDEA(messagesToArchive[i].Raw)
+				raw, err := encoding.ConvertFromEncodingToUtf8(messagesToArchive[i].Raw, messagesToArchive[i].Encoding)
+				if err != nil {
+					log.Error().Err(err).Interface("encoding", messagesToArchive[i].Encoding).Interface("messageID", messagesToArchive[i].ID).Msg("failed to encode instrument message to UTF-8")
+					raw = string(messagesToArchive[i].Raw)
+				}
+				deaID, err := s.uploadRawMessageToDEA(SaveInstrumentMessageTO{
+					ID:           messagesToArchive[i].ID,
+					InstrumentID: messagesToArchive[i].InstrumentID,
+					IsIncoming:   false,
+					Raw:          raw,
+					ReceivedAt:   messagesToArchive[i].CreatedAt,
+				})
 				if err != nil {
 					errorMsg := err.Error()
 					messagesToArchive[i].Error = &errorMsg
@@ -291,27 +330,253 @@ func (s *messageService) StartDEAArchiving(ctx context.Context) {
 	}
 }
 
-var nonSpecialCharactersRegex = regexp.MustCompile("[^A-Za-z0-9]+")
+func (s *messageService) RegisterSampleCodesToMessageIn(ctx context.Context, messageID uuid.UUID, sampleCodes []string) error {
+	ids, err := s.messageInRepository.RegisterSampleCodes(ctx, messageID, sampleCodes)
+	if err != nil {
+		return err
+	}
+	s.messageInSampleCodeIDChan <- []sampleCodesWithIDsAndMessageID{
+		{
+			MessageID:            messageID,
+			MessageSampleCodeIDs: ids,
+			SampleCodes:          sampleCodes,
+		},
+	}
 
-func (s *messageService) uploadRawMessageToDEA(rawMessageBytes []byte) (uuid.UUID, error) {
-	return s.deaClient.UploadFile(rawMessageBytes, generateRawMessageFileName(s.serviceName, time.Now().UTC()))
+	return nil
 }
 
-func generateRawMessageFileName(serviceName string, ts time.Time) string {
-	strippedServiceName := nonSpecialCharactersRegex.ReplaceAllString(serviceName, "_")
-	formattedTs := strings.ReplaceAll(ts.Format("2006-01-02-15-04-05.000000"), ".", "_")
-	return fmt.Sprintf("%s_%s", strippedServiceName, formattedTs)
+func (s *messageService) RegisterSampleCodesToMessageOut(ctx context.Context, messageID uuid.UUID, sampleCodes []string) error {
+	ids, err := s.messageOutRepository.RegisterSampleCodes(ctx, messageID, sampleCodes)
+	if err != nil {
+		return err
+	}
+	s.messageOutSampleCodeIDChan <- []sampleCodesWithIDsAndMessageID{
+		{
+			MessageID:            messageID,
+			MessageSampleCodeIDs: ids,
+			SampleCodes:          sampleCodes,
+		},
+	}
+
+	return nil
+}
+
+func (s *messageService) StartSampleCodeRegisteringToDEA(ctx context.Context) {
+	go s.addUnsentMessageInSampleCodesToQueue(ctx)
+	go s.addUnsentMessageOutSampleCodesToQueue(ctx)
+	go s.startMessageOutSampleCodeCleanupJob(ctx)
+	go s.startMessageInSampleCodeCleanupJob(ctx)
+	for {
+		select {
+		case sampleCodesWithMessageIDAndIDs := <-s.messageOutSampleCodeIDChan:
+			failed := make([]sampleCodesWithIDsAndMessageID, 0)
+			for i := range sampleCodesWithMessageIDAndIDs {
+				err := s.deaClient.RegisterSampleCodes(sampleCodesWithMessageIDAndIDs[i].MessageID, sampleCodesWithMessageIDAndIDs[i].SampleCodes)
+				if err != nil {
+					log.Error().Err(err).Msg("register message in sample codes failed")
+					failed = append(failed, sampleCodesWithMessageIDAndIDs[i])
+					continue
+				}
+				err = s.messageOutRepository.MarkSampleCodesAsUploadedByIDs(ctx, sampleCodesWithMessageIDAndIDs[i].MessageSampleCodeIDs)
+				if err != nil {
+					log.Error().Err(err).Msg("register message in sample codes failed")
+					failed = append(failed, sampleCodesWithMessageIDAndIDs[i])
+					continue
+				}
+			}
+			if len(failed) == 0 {
+				continue
+			}
+			time.AfterFunc(time.Minute, func() {
+				s.messageInSampleCodeIDChan <- failed
+			})
+		case sampleCodesWithMessageIDAndIDs := <-s.messageInSampleCodeIDChan:
+			failed := make([]sampleCodesWithIDsAndMessageID, 0)
+			for i := range sampleCodesWithMessageIDAndIDs {
+				err := s.deaClient.RegisterSampleCodes(sampleCodesWithMessageIDAndIDs[i].MessageID, sampleCodesWithMessageIDAndIDs[i].SampleCodes)
+				if err != nil {
+					log.Error().Err(err).Msg("register message out sample codes failed")
+					failed = append(failed, sampleCodesWithMessageIDAndIDs[i])
+					continue
+				}
+				err = s.messageInRepository.MarkSampleCodesAsUploadedByIDs(ctx, sampleCodesWithMessageIDAndIDs[i].MessageSampleCodeIDs)
+				if err != nil {
+					log.Error().Err(err).Msg("register message out sample codes failed")
+					failed = append(failed, sampleCodesWithMessageIDAndIDs[i])
+				}
+			}
+			if len(failed) == 0 {
+				continue
+			}
+			time.AfterFunc(time.Minute, func() {
+				s.messageOutSampleCodeIDChan <- failed
+			})
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (s *messageService) startMessageInSampleCodeCleanupJob(ctx context.Context) {
+	counter := 0
+	for {
+		affected, err := s.deleteOldMessageInSampleCodes(ctx, messageBatchSize, messageBatchSize*counter)
+		if err != nil {
+			log.Error().Err(err).Msg("delete old message in sample codes on startup failed")
+			break
+		}
+		if affected < messageBatchSize {
+			break
+		}
+		counter++
+	}
+	for {
+		select {
+		case <-time.After(time.Hour):
+			for {
+				affected, err := s.deleteOldMessageInSampleCodes(ctx, messageBatchSize, messageBatchSize*counter)
+				if err != nil {
+					log.Error().Err(err).Msg("delete old message in sample codes on startup failed")
+					break
+				}
+				if affected < messageBatchSize {
+					break
+				}
+				counter++
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (s *messageService) deleteOldMessageInSampleCodes(ctx context.Context, limit, offset int) (int, error) {
+	ids, err := s.messageInRepository.GetMessageInSampleCodeIDsToDelete(ctx, limit, offset)
+	if err != nil {
+		return 0, err
+	}
+	err = s.messageInRepository.DeleteMessageInSampleCodesByIDs(ctx, ids)
+	if err != nil {
+		return 0, err
+	}
+
+	return len(ids), nil
+}
+
+func (s *messageService) startMessageOutSampleCodeCleanupJob(ctx context.Context) {
+	counter := 0
+	for {
+		affected, err := s.deleteOldMessageOutSampleCodes(ctx, messageBatchSize, messageBatchSize*counter)
+		if err != nil {
+			log.Error().Err(err).Msg("delete old message in sample codes on startup failed")
+			break
+		}
+		if affected < messageBatchSize {
+			break
+		}
+		counter++
+	}
+	for {
+		select {
+		case <-time.After(time.Hour):
+			for {
+				affected, err := s.deleteOldMessageOutSampleCodes(ctx, messageBatchSize, messageBatchSize*counter)
+				if err != nil {
+					log.Error().Err(err).Msg("delete old message in sample codes on startup failed")
+					break
+				}
+				if affected < messageBatchSize {
+					break
+				}
+				counter++
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (s *messageService) deleteOldMessageOutSampleCodes(ctx context.Context, limit, offset int) (int, error) {
+	ids, err := s.messageOutRepository.GetMessageOutSampleCodeIDsToDelete(ctx, limit, offset)
+	if err != nil {
+		return 0, err
+	}
+	err = s.messageOutRepository.DeleteMessageOutSampleCodesByIDs(ctx, ids)
+	if err != nil {
+		return 0, err
+	}
+
+	return len(ids), nil
+}
+
+func (s *messageService) addUnsentMessageInSampleCodesToQueue(ctx context.Context) {
+	unsentMessageInSampleCodes, err := s.messageInRepository.GetUnsentMessageInSampleCodes(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("register unprocessed sample codes on startup failed")
+		return
+	}
+	unsentSampleCodes := make([]sampleCodesWithIDsAndMessageID, 0)
+	for messageID, sampleCodeByID := range unsentMessageInSampleCodes {
+		sampleCodes := sampleCodesWithIDsAndMessageID{
+			MessageID: messageID,
+		}
+		for id, sampleCode := range sampleCodeByID {
+			sampleCodes.MessageSampleCodeIDs = append(sampleCodes.MessageSampleCodeIDs, id)
+			sampleCodes.SampleCodes = append(sampleCodes.SampleCodes, sampleCode)
+		}
+		if len(sampleCodes.SampleCodes) == 0 {
+			continue
+		}
+		unsentSampleCodes = append(unsentSampleCodes, sampleCodes)
+	}
+	_ = utils.Partition(len(unsentMessageInSampleCodes), messageBatchSize, func(low int, high int) error {
+		s.messageInSampleCodeIDChan <- unsentSampleCodes[low:high]
+		return nil
+	})
+}
+
+func (s *messageService) addUnsentMessageOutSampleCodesToQueue(ctx context.Context) {
+	unsentMessageOutSampleCodes, err := s.messageOutRepository.GetUnsentMessageOutSampleCodes(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("register unprocessed sample codes on startup failed")
+		return
+	}
+	unsentSampleCodes := make([]sampleCodesWithIDsAndMessageID, 0)
+	for messageID, sampleCodeByID := range unsentMessageOutSampleCodes {
+		sampleCodes := sampleCodesWithIDsAndMessageID{
+			MessageID: messageID,
+		}
+		for id, sampleCode := range sampleCodeByID {
+			sampleCodes.MessageSampleCodeIDs = append(sampleCodes.MessageSampleCodeIDs, id)
+			sampleCodes.SampleCodes = append(sampleCodes.SampleCodes, sampleCode)
+		}
+		if len(sampleCodes.SampleCodes) == 0 {
+			continue
+		}
+		unsentSampleCodes = append(unsentSampleCodes, sampleCodes)
+	}
+	_ = utils.Partition(len(unsentMessageOutSampleCodes), messageBatchSize, func(low int, high int) error {
+		s.messageOutSampleCodeIDChan <- unsentSampleCodes[low:high]
+		return nil
+	})
+}
+
+func (s *messageService) uploadRawMessageToDEA(message SaveInstrumentMessageTO) (uuid.UUID, error) {
+	return s.deaClient.UploadInstrumentMessage(message)
 }
 
 func NewMessageService(deaClient DeaClientV1, messageInRepository MessageInRepository, messageOutRepository MessageOutRepository, messageOutOrderRepository MessageOutOrderRepository, serviceName string) MessageService {
 	return &messageService{
-		deaClient:                 deaClient,
-		messageInRepository:       messageInRepository,
-		messageOutRepository:      messageOutRepository,
-		messageOutOrderRepository: messageOutOrderRepository,
-		messageInArchivingChan:    make(chan []MessageIn, 100),
-		messageOutArchivingChan:   make(chan []MessageOut, 100),
-		serviceName:               serviceName,
+		deaClient:                  deaClient,
+		messageInRepository:        messageInRepository,
+		messageOutRepository:       messageOutRepository,
+		messageOutOrderRepository:  messageOutOrderRepository,
+		messageInArchivingChan:     make(chan []MessageIn, 100),
+		messageOutArchivingChan:    make(chan []MessageOut, 100),
+		messageInSampleCodeIDChan:  make(chan []sampleCodesWithIDsAndMessageID, 100),
+		messageOutSampleCodeIDChan: make(chan []sampleCodesWithIDsAndMessageID, 100),
+		serviceName:                serviceName,
 	}
 }
 
@@ -323,4 +588,10 @@ func isTypeValid(messageType messagetype.MessageType) bool {
 	return messageType == messagetype.Query || messageType == messagetype.Order || messageType == messagetype.Result ||
 		messageType == messagetype.Acknowledgement || messageType == messagetype.Cancellation || messageType == messagetype.Reorder ||
 		messageType == messagetype.Diagnostics || messageType == messagetype.Unidentified
+}
+
+type sampleCodesWithIDsAndMessageID struct {
+	SampleCodes          []string
+	MessageID            uuid.UUID
+	MessageSampleCodeIDs []uuid.UUID
 }
