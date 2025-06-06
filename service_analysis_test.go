@@ -1372,7 +1372,7 @@ func (r *extendedMockAnalysisRepo) SaveCerberusIDForAnalysisResult(ctx context.C
 	return nil
 }
 
-func (r *extendedMockAnalysisRepo) GetAnalysisResultIdsSinceLastControlByReagent(ctx context.Context, reagent Reagent, examinedAt time.Time, analyteMappingId uuid.UUID, instrumentId uuid.UUID) ([]uuid.UUID, error) {
+func (r *extendedMockAnalysisRepo) GetAnalysisResultIdsWithoutControlByReagent(ctx context.Context, controlResult ControlResult, reagent Reagent) ([]uuid.UUID, error) {
 	return nil, nil
 }
 

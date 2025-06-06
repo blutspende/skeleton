@@ -1337,7 +1337,11 @@ func (m *analysisRepositoryMock) SaveCerberusIDForReagent(ctx context.Context, r
 	return nil
 }
 
-func (m *analysisRepositoryMock) GetAnalysisResultIdsSinceLastControlByReagent(ctx context.Context, reagent Reagent, examinedAt time.Time, analyteMappingId uuid.UUID, instrumentId uuid.UUID) ([]uuid.UUID, error) {
+func (m *analysisRepositoryMock) GetAnalysisResultIdsWithoutControlByReagent(ctx context.Context, controlResult ControlResult, reagent Reagent) ([]uuid.UUID, error) {
+	return nil, nil
+}
+
+func (m *analysisRepositoryMock) GetAnalysisResultIdsWhereLastestControlIsInvalid(ctx context.Context, controlResult ControlResult, reagent Reagent) ([]uuid.UUID, error) {
 	return nil, nil
 }
 

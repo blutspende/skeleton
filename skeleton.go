@@ -392,8 +392,12 @@ func (s *skeleton) SaveControlResultImages(ctx context.Context, controlResult *C
 	return nil
 }
 
-func (s *skeleton) GetAnalysisResultIdsSinceLastControlByReagent(ctx context.Context, reagent Reagent, examinedAt time.Time, analyteMappingId uuid.UUID, instrumentId uuid.UUID) ([]uuid.UUID, error) {
-	return s.analysisRepository.GetAnalysisResultIdsSinceLastControlByReagent(ctx, reagent, examinedAt, analyteMappingId, instrumentId)
+func (s *skeleton) GetAnalysisResultIdsWithoutControlByReagent(ctx context.Context, controlResult ControlResult, reagent Reagent) ([]uuid.UUID, error) {
+	return s.analysisRepository.GetAnalysisResultIdsWithoutControlByReagent(ctx, controlResult, reagent)
+}
+
+func (s *skeleton) GetAnalysisResultIdsWhereLastestControlIsInvalid(ctx context.Context, controlResult ControlResult, reagent Reagent) ([]uuid.UUID, error) {
+	return s.analysisRepository.GetAnalysisResultIdsWhereLastestControlIsInvalid(ctx, controlResult, reagent)
 }
 
 func (s *skeleton) GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMappingId uuid.UUID, instrumentId uuid.UUID) ([]ControlResult, error) {

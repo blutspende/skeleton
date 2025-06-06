@@ -94,7 +94,11 @@ func (sr *SkeletonTestRig) SubmitControlResults(ctx context.Context, controlResu
 	return nil
 }
 
-func (sr *SkeletonTestRig) GetAnalysisResultIdsSinceLastControlByReagent(ctx context.Context, reagent Reagent, examinedAt time.Time, analyteMappingId uuid.UUID, instrumentId uuid.UUID) ([]uuid.UUID, error) {
+func (sr *SkeletonTestRig) GetAnalysisResultIdsWithoutControlByReagent(ctx context.Context, controlResult ControlResult, reagent Reagent) ([]uuid.UUID, error) {
+	return make([]uuid.UUID, 0), nil
+}
+
+func (sr *SkeletonTestRig) GetAnalysisResultIdsWhereLastestControlIsInvalid(ctx context.Context, controlResult ControlResult, reagent Reagent) ([]uuid.UUID, error) {
 	return make([]uuid.UUID, 0), nil
 }
 

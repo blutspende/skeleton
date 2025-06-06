@@ -50,7 +50,8 @@ const (
 	msgSaveCerberusIdForAnalysisResultFailed                         = "Save cerberus id for analysis result failed"
 	msgGetControlResultsByIDsFailed                                  = "Get control results by ids failed"
 	msgGetReagentsByIDsFailed                                        = "Get reagents by ids failed"
-	msgLoadAnalysisResultIdsForLatestControlResultFailed             = "Load analysis results for latest control result by reagent failed"
+	msgLoadAnalysisResultIdsWithoutControlByReagentFailed            = "Load analysis result ids without control result by reagent failed"
+	msgLoadAnalysisResultIdsWhereLatestControlResultIsInValidFailed  = "Load analysis result ids where latest control result is invalid failed"
 	msgLoadLatestControlResultIdFailed                               = "Load latest control result id by reagent failed"
 	msgLoadNotValidatedControlResultsFailed                          = "Load not validated control results failed"
 	msgGetAnalysisResultIdsForStatusRecalculationByControlIdsFailed  = "Get analysis result ids for status recalculation by control ids failed"
@@ -139,7 +140,8 @@ var (
 	ErrSaveCerberusIdForAnalysisResultFailed                         = errors.New(msgSaveCerberusIdForAnalysisResultFailed)
 	ErrGetControlResultsByIDsFailed                                  = errors.New(msgGetControlResultsByIDsFailed)
 	ErrGetReagentsByIDsFailed                                        = errors.New(msgGetReagentsByIDsFailed)
-	ErrLoadAnalysisResultIdsForLatestControlResultFailed             = errors.New(msgLoadAnalysisResultIdsForLatestControlResultFailed)
+	ErrLoadAnalysisResultIdsWithoutControlByReagentFailed            = errors.New(msgLoadAnalysisResultIdsWithoutControlByReagentFailed)
+	ErrLoadAnalysisResultIdsWhereLatestControlResultIsInValidFailed  = errors.New(msgLoadAnalysisResultIdsWhereLatestControlResultIsInValidFailed)
 	ErrLoadLatestControlResultIdFailed                               = errors.New(msgLoadLatestControlResultIdFailed)
 	ErrLoadNotValidatedControlResultsFailed                          = errors.New(msgLoadNotValidatedControlResultsFailed)
 	ErrGetAnalysisResultIdsForStatusRecalculationByControlIdsFailed  = errors.New(msgGetAnalysisResultIdsForStatusRecalculationByControlIdsFailed)
@@ -504,7 +506,8 @@ type AnalysisRepository interface {
 
 	SaveCerberusIDForAnalysisResult(ctx context.Context, analysisResultID uuid.UUID, cerberusID uuid.UUID) error
 
-	GetAnalysisResultIdsSinceLastControlByReagent(ctx context.Context, reagent Reagent, examinedAt time.Time, analyteMappingId uuid.UUID, instrumentId uuid.UUID) ([]uuid.UUID, error)
+	GetAnalysisResultIdsWithoutControlByReagent(ctx context.Context, controlResult ControlResult, reagent Reagent) ([]uuid.UUID, error)
+	GetAnalysisResultIdsWhereLastestControlIsInvalid(ctx context.Context, controlResult ControlResult, reagent Reagent) ([]uuid.UUID, error)
 	GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMappingId uuid.UUID, instrumentId uuid.UUID) ([]ControlResult, error)
 	GetControlResultsToValidate(ctx context.Context, analyteMappingIds []uuid.UUID) ([]ControlResult, error)
 
@@ -3986,7 +3989,7 @@ func (r *analysisRepository) SaveCerberusIDForAnalysisResult(ctx context.Context
 	return nil
 }
 
-func (r *analysisRepository) GetAnalysisResultIdsSinceLastControlByReagent(ctx context.Context, reagent Reagent, examinedAt time.Time, analyteMappingId uuid.UUID, instrumentId uuid.UUID) ([]uuid.UUID, error) {
+func (r *analysisRepository) GetAnalysisResultIdsWithoutControlByReagent(ctx context.Context, controlResult ControlResult, reagent Reagent) ([]uuid.UUID, error) {
 	analysisResultIds := make([]uuid.UUID, 0)
 
 	preparedValues := map[string]interface{}{
@@ -3994,28 +3997,30 @@ func (r *analysisRepository) GetAnalysisResultIdsSinceLastControlByReagent(ctx c
 		"lot_no":             reagent.LotNo,
 		"serial":             reagent.SerialNumber,
 		"name":               reagent.Name,
-		"examined_at":        examinedAt,
-		"analyte_mapping_id": analyteMappingId,
-		"instrument_id":      instrumentId,
+		"analyte_mapping_id": controlResult.AnalyteMapping.ID,
+		"sample_code":        controlResult.SampleCode,
+		"instrument_id":      controlResult.InstrumentID,
 	}
 
-	query := `WITH latest_control_timestamp AS (SELECT skra.id AS reagent_id, MAX(skcr.examined_at) AS control_examined_at
-		FROM %schema_name%.sk_reagents skra
-		JOIN %schema_name%.sk_reagent_control_result_relations skrcrr ON skra.id = skrcrr.reagent_id
-		JOIN %schema_name%.sk_control_results skcr ON skrcrr.control_result_id = skcr.id
-		WHERE skra.manufacturer = :manufacturer AND skra.lot_no = :lot_no AND skra.serial = :serial AND skra.name = :name AND skcr.analyte_mapping_id = :analyte_mapping_id AND skcr.instrument_id = :instrument_id AND skcr.examined_at < :examined_at
-		GROUP BY skra.id)
-	SELECT skar.id FROM %schema_name%.sk_analysis_results skar
-		JOIN %schema_name%.sk_analysis_result_reagent_relations skarr ON skar.id = skarr.analysis_result_id
-		JOIN %schema_name%.sk_reagents skr ON skarr.reagent_id = skr.id
-		LEFT JOIN latest_control_timestamp lct ON skr.id = lct.reagent_id
-	WHERE skr.manufacturer = :manufacturer AND skr.lot_no = :lot_no AND skr.serial = :serial AND skr.name = :name AND skar.analyte_mapping_id = :analyte_mapping_id AND skar.instrument_id = :instrument_id
-		AND skar.yielded_at < :examined_at AND (lct.control_examined_at IS NULL OR skar.yielded_at >= lct.control_examined_at)`
+	query := `WITH assignedControl AS (SELECT DISTINCT sarcrr.analysis_result_id, sarcrr.control_result_id
+		FROM %schema_name%.sk_analysis_result_control_result_relations sarcrr
+		INNER JOIN %schema_name%.sk_control_results scr ON sarcrr.control_result_id = scr.id
+		INNER JOIN %schema_name%.sk_analyte_mappings sam ON scr.analyte_mapping_id = sam.id
+		INNER JOIN %schema_name%.sk_reagent_control_result_relations skrcrr ON scr.id = skrcrr.control_result_id
+		INNER JOIN %schema_name%.sk_reagents skr ON skrcrr.reagent_id = skr.id
+		WHERE skr.manufacturer = :manufacturer AND skr.lot_no = :lot_no AND skr.serial = :serial AND skr.name = :name AND scr.sample_code = :sample_code
+		  AND scr.analyte_mapping_id = :analyte_mapping_id AND scr.instrument_id = :instrument_id)
+	SELECT skar.id FROM %schema_name% .sk_analysis_results skar
+		INNER JOIN %schema_name%.sk_analysis_result_reagent_relations skarr ON skar.id = skarr.analysis_result_id
+		INNER JOIN %schema_name%.sk_reagents skr ON skarr.reagent_id = skr.id
+		LEFT JOIN assignedControl ac ON skar.id = ac.analysis_result_id
+	WHERE skr.manufacturer = :manufacturer AND skr.lot_no = :lot_no AND skr.serial = :serial AND skr.name = :name AND skar.instrument_id = :instrument_id
+		AND skar.analyte_mapping_id = :analyte_mapping_id AND ac.control_result_id IS NULL;`
 	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
 	rows, err := r.db.NamedQueryContext(ctx, query, preparedValues)
 	if err != nil {
-		log.Error().Err(err).Msg(msgLoadAnalysisResultIdsForLatestControlResultFailed)
-		return analysisResultIds, ErrLoadAnalysisResultIdsForLatestControlResultFailed
+		log.Error().Err(err).Msg(msgLoadAnalysisResultIdsWithoutControlByReagentFailed)
+		return analysisResultIds, ErrLoadAnalysisResultIdsWithoutControlByReagentFailed
 	}
 
 	defer rows.Close()
@@ -4024,13 +4029,58 @@ func (r *analysisRepository) GetAnalysisResultIdsSinceLastControlByReagent(ctx c
 		var analysisResultId uuid.UUID
 		err := rows.Scan(&analysisResultId)
 		if err != nil {
-			log.Error().Err(err).Msg(msgLoadAnalysisResultIdsForLatestControlResultFailed)
-			return analysisResultIds, ErrLoadAnalysisResultIdsForLatestControlResultFailed
+			log.Error().Err(err).Msg(msgLoadAnalysisResultIdsWithoutControlByReagentFailed)
+			return analysisResultIds, ErrLoadAnalysisResultIdsWithoutControlByReagentFailed
 		}
 		analysisResultIds = append(analysisResultIds, analysisResultId)
 	}
 
 	return analysisResultIds, nil
+}
+
+func (r *analysisRepository) GetAnalysisResultIdsWhereLastestControlIsInvalid(ctx context.Context, controlResult ControlResult, reagent Reagent) ([]uuid.UUID, error) {
+	analysisResultIds := make([]uuid.UUID, 0)
+	preparedValues := map[string]interface{}{
+		"manufacturer":       reagent.Manufacturer,
+		"lot_no":             reagent.LotNo,
+		"serial":             reagent.SerialNumber,
+		"sample_code":        controlResult.SampleCode,
+		"analyte_mapping_id": controlResult.AnalyteMapping.ID,
+		"instrument_id":      controlResult.InstrumentID,
+	}
+
+	query := `WITH latestControl AS (SELECT skcr.id, skcr.is_valid, skcr.is_compared_to_expected_result
+		FROM %schema_name%.sk_control_results skcr
+		INNER JOIN %schema_name%.sk_analyte_mappings sam ON skcr.analyte_mapping_id = sam.id
+		INNER JOIN %schema_name%.sk_reagent_control_result_relations skrcrr ON skcr.id = skrcrr.control_result_id
+		INNER JOIN %schema_name%.sk_reagents skr ON skrcrr.reagent_id = skr.id
+		WHERE skr.manufacturer = :manufacturer AND skr.lot_no = :lot_no AND skr.serial = :serial AND skr.name = '' AND skcr.sample_code = :sample_code AND skcr.analyte_mapping_id = :analyte_mapping_id 
+			AND skcr.instrument_id = :instrument_id
+		ORDER BY skcr.sample_code, skcr.analyte_mapping_id, skcr. examined_at desc, skcr.created_at desc limit 1)
+	SELECT analysis_result_id 
+	FROM %schema_name%.sk_analysis_result_control_result_relations sarcrr 
+		INNER JOIN latestControl ON sarcrr.control_result_id = latestControl.id 
+	WHERE latestControl.is_compared_to_expected_result = false OR latestControl.is_valid = false;`
+	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
+	rows, err := r.db.NamedQueryContext(ctx, query, preparedValues)
+	if err != nil {
+		log.Error().Err(err).Msg(msgLoadAnalysisResultIdsWhereLatestControlResultIsInValidFailed)
+		return analysisResultIds, ErrLoadAnalysisResultIdsWhereLatestControlResultIsInValidFailed
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		var analysisResultId uuid.UUID
+		err := rows.Scan(&analysisResultId)
+		if err != nil {
+			log.Error().Err(err).Msg(msgLoadAnalysisResultIdsWhereLatestControlResultIsInValidFailed)
+			return analysisResultIds, ErrLoadAnalysisResultIdsWhereLatestControlResultIsInValidFailed
+		}
+		analysisResultIds = append(analysisResultIds, analysisResultId)
+	}
+
+	return analysisResultIds, err
 }
 
 func (r *analysisRepository) GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMappingId uuid.UUID, instrumentId uuid.UUID) ([]ControlResult, error) {
