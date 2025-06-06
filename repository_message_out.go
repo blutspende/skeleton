@@ -27,6 +27,10 @@ type MessageOutRepository interface {
 	Update(ctx context.Context, message MessageOut) error
 	UpdateDEAInfo(ctx context.Context, message MessageOut) error
 
+	GetMessageOutSampleCodesByIDs(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]map[uuid.UUID]string, error)
+	MarkSampleCodesAsUploadedByIDs(ctx context.Context, ids []uuid.UUID) error
+	RegisterSampleCodes(ctx context.Context, id uuid.UUID, sampleCodes []string) ([]uuid.UUID, error)
+
 	WithTransaction(tx db.DbConnection) MessageOutRepository
 	CreateTransaction() (db.DbConnection, error)
 }
@@ -205,6 +209,92 @@ func (r *messageOutRepository) GetUnsynced(ctx context.Context, limit, offset in
 	return messages, nil
 }
 
+func (r *messageOutRepository) GetMessageOutSampleCodesByIDs(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]map[uuid.UUID]string, error) {
+	sampleCodesByMessageInIDs := make(map[uuid.UUID]map[uuid.UUID]string)
+	err := utils.Partition(len(ids), maxParams, func(low int, high int) error {
+		query := `SELECT id, message_in_id, sample_code FROM %s.sk_message_out_sample_codes WHERE id IN (?) AND uploaded_to_dea_at IS NULL;`
+		query, args, _ := sqlx.In(query, ids[low:high])
+		query = r.db.Rebind(query)
+		rows, err := r.db.QueryxContext(ctx, query, args...)
+		if err != nil {
+			log.Error().Err(err).Msg(msgGetMessageOutSampleCodesByIDsFailed)
+			return ErrGetMessageOutSampleCodesByIDsFailed
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var id, messageInID uuid.UUID
+			var sampleCode string
+			err = rows.Scan(&id, &messageInID, &sampleCode)
+			if err != nil {
+				log.Error().Err(err).Msg(msgGetMessageOutSampleCodesByIDsFailed)
+				return ErrGetMessageOutSampleCodesByIDsFailed
+			}
+			if _, ok := sampleCodesByMessageInIDs[messageInID]; !ok {
+				sampleCodesByMessageInIDs[messageInID] = make(map[uuid.UUID]string)
+			}
+			sampleCodesByMessageInIDs[messageInID][id] = sampleCode
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return sampleCodesByMessageInIDs, nil
+}
+
+func (r *messageOutRepository) MarkSampleCodesAsUploadedByIDs(ctx context.Context, ids []uuid.UUID) error {
+	err := utils.Partition(len(ids), maxParams, func(low int, high int) error {
+		query := `UPDATE %s.sk_message_out_sample_codes SET uploaded_to_dea_at = timezone('utc', now()) WHERE id IN (?);`
+		query, args, _ := sqlx.In(query, ids[low:high])
+		query = r.db.Rebind(query)
+		_, err := r.db.ExecContext(ctx, query, args...)
+		if err != nil {
+			log.Error().Err(err).Msg(msgMarkMessageOutSampleCodesAsUploadedByIDsFailed)
+			return ErrMarkMessageOutSampleCodesAsUploadedByIDsFailed
+		}
+		return nil
+	})
+
+	return err
+}
+
+func (r *messageOutRepository) RegisterSampleCodes(ctx context.Context, id uuid.UUID, sampleCodes []string) ([]uuid.UUID, error) {
+	preparedValues := make([]map[string]interface{}, len(sampleCodes))
+	for i := range sampleCodes {
+		preparedValues[i] = map[string]interface{}{
+			"message_out_id": id,
+			"sample_code":    sampleCodes[i],
+		}
+	}
+	ids := make([]uuid.UUID, 0)
+	err := utils.Partition(len(preparedValues), maxParams/2, func(low int, high int) error {
+		query := `INSERT INTO %s.sk_message_out_sample_codes (message_out_id, sample_code) VALUES (:message_out_id, :sample_code) ON CONFLICT (message_out_id, sample_code) DO NOTHING RETURNING id;`
+		rows, err := r.db.NamedQueryContext(ctx, query, preparedValues[low:high])
+		if err != nil {
+			log.Error().Err(err).Msg(msgRegisterSampleCodesToMessageOutFailed)
+			return ErrRegisterSampleCodesToMessageOutFailed
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var insertedID uuid.UUID
+			err = rows.Scan(&insertedID)
+			if err != nil {
+				log.Error().Err(err).Msg(msgRegisterSampleCodesToMessageOutFailed)
+				return ErrRegisterSampleCodesToMessageOutFailed
+			}
+			ids = append(ids, insertedID)
+		}
+
+		return nil
+	})
+
+	return ids, err
+}
+
 func (r *messageOutRepository) Update(ctx context.Context, message MessageOut) error {
 	query := fmt.Sprintf(`UPDATE %s.sk_message_out SET status = :status,
 									retry_count = :retry_count, response_message_in_id = :response_message_in_id,
@@ -347,6 +437,10 @@ const (
 	msgUpdateMessageOutFailed                                       = "update message out failed"
 	msgUpdateMessageOutDEAInfoFailed                                = "update message out DEA info failed"
 	msgGetFullyRevokedUnsentMessageOutIDsByAnalysisRequestIDsFailed = "get fully revoked unsent message out IDs by analysis requests failed"
+
+	msgGetMessageOutSampleCodesByIDsFailed            = "get message out sample codes by IDs failed"
+	msgMarkMessageOutSampleCodesAsUploadedByIDsFailed = "mark message out sample codes as uploaded to DEA by IDs failed"
+	msgRegisterSampleCodesToMessageOutFailed          = "register sample codes to message out failed"
 )
 
 var (
@@ -358,4 +452,8 @@ var (
 	ErrUpdateMessageOutFailed                                       = errors.New(msgUpdateMessageOutFailed)
 	ErrUpdateMessageOutDEAInfoFailed                                = errors.New(msgUpdateMessageOutDEAInfoFailed)
 	ErrGetFullyRevokedUnsentMessageOutIDsByAnalysisRequestIDsFailed = errors.New(msgGetFullyRevokedUnsentMessageOutIDsByAnalysisRequestIDsFailed)
+
+	ErrGetMessageOutSampleCodesByIDsFailed            = errors.New(msgGetMessageOutSampleCodesByIDsFailed)
+	ErrMarkMessageOutSampleCodesAsUploadedByIDsFailed = errors.New(msgMarkMessageOutSampleCodesAsUploadedByIDsFailed)
+	ErrRegisterSampleCodesToMessageOutFailed          = errors.New(msgRegisterSampleCodesToMessageOutFailed)
 )

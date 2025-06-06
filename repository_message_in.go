@@ -7,6 +7,7 @@ import (
 	"github.com/blutspende/bloodlab-common/encoding"
 	"github.com/blutspende/bloodlab-common/messagestatus"
 	"github.com/blutspende/bloodlab-common/messagetype"
+	"github.com/blutspende/bloodlab-common/utils"
 	"github.com/blutspende/skeleton/db"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
@@ -24,6 +25,10 @@ type MessageInRepository interface {
 	Update(ctx context.Context, message MessageIn) error
 	UpdateDEAInfo(ctx context.Context, message MessageIn) error
 
+	GetMessageInSampleCodesByIDs(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]map[uuid.UUID]string, error)
+	MarkSampleCodesAsUploadedByIDs(ctx context.Context, ids []uuid.UUID) error
+	RegisterSampleCodes(ctx context.Context, id uuid.UUID, sampleCodes []string) ([]uuid.UUID, error)
+
 	WithTransaction(tx db.DbConnection) MessageInRepository
 	CreateTransaction() (db.DbConnection, error)
 }
@@ -39,8 +44,8 @@ func (r *messageInRepository) Create(ctx context.Context, message MessageIn) (uu
 	if message.ID == uuid.Nil {
 		message.ID = uuid.New()
 	}
-	query := fmt.Sprintf(`INSERT INTO %s.sk_message_in (id, instrument_id, instrument_module_id, protocol_id, "type", encoding, raw)
-									VALUES (:id, :instrument_id, :instrument_module_id, :protocol_id, :type, :encoding, :raw);`, r.dbSchema)
+	query := fmt.Sprintf(`INSERT INTO %s.sk_message_in (id, instrument_id, instrument_module_id, protocol_id, "type", encoding, raw, created_at)
+									VALUES (:id, :instrument_id, :instrument_module_id, :protocol_id, :type, :encoding, :raw, :created_at);`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, convertMessageInToDAO(message))
 	if err != nil {
 		log.Error().Err(err).Msg(msgCreateMessageInFailed)
@@ -157,17 +162,11 @@ func (r *messageInRepository) GetUnsynced(ctx context.Context, limit, offset int
 
 func (r *messageInRepository) Update(ctx context.Context, message MessageIn) error {
 	query := fmt.Sprintf(`UPDATE %s.sk_message_in SET status = :status, 
-<<<<<<< HEAD
 									retry_count = :retry_count, modified_at = timezone('utc', now())`, r.dbSchema)
 	if message.Error != nil {
 		query += ", error = :error"
 	}
 	query += " WHERE id = :id;"
-
-=======
-									error = :error, retry_count = :retry_count, modified_at = timezone('utc', now())
-									WHERE id = :id;`, r.dbSchema)
->>>>>>> 0d18943 (Add MessageIn/Out handling to skeleton.)
 	_, err := r.db.NamedExecContext(ctx, query, convertMessageInToDAO(message))
 	if err != nil {
 		log.Error().Err(err).Msg(msgUpdateMessageInFailed)
@@ -178,17 +177,12 @@ func (r *messageInRepository) Update(ctx context.Context, message MessageIn) err
 }
 
 func (r *messageInRepository) UpdateDEAInfo(ctx context.Context, message MessageIn) error {
-<<<<<<< HEAD
 	query := fmt.Sprintf(`UPDATE %s.sk_message_in SET dea_raw_message_id = :dea_raw_message_id,
                             retry_count = :retry_count`, r.dbSchema)
 	if message.Error != nil {
 		query += ", error = :error"
 	}
 	query += " WHERE id = :id;"
-=======
-	query := fmt.Sprintf(`UPDATE %s.sk_message_in SET dea_raw_message_id = :dea_raw_message_id, error = :error,
-                            retry_count = :retry_count WHERE id = :id;`, r.dbSchema)
->>>>>>> 0d18943 (Add MessageIn/Out handling to skeleton.)
 	_, err := r.db.NamedExecContext(ctx, query, convertMessageInToDAO(message))
 	if err != nil {
 		log.Error().Err(err).Msg(msgUpdateMessageInDEAInfoFailed)
@@ -196,6 +190,92 @@ func (r *messageInRepository) UpdateDEAInfo(ctx context.Context, message Message
 	}
 
 	return nil
+}
+
+func (r *messageInRepository) GetMessageInSampleCodesByIDs(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]map[uuid.UUID]string, error) {
+	sampleCodesByMessageInIDs := make(map[uuid.UUID]map[uuid.UUID]string)
+	err := utils.Partition(len(ids), maxParams, func(low int, high int) error {
+		query := `SELECT id, message_in_id, sample_code FROM %s.sk_message_in_sample_codes WHERE id IN (?) AND uploaded_to_dea_at IS NULL;`
+		query, args, _ := sqlx.In(query, ids[low:high])
+		query = r.db.Rebind(query)
+		rows, err := r.db.QueryxContext(ctx, query, args...)
+		if err != nil {
+			log.Error().Err(err).Msg(msgGetMessageInSampleCodesByIDsFailed)
+			return ErrGetMessageInSampleCodesByIDsFailed
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var id, messageInID uuid.UUID
+			var sampleCode string
+			err = rows.Scan(&id, &messageInID, &sampleCode)
+			if err != nil {
+				log.Error().Err(err).Msg(msgGetMessageInSampleCodesByIDsFailed)
+				return ErrGetMessageInSampleCodesByIDsFailed
+			}
+			if _, ok := sampleCodesByMessageInIDs[messageInID]; !ok {
+				sampleCodesByMessageInIDs[messageInID] = make(map[uuid.UUID]string)
+			}
+			sampleCodesByMessageInIDs[messageInID][id] = sampleCode
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return sampleCodesByMessageInIDs, nil
+}
+
+func (r *messageInRepository) MarkSampleCodesAsUploadedByIDs(ctx context.Context, ids []uuid.UUID) error {
+	err := utils.Partition(len(ids), maxParams, func(low int, high int) error {
+		query := `UPDATE %s.sk_message_in_sample_codes SET uploaded_to_dea_at = timezone('utc', now()) WHERE id IN (?);`
+		query, args, _ := sqlx.In(query, ids[low:high])
+		query = r.db.Rebind(query)
+		_, err := r.db.ExecContext(ctx, query, args...)
+		if err != nil {
+			log.Error().Err(err).Msg(msgMarkMessageInSampleCodesAsUploadedByIDsFailed)
+			return ErrMarkMessageInSampleCodesAsUploadedByIDsFailed
+		}
+		return nil
+	})
+
+	return err
+}
+
+func (r *messageInRepository) RegisterSampleCodes(ctx context.Context, id uuid.UUID, sampleCodes []string) ([]uuid.UUID, error) {
+	preparedValues := make([]map[string]interface{}, len(sampleCodes))
+	for i := range sampleCodes {
+		preparedValues[i] = map[string]interface{}{
+			"message_in_id": id,
+			"sample_code":   sampleCodes[i],
+		}
+	}
+	ids := make([]uuid.UUID, 0)
+	err := utils.Partition(len(preparedValues), maxParams/2, func(low int, high int) error {
+		query := `INSERT INTO %s.sk_message_in_sample_codes (message_in_id, sample_code) VALUES (:message_in_id, :sample_code) ON CONFLICT (message_in_id, sample_code) DO NOTHING RETURNING id;`
+		rows, err := r.db.NamedQueryContext(ctx, query, preparedValues[low:high])
+		if err != nil {
+			log.Error().Err(err).Msg(msgRegisterSampleCodesToMessageInFailed)
+			return ErrRegisterSampleCodesToMessageInFailed
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var insertedID uuid.UUID
+			err = rows.Scan(&insertedID)
+			if err != nil {
+				log.Error().Err(err).Msg(msgRegisterSampleCodesToMessageInFailed)
+				return ErrRegisterSampleCodesToMessageInFailed
+			}
+			ids = append(ids, insertedID)
+		}
+
+		return nil
+	})
+
+	return ids, err
 }
 
 func (r *messageInRepository) WithTransaction(tx db.DbConnection) MessageInRepository {
@@ -295,6 +375,10 @@ const (
 	msgGetUnsyncedMessageInsFailed    = "get unsynced message ins failed"
 	msgUpdateMessageInDEAInfoFailed   = "update message in DEA info failed"
 	msgUpdateMessageInFailed          = "update message in failed"
+
+	msgGetMessageInSampleCodesByIDsFailed            = "get message in sample codes by IDs failed"
+	msgMarkMessageInSampleCodesAsUploadedByIDsFailed = "mark message in sample codes as uploaded to DEA by IDs failed"
+	msgRegisterSampleCodesToMessageInFailed          = "register sample codes to message in failed"
 )
 
 var (
@@ -304,4 +388,8 @@ var (
 	ErrGetUnsyncedMessageInsFailed    = errors.New(msgGetUnsyncedMessageInsFailed)
 	ErrUpdateMessageInDEAInfoFailed   = errors.New(msgUpdateMessageInDEAInfoFailed)
 	ErrUpdateMessageInFailed          = errors.New(msgUpdateMessageInFailed)
+
+	ErrGetMessageInSampleCodesByIDsFailed            = errors.New(msgGetMessageInSampleCodesByIDsFailed)
+	ErrMarkMessageInSampleCodesAsUploadedByIDsFailed = errors.New(msgMarkMessageInSampleCodesAsUploadedByIDsFailed)
+	ErrRegisterSampleCodesToMessageInFailed          = errors.New(msgRegisterSampleCodesToMessageInFailed)
 )

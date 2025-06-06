@@ -29,16 +29,19 @@ type MessageService interface {
 	EnqueueMessageInsForArchiving(messages ...MessageIn)
 	EnqueueMessageOutsForArchiving(messages ...MessageOut)
 	StartDEAArchiving(ctx context.Context)
+	StartSampleCodeRegisteringToDEA(ctx context.Context)
 }
 
 type messageService struct {
-	deaClient                 DeaClientV1
-	messageInRepository       MessageInRepository
-	messageOutRepository      MessageOutRepository
-	messageOutOrderRepository MessageOutOrderRepository
-	messageInArchivingChan    chan []MessageIn
-	messageOutArchivingChan   chan []MessageOut
-	serviceName               string
+	deaClient                  DeaClientV1
+	messageInRepository        MessageInRepository
+	messageOutRepository       MessageOutRepository
+	messageOutOrderRepository  MessageOutOrderRepository
+	messageInArchivingChan     chan []MessageIn
+	messageOutArchivingChan    chan []MessageOut
+	messageInSampleCodeIDChan  chan []uuid.UUID
+	messageOutSampleCodeIDChan chan []uuid.UUID
+	serviceName                string
 }
 
 func (s *messageService) AddAnalysisRequestsToMessageOutOrder(ctx context.Context, messageOutOrderID uuid.UUID, analysisRequestIDs []uuid.UUID) error {
@@ -95,13 +98,16 @@ func (s *messageService) GetUnsyncedMessageIns(ctx context.Context, limit, offse
 }
 
 func (s *messageService) SaveMessageIn(ctx context.Context, message MessageIn) (uuid.UUID, error) {
+	message.CreatedAt = time.Now().UTC()
 	if !isStatusValid(message.Status) {
 		message.Status = messagestatus.Stored
 	}
+	s.EnqueueMessageInsForArchiving(message)
 	return s.messageInRepository.Create(ctx, message)
 }
 
 func (s *messageService) SaveMessageOut(ctx context.Context, message MessageOut) (uuid.UUID, error) {
+	message.CreatedAt = time.Now().UTC()
 	if !isStatusValid(message.Status) {
 		message.Status = messagestatus.Stored
 	}
@@ -110,11 +116,13 @@ func (s *messageService) SaveMessageOut(ctx context.Context, message MessageOut)
 	if err != nil {
 		return uuid.Nil, err
 	}
+	s.EnqueueMessageOutsForArchiving(message)
 
 	return messageIDs[0], nil
 }
 
 func (s *messageService) SaveMessageOutBatch(ctx context.Context, messages []MessageOut) ([]uuid.UUID, error) {
+	ts := time.Now().UTC()
 	if len(messages) == 0 {
 		return nil, nil
 	}
@@ -128,6 +136,7 @@ func (s *messageService) SaveMessageOutBatch(ctx context.Context, messages []Mes
 		return nil, err
 	}
 	for i := range messages {
+		messages[i].CreatedAt = ts
 		messages[i].ID = messageIDs[i]
 		for j := range messages[i].MessageOutOrders {
 			if messages[i].MessageOutOrders[j].ID == uuid.Nil {
@@ -297,19 +306,117 @@ func (s *messageService) StartDEAArchiving(ctx context.Context) {
 	}
 }
 
+func (s *messageService) RegisterSampleCodesToMessageIn(ctx context.Context, messageID uuid.UUID, sampleCodes []string) error {
+	ids, err := s.messageInRepository.RegisterSampleCodes(ctx, messageID, sampleCodes)
+	if err != nil {
+		return err
+	}
+	s.messageInSampleCodeIDChan <- ids
+
+	return nil
+}
+
+func (s *messageService) RegisterSampleCodesToMessageOut(ctx context.Context, messageID uuid.UUID, sampleCodes []string) error {
+	ids, err := s.messageOutRepository.RegisterSampleCodes(ctx, messageID, sampleCodes)
+	if err != nil {
+		return err
+	}
+	s.messageOutSampleCodeIDChan <- ids
+
+	return nil
+}
+
+func (s *messageService) StartSampleCodeRegisteringToDEA(ctx context.Context) {
+	for {
+		select {
+		case ids := <-s.messageInSampleCodeIDChan:
+			sampleCodesByMessageIDs, err := s.messageInRepository.GetMessageInSampleCodesByIDs(ctx, ids)
+			if err != nil {
+				time.AfterFunc(time.Minute, func() {
+					s.messageInSampleCodeIDChan <- ids
+				})
+				continue
+			}
+			failedIDs := make([]uuid.UUID, 0)
+			for messageID, sampleCodesByIDs := range sampleCodesByMessageIDs {
+				currentIDs := make([]uuid.UUID, len(sampleCodesByIDs))
+				sampleCodes := make([]string, len(sampleCodesByIDs))
+				counter := 0
+				for id, sampleCode := range sampleCodesByIDs {
+					currentIDs[counter] = id
+					sampleCodes[counter] = sampleCode
+					counter++
+				}
+				err = s.deaClient.RegisterSampleCodes(messageID, sampleCodes)
+				if err != nil {
+					failedIDs = append(failedIDs, currentIDs...)
+					continue
+				}
+				err = s.messageInRepository.MarkSampleCodesAsUploadedByIDs(ctx, currentIDs)
+				if err != nil {
+					failedIDs = append(failedIDs, currentIDs...)
+				}
+			}
+			if len(failedIDs) == 0 {
+				continue
+			}
+			time.AfterFunc(time.Minute, func() {
+				s.messageInSampleCodeIDChan <- failedIDs
+			})
+		case ids := <-s.messageOutSampleCodeIDChan:
+			sampleCodesByMessageIDs, err := s.messageOutRepository.GetMessageOutSampleCodesByIDs(ctx, ids)
+			if err != nil {
+				time.AfterFunc(time.Minute, func() {
+					s.messageOutSampleCodeIDChan <- ids
+				})
+				continue
+			}
+			failedIDs := make([]uuid.UUID, 0)
+			for messageID, sampleCodesByIDs := range sampleCodesByMessageIDs {
+				currentIDs := make([]uuid.UUID, len(sampleCodesByIDs))
+				sampleCodes := make([]string, len(sampleCodesByIDs))
+				counter := 0
+				for id, sampleCode := range sampleCodesByIDs {
+					currentIDs[counter] = id
+					sampleCodes[counter] = sampleCode
+					counter++
+				}
+				err = s.deaClient.RegisterSampleCodes(messageID, sampleCodes)
+				if err != nil {
+					failedIDs = append(failedIDs, currentIDs...)
+				}
+				err = s.messageOutRepository.MarkSampleCodesAsUploadedByIDs(ctx, currentIDs)
+				if err != nil {
+					failedIDs = append(failedIDs, currentIDs...)
+				}
+			}
+			if len(failedIDs) == 0 {
+				continue
+			}
+			time.AfterFunc(time.Minute, func() {
+				s.messageOutSampleCodeIDChan <- failedIDs
+			})
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
 func (s *messageService) uploadRawMessageToDEA(message SaveInstrumentMessageTO) (uuid.UUID, error) {
 	return s.deaClient.UploadInstrumentMessage(message)
 }
 
 func NewMessageService(deaClient DeaClientV1, messageInRepository MessageInRepository, messageOutRepository MessageOutRepository, messageOutOrderRepository MessageOutOrderRepository, serviceName string) MessageService {
 	return &messageService{
-		deaClient:                 deaClient,
-		messageInRepository:       messageInRepository,
-		messageOutRepository:      messageOutRepository,
-		messageOutOrderRepository: messageOutOrderRepository,
-		messageInArchivingChan:    make(chan []MessageIn, 100),
-		messageOutArchivingChan:   make(chan []MessageOut, 100),
-		serviceName:               serviceName,
+		deaClient:                  deaClient,
+		messageInRepository:        messageInRepository,
+		messageOutRepository:       messageOutRepository,
+		messageOutOrderRepository:  messageOutOrderRepository,
+		messageInArchivingChan:     make(chan []MessageIn, 100),
+		messageOutArchivingChan:    make(chan []MessageOut, 100),
+		messageInSampleCodeIDChan:  make(chan []uuid.UUID, 100),
+		messageOutSampleCodeIDChan: make(chan []uuid.UUID, 100),
+		serviceName:                serviceName,
 	}
 }
 

@@ -12,11 +12,13 @@ import (
 )
 
 var (
+	ErrRegisterSampleCodesFailed          = errors.New("register sample codes to instrument message failed")
 	ErrUploadInstrumentMessageToDEAFailed = errors.New("upload instrument message to DEA failed")
 	ErrUploadImageToDEAFailed             = errors.New("upload image to DEA failed")
 )
 
 type DeaClientV1 interface {
+	RegisterSampleCodes(messageID uuid.UUID, sampleCodes []string) error
 	UploadImage(fileData []byte, name string) (uuid.UUID, error)
 	UploadInstrumentMessage(message SaveInstrumentMessageTO) (uuid.UUID, error)
 }
@@ -36,6 +38,27 @@ func NewDEAClient(deaUrl string, restyClient *resty.Client) (DeaClientV1, error)
 		deaUrl: deaUrl,
 		client: clientCopy,
 	}, nil
+}
+
+func (dea *deaClientV1) RegisterSampleCodes(messageID uuid.UUID, sampleCodes []string) error {
+	var errResponse clientError
+	resp, err := dea.client.R().
+		SetBody(sampleCodes).
+		SetError(&errResponse).
+		Post(dea.deaUrl + "/v1/instrument-messages/" + messageID.String() + "/samplecodes")
+	if err != nil {
+		log.Error().Err(err).Msg("Can not call internal dea api")
+		return ErrRegisterSampleCodesFailed
+	}
+	if resp == nil {
+		return ErrRegisterSampleCodesFailed
+	}
+	if resp.IsError() {
+		log.Error().Msg(errResponse.Message)
+		return ErrRegisterSampleCodesFailed
+	}
+
+	return nil
 }
 
 func (dea *deaClientV1) UploadImage(fileData []byte, name string) (imageID uuid.UUID, err error) {
@@ -83,7 +106,7 @@ func (dea *deaClientV1) UploadInstrumentMessage(message SaveInstrumentMessageTO)
 		SetResult(&id).
 		SetBody(message).
 		SetError(&errResponse).
-		Post(dea.deaUrl + "/v1/files")
+		Post(dea.deaUrl + "/v1/instrument-messages")
 	if err != nil {
 		log.Error().Err(err).Msg(ErrUploadInstrumentMessageToDEAFailed.Error())
 		err = ErrUploadInstrumentMessageToDEAFailed
