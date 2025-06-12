@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/blutspende/skeleton/config"
+	_ "github.com/jackc/pgx/v4/stdlib"
 	"github.com/jmoiron/sqlx"
 	"github.com/rs/zerolog/log"
 )

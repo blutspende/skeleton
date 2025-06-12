@@ -3,11 +3,11 @@ package skeleton
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"github.com/blutspende/skeleton/db"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
-	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"strings"
 	"time"

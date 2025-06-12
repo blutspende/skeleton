@@ -4,14 +4,16 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/blutspende/bloodlab-common/encoding"
+	"github.com/blutspende/bloodlab-common/timezone"
 	"github.com/blutspende/bloodlab-common/utils"
 	"strings"
 	"time"
 
+	"errors"
 	"github.com/blutspende/skeleton/db"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
-	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 )
 
@@ -126,24 +128,24 @@ var (
 )
 
 type instrumentDAO struct {
-	ID                 uuid.UUID      `db:"id"`
-	Type               InstrumentType `db:"type"`
-	ProtocolID         uuid.UUID      `db:"protocol_id"`
-	Name               string         `db:"name"`
-	HostName           string         `db:"hostname"`
-	ClientPort         sql.NullInt32  `db:"client_port"`
-	Enabled            bool           `db:"enabled"`
-	ConnectionMode     string         `db:"connection_mode"`
-	RunningMode        ResultMode     `db:"running_mode"`
-	CaptureResults     bool           `db:"captureresults"`
-	CaptureDiagnostics bool           `db:"capturediagnostics"`
-	ReplyToQuery       bool           `db:"replytoquery"`
-	Status             string         `db:"status"`
-	Timezone           string         `db:"timezone"`
-	FileEncoding       string         `db:"file_encoding"`
-	CreatedAt          time.Time      `db:"created_at"`
-	ModifiedAt         sql.NullTime   `db:"modified_at"`
-	DeletedAt          sql.NullTime   `db:"deleted_at"`
+	ID                 uuid.UUID         `db:"id"`
+	Type               InstrumentType    `db:"type"`
+	ProtocolID         uuid.UUID         `db:"protocol_id"`
+	Name               string            `db:"name"`
+	HostName           string            `db:"hostname"`
+	ClientPort         sql.NullInt32     `db:"client_port"`
+	Enabled            bool              `db:"enabled"`
+	ConnectionMode     string            `db:"connection_mode"`
+	RunningMode        ResultMode        `db:"running_mode"`
+	CaptureResults     bool              `db:"captureresults"`
+	CaptureDiagnostics bool              `db:"capturediagnostics"`
+	ReplyToQuery       bool              `db:"replytoquery"`
+	Status             string            `db:"status"`
+	TimeZone           timezone.TimeZone `db:"timezone"`
+	Encoding           encoding.Encoding `db:"file_encoding"`
+	CreatedAt          time.Time         `db:"created_at"`
+	ModifiedAt         sql.NullTime      `db:"modified_at"`
+	DeletedAt          sql.NullTime      `db:"deleted_at"`
 }
 
 type ftpConfigDAO struct {
@@ -1381,8 +1383,8 @@ func convertInstrumentToDAO(instrument Instrument) (instrumentDAO, error) {
 		CaptureDiagnostics: instrument.CaptureDiagnostics,
 		ReplyToQuery:       instrument.ReplyToQuery,
 		Status:             instrument.Status,
-		Timezone:           instrument.Timezone,
-		FileEncoding:       instrument.FileEncoding,
+		TimeZone:           instrument.TimeZone,
+		Encoding:           instrument.Encoding,
 	}
 	switch instrument.Type {
 	case Analyzer, Sorter:
@@ -1422,8 +1424,8 @@ func convertInstrumentDaoToInstrument(dao instrumentDAO) (Instrument, error) {
 		CaptureDiagnostics: dao.CaptureDiagnostics,
 		ReplyToQuery:       dao.ReplyToQuery,
 		Status:             dao.Status,
-		Timezone:           dao.Timezone,
-		FileEncoding:       dao.FileEncoding,
+		TimeZone:           dao.TimeZone,
+		Encoding:           dao.Encoding,
 		CreatedAt:          dao.CreatedAt,
 	}
 	switch dao.Type {

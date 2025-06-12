@@ -21,9 +21,6 @@ type AnalysisService interface {
 	ProcessAnalysisRequests(ctx context.Context, analysisRequests []AnalysisRequest) error
 	RevokeAnalysisRequests(ctx context.Context, workItemIDs []uuid.UUID) error
 	ReexamineAnalysisRequestsBatch(ctx context.Context, workItemIDs []uuid.UUID) error
-	GetAnalysisRequestsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisRequestInfo, int, error)
-	GetAnalysisResultsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisResultInfo, int, error)
-	GetAnalysisBatches(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisBatch, int, error)
 	CreateAnalysisResultsBatch(ctx context.Context, analysisResults AnalysisResultSet) ([]AnalysisResult, error)
 	CreateControlResultBatch(ctx context.Context, controlResults []StandaloneControlResult) ([]StandaloneControlResult, []uuid.UUID, error)
 	GetAnalysisResultsByIDsWithRecalculatedStatus(ctx context.Context, analysisResultIDs []uuid.UUID, reValidateControlResult bool) ([]AnalysisResult, error)
@@ -156,18 +153,21 @@ func (as *analysisService) ProcessAnalysisRequests(ctx context.Context, analysis
 
 func (as *analysisService) RevokeAnalysisRequests(ctx context.Context, workItemIDs []uuid.UUID) error {
 	log.Trace().Msgf("Revoking %d work-item(s) by IDs", len(workItemIDs))
-
 	analysisRequests, err := as.analysisRepository.GetAnalysisRequestsByWorkItemIDs(ctx, workItemIDs)
 	if err != nil {
 		return ErrRevokeAnalysisRequestsFailed
 	}
-
-	as.manager.GetCallbackHandler().RevokeAnalysisRequests(analysisRequests)
 	err = as.analysisRepository.DeleteAnalysisRequestExtraValues(ctx, workItemIDs)
 	if err != nil {
 		return ErrRevokeAnalysisRequestsFailed
 	}
-	return as.analysisRepository.RevokeAnalysisRequests(ctx, workItemIDs)
+	err = as.analysisRepository.RevokeAnalysisRequests(ctx, workItemIDs)
+	if err != nil {
+		return ErrRevokeAnalysisRequestsFailed
+	}
+	as.manager.GetCallbackHandler().RevokeAnalysisRequests(analysisRequests)
+
+	return nil
 }
 
 func (as *analysisService) ReexamineAnalysisRequestsBatch(ctx context.Context, workItemIDs []uuid.UUID) error {
@@ -183,33 +183,6 @@ func (as *analysisService) ReexamineAnalysisRequestsBatch(ctx context.Context, w
 	as.manager.GetCallbackHandler().ReexamineAnalysisRequests(analysisRequests)
 
 	return nil
-}
-
-func (as *analysisService) GetAnalysisRequestsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisRequestInfo, int, error) {
-	requestInfoList, totalCount, err := as.analysisRepository.GetAnalysisRequestsInfo(ctx, instrumentID, filter)
-	if err != nil {
-		return []AnalysisRequestInfo{}, 0, err
-	}
-
-	return requestInfoList, totalCount, nil
-}
-
-func (as *analysisService) GetAnalysisResultsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisResultInfo, int, error) {
-	resultInfoList, totalCount, err := as.analysisRepository.GetAnalysisResultsInfo(ctx, instrumentID, filter)
-	if err != nil {
-		return []AnalysisResultInfo{}, 0, err
-	}
-
-	return resultInfoList, totalCount, nil
-}
-
-func (as *analysisService) GetAnalysisBatches(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisBatch, int, error) {
-	analysisBatchList, totalCount, err := as.analysisRepository.GetAnalysisBatches(ctx, instrumentID, filter)
-	if err != nil {
-		return []AnalysisBatch{}, 0, err
-	}
-
-	return analysisBatchList, totalCount, nil
 }
 
 func (as *analysisService) CreateAnalysisResultsBatch(ctx context.Context, analysisResults AnalysisResultSet) ([]AnalysisResult, error) {
@@ -247,9 +220,6 @@ func (as *analysisService) CreateAnalysisResultsBatch(ctx context.Context, analy
 func (as *analysisService) createAnalysisResultsBatch(ctx context.Context, tx db.DbConnection, analysisResultSet AnalysisResultSet) (AnalysisResultSet, error) {
 	var err error
 	for i := range analysisResultSet.Results {
-		if analysisResultSet.Results[i].DEARawMessageID == uuid.Nil {
-			return analysisResultSet, errors.New(fmt.Sprintf("DEA raw message ID is missing at index: %d", i))
-		}
 		if analysisResultSet.Results[i].AnalyteMapping.ID == uuid.Nil {
 			return analysisResultSet, errors.New(fmt.Sprintf("analyte mapping CerberusID is missing at index: %d", i))
 		}
