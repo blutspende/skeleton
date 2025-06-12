@@ -3,9 +3,9 @@ package skeleton
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"github.com/blutspende/skeleton/db"
-	"github.com/pkg/errors"
 	"time"
 
 	"github.com/rs/zerolog/log"

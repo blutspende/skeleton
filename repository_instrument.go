@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
+	"errors"
 	"github.com/blutspende/skeleton/db"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
-	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 )
 
@@ -141,8 +141,8 @@ type instrumentDAO struct {
 	CaptureDiagnostics bool              `db:"capturediagnostics"`
 	ReplyToQuery       bool              `db:"replytoquery"`
 	Status             string            `db:"status"`
-	Timezone           timezone.TimeZone `db:"timezone"`
-	FileEncoding       encoding.Encoding `db:"file_encoding"`
+	TimeZone           timezone.TimeZone `db:"timezone"`
+	Encoding           encoding.Encoding `db:"file_encoding"`
 	CreatedAt          time.Time         `db:"created_at"`
 	ModifiedAt         sql.NullTime      `db:"modified_at"`
 	DeletedAt          sql.NullTime      `db:"deleted_at"`
@@ -1383,8 +1383,8 @@ func convertInstrumentToDAO(instrument Instrument) (instrumentDAO, error) {
 		CaptureDiagnostics: instrument.CaptureDiagnostics,
 		ReplyToQuery:       instrument.ReplyToQuery,
 		Status:             instrument.Status,
-		Timezone:           instrument.Timezone,
-		FileEncoding:       instrument.FileEncoding,
+		TimeZone:           instrument.TimeZone,
+		Encoding:           instrument.Encoding,
 	}
 	switch instrument.Type {
 	case Analyzer, Sorter:
@@ -1424,8 +1424,8 @@ func convertInstrumentDaoToInstrument(dao instrumentDAO) (Instrument, error) {
 		CaptureDiagnostics: dao.CaptureDiagnostics,
 		ReplyToQuery:       dao.ReplyToQuery,
 		Status:             dao.Status,
-		Timezone:           dao.Timezone,
-		FileEncoding:       dao.FileEncoding,
+		TimeZone:           dao.TimeZone,
+		Encoding:           dao.Encoding,
 		CreatedAt:          dao.CreatedAt,
 	}
 	switch dao.Type {

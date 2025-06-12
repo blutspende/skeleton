@@ -3,6 +3,7 @@ package skeleton
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"github.com/blutspende/bloodlab-common/encoding"
 	"github.com/blutspende/bloodlab-common/messagestatus"
@@ -10,7 +11,6 @@ import (
 	"github.com/blutspende/skeleton/db"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
-	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"time"
 )
@@ -39,8 +39,8 @@ func (r *messageInRepository) Create(ctx context.Context, message MessageIn) (uu
 	if message.ID == uuid.Nil {
 		message.ID = uuid.New()
 	}
-	query := fmt.Sprintf(`INSERT INTO %s.sk_message_in (id, instrument_id, instrument_module_id, protocol_id, "type", encoding, raw)
-									VALUES (:id, :instrument_id, :instrument_module_id, :protocol_id, :type, :encoding, :raw);`, r.dbSchema)
+	query := fmt.Sprintf(`INSERT INTO %s.sk_message_in (id, instrument_id, instrument_module_id, protocol_id, "type", encoding, raw, status)
+									VALUES (:id, :instrument_id, :instrument_module_id, :protocol_id, :type, :encoding, :raw, :status);`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, convertMessageInToDAO(message))
 	if err != nil {
 		log.Error().Err(err).Msg(msgCreateMessageInFailed)

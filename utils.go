@@ -37,8 +37,8 @@ func HashInstrument(instrument Instrument) string {
 	builder.WriteString(fmt.Sprintf("%t", instrument.CaptureDiagnostics))
 	builder.WriteString(fmt.Sprintf("%t", instrument.ReplyToQuery))
 	builder.WriteString(instrument.Status)
-	builder.WriteString(string(instrument.FileEncoding))
-	builder.WriteString(string(instrument.Timezone))
+	builder.WriteString(string(instrument.Encoding))
+	builder.WriteString(string(instrument.TimeZone))
 	builder.WriteString(instrument.Hostname)
 	if instrument.ClientPort != nil {
 		builder.WriteString(fmt.Sprintf("%d", *instrument.ClientPort))

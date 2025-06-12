@@ -2,13 +2,13 @@ package skeleton
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/blutspende/bloodlab-common/messagestatus"
 	"github.com/blutspende/bloodlab-common/utils"
 	"github.com/blutspende/skeleton/db"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
-	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"strings"
 )

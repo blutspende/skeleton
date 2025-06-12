@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"errors"
 	"github.com/blutspende/skeleton/db"
-	"github.com/pkg/errors"
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
