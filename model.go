@@ -150,8 +150,8 @@ type Instrument struct {
 	CaptureDiagnostics bool
 	ReplyToQuery       bool
 	Status             string
-	FileEncoding       encoding.Encoding
-	Timezone           timezone.TimeZone
+	Encoding           encoding.Encoding
+	TimeZone           timezone.TimeZone
 	Hostname           string
 	ClientPort         *int
 	FTPConfig          *FTPConfig

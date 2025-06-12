@@ -41,8 +41,8 @@ func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
 		ConnectionMode: FTP,
 		ResultMode:     Production,
 		Status:         "ONLINE",
-		FileEncoding:   "UTF8",
-		Timezone:       "Europe/Budapest",
+		Encoding:       "UTF8",
+		TimeZone:       "Europe/Budapest",
 		Hostname:       "192.168.1.20",
 		ClientPort:     &clientPort,
 		FTPConfig: &FTPConfig{
@@ -91,8 +91,8 @@ func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
 		ConnectionMode: FTP,
 		ResultMode:     Production,
 		Status:         "ONLINE",
-		FileEncoding:   "UTF8",
-		Timezone:       "Europe/Budapest",
+		Encoding:       "UTF8",
+		TimeZone:       "Europe/Budapest",
 		Hostname:       "192.168.1.20",
 		ClientPort:     &clientPort,
 		FTPConfig: &FTPConfig{
@@ -166,8 +166,8 @@ func TestFtpConfigConnectionModeChange(t *testing.T) {
 		ConnectionMode: TCPClientMode,
 		ResultMode:     Production,
 		Status:         "ONLINE",
-		FileEncoding:   "UTF8",
-		Timezone:       "Europe/Budapest",
+		Encoding:       "UTF8",
+		TimeZone:       "Europe/Budapest",
 		Hostname:       "192.168.1.20",
 		ClientPort:     &clientPort,
 	})
@@ -190,8 +190,8 @@ func TestFtpConfigConnectionModeChange(t *testing.T) {
 		ConnectionMode: FTP,
 		ResultMode:     Production,
 		Status:         "ONLINE",
-		FileEncoding:   "UTF8",
-		Timezone:       "Europe/Budapest",
+		Encoding:       "UTF8",
+		TimeZone:       "Europe/Budapest",
 		Hostname:       "192.168.1.20",
 		ClientPort:     &clientPort,
 		FTPConfig: &FTPConfig{
@@ -235,8 +235,8 @@ func TestFtpConfigConnectionModeChange(t *testing.T) {
 		ConnectionMode: TCPMixed,
 		ResultMode:     Production,
 		Status:         "ONLINE",
-		FileEncoding:   "UTF8",
-		Timezone:       "Europe/Budapest",
+		Encoding:       "UTF8",
+		TimeZone:       "Europe/Budapest",
 		Hostname:       "192.168.1.20",
 		ClientPort:     &clientPort,
 	}, uuid.MustParse("9d5fb5e9-65a1-4479-8f82-25b04145bfe1"))
@@ -292,8 +292,8 @@ func TestUpdateInstrument(t *testing.T) {
 		CaptureDiagnostics: false,
 		ReplyToQuery:       false,
 		Status:             "TestStatus",
-		FileEncoding:       "UTF8",
-		Timezone:           "Europe/Berlin",
+		Encoding:           "UTF8",
+		TimeZone:           "Europe/Berlin",
 		Hostname:           "TestHost",
 		ClientPort:         &clientPort,
 	}
@@ -323,8 +323,8 @@ func TestUpdateInstrument(t *testing.T) {
 		CaptureDiagnostics: false,
 		ReplyToQuery:       false,
 		Status:             "TestStatus",
-		FileEncoding:       "UTF8",
-		Timezone:           "Europe/Berlin",
+		Encoding:           "UTF8",
+		TimeZone:           "Europe/Berlin",
 		Hostname:           "TestHost",
 		ClientPort:         &clientPort,
 		AnalyteMappings: []AnalyteMapping{
@@ -412,8 +412,8 @@ func TestUpdateInstrument(t *testing.T) {
 		CaptureDiagnostics: false,
 		ReplyToQuery:       false,
 		Status:             "TestStatus",
-		FileEncoding:       "UTF8",
-		Timezone:           "Europe/Berlin",
+		Encoding:           "UTF8",
+		TimeZone:           "Europe/Berlin",
 		Hostname:           "TestHost",
 		ClientPort:         &clientPort,
 		AnalyteMappings: []AnalyteMapping{
@@ -582,8 +582,8 @@ func TestNotVerifiedInstrument(t *testing.T) {
 		CaptureDiagnostics: false,
 		ReplyToQuery:       false,
 		Status:             "TestStatus",
-		FileEncoding:       "UTF8",
-		Timezone:           "Europe/Berlin",
+		Encoding:           "UTF8",
+		TimeZone:           "Europe/Berlin",
 		Hostname:           "TestHost",
 		ClientPort:         &clientPort,
 	}
@@ -1066,8 +1066,8 @@ func (r *instrumentRepositoryMock) GetInstrumentByID(ctx context.Context, id uui
 		ConnectionMode: "TCP_MIXED",
 		ResultMode:     "SIMULATION",
 		Status:         "ONLINE",
-		FileEncoding:   "UTF8",
-		Timezone:       "Europe/Budapest",
+		Encoding:       "UTF8",
+		TimeZone:       "Europe/Budapest",
 		Hostname:       "192.168.1.20",
 		Settings: []InstrumentSetting{
 			{
@@ -1093,8 +1093,8 @@ func (r *instrumentRepositoryMock) GetInstrumentByIP(ctx context.Context, ip str
 		ConnectionMode: "TCP_MIXED",
 		ResultMode:     "SIMULATION",
 		Status:         "ONLINE",
-		FileEncoding:   "UTF8",
-		Timezone:       "Europe/Budapest",
+		Encoding:       "UTF8",
+		TimeZone:       "Europe/Budapest",
 		Hostname:       "192.168.1.20",
 		Settings: []InstrumentSetting{
 			{
