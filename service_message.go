@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/blutspende/bloodlab-common/messagestatus"
+	"github.com/blutspende/bloodlab-common/messagetype"
 	"github.com/google/uuid"
 	"regexp"
 	"strings"
@@ -99,12 +100,19 @@ func (s *messageService) SaveMessageIn(ctx context.Context, message MessageIn) (
 	if !isStatusValid(message.Status) {
 		message.Status = messagestatus.Stored
 	}
+	if !isTypeValid(message.Type) {
+		message.Type = messagetype.Unidentified
+	}
+
 	return s.messageInRepository.Create(ctx, message)
 }
 
 func (s *messageService) SaveMessageOut(ctx context.Context, message MessageOut) (uuid.UUID, error) {
 	if !isStatusValid(message.Status) {
 		message.Status = messagestatus.Stored
+	}
+	if !isTypeValid(message.Type) {
+		message.Type = messagetype.Unidentified
 	}
 
 	messageIDs, err := s.messageOutRepository.CreateBatch(ctx, []MessageOut{message})
@@ -129,6 +137,12 @@ func (s *messageService) SaveMessageOutBatch(ctx context.Context, messages []Mes
 		return nil, err
 	}
 	for i := range messages {
+		if !isStatusValid(messages[i].Status) {
+			messages[i].Status = messagestatus.Stored
+		}
+		if !isTypeValid(messages[i].Type) {
+			messages[i].Type = messagetype.Unidentified
+		}
 		messages[i].ID = messageIDs[i]
 		for j := range messages[i].MessageOutOrders {
 			if messages[i].MessageOutOrders[j].ID == uuid.Nil {
@@ -302,4 +316,10 @@ func NewMessageService(deaClient DeaClientV1, messageInRepository MessageInRepos
 
 func isStatusValid(status messagestatus.MessageStatus) bool {
 	return status == messagestatus.Sent || status == messagestatus.Error || status == messagestatus.Processed || status == messagestatus.Stored
+}
+
+func isTypeValid(messageType messagetype.MessageType) bool {
+	return messageType == messagetype.Query || messageType == messagetype.Order || messageType == messagetype.Result ||
+		messageType == messagetype.Acknowledgement || messageType == messagetype.Cancellation || messageType == messagetype.Reorder ||
+		messageType == messagetype.Diagnostics || messageType == messagetype.Unidentified
 }

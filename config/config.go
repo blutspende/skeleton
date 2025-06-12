@@ -2,7 +2,7 @@ package config
 
 import (
 	"encoding/base64"
-	"github.com/pkg/errors"
+	"errors"
 	"github.com/rs/zerolog"
 
 	"github.com/kelseyhightower/envconfig"
@@ -76,9 +76,8 @@ func ReadConfiguration() (Configuration, error) {
 	var config Configuration
 	err := envconfig.Process("", &config)
 	if err != nil {
-		err = errors.Wrap(err, MsgFailedToReadConfiguration)
 		log.Error().Err(err).Msgf("%s\n", ErrFailedToReadConfiguration)
-		return config, err
+		return config, errors.New(MsgFailedToReadConfiguration)
 	}
 	config.ClientCredentialAuthHeaderValue = base64.StdEncoding.EncodeToString([]byte(config.ClientID + ":" + config.ClientSecret))
 	return config, nil

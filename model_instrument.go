@@ -22,8 +22,8 @@ type instrumentTO struct {
 	CaptureDiagnostics  bool                  `json:"captureDiagnostics"`
 	ReplyToQuery        bool                  `json:"replyToQuery"`
 	Status              string                `json:"status"`
-	FileEncoding        encoding.Encoding     `json:"fileEncoding"`
-	Timezone            timezone.TimeZone     `json:"timezone"`
+	Encoding            encoding.Encoding     `json:"fileEncoding"`
+	TimeZone            timezone.TimeZone     `json:"timezone"`
 	Hostname            string                `json:"hostname"`
 	ClientPort          *int                  `json:"clientPort"`
 	FtpUsername         *string               `json:"ftpUserName"`
@@ -156,8 +156,8 @@ func convertInstrumentTOToInstrument(instrumentTO instrumentTO) Instrument {
 		CaptureDiagnostics: instrumentTO.CaptureDiagnostics,
 		Status:             instrumentTO.Status,
 		ReplyToQuery:       instrumentTO.ReplyToQuery,
-		FileEncoding:       instrumentTO.FileEncoding,
-		Timezone:           instrumentTO.Timezone,
+		Encoding:           instrumentTO.Encoding,
+		TimeZone:           instrumentTO.TimeZone,
 		Hostname:           instrumentTO.Hostname,
 		ClientPort:         instrumentTO.ClientPort,
 		AnalyteMappings:    make([]AnalyteMapping, len(instrumentTO.AnalyteMappings)),

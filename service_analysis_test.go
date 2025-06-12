@@ -2,6 +2,7 @@ package skeleton
 
 import (
 	"context"
+	"github.com/blutspende/bloodlab-common/timezone"
 	"github.com/blutspende/skeleton/db"
 	"github.com/blutspende/skeleton/utils"
 	"github.com/google/uuid"
@@ -943,8 +944,8 @@ func setupTestDataForAnalysisResultStatusAndControlResultValidCheck(addExpectedC
 		ConnectionMode:  TCPMixed,
 		ResultMode:      Qualification,
 		Status:          "ONLINE",
-		FileEncoding:    "UTF8",
-		Timezone:        "Europe/Budapest",
+		Encoding:        "UTF8",
+		TimeZone:        "Europe/Budapest",
 		Hostname:        "192.168.1.20",
 		AnalyteMappings: analyteMappings,
 	}
@@ -1112,8 +1113,8 @@ func setupTestDataForAnalysisResultReagentAndControlRelationCheck(addExpectedCon
 		ConnectionMode:  TCPMixed,
 		ResultMode:      Qualification,
 		Status:          "ONLINE",
-		FileEncoding:    "UTF8",
-		Timezone:        "Europe/Budapest",
+		Encoding:        "UTF8",
+		TimeZone:        "Europe/Budapest",
 		Hostname:        "192.168.1.20",
 		AnalyteMappings: analyteMappings,
 	}
@@ -1394,7 +1395,7 @@ func (r *extendedMockAnalysisRepo) WithTransaction(tx db.DbConnection) AnalysisR
 }
 
 func formatTimeStringToBerlinTime(timeString, format string) (time.Time, error) {
-	location, err := time.LoadLocation(string("Europe/Berlin"))
+	location, err := timezone.EuropeBerlin.GetLocation()
 	if err != nil {
 		log.Error().Err(err).Msg("Can not load Location")
 		return time.Time{}, err
