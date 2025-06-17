@@ -2,9 +2,8 @@ package config
 
 import (
 	"encoding/base64"
+	"errors"
 	"github.com/rs/zerolog"
-
-	"github.com/pkg/errors"
 
 	"github.com/kelseyhightower/envconfig"
 	"github.com/rs/zerolog/log"
@@ -67,6 +66,7 @@ type Configuration struct {
 	LongPollingReattemptWaitSeconds            uint          `envconfig:"LONG_POLLING_REATTEMPT_WAIT_SECONDS" default:"5"`
 	LongPollingLoggingEnabled                  bool          `envconfig:"LONG_POLLING_LOGGING_ENABLED" default:"false"`
 	LongPollingRetrySeconds                    int           `envconfig:"LONG_POLLING_RETRY_SECONDS" default:"30"`
+	MessageMaxRetries                          int           `envconfig:"MESSAGE_MAX_RETRIES" default:"25"`
 	ClientCredentialAuthHeaderValue            string
 }
 
@@ -76,9 +76,8 @@ func ReadConfiguration() (Configuration, error) {
 	var config Configuration
 	err := envconfig.Process("", &config)
 	if err != nil {
-		err = errors.Wrap(err, MsgFailedToReadConfiguration)
 		log.Error().Err(err).Msgf("%s\n", ErrFailedToReadConfiguration)
-		return config, err
+		return config, errors.New(MsgFailedToReadConfiguration)
 	}
 	config.ClientCredentialAuthHeaderValue = base64.StdEncoding.EncodeToString([]byte(config.ClientID + ":" + config.ClientSecret))
 	return config, nil

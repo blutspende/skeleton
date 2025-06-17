@@ -13,7 +13,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/rs/zerolog/log"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -32,6 +31,7 @@ type skeleton struct {
 	instrumentService                          InstrumentService
 	consoleLogService                          ConsoleLogService
 	sortingRuleService                         SortingRuleService
+	messageService                             MessageService
 	resultsBuffer                              []AnalysisResult
 	resultBatchesChan                          chan []AnalysisResult
 	controlValidationAnalyteMappingsBuffer     []uuid.UUID
@@ -119,18 +119,6 @@ func (s *skeleton) SaveAnalysisRequestsInstrumentTransmissions(ctx context.Conte
 		return err
 	}
 	return nil
-}
-
-var nonSpecialCharactersRegex = regexp.MustCompile("[^A-Za-z0-9]+")
-
-func (s *skeleton) UploadRawMessageToDEA(rawMessageBytes []byte) (uuid.UUID, error) {
-	return s.deaClient.UploadFile(rawMessageBytes, generateRawMessageFileName(s.serviceName, time.Now().UTC()))
-}
-
-func generateRawMessageFileName(serviceName string, ts time.Time) string {
-	strippedServiceName := nonSpecialCharactersRegex.ReplaceAllString(serviceName, "_")
-	formattedTs := strings.ReplaceAll(ts.Format("2006-01-02-15-04-05.000000"), ".", "_")
-	return fmt.Sprintf("%s_%s", strippedServiceName, formattedTs)
 }
 
 func (s *skeleton) SubmitAnalysisResult(ctx context.Context, resultData AnalysisResultSet) error {
@@ -561,6 +549,123 @@ func (s *skeleton) SetOnlineStatus(ctx context.Context, id uuid.UUID, status Ins
 	return s.cerberusClient.SetInstrumentOnlineStatus(id, status)
 }
 
+const messageBatchSize = 1000
+
+func (s *skeleton) UpdateMessageIn(ctx context.Context, messageIn MessageIn) error {
+	return s.messageService.UpdateMessageIn(ctx, messageIn)
+}
+
+func (s *skeleton) GetUnprocessedMessageIns(ctx context.Context, cutoffTime time.Time) ([]MessageIn, error) {
+	messageIns := make([]MessageIn, 0)
+	counter := 0
+	for {
+		messages, err := s.messageService.GetUnprocessedMessageIns(ctx, messageBatchSize, counter*messageBatchSize, cutoffTime)
+		if err != nil {
+			return nil, err
+		}
+		messageIns = append(messageIns, messages...)
+		if len(messages) < messageBatchSize {
+			break
+		}
+		counter++
+	}
+
+	return messageIns, nil
+}
+
+func (s *skeleton) UpdateMessageOut(ctx context.Context, messageOut MessageOut) error {
+	return s.messageService.UpdateMessageOut(ctx, messageOut)
+}
+
+func (s *skeleton) GetUnprocessedMessageOuts(ctx context.Context, cutoffTime time.Time) ([]MessageOut, error) {
+	messageOuts := make([]MessageOut, 0)
+	counter := 0
+	for {
+		messages, err := s.messageService.GetUnprocessedMessageOuts(ctx, messageBatchSize, counter*messageBatchSize, cutoffTime)
+		if err != nil {
+			return nil, err
+		}
+		messageOuts = append(messageOuts, messages...)
+		if len(messages) < messageBatchSize {
+			break
+		}
+		counter++
+	}
+
+	return messageOuts, nil
+}
+
+func (s *skeleton) GetUnprocessedMessageInsByInstrumentID(ctx context.Context, instrumentID uuid.UUID) ([]MessageIn, error) {
+	counter := 0
+	unprocessedMessages := make([]MessageIn, 0)
+	for {
+		messages, err := s.messageService.GetUnprocessedMessageInsByInstrumentID(ctx, instrumentID, messageBatchSize, messageBatchSize*counter)
+		if err != nil {
+			return nil, err
+		}
+		unprocessedMessages = append(unprocessedMessages, messages...)
+		if len(messages) < messageBatchSize {
+			break
+		}
+		counter++
+	}
+
+	return unprocessedMessages, nil
+}
+
+func (s *skeleton) GetUnprocessedMessageOutsByInstrumentID(ctx context.Context, instrumentID uuid.UUID) ([]MessageOut, error) {
+	counter := 0
+	unprocessedMessages := make([]MessageOut, 0)
+	for {
+		messages, err := s.messageService.GetUnprocessedMessageOutsByInstrumentID(ctx, instrumentID, messageBatchSize, messageBatchSize*counter)
+		if err != nil {
+			return nil, err
+		}
+		unprocessedMessages = append(unprocessedMessages, messages...)
+		if len(messages) < messageBatchSize {
+			break
+		}
+		counter++
+	}
+
+	return unprocessedMessages, nil
+}
+
+func (s *skeleton) GetTestCodesToRevokeBySampleCodes(ctx context.Context, instrumentID uuid.UUID, analysisRequestIDs []uuid.UUID) (map[string][]string, error) {
+	return s.messageService.GetTestCodesToRevokeBySampleCodes(ctx, instrumentID, analysisRequestIDs)
+}
+
+func (s *skeleton) GetMessageOutOrdersBySampleCodesAndRequestMappingIDs(ctx context.Context, sampleCodes []string, requestMappingIDs []uuid.UUID, includePending bool) (map[string]map[uuid.UUID][]MessageOutOrder, error) {
+	return s.messageService.GetMessageOutOrdersBySampleCodesAndRequestMappingIDs(ctx, sampleCodes, requestMappingIDs, includePending)
+}
+
+func (s *skeleton) AddAnalysisRequestsToMessageOutOrder(ctx context.Context, messageOutOrderID uuid.UUID, analysisRequestIDs []uuid.UUID) error {
+	return s.messageService.AddAnalysisRequestsToMessageOutOrder(ctx, messageOutOrderID, analysisRequestIDs)
+}
+
+func (s *skeleton) SaveMessageIn(ctx context.Context, messageIn MessageIn) (uuid.UUID, error) {
+	var err error
+	messageIn.ID, err = s.messageService.SaveMessageIn(ctx, messageIn)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	s.messageService.EnqueueMessageInsForArchiving(messageIn)
+
+	return messageIn.ID, nil
+}
+
+func (s *skeleton) SaveMessageOut(ctx context.Context, messageOut MessageOut) (uuid.UUID, error) {
+	return s.messageService.SaveMessageOut(ctx, messageOut)
+}
+
+func (s *skeleton) SaveMessageOutBatch(ctx context.Context, messageOuts []MessageOut) ([]uuid.UUID, error) {
+	return s.messageService.SaveMessageOutBatch(ctx, messageOuts)
+}
+
+func (s *skeleton) DeleteRevokedUnsentOrderMessagesByAnalysisRequestIDs(ctx context.Context, analysisRequestIDs []uuid.UUID) ([]uuid.UUID, error) {
+	return s.messageService.DeleteRevokedUnsentOrderMessagesByAnalysisRequestIDs(ctx, analysisRequestIDs)
+}
+
 func (s *skeleton) migrateUp(ctx context.Context, db *sqlx.DB, schemaName string) error {
 	return s.migrator.Run(ctx, db, schemaName)
 }
@@ -608,6 +713,8 @@ func (s *skeleton) Start() error {
 	for i := 0; i < s.config.AnalysisRequestWorkerPoolSize; i++ {
 		go s.processAnalysisRequests(s.ctx)
 	}
+	go s.messageService.StartDEAArchiving(s.ctx)
+	s.enqueueUnsyncedMessages(s.ctx)
 	go s.processAnalysisResults(s.ctx)
 	go s.processAnalysisResultBatches(s.ctx)
 	go s.submitAnalysisResultsToCerberus(s.ctx)
@@ -799,6 +906,42 @@ func (s *skeleton) processAnalysisRequests(ctx context.Context) {
 	}
 }
 
+func (s *skeleton) enqueueUnsyncedMessages(ctx context.Context) {
+	ts := time.Now().UTC()
+	go func(cutoffTime time.Time) {
+		counter := 0
+		for {
+			unsyncedMessages, err := s.messageService.GetUnsyncedMessageIns(ctx, messageBatchSize, messageBatchSize*counter, cutoffTime)
+			if err != nil {
+				log.Error().Err(err).Msg("enqueue unsynced message ins failed")
+				time.Sleep(time.Second * 15)
+				continue
+			}
+			s.messageService.EnqueueMessageInsForArchiving(unsyncedMessages...)
+			if len(unsyncedMessages) < messageBatchSize {
+				return
+			}
+			counter++
+		}
+	}(ts)
+	go func(cutoffTime time.Time) {
+		counter := 0
+		for {
+			unsyncedMessages, err := s.messageService.GetUnsyncedMessageOuts(ctx, messageBatchSize, messageBatchSize*counter, cutoffTime)
+			if err != nil {
+				log.Error().Err(err).Msg("enqueue unsynced message outs failed")
+				time.Sleep(time.Second * 15)
+				continue
+			}
+			s.messageService.EnqueueMessageOutsForArchiving(unsyncedMessages...)
+			if len(unsyncedMessages) < messageBatchSize {
+				return
+			}
+			counter++
+		}
+	}(ts)
+}
+
 func (s *skeleton) processAnalysisResults(ctx context.Context) {
 	for {
 		select {
@@ -832,14 +975,56 @@ func (s *skeleton) processAnalysisResultBatches(ctx context.Context) {
 		if len(resultsBatch) < 1 {
 			continue
 		}
-
-		err := s.analysisService.QueueAnalysisResults(ctx, resultsBatch)
+		results := make([]AnalysisResult, 0)
+		resultsNotYetSyncedToDEA := make([]AnalysisResult, 0)
+		resultsToRetry := make([]AnalysisResult, 0)
+		messageInIDs := make([]uuid.UUID, 0)
+		for i := range resultsBatch {
+			if resultsBatch[i].DEARawMessageID.Valid {
+				results = append(results, resultsBatch[i])
+				continue
+			}
+			messageInIDs = append(messageInIDs, resultsBatch[i].MessageInID)
+			resultsNotYetSyncedToDEA = append(resultsNotYetSyncedToDEA, resultsBatch[i])
+		}
+		messagesByIDs, err := s.messageService.GetMessageInsByIDs(ctx, messageInIDs)
 		if err != nil {
-			time.AfterFunc(30*time.Second, func() {
-				s.resultBatchesChan <- resultsBatch
+			time.AfterFunc(time.Duration(s.resultTransferFlushTimeout)*time.Second, func() {
+				s.resultBatchesChan <- results
 			})
 			continue
 		}
+		for _, result := range resultsNotYetSyncedToDEA {
+			message, ok := messagesByIDs[result.MessageInID]
+			if !ok {
+				log.Error().Interface("messageInID", result.MessageInID).Msg("message ID of analysis result not found in database")
+				continue
+			}
+			if !message.DEARawMessageID.Valid {
+				resultsToRetry = append(resultsToRetry, result)
+				continue
+			}
+
+			result.DEARawMessageID = message.DEARawMessageID
+			err = s.analysisRepository.UpdateAnalysisResultDEARawMessageID(ctx, result.ID, result.DEARawMessageID)
+			if err != nil {
+				resultsToRetry = append(resultsToRetry, result)
+				continue
+			}
+			results = append(results, result)
+		}
+		if len(results) > 0 {
+			err = s.analysisService.QueueAnalysisResults(ctx, results)
+			if err != nil {
+				resultsToRetry = append(resultsToRetry, results...)
+			}
+		}
+		if len(resultsToRetry) == 0 {
+			continue
+		}
+		time.AfterFunc(time.Duration(s.resultTransferFlushTimeout)*time.Second, func() {
+			s.resultBatchesChan <- resultsToRetry
+		})
 	}
 }
 
@@ -1417,7 +1602,7 @@ func (s *skeleton) Stop() error {
 	return nil
 }
 
-func NewSkeleton(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, reagentManufacturers []string, dbConnector db.DbConnector, dbConn db.DbConnection, dbSchema string, migrator migrator.SkeletonMigrator, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService ConsoleLogService, manager Manager, cerberusClient CerberusClient, longPollClient LongPollClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
+func NewSkeleton(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, reagentManufacturers []string, dbConnector db.DbConnector, dbConn db.DbConnection, dbSchema string, migrator migrator.SkeletonMigrator, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService ConsoleLogService, messageService MessageService, manager Manager, cerberusClient CerberusClient, longPollClient LongPollClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
 	skeleton := &skeleton{
 		ctx:                                    ctx,
 		serviceName:                            serviceName,
@@ -1434,6 +1619,7 @@ func NewSkeleton(ctx context.Context, serviceName, displayName string, requested
 		analysisService:                        analysisService,
 		instrumentService:                      instrumentService,
 		consoleLogService:                      consoleLogService,
+		messageService:                         messageService,
 		manager:                                manager,
 		cerberusClient:                         cerberusClient,
 		longPollClient:                         longPollClient,

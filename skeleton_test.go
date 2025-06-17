@@ -4,45 +4,21 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
+	"testing"
+	"time"
+
 	"github.com/MicahParks/keyfunc"
 	"github.com/blutspende/skeleton/config"
 	"github.com/blutspende/skeleton/db"
 	"github.com/blutspende/skeleton/migrator"
-	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	_ "github.com/jackc/pgx/v4/stdlib"
 	"github.com/stretchr/testify/assert"
-	timeout "github.com/vearne/gin-timeout"
-	"net/http"
-	"runtime"
-	"sort"
-	"testing"
-	"time"
 )
 
 const serviceName = "testInstrumentDriver"
 const displayName = "testDisplayName"
-
-func TestSkeletonStart(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-
-	defer cancel()
-
-	skeletonApi, err := New(ctx, serviceName, displayName, []string{}, []string{}, []string{}, "skeleton")
-	if err != nil {
-		return
-	}
-
-	go func() {
-		time.Sleep(5 * time.Second)
-		runtime.Goexit()
-	}()
-
-	err = skeletonApi.Start()
-	if err != nil {
-		t.Fail()
-	}
-}
 
 func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 	dbConn, schemaName, pg, sqlConn := setupDbConnector("testSubmitAnalysisRequestsParallel")
@@ -106,8 +82,12 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
 	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
 	consoleLogService := NewConsoleLogService(cerberusClientMock)
+	messageInRepository := NewMessageInRepository(dbConn, schemaName, 0, 0)
+	messageOutRepository := NewMessageOutRepository(dbConn, schemaName, 0, 0)
+	messageOutOrderRepository := NewMessageOutOrderRepository(dbConn, schemaName, 0)
+	messageService := NewMessageService(deaClientMock, messageInRepository, messageOutRepository, messageOutOrderRepository, schemaName)
 
-	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, []string{}, pg, dbConn, schemaName, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, skeletonManager, cerberusClientMock, &longPollClientMock{AnalysisRequests: analysisResultsWithoutAnalysisRequestsTest_AnalysisRequests}, deaClientMock, configuration)
+	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, []string{}, pg, dbConn, schemaName, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, messageService, skeletonManager, cerberusClientMock, &longPollClientMock{AnalysisRequests: analysisResultsWithoutAnalysisRequestsTest_AnalysisRequests}, deaClientMock, configuration)
 
 	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description)
 		VALUES ('abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
@@ -196,8 +176,11 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
 	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
 	consoleLogService := NewConsoleLogService(cerberusClientMock)
-
-	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, []string{}, pg, dbConn, schemaName, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, skeletonManager, cerberusClientMock, longPollClientMock, deaClientMock, configuration)
+	messageInRepository := NewMessageInRepository(dbConn, schemaName, 0, 0)
+	messageOutRepository := NewMessageOutRepository(dbConn, schemaName, 0, 0)
+	messageOutOrderRepository := NewMessageOutOrderRepository(dbConn, schemaName, 0)
+	messageService := NewMessageService(deaClientMock, messageInRepository, messageOutRepository, messageOutOrderRepository, schemaName)
+	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, []string{}, pg, dbConn, schemaName, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, messageService, skeletonManager, cerberusClientMock, longPollClientMock, deaClientMock, configuration)
 	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('9bec3063-435d-490f-bec0-88a6633ef4c2', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
 
 	go func() {
@@ -270,8 +253,8 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 		CaptureDiagnostics: true,
 		ReplyToQuery:       true,
 		Status:             "ONLINE",
-		FileEncoding:       "UTF8",
-		Timezone:           "Europe/Budapest",
+		Encoding:           "UTF8",
+		TimeZone:           "Europe/Budapest",
 		Hostname:           "192.168.1.35",
 		ClientPort:         nil,
 		AnalyteMappings:    analyteMappings,
@@ -293,11 +276,14 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 	batchID := uuid.MustParse("ddd34c4d-62f9-4621-bb16-efad459a9bfe")
 	analysisResults := []AnalysisResult{
 		{
-			AnalysisRequest:          AnalysisRequest{},
-			AnalyteMapping:           analyteMappings[0],
-			Instrument:               instrument,
-			SampleCode:               "testSampleCode",
-			DEARawMessageID:          uuid.MustParse("2f369489-77d3-464e-87e2-edbeffa62ae7"),
+			AnalysisRequest: AnalysisRequest{},
+			AnalyteMapping:  analyteMappings[0],
+			Instrument:      instrument,
+			SampleCode:      "testSampleCode",
+			DEARawMessageID: uuid.NullUUID{
+				UUID:  uuid.MustParse("2f369489-77d3-464e-87e2-edbeffa62ae7"),
+				Valid: true,
+			},
 			BatchID:                  batchID,
 			Result:                   "pos",
 			ResultMode:               "PRODUCTION",
@@ -317,11 +303,14 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 			Images:                   []Image{},
 		},
 		{
-			AnalysisRequest:          AnalysisRequest{},
-			AnalyteMapping:           analyteMappings[0],
-			Instrument:               instrument,
-			SampleCode:               "testSampleCode2",
-			DEARawMessageID:          uuid.MustParse("43a7b261-3e1d-4065-935a-ac15841f13e4"),
+			AnalysisRequest: AnalysisRequest{},
+			AnalyteMapping:  analyteMappings[0],
+			Instrument:      instrument,
+			SampleCode:      "testSampleCode2",
+			DEARawMessageID: uuid.NullUUID{
+				UUID:  uuid.MustParse("43a7b261-3e1d-4065-935a-ac15841f13e4"),
+				Valid: true,
+			},
 			BatchID:                  batchID,
 			Result:                   "pos",
 			ResultMode:               "PRODUCTION",
@@ -349,192 +338,6 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 
 	time.Sleep(4 * time.Second)
 	assert.Equal(t, 0, len(cerberusClientMock.AnalysisResults))
-}
-
-func TestSubmitAnalysisResultWithoutDEARawMessageID(t *testing.T) {
-	dbConn, schemaName, pg, sqlConn := setupDbConnector("testSubmitAnalysisResultsWithRequests")
-
-	configuration := config.Configuration{
-		APIPort:                          5000,
-		Authorization:                    false,
-		PermittedOrigin:                  "*",
-		ApplicationName:                  "Instrument API Test",
-		TCPListenerPort:                  5401,
-		InstrumentTransferRetryDelayInMs: 100,
-		ResultTransferFlushTimeout:       5,
-		ImageRetrySeconds:                60,
-	}
-
-	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
-	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
-	ctx, cancel := context.WithCancel(context.Background())
-
-	defer cancel()
-
-	skeletonManager := NewSkeletonManager(ctx)
-	skeletonManager.SetCallbackHandler(&skeletonCallbackHandlerV1Mock{
-		handleAnalysisRequestsFunc: func(request []AnalysisRequest) error {
-			return nil
-		},
-	})
-	cerberusClientMock := &cerberusClientMock{
-		registerInstrumentFunc: func(instrument Instrument) error {
-			return nil
-		},
-	}
-
-	longPollClientMock := &longPollClientMock{}
-	deaClientMock := &deaClientMock{}
-
-	analysisService := NewAnalysisService(analysisRepository, deaClientMock, cerberusClientMock, skeletonManager)
-	conditionRepository := NewConditionRepository(dbConn, schemaName)
-	conditionService := NewConditionService(conditionRepository)
-	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
-	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
-	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
-	consoleLogService := NewConsoleLogService(cerberusClientMock)
-
-	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, []string{}, pg, dbConn, schemaName, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, skeletonManager, cerberusClientMock, longPollClientMock, deaClientMock, configuration)
-	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('9bec3063-435d-490f-bec0-88a6633ef4c2', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
-
-	_ = skeletonInstance.Start()
-
-	analysisRequests := []AnalysisRequest{
-		{
-			ID:             uuid.New(),
-			WorkItemID:     uuid.New(),
-			AnalyteID:      uuid.New(),
-			SampleCode:     "",
-			MaterialID:     uuid.New(),
-			LaboratoryID:   uuid.New(),
-			ValidUntilTime: time.Now().UTC().Add(14 * 24 * time.Hour),
-			CreatedAt:      time.Now().UTC(),
-			SubjectInfo:    nil,
-		},
-	}
-	err := analysisService.CreateAnalysisRequests(context.TODO(), analysisRequests)
-	assert.Nil(t, err)
-
-	analyteMappings := []AnalyteMapping{
-		{
-			ID:                uuid.MustParse("8facbaeb-368f-482a-9169-4b128632f9e0"),
-			InstrumentAnalyte: "TESTANALYTE",
-			AnalyteID:         uuid.MustParse("51bfea41-1b7e-48f7-8b35-46d930216de7"),
-			ChannelMappings: []ChannelMapping{
-				{
-					ID:                uuid.MustParse("eb780147-a519-4e88-9a5f-961ce531f219"),
-					InstrumentChannel: "TestInstrumentChannel",
-					ChannelID:         uuid.MustParse("9fe9b1f9-e1fd-4669-873b-c2446d5d6b6f"),
-				},
-			},
-			ResultMappings: []ResultMapping{
-				{
-					ID:    uuid.MustParse("0e49a9a7-8ef0-4ef3-a1e1-6277398fcc08"),
-					Key:   "pos",
-					Value: "pos",
-					Index: 0,
-				},
-				{
-					ID:    uuid.MustParse("329080eb-2dca-4a05-9730-24444cc3b487"),
-					Key:   "neg",
-					Value: "neg",
-					Index: 1,
-				},
-			},
-			ResultType: "pein",
-		},
-	}
-
-	instrumentID := uuid.MustParse("93f36696-5ff0-45a9-87eb-ca5c064c5890")
-	instrument := Instrument{
-		ID:                 instrumentID,
-		Name:               "TestInstrument",
-		ProtocolID:         uuid.MustParse("9bec3063-435d-490f-bec0-88a6633ef4c2"),
-		ProtocolName:       "IH-1000 v5.2",
-		Enabled:            true,
-		ConnectionMode:     "TCP_SERVER_ONLY",
-		ResultMode:         "PRODUCTION",
-		CaptureResults:     true,
-		CaptureDiagnostics: true,
-		ReplyToQuery:       true,
-		Status:             "ONLINE",
-		FileEncoding:       "UTF8",
-		Timezone:           "Europe/Budapest",
-		Hostname:           "192.168.1.35",
-		ClientPort:         nil,
-		AnalyteMappings:    analyteMappings,
-		RequestMappings: []RequestMapping{
-			{
-				ID:   uuid.MustParse("9e83ad17-40bc-44b2-b6c9-50a9f559387b"),
-				Code: "Test1",
-				AnalyteIDs: []uuid.UUID{
-					uuid.MustParse("7444d776-3ff7-40b6-9b3c-2e0c58337528"),
-					uuid.MustParse("c9cc51ec-2b63-45df-b0a8-98f325027f8f"),
-				},
-			},
-		},
-		CreatedAt:  time.Now().UTC(),
-		ModifiedAt: nil,
-		DeletedAt:  nil,
-	}
-
-	batchID := uuid.MustParse("ddd34c4d-62f9-4621-bb16-efad459a9bfe")
-	// this one has no DEA raw message ID
-	analysisResults := []AnalysisResult{
-		{
-			AnalysisRequest:          AnalysisRequest{},
-			AnalyteMapping:           analyteMappings[0],
-			Instrument:               instrument,
-			SampleCode:               "testSampleCode",
-			BatchID:                  batchID,
-			Result:                   "pos",
-			ResultMode:               "PRODUCTION",
-			Status:                   "PRE",
-			ResultYieldDateTime:      nil,
-			ValidUntil:               time.Now().Add(1 * time.Minute),
-			Operator:                 "TestOperator",
-			TechnicalReleaseDateTime: nil,
-			InstrumentRunID:          uuid.Nil,
-			Edited:                   false,
-			EditReason:               "",
-			WarnFlag:                 false,
-			Warnings:                 []string{"test warning"},
-			ChannelResults:           []ChannelResult{},
-			ExtraValues:              []ExtraValue{},
-			Reagents:                 []Reagent{},
-			Images:                   []Image{},
-		},
-		{
-			AnalysisRequest:          AnalysisRequest{},
-			AnalyteMapping:           analyteMappings[0],
-			Instrument:               instrument,
-			SampleCode:               "testSampleCode2",
-			DEARawMessageID:          uuid.MustParse("43a7b261-3e1d-4065-935a-ac15841f13e4"),
-			BatchID:                  batchID,
-			Result:                   "pos",
-			ResultMode:               "PRODUCTION",
-			Status:                   "PRE",
-			ResultYieldDateTime:      nil,
-			ValidUntil:               time.Now().Add(2 * time.Minute),
-			Operator:                 "TestOperator",
-			TechnicalReleaseDateTime: nil,
-			InstrumentRunID:          uuid.Nil,
-			Edited:                   false,
-			EditReason:               "",
-			WarnFlag:                 false,
-			Warnings:                 []string{},
-			ChannelResults:           []ChannelResult{},
-			ExtraValues:              []ExtraValue{},
-			Reagents:                 []Reagent{},
-			Images:                   []Image{},
-		},
-	}
-
-	err = skeletonInstance.SubmitAnalysisResultBatch(context.TODO(), AnalysisResultSet{
-		Results: analysisResults,
-	})
-	assert.NotNil(t, err)
-	assert.Equal(t, "DEA raw message ID is missing at index: 0", err.Error())
 }
 
 func TestRegisterProtocol(t *testing.T) {
@@ -590,11 +393,11 @@ func TestAnalysisResultsReprocessing(t *testing.T) {
 	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
 	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
 	consoleLogService := NewConsoleLogService(cerberusClientMock)
-	ginEngine := gin.New()
-
-	ginEngine.Use(timeout.Timeout(timeout.WithTimeout(5*time.Second), timeout.WithErrorHttpCode(http.StatusRequestTimeout)))
-
-	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, []string{}, pg, dbConn, schemaName, migrator.NewSkeletonMigrator(), analysisRepositoryMock, analysisServiceMock, instrumentService, consoleLogService, skeletonManager, cerberusClientMock, longPollClient, deaClientMock, configuration)
+	messageInRepository := NewMessageInRepository(dbConn, schemaName, 0, 0)
+	messageOutRepository := NewMessageOutRepository(dbConn, schemaName, 0, 0)
+	messageOutOrderRepository := NewMessageOutOrderRepository(dbConn, schemaName, 0)
+	messageService := NewMessageService(deaClientMock, messageInRepository, messageOutRepository, messageOutOrderRepository, schemaName)
+	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, []string{}, pg, dbConn, schemaName, migrator.NewSkeletonMigrator(), analysisRepositoryMock, analysisServiceMock, instrumentService, consoleLogService, messageService, skeletonManager, cerberusClientMock, longPollClient, deaClientMock, configuration)
 	go func() {
 		_ = skeletonInstance.Start()
 	}()
@@ -642,7 +445,6 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 		},
 	}
 	deaClientMock := &deaClientMock{}
-
 	analysisService := NewAnalysisService(analysisRepositoryMock, deaClientMock, cerberusClientMock, skeletonManagerMock)
 	conditionService := NewConditionService(conditionRepository)
 	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
@@ -650,12 +452,12 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 
 	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, skeletonManagerMock, NewInstrumentCache(), cerberusClientMock)
 	consoleLogService := NewConsoleLogService(cerberusClientMock)
+	messageInRepository := NewMessageInRepository(dbConn, schemaName, 0, 0)
+	messageOutRepository := NewMessageOutRepository(dbConn, schemaName, 0, 0)
+	messageOutOrderRepository := NewMessageOutOrderRepository(dbConn, schemaName, 0)
+	messageService := NewMessageService(deaClientMock, messageInRepository, messageOutRepository, messageOutOrderRepository, schemaName)
 
-	ginEngine := gin.New()
-
-	ginEngine.Use(timeout.Timeout(timeout.WithTimeout(5*time.Second), timeout.WithErrorHttpCode(http.StatusRequestTimeout)))
-
-	skeletonInstance, _ := NewSkeleton(ctx, serviceName, "", []string{}, []string{}, []string{}, pg, dbConn, schemaName, migrator.NewSkeletonMigrator(), analysisRepositoryMock, analysisService, instrumentService, consoleLogService, skeletonManagerMock, cerberusClientMock, &longPollClientMock{AnalysisRequests: analysisResultsWithoutAnalysisRequestsTest_AnalysisRequests}, deaClientMock, configuration)
+	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, []string{}, pg, dbConn, schemaName, migrator.NewSkeletonMigrator(), analysisRepositoryMock, analysisService, instrumentService, consoleLogService, messageService, skeletonManagerMock, cerberusClientMock, &longPollClientMock{AnalysisRequests: analysisResultsWithoutAnalysisRequestsTest_AnalysisRequests}, deaClientMock, configuration)
 	go func() {
 		_ = skeletonInstance.Start()
 	}()
@@ -716,8 +518,8 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 		CaptureDiagnostics: true,
 		ReplyToQuery:       true,
 		Status:             "ONLINE",
-		FileEncoding:       "UTF8",
-		Timezone:           "Europe/Budapest",
+		Encoding:           "UTF8",
+		TimeZone:           "Europe/Budapest",
 		Hostname:           "192.168.1.35",
 		ClientPort:         nil,
 		AnalyteMappings:    analyteMappings,
@@ -753,12 +555,15 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 	analysisResultId2 := uuid.MustParse("69f853b0-fe43-4bd1-a8d4-64c0ff704558")
 	analysisResults := []AnalysisResult{
 		{
-			ID:                       analysisResultId1,
-			AnalysisRequest:          AnalysisRequest{},
-			AnalyteMapping:           analyteMappings[0],
-			Instrument:               instrument,
-			SampleCode:               "testSampleCode",
-			DEARawMessageID:          uuid.MustParse("2f369489-77d3-464e-87e2-edbeffa62ae7"),
+			ID:              analysisResultId1,
+			AnalysisRequest: AnalysisRequest{},
+			AnalyteMapping:  analyteMappings[0],
+			Instrument:      instrument,
+			SampleCode:      "testSampleCode",
+			DEARawMessageID: uuid.NullUUID{
+				UUID:  uuid.MustParse("2f369489-77d3-464e-87e2-edbeffa62ae7"),
+				Valid: true,
+			},
 			BatchID:                  batchID,
 			Result:                   "pos",
 			ResultMode:               "PRODUCTION",
@@ -778,12 +583,15 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 			Images:                   []Image{},
 		},
 		{
-			ID:                       analysisResultId2,
-			AnalysisRequest:          AnalysisRequest{},
-			AnalyteMapping:           analyteMappings[0],
-			Instrument:               instrument,
-			SampleCode:               "testSampleCode2",
-			DEARawMessageID:          uuid.MustParse("43a7b261-3e1d-4065-935a-ac15841f13e4"),
+			ID:              analysisResultId2,
+			AnalysisRequest: AnalysisRequest{},
+			AnalyteMapping:  analyteMappings[0],
+			Instrument:      instrument,
+			SampleCode:      "testSampleCode2",
+			DEARawMessageID: uuid.NullUUID{
+				UUID:  uuid.MustParse("43a7b261-3e1d-4065-935a-ac15841f13e4"),
+				Valid: true,
+			},
 			BatchID:                  batchID,
 			Result:                   "pos",
 			ResultMode:               "PRODUCTION",
@@ -1273,6 +1081,10 @@ type analysisRepositoryMock struct {
 	savedWorkItemIDs    map[uuid.UUID]any
 }
 
+func (m *analysisRepositoryMock) UpdateAnalysisResultDEARawMessageID(ctx context.Context, analysisResultID uuid.UUID, deaRawMessageID uuid.NullUUID) error {
+	return nil
+}
+
 func (m *analysisRepositoryMock) DeleteOldCerberusQueueItems(ctx context.Context, cleanupDays, limit int) (int64, error) {
 	return 0, nil
 }
@@ -1583,11 +1395,14 @@ func (m *analysisRepositoryMock) WithTransaction(tx db.DbConnection) AnalysisRep
 
 var analysisResultsWithoutAnalysisRequestsTest_analysisResults = []AnalysisResult{
 	{
-		AnalysisRequest:          AnalysisRequest{},
-		AnalyteMapping:           analysisResultsWithoutAnalysisRequestsTest_analyteMappings[0],
-		Instrument:               analysisResultsWithoutAnalysisRequestsTest_instrument,
-		SampleCode:               "TestSampleCode1",
-		DEARawMessageID:          uuid.MustParse("2f369489-77d3-464e-87e2-edbeffa62ae7"),
+		AnalysisRequest: AnalysisRequest{},
+		AnalyteMapping:  analysisResultsWithoutAnalysisRequestsTest_analyteMappings[0],
+		Instrument:      analysisResultsWithoutAnalysisRequestsTest_instrument,
+		SampleCode:      "TestSampleCode1",
+		DEARawMessageID: uuid.NullUUID{
+			UUID:  uuid.MustParse("2f369489-77d3-464e-87e2-edbeffa62ae7"),
+			Valid: true,
+		},
 		BatchID:                  uuid.MustParse("ddd34c4d-62f9-4621-bb16-efad459a9bfe"),
 		Result:                   "pos",
 		ResultMode:               "PRODUCTION",
@@ -1619,11 +1434,14 @@ var analysisResultsWithoutAnalysisRequestsTest_analysisResults = []AnalysisResul
 		Images: []Image{},
 	},
 	{
-		AnalysisRequest:          AnalysisRequest{},
-		AnalyteMapping:           analysisResultsWithoutAnalysisRequestsTest_analyteMappings[0],
-		Instrument:               analysisResultsWithoutAnalysisRequestsTest_instrument,
-		SampleCode:               "TestSampleCode2",
-		DEARawMessageID:          uuid.MustParse("43a7b261-3e1d-4065-935a-ac15841f13e4"),
+		AnalysisRequest: AnalysisRequest{},
+		AnalyteMapping:  analysisResultsWithoutAnalysisRequestsTest_analyteMappings[0],
+		Instrument:      analysisResultsWithoutAnalysisRequestsTest_instrument,
+		SampleCode:      "TestSampleCode2",
+		DEARawMessageID: uuid.NullUUID{
+			UUID:  uuid.MustParse("43a7b261-3e1d-4065-935a-ac15841f13e4"),
+			Valid: true,
+		},
 		BatchID:                  uuid.MustParse("ddd34c4d-62f9-4621-bb16-efad459a9bfe"),
 		Result:                   "pos",
 		ResultMode:               "PRODUCTION",
@@ -1697,8 +1515,8 @@ var analysisResultsWithoutAnalysisRequestsTest_instrument = Instrument{
 	CaptureDiagnostics: true,
 	ReplyToQuery:       true,
 	Status:             "ONLINE",
-	FileEncoding:       "UTF8",
-	Timezone:           "Europe/Budapest",
+	Encoding:           "UTF8",
+	TimeZone:           "Europe/Budapest",
 	Hostname:           "192.168.1.13",
 	ClientPort:         nil,
 	AnalyteMappings:    analysisResultsWithoutAnalysisRequestsTest_analyteMappings,

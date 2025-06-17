@@ -1,6 +1,8 @@
 package skeleton
 
 import (
+	"github.com/blutspende/bloodlab-common/encoding"
+	"github.com/blutspende/bloodlab-common/timezone"
 	"github.com/blutspende/bloodlab-common/utils"
 	"github.com/google/uuid"
 )
@@ -20,8 +22,8 @@ type instrumentTO struct {
 	CaptureDiagnostics  bool                  `json:"captureDiagnostics"`
 	ReplyToQuery        bool                  `json:"replyToQuery"`
 	Status              string                `json:"status"`
-	FileEncoding        string                `json:"fileEncoding"`
-	Timezone            string                `json:"timezone"`
+	Encoding            encoding.Encoding     `json:"fileEncoding"`
+	TimeZone            timezone.TimeZone     `json:"timezone"`
 	Hostname            string                `json:"hostname"`
 	ClientPort          *int                  `json:"clientPort"`
 	FtpUsername         *string               `json:"ftpUserName"`
@@ -154,8 +156,8 @@ func convertInstrumentTOToInstrument(instrumentTO instrumentTO) Instrument {
 		CaptureDiagnostics: instrumentTO.CaptureDiagnostics,
 		Status:             instrumentTO.Status,
 		ReplyToQuery:       instrumentTO.ReplyToQuery,
-		FileEncoding:       instrumentTO.FileEncoding,
-		Timezone:           instrumentTO.Timezone,
+		Encoding:           instrumentTO.Encoding,
+		TimeZone:           instrumentTO.TimeZone,
 		Hostname:           instrumentTO.Hostname,
 		ClientPort:         instrumentTO.ClientPort,
 		AnalyteMappings:    make([]AnalyteMapping, len(instrumentTO.AnalyteMappings)),
