@@ -460,7 +460,6 @@ type AnalysisRepository interface {
 	CreateAnalysisResultExtraValues(ctx context.Context, extraValuesByAnalysisRequestIDs map[uuid.UUID][]ExtraValue) error
 	CreateChannelResults(ctx context.Context, channelResults []ChannelResult, analysisResultID uuid.UUID) ([]uuid.UUID, error)
 	CreateChannelResultQuantitativeValues(ctx context.Context, quantitativeValuesByChannelResultIDs map[uuid.UUID]map[string]string) error
-	CreateReagentsByAnalysisResultID(ctx context.Context, reagentsByAnalysisResultID map[uuid.UUID][]Reagent) (map[uuid.UUID]map[uuid.UUID][]ControlResult, map[uuid.UUID][]Reagent, error)
 	CreateReagentBatch(ctx context.Context, reagents []Reagent) ([]Reagent, error)
 	CreateControlResults(ctx context.Context, controlResultsMap map[uuid.UUID]map[uuid.UUID][]ControlResult) (map[uuid.UUID]map[uuid.UUID][]uuid.UUID, error)
 	CreateWarnings(ctx context.Context, warningsByAnalysisResultID map[uuid.UUID][]string) error
@@ -1945,40 +1944,6 @@ func (r *analysisRepository) getAnalysisResultControlResultRelations(ctx context
 }
 
 const reagentBatchSize = 5000
-
-func (r *analysisRepository) CreateReagentsByAnalysisResultID(ctx context.Context, reagentsByAnalysisResultID map[uuid.UUID][]Reagent) (map[uuid.UUID]map[uuid.UUID][]ControlResult, map[uuid.UUID][]Reagent, error) {
-	reagentDAOs := make([]reagentDAO, 0)
-	controlResultsMap := make(map[uuid.UUID]map[uuid.UUID][]ControlResult)
-	for _, reagents := range reagentsByAnalysisResultID {
-		rDAOs := make([]reagentDAO, len(reagents))
-		for i := range reagents {
-			rDAOs[i] = convertReagentToDAO(reagents[i])
-		}
-
-		reagentDAOs = append(reagentDAOs, rDAOs...)
-	}
-
-	reagentIDs, err := r.createReagents(ctx, reagentDAOs)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	var index = 0
-	for analysisResultID, reagents := range reagentsByAnalysisResultID {
-		for j, reagent := range reagents {
-			if _, ok := controlResultsMap[analysisResultID]; !ok {
-				controlResultsMap[analysisResultID] = make(map[uuid.UUID][]ControlResult)
-			}
-
-			controlResultsMap[analysisResultID][reagentIDs[index]] = reagent.ControlResults
-			reagentsByAnalysisResultID[analysisResultID][j].ID = reagentIDs[index]
-
-			index++
-		}
-	}
-
-	return controlResultsMap, reagentsByAnalysisResultID, nil
-}
 
 func (r *analysisRepository) CreateReagentBatch(ctx context.Context, reagents []Reagent) ([]Reagent, error) {
 	reagentDAOs := make([]reagentDAO, 0)
