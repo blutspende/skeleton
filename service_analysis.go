@@ -301,7 +301,7 @@ func (as *analysisService) createAnalysisResultsBatch(ctx context.Context, tx db
 		}
 	}
 
-	controlResultsMap, reagentsMapWithIds, err := as.analysisRepository.WithTransaction(tx).CreateReagentsByAnalysisResultID(ctx, reagentsMap)
+	controlResultsMap, reagentsMapWithIds, err := as.createReagentsByAnalysisResultID(ctx, tx, reagentsMap)
 	if err != nil {
 		return analysisResultSet, err
 	}
@@ -525,6 +525,41 @@ func calculateControlResultIsValid(controlResult string, expectedControlResult E
 	}
 	log.Error().Err(ErrUnsupportedExpectedControlResultFound)
 	return false, ErrUnsupportedExpectedControlResultFound
+}
+
+func (as *analysisService) createReagentsByAnalysisResultID(ctx context.Context, tx db.DbConnection, reagentsByAnalysisResultID map[uuid.UUID][]Reagent) (map[uuid.UUID]map[uuid.UUID][]ControlResult, map[uuid.UUID][]Reagent, error) {
+	reagentList := make([]Reagent, 0)
+	analysisResultIDsProcessingOrder := make([]uuid.UUID, 0)
+	controlResultsMap := make(map[uuid.UUID]map[uuid.UUID][]ControlResult)
+	for analysisResultID, reagents := range reagentsByAnalysisResultID {
+		for i := range reagents {
+			reagentList = append(reagentList, reagents[i])
+		}
+
+		analysisResultIDsProcessingOrder = append(analysisResultIDsProcessingOrder, analysisResultID)
+	}
+
+	reagentIDs, err := as.analysisRepository.WithTransaction(tx).CreateReagents(ctx, reagentList)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var index = 0
+	for _, analysisResultID := range analysisResultIDsProcessingOrder {
+		reagents := reagentsByAnalysisResultID[analysisResultID]
+		for j, reagent := range reagents {
+			if _, ok := controlResultsMap[analysisResultID]; !ok {
+				controlResultsMap[analysisResultID] = make(map[uuid.UUID][]ControlResult)
+			}
+
+			controlResultsMap[analysisResultID][reagentIDs[index]] = reagent.ControlResults
+			reagentsByAnalysisResultID[analysisResultID][j].ID = reagentIDs[index]
+
+			index++
+		}
+	}
+
+	return controlResultsMap, reagentsByAnalysisResultID, nil
 }
 
 func (as *analysisService) CreateControlResultBatch(ctx context.Context, controlResults []StandaloneControlResult) ([]StandaloneControlResult, []uuid.UUID, error) {

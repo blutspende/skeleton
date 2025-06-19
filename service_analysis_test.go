@@ -746,6 +746,360 @@ func TestCreateAnalysisResultReagentControlRelations(t *testing.T) {
 	assert.Equal(t, Final, results[0].Status)
 }
 
+func TestCreateAnalysisResultReagentRelations(t *testing.T) {
+	resultYieldedAt, _ := formatTimeStringToBerlinTime("20240927162727", "20060102150405")
+	validUntil, _ := formatTimeStringToBerlinTime("20240930162727", "20060102150405")
+
+	analyteMappings := []AnalyteMapping{
+		{
+			ID:                uuid.MustParse("1bc041a7-5a48-4290-8f66-a3e8db64062d"),
+			InstrumentAnalyte: "TESTHIVDuo_01",
+			AnalyteID:         uuid.MustParse("fdc9dcd3-2133-4164-87ee-3f8a533fd18e"),
+			ChannelMappings: []ChannelMapping{
+				{
+					InstrumentChannel: "TestInstrumentChannel",
+					ChannelID:         uuid.MustParse("6ded3ef2-4f98-45bb-b0d5-3ff3bd294d8b"),
+				},
+			},
+			ResultMappings: []ResultMapping{
+				{
+					Key:   "pos",
+					Value: "pos",
+					Index: 0,
+				},
+				{
+					Key:   "neg",
+					Value: "neg",
+					Index: 1,
+				},
+			},
+			ResultType:            "pein",
+			ControlResultRequired: true,
+		}, {
+			ID:                uuid.MustParse("6a3d37b2-5ce0-4280-9fdc-770191594a28"),
+			InstrumentAnalyte: "TESTAHBC2_E-1",
+			AnalyteID:         uuid.MustParse("caeab718-833d-47e0-be6b-80d18c316ef8"),
+			ChannelMappings: []ChannelMapping{
+				{
+					InstrumentChannel: "TestInstrumentChannel",
+					ChannelID:         uuid.MustParse("6ded3ef2-4f98-45bb-b0d5-3ff3bd294d8b"),
+				},
+			},
+			ResultMappings: []ResultMapping{
+				{
+					Key:   "pos",
+					Value: "pos",
+					Index: 0,
+				},
+				{
+					Key:   "neg",
+					Value: "neg",
+					Index: 1,
+				},
+			},
+			ResultType:            "pein",
+			ControlResultRequired: true,
+		}, {
+			ID:                uuid.MustParse("4cc8385b-b849-457f-941e-ce193d575c71"),
+			InstrumentAnalyte: "TESTHBSAG_E-1",
+			AnalyteID:         uuid.MustParse("50dc8033-eefa-489d-9abc-07ad129e2782"),
+			ChannelMappings: []ChannelMapping{
+				{
+					InstrumentChannel: "TestInstrumentChannel",
+					ChannelID:         uuid.MustParse("6ded3ef2-4f98-45bb-b0d5-3ff3bd294d8b"),
+				},
+			},
+			ResultMappings: []ResultMapping{
+				{
+					Key:   "pos",
+					Value: "pos",
+					Index: 0,
+				},
+				{
+					Key:   "neg",
+					Value: "neg",
+					Index: 1,
+				},
+			},
+			ResultType:            "pein",
+			ControlResultRequired: true,
+		}, {
+			ID:                uuid.MustParse("f81b5918-3a5f-403f-8a56-11b93ea6d9fd"),
+			InstrumentAnalyte: "TESTAHCV2_E-1",
+			AnalyteID:         uuid.MustParse("a2523597-8083-48ba-b517-c9e1a95efeca"),
+			ChannelMappings: []ChannelMapping{
+				{
+					InstrumentChannel: "TestInstrumentChannel",
+					ChannelID:         uuid.MustParse("6ded3ef2-4f98-45bb-b0d5-3ff3bd294d8b"),
+				},
+			},
+			ResultMappings: []ResultMapping{
+				{
+					Key:   "pos",
+					Value: "pos",
+					Index: 0,
+				},
+				{
+					Key:   "neg",
+					Value: "neg",
+					Index: 1,
+				},
+			},
+			ResultType:            "pein",
+			ControlResultRequired: true,
+		}, {
+			ID:                uuid.MustParse("0b0810b7-6782-4416-8d96-bf1d45364fa6"),
+			InstrumentAnalyte: "TESTSYPH_E-1",
+			AnalyteID:         uuid.MustParse("0ddf53a1-bc84-40d2-8f11-570f6c82c147"),
+			ChannelMappings: []ChannelMapping{
+				{
+					InstrumentChannel: "TestInstrumentChannel",
+					ChannelID:         uuid.MustParse("6ded3ef2-4f98-45bb-b0d5-3ff3bd294d8b"),
+				},
+			},
+			ResultMappings: []ResultMapping{
+				{
+					Key:   "pos",
+					Value: "pos",
+					Index: 0,
+				},
+				{
+					Key:   "neg",
+					Value: "neg",
+					Index: 1,
+				},
+			},
+			ResultType:            "pein",
+			ControlResultRequired: true,
+		},
+	}
+
+	instrument := Instrument{
+		ID:              uuid.MustParse("abb539a3-286f-4c15-a7b7-2e9adf6eab74"),
+		Name:            "TestInstrument",
+		Type:            Analyzer,
+		ProtocolID:      uuid.MustParse("abb539a3-286f-4c15-a7b7-2e9adf6eab91"),
+		ProtocolName:    "Test Protocol",
+		Enabled:         true,
+		ConnectionMode:  TCPMixed,
+		ResultMode:      Qualification,
+		Status:          "ONLINE",
+		Hostname:        "192.168.1.20",
+		AnalyteMappings: analyteMappings,
+	}
+
+	regents := []Reagent{
+		{
+			Manufacturer:   "Roche",
+			SerialNumber:   "000000001",
+			LotNo:          "000000002",
+			Type:           Standard,
+			Name:           "",
+			CreatedAt:      time.Time{},
+			ControlResults: nil,
+		}, {
+			Manufacturer:   "Roche",
+			SerialNumber:   "000000002",
+			LotNo:          "000000003",
+			Type:           Standard,
+			Name:           "",
+			CreatedAt:      time.Time{},
+			ControlResults: nil,
+		}, {
+			Manufacturer:   "Roche",
+			SerialNumber:   "000000003",
+			LotNo:          "000000004",
+			Type:           Standard,
+			Name:           "",
+			CreatedAt:      time.Time{},
+			ControlResults: nil,
+		}, {
+			Manufacturer:   "Roche",
+			SerialNumber:   "000000004",
+			LotNo:          "000000005",
+			Type:           Standard,
+			Name:           "",
+			CreatedAt:      time.Time{},
+			ControlResults: nil,
+		}, {
+			Manufacturer:   "Roche",
+			SerialNumber:   "000000005",
+			LotNo:          "000000006",
+			Type:           Standard,
+			Name:           "",
+			CreatedAt:      time.Time{},
+			ControlResults: nil,
+		},
+	}
+
+	analysisResults := []AnalysisResult{
+		{
+			AnalysisRequest: AnalysisRequest{},
+			AnalyteMapping:  analyteMappings[0],
+			Instrument:      instrument,
+			SampleCode:      "",
+			DEARawMessageID: uuid.NullUUID{
+				UUID:  uuid.MustParse("92a2ba34-d891-4a1b-89fb-e0c4d717f729"),
+				Valid: true,
+			},
+			BatchID:                  uuid.MustParse("88b87019-ddcc-4d4b-bc04-9e213680e0db"),
+			Result:                   "pos",
+			ResultMode:               Qualification,
+			Status:                   Final,
+			ResultYieldDateTime:      &resultYieldedAt,
+			ValidUntil:               validUntil,
+			Operator:                 "",
+			TechnicalReleaseDateTime: nil,
+			InstrumentRunID:          uuid.MustParse("c0dbcfb6-6a90-4ab6-bcab-0cfbec4abd06"),
+			Edited:                   false,
+			EditReason:               "",
+			IsInvalid:                false,
+			WarnFlag:                 false,
+			Warnings:                 nil,
+			ChannelResults:           nil,
+			ExtraValues:              nil,
+			Reagents:                 []Reagent{regents[0]},
+			ControlResults:           []ControlResult{},
+			Images:                   nil,
+		}, {
+			AnalysisRequest: AnalysisRequest{},
+			AnalyteMapping:  analyteMappings[1],
+			Instrument:      instrument,
+			SampleCode:      "",
+			DEARawMessageID: uuid.NullUUID{
+				UUID:  uuid.MustParse("92a2ba34-d891-4a1b-89fb-e0c4d717f729"),
+				Valid: true,
+			},
+			BatchID:                  uuid.MustParse("88b87019-ddcc-4d4b-bc04-9e213680e0db"),
+			Result:                   "pos",
+			ResultMode:               Qualification,
+			Status:                   Final,
+			ResultYieldDateTime:      &resultYieldedAt,
+			ValidUntil:               validUntil,
+			Operator:                 "",
+			TechnicalReleaseDateTime: nil,
+			InstrumentRunID:          uuid.MustParse("c0dbcfb6-6a90-4ab6-bcab-0cfbec4abd06"),
+			Edited:                   false,
+			EditReason:               "",
+			IsInvalid:                false,
+			WarnFlag:                 false,
+			Warnings:                 nil,
+			ChannelResults:           nil,
+			ExtraValues:              nil,
+			Reagents:                 []Reagent{regents[1]},
+			ControlResults:           []ControlResult{},
+			Images:                   nil,
+		}, {
+			AnalysisRequest: AnalysisRequest{},
+			AnalyteMapping:  analyteMappings[2],
+			Instrument:      instrument,
+			SampleCode:      "",
+			DEARawMessageID: uuid.NullUUID{
+				UUID:  uuid.MustParse("92a2ba34-d891-4a1b-89fb-e0c4d717f729"),
+				Valid: true,
+			},
+			BatchID:                  uuid.MustParse("88b87019-ddcc-4d4b-bc04-9e213680e0db"),
+			Result:                   "pos",
+			ResultMode:               Qualification,
+			Status:                   Final,
+			ResultYieldDateTime:      &resultYieldedAt,
+			ValidUntil:               validUntil,
+			Operator:                 "",
+			TechnicalReleaseDateTime: nil,
+			InstrumentRunID:          uuid.MustParse("c0dbcfb6-6a90-4ab6-bcab-0cfbec4abd06"),
+			Edited:                   false,
+			EditReason:               "",
+			IsInvalid:                false,
+			WarnFlag:                 false,
+			Warnings:                 nil,
+			ChannelResults:           nil,
+			ExtraValues:              nil,
+			Reagents:                 []Reagent{regents[2]},
+			ControlResults:           []ControlResult{},
+			Images:                   nil,
+		}, {
+			AnalysisRequest: AnalysisRequest{},
+			AnalyteMapping:  analyteMappings[3],
+			Instrument:      instrument,
+			SampleCode:      "",
+			DEARawMessageID: uuid.NullUUID{
+				UUID:  uuid.MustParse("92a2ba34-d891-4a1b-89fb-e0c4d717f729"),
+				Valid: true,
+			},
+			BatchID:                  uuid.MustParse("88b87019-ddcc-4d4b-bc04-9e213680e0db"),
+			Result:                   "pos",
+			ResultMode:               Qualification,
+			Status:                   Final,
+			ResultYieldDateTime:      &resultYieldedAt,
+			ValidUntil:               validUntil,
+			Operator:                 "",
+			TechnicalReleaseDateTime: nil,
+			InstrumentRunID:          uuid.MustParse("c0dbcfb6-6a90-4ab6-bcab-0cfbec4abd06"),
+			Edited:                   false,
+			EditReason:               "",
+			IsInvalid:                false,
+			WarnFlag:                 false,
+			Warnings:                 nil,
+			ChannelResults:           nil,
+			ExtraValues:              nil,
+			Reagents:                 []Reagent{regents[3]},
+			ControlResults:           []ControlResult{},
+			Images:                   nil,
+		}, {
+			AnalysisRequest: AnalysisRequest{},
+			AnalyteMapping:  analyteMappings[4],
+			Instrument:      instrument,
+			SampleCode:      "",
+			DEARawMessageID: uuid.NullUUID{
+				UUID:  uuid.MustParse("92a2ba34-d891-4a1b-89fb-e0c4d717f729"),
+				Valid: true,
+			},
+			BatchID:                  uuid.MustParse("88b87019-ddcc-4d4b-bc04-9e213680e0db"),
+			Result:                   "pos",
+			ResultMode:               Qualification,
+			Status:                   Final,
+			ResultYieldDateTime:      &resultYieldedAt,
+			ValidUntil:               validUntil,
+			Operator:                 "",
+			TechnicalReleaseDateTime: nil,
+			InstrumentRunID:          uuid.MustParse("c0dbcfb6-6a90-4ab6-bcab-0cfbec4abd06"),
+			Edited:                   false,
+			EditReason:               "",
+			IsInvalid:                false,
+			WarnFlag:                 false,
+			Warnings:                 nil,
+			ChannelResults:           nil,
+			ExtraValues:              nil,
+			Reagents:                 []Reagent{regents[4]},
+			ControlResults:           []ControlResult{},
+			Images:                   nil,
+		},
+	}
+
+	mockManager := &mockManager{}
+	extendedMockAnalysisRepo := &extendedMockAnalysisRepo{}
+	analysisService := NewAnalysisService(extendedMockAnalysisRepo, nil, nil, mockManager)
+	results, err := analysisService.CreateAnalysisResultsBatch(context.TODO(), AnalysisResultSet{
+		Results: analysisResults,
+	})
+	assert.Nil(t, err)
+	assert.Equal(t, 5, len(results))
+	assert.Equal(t, 1, len(results[0].Reagents))
+	assert.Equal(t, 1, len(results[1].Reagents))
+	assert.Equal(t, 1, len(results[2].Reagents))
+	assert.Equal(t, 1, len(results[3].Reagents))
+	assert.Equal(t, 1, len(results[4].Reagents))
+
+	assert.Equal(t, 5, len(extendedMockAnalysisRepo.analysisResultReagentRelationDAOs))
+	assert.Equal(t, 0, len(extendedMockAnalysisRepo.analysisResultControlResultRelationDAOs))
+	assert.Equal(t, 0, len(extendedMockAnalysisRepo.reagentControlResultRelationDAOs))
+	assert.Equal(t, extendedMockAnalysisRepo.uniqueReagentIDMap[getUniqueReagentString(convertReagentToDAO(results[0].Reagents[0]))], results[0].Reagents[0].ID)
+	assert.Equal(t, extendedMockAnalysisRepo.uniqueReagentIDMap[getUniqueReagentString(convertReagentToDAO(results[1].Reagents[0]))], results[1].Reagents[0].ID)
+	assert.Equal(t, extendedMockAnalysisRepo.uniqueReagentIDMap[getUniqueReagentString(convertReagentToDAO(results[2].Reagents[0]))], results[2].Reagents[0].ID)
+	assert.Equal(t, extendedMockAnalysisRepo.uniqueReagentIDMap[getUniqueReagentString(convertReagentToDAO(results[3].Reagents[0]))], results[3].Reagents[0].ID)
+	assert.Equal(t, extendedMockAnalysisRepo.uniqueReagentIDMap[getUniqueReagentString(convertReagentToDAO(results[4].Reagents[0]))], results[4].Reagents[0].ID)
+}
+
 func TestCreateControlResultBatchWithOnlyPreControlResults(t *testing.T) {
 	controlResult, reagent := setupTestDataForStandaloneControlProcessing()
 	standaloneControlResults := []StandaloneControlResult{{
@@ -1310,6 +1664,7 @@ type extendedMockAnalysisRepo struct {
 	analysisResultControlResultRelationDAOs []analysisResultControlResultRelationDAO
 	analysisResultReagentRelationDAOs       []analysisResultReagentRelationDAO
 	reagentControlResultRelationDAOs        []reagentControlResultRelationDAO
+	uniqueReagentIDMap                      map[string]uuid.UUID
 }
 
 func (r *extendedMockAnalysisRepo) GetUnprocessedAnalysisResultIDsByControlResultIDs(ctx context.Context, controlResultIDs []uuid.UUID) (map[uuid.UUID]map[uuid.UUID]uuid.UUID, error) {
@@ -1333,9 +1688,18 @@ func (r *extendedMockAnalysisRepo) UpdateCerberusQueueItemStatus(ctx context.Con
 }
 
 func (r *extendedMockAnalysisRepo) CreateReagents(ctx context.Context, reagents []Reagent) ([]uuid.UUID, error) {
-	ids := make([]uuid.UUID, len(reagents))
-	for i := range reagents {
-		ids[i] = uuid.New()
+	ids := make([]uuid.UUID, 0)
+	r.uniqueReagentIDMap = make(map[string]uuid.UUID)
+	for i, reagent := range reagents {
+		if _, ok := r.uniqueReagentIDMap[getUniqueReagentString(convertReagentToDAO(reagent))]; !ok {
+			newReagentId := uuid.New()
+			reagents[i].ID = newReagentId
+			r.uniqueReagentIDMap[getUniqueReagentString(convertReagentToDAO(reagent))] = newReagentId
+			ids = append(ids, newReagentId)
+		} else {
+			reagents[i].ID = r.uniqueReagentIDMap[getUniqueReagentString(convertReagentToDAO(reagent))]
+			ids = append(ids, r.uniqueReagentIDMap[getUniqueReagentString(convertReagentToDAO(reagent))])
+		}
 	}
 	return ids, nil
 }
