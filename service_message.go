@@ -31,6 +31,8 @@ type MessageService interface {
 	EnqueueMessageInsForArchiving(messages ...MessageIn)
 	EnqueueMessageOutsForArchiving(messages ...MessageOut)
 	StartDEAArchiving(ctx context.Context)
+	DeleteOldMessageInRecords(ctx context.Context, cleanupDays int, limit int) (int64, error)
+	DeleteOldMessageOutRecords(ctx context.Context, cleanupDays int, limit int) (int64, error)
 	RegisterSampleCodesToMessageIn(ctx context.Context, messageID uuid.UUID, sampleCodes []string) error
 	RegisterSampleCodesToMessageOut(ctx context.Context, messageID uuid.UUID, sampleCodes []string) error
 	StartSampleCodeRegisteringToDEA(ctx context.Context)
@@ -329,6 +331,10 @@ func (s *messageService) StartDEAArchiving(ctx context.Context) {
 			return
 		}
 	}
+}
+
+func (s *messageService) uploadRawMessageToDEA(message SaveInstrumentMessageTO) (uuid.UUID, error) {
+	return s.deaClient.UploadInstrumentMessage(message)
 }
 
 func (s *messageService) RegisterSampleCodesToMessageIn(ctx context.Context, messageID uuid.UUID, sampleCodes []string) error {
@@ -639,8 +645,40 @@ func (s *messageService) addUnsentMessageOutSampleCodesToQueue(ctx context.Conte
 	})
 }
 
-func (s *messageService) uploadRawMessageToDEA(message SaveInstrumentMessageTO) (uuid.UUID, error) {
-	return s.deaClient.UploadInstrumentMessage(message)
+func (s *messageService) DeleteOldMessageInRecords(ctx context.Context, cleanupDays int, limit int) (int64, error) {
+	tx, err := s.messageInRepository.CreateTransaction()
+	if err != nil {
+		return 0, err
+	}
+	deletedRows, err := s.messageInRepository.WithTransaction(tx).DeleteOldMessageInRecords(ctx, cleanupDays, limit)
+	if err != nil {
+		_ = tx.Rollback()
+		return deletedRows, err
+	}
+	err = tx.Commit()
+	if err != nil {
+		_ = tx.Rollback()
+		return deletedRows, err
+	}
+	return deletedRows, nil
+}
+
+func (s *messageService) DeleteOldMessageOutRecords(ctx context.Context, cleanupDays int, limit int) (int64, error) {
+	tx, err := s.messageOutRepository.CreateTransaction()
+	if err != nil {
+		return 0, err
+	}
+	deletedRows, err := s.messageOutRepository.WithTransaction(tx).DeleteOldMessageOutRecords(ctx, cleanupDays, limit)
+	if err != nil {
+		_ = tx.Rollback()
+		return deletedRows, err
+	}
+	err = tx.Commit()
+	if err != nil {
+		_ = tx.Rollback()
+		return deletedRows, err
+	}
+	return deletedRows, nil
 }
 
 func NewMessageService(deaClient DeaClientV1, messageInRepository MessageInRepository, messageOutRepository MessageOutRepository, messageOutOrderRepository MessageOutOrderRepository, serviceName string) MessageService {
