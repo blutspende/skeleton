@@ -246,7 +246,3 @@ func (sr *SkeletonTestRig) GetUnprocessedMessageOuts(ctx context.Context, cutoff
 func (sr *SkeletonTestRig) GetDbConnection() (*sqlx.DB, error) {
 	return nil, nil
 }
-
-func (sr *SkeletonTestRig) Stop() error {
-	return nil
-}

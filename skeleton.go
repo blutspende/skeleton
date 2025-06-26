@@ -683,6 +683,14 @@ func (s *skeleton) Start() error {
 	}
 	s.dbConn.SetSqlConnection(sqlConn)
 
+	go func() {
+		<-s.ctx.Done()
+		err = s.dbConnector.Close()
+		if err != nil {
+			log.Error().Err(err).Msg("failed to close database connection")
+		}
+	}()
+
 	s.unprocessedHandlingWaitGroup.Add(waitGroupSize)
 
 	err = s.migrateUp(s.ctx, sqlConn, s.dbSchema)
@@ -1591,15 +1599,6 @@ func (s *skeleton) GetDbConnection() (*sqlx.DB, error) {
 		return nil, err
 	}
 	return dbConn, nil
-}
-
-func (s *skeleton) Stop() error {
-	err := s.dbConnector.Close()
-	if err != nil {
-		log.Error().Err(err).Msg("failed to close database connection")
-		return err
-	}
-	return nil
 }
 
 func NewSkeleton(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, reagentManufacturers []string, dbConnector db.DbConnector, dbConn db.DbConnection, dbSchema string, migrator migrator.SkeletonMigrator, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService ConsoleLogService, messageService MessageService, manager Manager, cerberusClient CerberusClient, longPollClient LongPollClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
