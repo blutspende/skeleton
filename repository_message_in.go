@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/rs/zerolog/log"
+	"strconv"
 	"time"
 )
 
@@ -23,6 +24,7 @@ type MessageInRepository interface {
 	GetUnsynced(ctx context.Context, limit, offset int, cutoffTime time.Time) ([]MessageIn, error)
 	Update(ctx context.Context, message MessageIn) error
 	UpdateDEAInfo(ctx context.Context, message MessageIn) error
+	DeleteOldMessageInRecords(ctx context.Context, cleanupDays int, limit int) (int64, error)
 
 	WithTransaction(tx db.DbConnection) MessageInRepository
 	CreateTransaction() (db.DbConnection, error)
@@ -188,6 +190,20 @@ func (r *messageInRepository) UpdateDEAInfo(ctx context.Context, message Message
 	return nil
 }
 
+func (r *messageInRepository) DeleteOldMessageInRecords(ctx context.Context, cleanupDays int, limit int) (int64, error) {
+	query := fmt.Sprintf(`DELETE FROM %s.message_in WHERE id IN 
+                                      (SELECT id FROM %s.message_in mi 
+                                                 WHERE (mi.state = $1 OR (mi.state = $2 AND mi.retrycount >= $3)) 
+                                                   AND created_at <= current_date - ($4 ||' DAY')::INTERVAL LIMIT $5);`, r.dbSchema, r.dbSchema)
+	result, err := r.db.ExecContext(ctx, query, messagestatus.Processed, messagestatus.Error, r.maxRetries, strconv.Itoa(cleanupDays), limit)
+	if err != nil {
+		log.Error().Err(err).Msg(msgDeleteOldMessageInRecordsFailed)
+		return 0, ErrDeleteOldMessageInRecordsFailed
+	}
+
+	return result.RowsAffected()
+}
+
 func (r *messageInRepository) WithTransaction(tx db.DbConnection) MessageInRepository {
 	txRepo := *r
 	txRepo.db = tx
@@ -279,19 +295,21 @@ func convertDAOToMessageIn(dao messageInDAO) MessageIn {
 }
 
 const (
-	msgCreateMessageInFailed          = "create message in failed"
-	msgGetMessageInsByIDsFailed       = "get message ins by IDs failed"
-	msgGetUnprocessedMessageInsFailed = "get unprocessed message ins failed"
-	msgGetUnsyncedMessageInsFailed    = "get unsynced message ins failed"
-	msgUpdateMessageInDEAInfoFailed   = "update message in DEA info failed"
-	msgUpdateMessageInFailed          = "update message in failed"
+	msgCreateMessageInFailed           = "create message in failed"
+	msgGetMessageInsByIDsFailed        = "get message ins by IDs failed"
+	msgGetUnprocessedMessageInsFailed  = "get unprocessed message ins failed"
+	msgGetUnsyncedMessageInsFailed     = "get unsynced message ins failed"
+	msgUpdateMessageInDEAInfoFailed    = "update message in DEA info failed"
+	msgUpdateMessageInFailed           = "update message in failed"
+	msgDeleteOldMessageInRecordsFailed = "delete old message out records failed"
 )
 
 var (
-	ErrCreateMessageInFailed          = errors.New(msgCreateMessageInFailed)
-	ErrGetMessageInsByIDsFailed       = errors.New(msgGetMessageInsByIDsFailed)
-	ErrGetUnprocessedMessageInsFailed = errors.New(msgGetUnprocessedMessageInsFailed)
-	ErrGetUnsyncedMessageInsFailed    = errors.New(msgGetUnsyncedMessageInsFailed)
-	ErrUpdateMessageInDEAInfoFailed   = errors.New(msgUpdateMessageInDEAInfoFailed)
-	ErrUpdateMessageInFailed          = errors.New(msgUpdateMessageInFailed)
+	ErrCreateMessageInFailed           = errors.New(msgCreateMessageInFailed)
+	ErrGetMessageInsByIDsFailed        = errors.New(msgGetMessageInsByIDsFailed)
+	ErrGetUnprocessedMessageInsFailed  = errors.New(msgGetUnprocessedMessageInsFailed)
+	ErrGetUnsyncedMessageInsFailed     = errors.New(msgGetUnsyncedMessageInsFailed)
+	ErrUpdateMessageInDEAInfoFailed    = errors.New(msgUpdateMessageInDEAInfoFailed)
+	ErrUpdateMessageInFailed           = errors.New(msgUpdateMessageInFailed)
+	ErrDeleteOldMessageInRecordsFailed = errors.New(msgDeleteOldMessageInRecordsFailed)
 )

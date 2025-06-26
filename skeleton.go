@@ -1153,6 +1153,8 @@ func (s *skeleton) runCleanupJobs() {
 	s.cleanupCerberusQueueItems()
 	s.cleanupAnalysisResults()
 	s.cleanupAnalysisRequests()
+	s.cleanupMessageIn()
+	s.cleanupMessageOut()
 }
 
 func (s *skeleton) cleanupCerberusQueueItems() {
@@ -1227,6 +1229,44 @@ func (s *skeleton) cleanupAnalysisResults() {
 			if err != nil {
 				_ = tx.Rollback()
 				log.Error().Err(err).Msg("cleanup old analysis results failed")
+				return
+			}
+			if int(deletedRows) < limit {
+				return
+			}
+		}
+	}
+}
+
+func (s *skeleton) cleanupMessageIn() {
+	for {
+		select {
+		case <-s.ctx.Done():
+			log.Trace().Msg("stopping to cleanup message in")
+			return
+		default:
+			deletedRows, err := s.messageService.DeleteOldMessageInRecords(s.ctx, s.config.CleanupDays, limit)
+			if err != nil {
+				log.Error().Err(err).Msg("cleanup old message in records failed")
+				return
+			}
+			if int(deletedRows) < limit {
+				return
+			}
+		}
+	}
+}
+
+func (s *skeleton) cleanupMessageOut() {
+	for {
+		select {
+		case <-s.ctx.Done():
+			log.Trace().Msg("stopping to cleanup message out")
+			return
+		default:
+			deletedRows, err := s.messageService.DeleteOldMessageOutRecords(s.ctx, s.config.CleanupDays, limit)
+			if err != nil {
+				log.Error().Err(err).Msg("cleanup old message out records failed")
 				return
 			}
 			if int(deletedRows) < limit {

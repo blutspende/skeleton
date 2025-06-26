@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/rs/zerolog/log"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -26,6 +27,7 @@ type MessageOutRepository interface {
 	GetUnsynced(ctx context.Context, limit, offset int, cutoffTime time.Time) ([]MessageOut, error)
 	Update(ctx context.Context, message MessageOut) error
 	UpdateDEAInfo(ctx context.Context, message MessageOut) error
+	DeleteOldMessageOutRecords(ctx context.Context, cleanupDays int, limit int) (int64, error)
 
 	WithTransaction(tx db.DbConnection) MessageOutRepository
 	CreateTransaction() (db.DbConnection, error)
@@ -237,6 +239,20 @@ func (r *messageOutRepository) UpdateDEAInfo(ctx context.Context, message Messag
 	return nil
 }
 
+func (r *messageOutRepository) DeleteOldMessageOutRecords(ctx context.Context, cleanupDays int, limit int) (int64, error) {
+	query := fmt.Sprintf(`DELETE FROM %s.message_out WHERE id IN 
+                                      (SELECT id FROM %s.message_out mi 
+                                                 WHERE (mi.state = $1 OR (mi.state = $2 AND mi.retrycount >= $3)) 
+                                                   AND created_at <= current_date - ($4 ||' DAY')::INTERVAL LIMIT $5);`, r.dbSchema, r.dbSchema)
+	result, err := r.db.ExecContext(ctx, query, messagestatus.Sent, messagestatus.Error, r.maxRetries, strconv.Itoa(cleanupDays), limit)
+	if err != nil {
+		log.Error().Err(err).Msg(msgDeleteOldMessageOutRecordsFailed)
+		return 0, ErrDeleteOldMessageOutRecordsFailed
+	}
+
+	return result.RowsAffected()
+}
+
 func (r *messageOutRepository) WithTransaction(tx db.DbConnection) MessageOutRepository {
 	txRepo := *r
 	txRepo.db = tx
@@ -347,6 +363,7 @@ const (
 	msgUpdateMessageOutFailed                                       = "update message out failed"
 	msgUpdateMessageOutDEAInfoFailed                                = "update message out DEA info failed"
 	msgGetFullyRevokedUnsentMessageOutIDsByAnalysisRequestIDsFailed = "get fully revoked unsent message out IDs by analysis requests failed"
+	msgDeleteOldMessageOutRecordsFailed                             = "delete old message out records failed"
 )
 
 var (
@@ -358,4 +375,5 @@ var (
 	ErrUpdateMessageOutFailed                                       = errors.New(msgUpdateMessageOutFailed)
 	ErrUpdateMessageOutDEAInfoFailed                                = errors.New(msgUpdateMessageOutDEAInfoFailed)
 	ErrGetFullyRevokedUnsentMessageOutIDsByAnalysisRequestIDsFailed = errors.New(msgGetFullyRevokedUnsentMessageOutIDsByAnalysisRequestIDsFailed)
+	ErrDeleteOldMessageOutRecordsFailed                             = errors.New(msgDeleteOldMessageOutRecordsFailed)
 )

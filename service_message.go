@@ -31,6 +31,8 @@ type MessageService interface {
 	EnqueueMessageInsForArchiving(messages ...MessageIn)
 	EnqueueMessageOutsForArchiving(messages ...MessageOut)
 	StartDEAArchiving(ctx context.Context)
+	DeleteOldMessageInRecords(ctx context.Context, cleanupDays int, limit int) (int64, error)
+	DeleteOldMessageOutRecords(ctx context.Context, cleanupDays int, limit int) (int64, error)
 }
 
 type messageService struct {
@@ -292,6 +294,42 @@ func (s *messageService) StartDEAArchiving(ctx context.Context) {
 			return
 		}
 	}
+}
+
+func (s *messageService) DeleteOldMessageInRecords(ctx context.Context, cleanupDays int, limit int) (int64, error) {
+	tx, err := s.messageInRepository.CreateTransaction()
+	if err != nil {
+		return 0, err
+	}
+	deletedRows, err := s.messageInRepository.WithTransaction(tx).DeleteOldMessageInRecords(ctx, cleanupDays, limit)
+	if err != nil {
+		_ = tx.Rollback()
+		return deletedRows, err
+	}
+	err = tx.Commit()
+	if err != nil {
+		_ = tx.Rollback()
+		return deletedRows, err
+	}
+	return deletedRows, nil
+}
+
+func (s *messageService) DeleteOldMessageOutRecords(ctx context.Context, cleanupDays int, limit int) (int64, error) {
+	tx, err := s.messageOutRepository.CreateTransaction()
+	if err != nil {
+		return 0, err
+	}
+	deletedRows, err := s.messageOutRepository.WithTransaction(tx).DeleteOldMessageOutRecords(ctx, cleanupDays, limit)
+	if err != nil {
+		_ = tx.Rollback()
+		return deletedRows, err
+	}
+	err = tx.Commit()
+	if err != nil {
+		_ = tx.Rollback()
+		return deletedRows, err
+	}
+	return deletedRows, nil
 }
 
 var nonSpecialCharactersRegex = regexp.MustCompile("[^A-Za-z0-9]+")
