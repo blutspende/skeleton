@@ -128,7 +128,7 @@ func (r *messageOutRepository) GetFullyRevokedUnsentMessageIDsByAnalysisRequestI
 }
 
 func (r *messageOutRepository) GetUnprocessed(ctx context.Context, limit, offset int, cutoffTime time.Time) ([]MessageOut, error) {
-	query := fmt.Sprintf(`SELECT * FROM %s.sk_message_in 
+	query := fmt.Sprintf(`SELECT * FROM %s.sk_message_out
          							WHERE status IN ($1, $2) AND retry_count < $3 
          								AND created_at >= (current_date - make_interval(days := $4))
          								AND created_at <= $5
