@@ -146,10 +146,6 @@ type SkeletonAPI interface {
 	// GetDbConnection - Provides access to internal database connection
 	// - returns database connection
 	GetDbConnection() (*sqlx.DB, error)
-
-	// Shutdown - MUST BE CALLED ON (GRACEFUL) SHUTDOWN
-	// - closes database connection
-	Stop() error
 }
 
 func New(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, reagentManufacturers []string, dbSchema string) (SkeletonAPI, error) {
