@@ -129,6 +129,14 @@ func (s *messageService) SaveMessageOutBatch(ctx context.Context, messages []Mes
 	if len(messages) == 0 {
 		return nil, nil
 	}
+	for i := range messages {
+		if !isStatusValid(messages[i].Status) {
+			messages[i].Status = messagestatus.Stored
+		}
+		if !isTypeValid(messages[i].Type) {
+			messages[i].Type = messagetype.Unidentified
+		}
+	}
 	tx, err := s.messageOutRepository.CreateTransaction()
 	if err != nil {
 		return nil, err
@@ -139,12 +147,6 @@ func (s *messageService) SaveMessageOutBatch(ctx context.Context, messages []Mes
 		return nil, err
 	}
 	for i := range messages {
-		if !isStatusValid(messages[i].Status) {
-			messages[i].Status = messagestatus.Stored
-		}
-		if !isTypeValid(messages[i].Type) {
-			messages[i].Type = messagetype.Unidentified
-		}
 		messages[i].ID = messageIDs[i]
 		for j := range messages[i].MessageOutOrders {
 			if messages[i].MessageOutOrders[j].ID == uuid.Nil {
