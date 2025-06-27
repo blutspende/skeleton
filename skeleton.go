@@ -50,6 +50,7 @@ type skeleton struct {
 	reagentManufacturers                       []string
 	unprocessedHandlingWaitGroup               sync.WaitGroup
 	encodings                                  []string
+	protocols                                  []SupportedProtocol
 }
 
 const waitGroupSize = 3
@@ -536,10 +537,6 @@ func (s *skeleton) RegisterManufacturerTests(ctx context.Context, manufacturerTe
 	return nil
 }
 
-func (s *skeleton) RegisterProtocol(ctx context.Context, id uuid.UUID, name string, description string, abilities []ProtocolAbility, settings []ProtocolSetting) error {
-	return s.instrumentService.UpsertSupportedProtocol(ctx, id, name, description, abilities, settings)
-}
-
 func (s *skeleton) SetOnlineStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error {
 	err := s.instrumentService.UpdateInstrumentStatus(ctx, id, status)
 	if err != nil {
@@ -697,6 +694,17 @@ func (s *skeleton) Start() error {
 	if err != nil {
 		log.Error().Err(err).Msg("migrate up failed")
 		return err
+	}
+	for _, protocol := range s.protocols {
+		description := ""
+		if protocol.Description != nil {
+			description = *protocol.Description
+		}
+		err = s.instrumentService.UpsertSupportedProtocol(s.ctx, protocol.ID, protocol.Name, description, protocol.ProtocolAbilities, protocol.ProtocolSettings)
+		if err != nil {
+			log.Error().Err(err).Msg("register protocols failed")
+			return err
+		}
 	}
 
 	// Note: Cache instruments on startup
@@ -1602,7 +1610,7 @@ func (s *skeleton) GetDbConnection() (*sqlx.DB, error) {
 	return dbConn, nil
 }
 
-func NewSkeleton(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, reagentManufacturers []string, dbConnector db.DbConnector, dbConn db.DbConnection, dbSchema string, migrator migrator.SkeletonMigrator, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService ConsoleLogService, messageService MessageService, manager Manager, cerberusClient CerberusClient, longPollClient LongPollClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
+func NewSkeleton(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, reagentManufacturers []string, protocols []SupportedProtocol, dbConnector db.DbConnector, dbConn db.DbConnection, dbSchema string, migrator migrator.SkeletonMigrator, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService ConsoleLogService, messageService MessageService, manager Manager, cerberusClient CerberusClient, longPollClient LongPollClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
 	skeleton := &skeleton{
 		ctx:                                    ctx,
 		serviceName:                            serviceName,
@@ -1610,6 +1618,7 @@ func NewSkeleton(ctx context.Context, serviceName, displayName string, requested
 		extraValueKeys:                         requestedExtraValueKeys,
 		encodings:                              encodings,
 		reagentManufacturers:                   reagentManufacturers,
+		protocols:                              protocols,
 		config:                                 config,
 		dbConnector:                            dbConnector,
 		dbConn:                                 dbConn,

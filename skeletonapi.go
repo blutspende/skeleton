@@ -128,9 +128,6 @@ type SkeletonAPI interface {
 	// FindResultEntities - Convenient: Lookup Instrument, AnalysisRequest and ResultMapping for the analyte at once
 	FindResultEntities(ctx context.Context, InstrumentID uuid.UUID, SampleCode string, ManufacturerTestCode string) (Instrument, []AnalysisRequest, AnalyteMapping, error)
 
-	// RegisterProtocol - Registers the supported protocols of a driver class
-	RegisterProtocol(ctx context.Context, id uuid.UUID, name string, description string, abilities []ProtocolAbility, settings []ProtocolSetting) error
-
 	// RegisterManufacturerTests - Registers the supported manufacturer tests of the driver
 	RegisterManufacturerTests(ctx context.Context, manufacturerTests []SupportedManufacturerTests, sendToCerberus bool) error
 
@@ -152,7 +149,7 @@ type SkeletonAPI interface {
 	GetDbConnection() (*sqlx.DB, error)
 }
 
-func New(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, reagentManufacturers []string, dbSchema string) (SkeletonAPI, error) {
+func New(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, reagentManufacturers []string, protocols []SupportedProtocol, dbSchema string) (SkeletonAPI, error) {
 	config, err := config2.ReadConfiguration()
 	if err != nil {
 		return nil, err
@@ -190,5 +187,5 @@ func New(ctx context.Context, serviceName, displayName string, requestedExtraVal
 
 	longpollClient := NewLongPollClient(longPollingApiRestyClient, serviceName, config.CerberusURL, config.LongPollingAPIClientTimeoutSeconds, config.LongPollingReattemptWaitSeconds, config.LongPollingLoggingEnabled)
 
-	return NewSkeleton(ctx, serviceName, displayName, requestedExtraValueKeys, encodings, reagentManufacturers, dbConnector, dbConn, dbSchema, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, messageService, manager, cerberusClient, longpollClient, deaClient, config)
+	return NewSkeleton(ctx, serviceName, displayName, requestedExtraValueKeys, encodings, reagentManufacturers, protocols, dbConnector, dbConn, dbSchema, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, messageService, manager, cerberusClient, longpollClient, deaClient, config)
 }
