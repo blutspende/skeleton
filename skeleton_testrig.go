@@ -134,10 +134,6 @@ func (sr *SkeletonTestRig) FindResultEntities(ctx context.Context, InstrumentID 
 	return Instrument{}, []AnalysisRequest{}, AnalyteMapping{}, nil
 }
 
-func (sr *SkeletonTestRig) RegisterProtocol(ctx context.Context, id uuid.UUID, name string, description string, abilities []ProtocolAbility, settings []ProtocolSetting) error {
-	return nil
-}
-
 func (sr *SkeletonTestRig) SetOnlineStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error {
 	return nil
 }
