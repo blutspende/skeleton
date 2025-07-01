@@ -405,14 +405,6 @@ func TestAnalysisResultsReprocessing(t *testing.T) {
 	time.Sleep(1 * time.Second)
 }
 
-func TestGenerateRawMessageFilename(t *testing.T) {
-	ts, _ := time.Parse("2006-01-02-15:04:05.000000", "2025-02-18-20:11:24.123456")
-	filename := generateRawMessageFileName("infinity", ts)
-	assert.Equal(t, "infinity_2025-02-18-20-11-24_123456", filename)
-	filename = generateRawMessageFileName("Sarstedt Host : The Sorter", ts)
-	assert.Equal(t, "Sarstedt_Host_The_Sorter_2025-02-18-20-11-24_123456", filename)
-}
-
 func TestSubmitControlResultsProcessing(t *testing.T) {
 	dbConn, schemaName, pg, _ := setupDbConnector("testSubmitControlResultsProcessing")
 
@@ -883,7 +875,11 @@ func (m *longPollClientMock) StartRevokedReexaminedWorkItemIDsLongPolling(ctx co
 type deaClientMock struct {
 }
 
-func (m *deaClientMock) UploadFile(fileData []byte, name string) (uuid.UUID, error) {
+func (m *deaClientMock) RegisterSampleCodes(messageID uuid.UUID, sampleCodes []string) error {
+	return nil
+}
+
+func (m *deaClientMock) UploadInstrumentMessage(message SaveInstrumentMessageTO) (uuid.UUID, error) {
 	return uuid.Nil, nil
 }
 

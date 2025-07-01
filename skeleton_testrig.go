@@ -246,3 +246,11 @@ func (sr *SkeletonTestRig) GetUnprocessedMessageOuts(ctx context.Context, cutoff
 func (sr *SkeletonTestRig) GetDbConnection() (*sqlx.DB, error) {
 	return nil, nil
 }
+
+func (sr *SkeletonTestRig) RegisterSampleCodesToMessageIn(ctx context.Context, messageID uuid.UUID, sampleCodes []string) error {
+	return nil
+}
+
+func (sr *SkeletonTestRig) RegisterSampleCodesToMessageOut(ctx context.Context, messageID uuid.UUID, sampleCodes []string) error {
+	return nil
+}
