@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	Universal_Lis2A2 Protocol = "Universal Lis2A2 (Generic)"
+	Universal_Lis2A2 = "Universal Lis2A2 (Generic)"
 )
 
 type GinApi interface {
@@ -142,7 +142,7 @@ type Instrument struct {
 	Type               InstrumentType
 	Name               string
 	ProtocolID         uuid.UUID
-	ProtocolName       Protocol
+	ProtocolName       string
 	Enabled            bool
 	ConnectionMode     ConnectionMode
 	ResultMode         ResultMode
@@ -163,8 +163,6 @@ type Instrument struct {
 	ModifiedAt         *time.Time
 	DeletedAt          *time.Time
 }
-
-type Protocol string
 
 type FTPConfig struct {
 	ID               uuid.UUID
@@ -441,7 +439,7 @@ const (
 
 type SupportedProtocol struct {
 	ID                uuid.UUID
-	Name              Protocol
+	Name              string
 	Description       *string
 	ProtocolAbilities []ProtocolAbility
 	ProtocolSettings  []ProtocolSetting

@@ -244,7 +244,7 @@ type instrumentSettingDao struct {
 
 type supportedProtocolDAO struct {
 	ID          uuid.UUID
-	Name        Protocol
+	Name        string
 	Description sql.NullString
 }
 

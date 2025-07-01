@@ -14,7 +14,7 @@ type instrumentTO struct {
 	Type                InstrumentType        `json:"instrumentType"`
 	Name                string                `json:"name"`
 	ProtocolID          uuid.UUID             `json:"protocolId"`
-	ProtocolName        Protocol              `json:"type"`
+	ProtocolName        string                `json:"type"`
 	Enabled             bool                  `json:"enabled"`
 	ConnectionMode      ConnectionMode        `json:"connectionMode"`
 	ResultMode          ResultMode            `json:"runningMode"`
@@ -115,7 +115,7 @@ type conditionOperandTO struct {
 
 type supportedProtocolTO struct {
 	ID                uuid.UUID           `json:"id"`
-	Name              Protocol            `json:"name"`
+	Name              string              `json:"name"`
 	Description       *string             `json:"description"`
 	ProtocolAbilities []protocolAbilityTO `json:"protocolAbilities"`
 	ProtocolSettings  []protocolSettingTO `json:"protocolSettings"`
