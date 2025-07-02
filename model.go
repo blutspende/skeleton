@@ -264,7 +264,6 @@ type AnalysisResult struct {
 	SampleCode               string
 	MessageInID              uuid.UUID
 	DEARawMessageID          uuid.NullUUID
-	BatchID                  uuid.UUID
 	Result                   string
 	ResultMode               ResultMode
 	Status                   ResultStatus

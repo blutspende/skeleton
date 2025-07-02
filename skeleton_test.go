@@ -273,7 +273,6 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 		DeletedAt:  nil,
 	}
 
-	batchID := uuid.MustParse("ddd34c4d-62f9-4621-bb16-efad459a9bfe")
 	analysisResults := []AnalysisResult{
 		{
 			AnalysisRequest: AnalysisRequest{},
@@ -284,7 +283,6 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 				UUID:  uuid.MustParse("2f369489-77d3-464e-87e2-edbeffa62ae7"),
 				Valid: true,
 			},
-			BatchID:                  batchID,
 			Result:                   "pos",
 			ResultMode:               "PRODUCTION",
 			Status:                   "PRE",
@@ -311,7 +309,6 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 				UUID:  uuid.MustParse("43a7b261-3e1d-4065-935a-ac15841f13e4"),
 				Valid: true,
 			},
-			BatchID:                  batchID,
 			Result:                   "pos",
 			ResultMode:               "PRODUCTION",
 			Status:                   "PRE",
@@ -535,7 +532,6 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 		ControlResults: nil,
 	}
 
-	batchID := uuid.MustParse("ddd34c4d-62f9-4621-bb16-efad459a9bfe")
 	analysisResultId1 := uuid.MustParse("88888acb-5449-4012-96c2-2dd761b62b19")
 	analysisResultId2 := uuid.MustParse("69f853b0-fe43-4bd1-a8d4-64c0ff704558")
 	analysisResults := []AnalysisResult{
@@ -549,7 +545,6 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 				UUID:  uuid.MustParse("2f369489-77d3-464e-87e2-edbeffa62ae7"),
 				Valid: true,
 			},
-			BatchID:                  batchID,
 			Result:                   "pos",
 			ResultMode:               "PRODUCTION",
 			Status:                   "PRE",
@@ -577,7 +572,6 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 				UUID:  uuid.MustParse("43a7b261-3e1d-4065-935a-ac15841f13e4"),
 				Valid: true,
 			},
-			BatchID:                  batchID,
 			Result:                   "pos",
 			ResultMode:               "PRODUCTION",
 			Status:                   "PRE",
@@ -1053,9 +1047,6 @@ func (m *analysisServiceMock) QueueAnalysisResults(ctx context.Context, results 
 func (m *analysisServiceMock) RetransmitResult(ctx context.Context, resultID uuid.UUID) error {
 	return nil
 }
-func (m *analysisServiceMock) RetransmitResultBatches(ctx context.Context, batchIDs []uuid.UUID) error {
-	return nil
-}
 func (m *analysisServiceMock) ReprocessInstrumentData(ctx context.Context, batchIDs []uuid.UUID) {
 }
 func (m *analysisServiceMock) ProcessStuckImagesToDEA(ctx context.Context) {
@@ -1301,9 +1292,6 @@ func (m *analysisRepositoryMock) UpdateControlResultBatch(ctx context.Context, c
 func (m *analysisRepositoryMock) CreateWarnings(ctx context.Context, warningsByAnalysisResultID map[uuid.UUID][]string) error {
 	return nil
 }
-func (m *analysisRepositoryMock) GetAnalysisResultsByBatchIDsMapped(ctx context.Context, batchIDs []uuid.UUID) (map[uuid.UUID][]AnalysisResultInfo, error) {
-	return nil, nil
-}
 func (m *analysisRepositoryMock) GetAnalysisRequestExtraValuesByAnalysisRequestID(ctx context.Context, analysisRequestID uuid.UUID) (map[string]string, error) {
 	return nil, nil
 }
@@ -1376,7 +1364,6 @@ var analysisResultsWithoutAnalysisRequestsTest_analysisResults = []AnalysisResul
 			UUID:  uuid.MustParse("2f369489-77d3-464e-87e2-edbeffa62ae7"),
 			Valid: true,
 		},
-		BatchID:                  uuid.MustParse("ddd34c4d-62f9-4621-bb16-efad459a9bfe"),
 		Result:                   "pos",
 		ResultMode:               "PRODUCTION",
 		Status:                   "PRE",
@@ -1415,7 +1402,6 @@ var analysisResultsWithoutAnalysisRequestsTest_analysisResults = []AnalysisResul
 			UUID:  uuid.MustParse("43a7b261-3e1d-4065-935a-ac15841f13e4"),
 			Valid: true,
 		},
-		BatchID:                  uuid.MustParse("ddd34c4d-62f9-4621-bb16-efad459a9bfe"),
 		Result:                   "pos",
 		ResultMode:               "PRODUCTION",
 		Status:                   "PRE",
