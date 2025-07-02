@@ -51,6 +51,7 @@ type skeleton struct {
 	unprocessedHandlingWaitGroup               sync.WaitGroup
 	encodings                                  []string
 	protocols                                  []SupportedProtocol
+	cutoffTime                                 time.Time
 }
 
 const waitGroupSize = 3
@@ -552,11 +553,11 @@ func (s *skeleton) UpdateMessageIn(ctx context.Context, messageIn MessageIn) err
 	return s.messageService.UpdateMessageIn(ctx, messageIn)
 }
 
-func (s *skeleton) GetUnprocessedMessageIns(ctx context.Context, cutoffTime time.Time) ([]MessageIn, error) {
+func (s *skeleton) GetUnprocessedMessageIns(ctx context.Context) ([]MessageIn, error) {
 	messageIns := make([]MessageIn, 0)
 	counter := 0
 	for {
-		messages, err := s.messageService.GetUnprocessedMessageIns(ctx, messageBatchSize, counter*messageBatchSize, cutoffTime)
+		messages, err := s.messageService.GetUnprocessedMessageIns(ctx, messageBatchSize, counter*messageBatchSize, s.cutoffTime)
 		if err != nil {
 			return nil, err
 		}
@@ -574,11 +575,11 @@ func (s *skeleton) UpdateMessageOut(ctx context.Context, messageOut MessageOut) 
 	return s.messageService.UpdateMessageOut(ctx, messageOut)
 }
 
-func (s *skeleton) GetUnprocessedMessageOuts(ctx context.Context, cutoffTime time.Time) ([]MessageOut, error) {
+func (s *skeleton) GetUnprocessedMessageOuts(ctx context.Context) ([]MessageOut, error) {
 	messageOuts := make([]MessageOut, 0)
 	counter := 0
 	for {
-		messages, err := s.messageService.GetUnprocessedMessageOuts(ctx, messageBatchSize, counter*messageBatchSize, cutoffTime)
+		messages, err := s.messageService.GetUnprocessedMessageOuts(ctx, messageBatchSize, counter*messageBatchSize, s.cutoffTime)
 		if err != nil {
 			return nil, err
 		}
@@ -668,6 +669,8 @@ func (s *skeleton) migrateUp(ctx context.Context, db *sqlx.DB, schemaName string
 }
 
 func (s *skeleton) Start() error {
+	s.cutoffTime = time.Now().UTC()
+
 	err := s.dbConnector.Connect()
 	if err != nil {
 		log.Error().Err(err).Msg("failed to connect to database")
@@ -924,11 +927,10 @@ func (s *skeleton) processAnalysisRequests(ctx context.Context) {
 }
 
 func (s *skeleton) enqueueUnsyncedMessages(ctx context.Context) {
-	ts := time.Now().UTC()
-	go func(cutoffTime time.Time) {
+	go func() {
 		counter := 0
 		for {
-			unsyncedMessages, err := s.messageService.GetUnsyncedMessageIns(ctx, messageBatchSize, messageBatchSize*counter, cutoffTime)
+			unsyncedMessages, err := s.messageService.GetUnsyncedMessageIns(ctx, messageBatchSize, messageBatchSize*counter, s.cutoffTime)
 			if err != nil {
 				log.Error().Err(err).Msg("enqueue unsynced message ins failed")
 				time.Sleep(time.Second * 15)
@@ -940,11 +942,11 @@ func (s *skeleton) enqueueUnsyncedMessages(ctx context.Context) {
 			}
 			counter++
 		}
-	}(ts)
-	go func(cutoffTime time.Time) {
+	}()
+	go func() {
 		counter := 0
 		for {
-			unsyncedMessages, err := s.messageService.GetUnsyncedMessageOuts(ctx, messageBatchSize, messageBatchSize*counter, cutoffTime)
+			unsyncedMessages, err := s.messageService.GetUnsyncedMessageOuts(ctx, messageBatchSize, messageBatchSize*counter, s.cutoffTime)
 			if err != nil {
 				log.Error().Err(err).Msg("enqueue unsynced message outs failed")
 				time.Sleep(time.Second * 15)
@@ -956,7 +958,7 @@ func (s *skeleton) enqueueUnsyncedMessages(ctx context.Context) {
 			}
 			counter++
 		}
-	}(ts)
+	}()
 }
 
 func (s *skeleton) processAnalysisResults(ctx context.Context) {
