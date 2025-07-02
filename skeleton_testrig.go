@@ -231,11 +231,11 @@ func (sr *SkeletonTestRig) GetMessageOutOrdersBySampleCodesAndRequestMappingIDs(
 	return nil, nil
 }
 
-func (sr *SkeletonTestRig) GetUnprocessedMessageIns(ctx context.Context, cutoffTime time.Time) ([]MessageIn, error) {
+func (sr *SkeletonTestRig) GetUnprocessedMessageIns(ctx context.Context) ([]MessageIn, error) {
 	return nil, nil
 }
 
-func (sr *SkeletonTestRig) GetUnprocessedMessageOuts(ctx context.Context, cutoffTime time.Time) ([]MessageOut, error) {
+func (sr *SkeletonTestRig) GetUnprocessedMessageOuts(ctx context.Context) ([]MessageOut, error) {
 	return nil, nil
 }
 

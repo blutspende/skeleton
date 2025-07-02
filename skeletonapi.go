@@ -2,13 +2,12 @@ package skeleton
 
 import (
 	"context"
-	"github.com/jmoiron/sqlx"
-	"time"
-
 	config2 "github.com/blutspende/skeleton/config"
 	"github.com/blutspende/skeleton/db"
 	"github.com/blutspende/skeleton/migrator"
 	"github.com/google/uuid"
+	"github.com/jmoiron/sqlx"
+	"time"
 )
 
 type SkeletonError error
@@ -79,9 +78,9 @@ type SkeletonAPI interface {
 	SaveMessageIn(ctx context.Context, messageIn MessageIn) (uuid.UUID, error)
 	// UpdateMessageIn - updates an incoming instrument message
 	UpdateMessageIn(ctx context.Context, messageIn MessageIn) error
-	// GetUnprocessedMessageIns - get all unprocessed incoming instrument messages, up until the provided cutoff timestamp
-	GetUnprocessedMessageIns(ctx context.Context, cutoffTime time.Time) ([]MessageIn, error)
-	// GetUnprocessedMessageInsByInstrumentID - get all unprocessed incoming instrument messages up until the provided cutoff timestamp for a specific instrument
+	// GetUnprocessedMessageIns - get all unprocessed incoming instrument messages, up until the start time of skeleton
+	GetUnprocessedMessageIns(ctx context.Context) ([]MessageIn, error)
+	// GetUnprocessedMessageInsByInstrumentID - get all unprocessed incoming instrument messages, up until the start time of skeleton, for a specific instrument
 	GetUnprocessedMessageInsByInstrumentID(ctx context.Context, instrumentID uuid.UUID) ([]MessageIn, error)
 	// SaveMessageOut - persist an outgoing instrument message
 	SaveMessageOut(ctx context.Context, messageOut MessageOut) (uuid.UUID, error)
@@ -89,9 +88,9 @@ type SkeletonAPI interface {
 	SaveMessageOutBatch(ctx context.Context, messageOuts []MessageOut) ([]uuid.UUID, error)
 	// UpdateMessageOut - updates an outgoing instrument message
 	UpdateMessageOut(ctx context.Context, messageOut MessageOut) error
-	// GetUnprocessedMessageOuts - returns all unprocessed outgoing instrument messages, up until the provided cutoff timestamp
-	GetUnprocessedMessageOuts(ctx context.Context, cutoffTime time.Time) ([]MessageOut, error)
-	// GetUnprocessedMessageOutsByInstrumentID - returns all unprocessed outgoing instrument messages, up until the provided cutoff timestamp for a specific instrument
+	// GetUnprocessedMessageOuts - returns all unprocessed outgoing instrument messages, up until the start time of skeleton
+	GetUnprocessedMessageOuts(ctx context.Context) ([]MessageOut, error)
+	// GetUnprocessedMessageOutsByInstrumentID - returns all unprocessed outgoing instrument messages, up until the start time of skeleton, for a specific instrument
 	GetUnprocessedMessageOutsByInstrumentID(ctx context.Context, instrumentID uuid.UUID) ([]MessageOut, error)
 	// AddAnalysisRequestsToMessageOutOrder - adds analysis requests to an existing order
 	AddAnalysisRequestsToMessageOutOrder(ctx context.Context, messageOutOrderID uuid.UUID, analysisRequestIDs []uuid.UUID) error
