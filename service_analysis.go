@@ -28,7 +28,6 @@ type AnalysisService interface {
 	AnalysisResultStatusRecalculationAndSendForProcessingIfFinal(ctx context.Context, controlResultIds []uuid.UUID) error
 	QueueAnalysisResults(ctx context.Context, results []AnalysisResult) error
 	RetransmitResult(ctx context.Context, resultID uuid.UUID) error
-	RetransmitResultBatches(ctx context.Context, batchIDs []uuid.UUID) error
 	ProcessStuckImagesToDEA(ctx context.Context)
 	ProcessStuckImagesToCerberus(ctx context.Context)
 	SaveCerberusIDsForAnalysisResultBatchItems(ctx context.Context, analysisResults []AnalysisResultBatchItemInfo)
@@ -818,23 +817,6 @@ func (as *analysisService) RetransmitResult(ctx context.Context, resultID uuid.U
 	}
 
 	as.manager.SendResultForProcessing(analysisResult)
-
-	return nil
-}
-
-func (as *analysisService) RetransmitResultBatches(ctx context.Context, batchIDs []uuid.UUID) error {
-	log.Trace().Msgf("Trying to retransmit %d analysis results by CerberusID", len(batchIDs))
-
-	analysisResults, err := as.analysisRepository.GetAnalysisResultsByBatchIDs(ctx, batchIDs)
-	if err != nil {
-		return err
-	}
-
-	log.Trace().Msgf("Retransmitting %d analysis results", len(analysisResults))
-
-	for _, analysisResult := range analysisResults {
-		as.manager.SendResultForProcessing(analysisResult)
-	}
 
 	return nil
 }
