@@ -25,7 +25,6 @@ type skeleton struct {
 	dbConn                                     db.DbConnection
 	dbSchema                                   string
 	migrator                                   migrator.SkeletonMigrator
-	api                                        GinApi
 	analysisRepository                         AnalysisRepository
 	analysisService                            AnalysisService
 	instrumentService                          InstrumentService

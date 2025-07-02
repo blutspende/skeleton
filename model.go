@@ -387,24 +387,6 @@ type AnalysisRequestInfo struct {
 	MappingError      bool
 }
 
-type AnalysisResultInfo struct {
-	ID               uuid.UUID
-	BatchID          *uuid.UUID
-	RequestCreatedAt *time.Time
-	WorkItemID       *uuid.UUID
-	SampleCode       string
-	AnalyteID        uuid.UUID
-	ResultCreatedAt  time.Time
-	TestName         *string
-	TestResult       *string
-	Status           string
-}
-
-type AnalysisBatch struct {
-	ID      uuid.UUID
-	Results []AnalysisResultInfo
-}
-
 // Image Images are Id's as returned by the DEA service where they get uploaded to
 type Image struct {
 	ID              uuid.UUID
