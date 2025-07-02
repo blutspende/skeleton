@@ -387,35 +387,6 @@ type warningDAO struct {
 	Warning          string    `db:"warning"`
 }
 
-type analysisRequestInfoDAO struct {
-	RequestID         uuid.UUID      `db:"request_id"`
-	SampleCode        string         `db:"sample_code"`
-	WorkItemID        uuid.UUID      `db:"work_item_id"`
-	AnalyteID         uuid.UUID      `db:"analyte_id"`
-	RequestCreatedAt  time.Time      `db:"request_created_at"`
-	ResultCreatedAt   sql.NullTime   `db:"result_created_at"`
-	AnalyteMappingsID uuid.NullUUID  `db:"analyte_mapping_id"`
-	ResultID          uuid.NullUUID  `db:"result_id"`
-	TestName          sql.NullString `db:"test_name"`
-	TestResult        sql.NullString `db:"test_result"`
-	BatchCreatedAt    sql.NullTime   `db:"batch_created_at"`
-	SourceIP          sql.NullString `db:"source_ip"`
-	InstrumentID      uuid.NullUUID  `db:"instrument_id"`
-}
-
-type analysisResultInfoDAO struct {
-	ID               uuid.UUID      `db:"result_id"`
-	BatchID          uuid.NullUUID  `db:"batch_id"`
-	RequestCreatedAt sql.NullTime   `db:"request_created_at"`
-	WorkItemID       uuid.NullUUID  `db:"work_item_id"`
-	SampleCode       string         `db:"sample_code"`
-	AnalyteID        uuid.UUID      `db:"analyte_id"`
-	ResultCreatedAt  time.Time      `db:"result_created_at"`
-	TestName         sql.NullString `db:"test_name"`
-	TestResult       sql.NullString `db:"test_result"`
-	Status           string         `db:"status"`
-}
-
 type cerberusQueueItemDAO struct {
 	ID                  uuid.UUID    `db:"queue_item_id"`
 	JsonMessage         string       `db:"json_message"`
@@ -4165,72 +4136,6 @@ func convertSubjectDAOToSubjectInfo(subject subjectInfoDAO) SubjectInfo {
 		subjectInfo.Pseudonym = &subject.Pseudonym.String
 	}
 	return subjectInfo
-}
-
-func convertRequestInfoDAOToRequestInfo(analysisRequestInfoDAO analysisRequestInfoDAO) AnalysisRequestInfo {
-	analysisRequestInfo := AnalysisRequestInfo{
-		ID:                analysisRequestInfoDAO.RequestID,
-		WorkItemID:        analysisRequestInfoDAO.WorkItemID,
-		AnalyteID:         analysisRequestInfoDAO.AnalyteID,
-		SampleCode:        analysisRequestInfoDAO.SampleCode,
-		RequestCreatedAt:  analysisRequestInfoDAO.RequestCreatedAt,
-		ResultID:          utils.NullUUIDToUUIDPointer(analysisRequestInfoDAO.ResultID),
-		AnalyteMappingsID: utils.NullUUIDToUUIDPointer(analysisRequestInfoDAO.AnalyteMappingsID),
-		TestName:          utils.NullStringToStringPointer(analysisRequestInfoDAO.TestName),
-		TestResult:        utils.NullStringToStringPointer(analysisRequestInfoDAO.TestResult),
-		BatchCreatedAt:    utils.NullTimeToTimePointer(analysisRequestInfoDAO.BatchCreatedAt),
-		Status:            AnalysisRequestStatusOpen,
-		SourceIP:          utils.NullStringToString(analysisRequestInfoDAO.SourceIP),
-		InstrumentID:      utils.NullUUIDToUUIDPointer(analysisRequestInfoDAO.InstrumentID),
-	}
-
-	// Todo - Check conditions
-	if analysisRequestInfo.ResultID != nil && *analysisRequestInfo.ResultID != uuid.Nil {
-		analysisRequestInfo.Status = AnalysisRequestStatusProcessed
-	}
-
-	if !analysisRequestInfoDAO.AnalyteMappingsID.Valid {
-		analysisRequestInfo.MappingError = true
-	}
-
-	if analysisRequestInfoDAO.ResultCreatedAt.Valid {
-		analysisRequestInfo.ResultCreatedAt = &analysisRequestInfoDAO.ResultCreatedAt.Time
-	}
-
-	return analysisRequestInfo
-}
-
-func convertResultInfoDAOToResultInfo(analysisResultInfoDAO analysisResultInfoDAO) AnalysisResultInfo {
-	analysisResultInfo := AnalysisResultInfo{
-		ID:               analysisResultInfoDAO.ID,
-		BatchID:          utils.NullUUIDToUUIDPointer(analysisResultInfoDAO.BatchID),
-		RequestCreatedAt: utils.NullTimeToTimePointer(analysisResultInfoDAO.RequestCreatedAt),
-		WorkItemID:       utils.NullUUIDToUUIDPointer(analysisResultInfoDAO.WorkItemID),
-		AnalyteID:        analysisResultInfoDAO.AnalyteID,
-		SampleCode:       analysisResultInfoDAO.SampleCode,
-		ResultCreatedAt:  analysisResultInfoDAO.ResultCreatedAt,
-		TestName:         utils.NullStringToStringPointer(analysisResultInfoDAO.TestName),
-		TestResult:       utils.NullStringToStringPointer(analysisResultInfoDAO.TestResult),
-		Status:           analysisResultInfoDAO.Status,
-	}
-
-	return analysisResultInfo
-}
-
-func convertRequestInfoDAOsToRequestInfos(analysisRequestInfoDAOs []analysisRequestInfoDAO) []AnalysisRequestInfo {
-	analysisRequestInfo := make([]AnalysisRequestInfo, len(analysisRequestInfoDAOs))
-	for i := range analysisRequestInfoDAOs {
-		analysisRequestInfo[i] = convertRequestInfoDAOToRequestInfo(analysisRequestInfoDAOs[i])
-	}
-	return analysisRequestInfo
-}
-
-func convertResultInfoDAOsToResultInfos(analysisResultInfoDAOs []analysisResultInfoDAO) []AnalysisResultInfo {
-	analysisResultInfo := make([]AnalysisResultInfo, len(analysisResultInfoDAOs))
-	for i := range analysisResultInfoDAOs {
-		analysisResultInfo[i] = convertResultInfoDAOToResultInfo(analysisResultInfoDAOs[i])
-	}
-	return analysisResultInfo
 }
 
 func convertCerberusQueueItemToCerberusQueueItemDAO(cerberusQueueItem CerberusQueueItem) cerberusQueueItemDAO {

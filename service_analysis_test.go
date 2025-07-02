@@ -1660,26 +1660,6 @@ type extendedMockAnalysisRepo struct {
 	uniqueReagentIDMap                      map[string]uuid.UUID
 }
 
-func (r *extendedMockAnalysisRepo) GetUnprocessedAnalysisResultIDsByControlResultIDs(ctx context.Context, controlResultIDs []uuid.UUID) (map[uuid.UUID]map[uuid.UUID]uuid.UUID, error) {
-	return nil, nil
-}
-
-func (r *extendedMockAnalysisRepo) GetUnprocessedReagentIDsByControlResultIDs(ctx context.Context, controlResultIDs []uuid.UUID) (map[uuid.UUID][]uuid.UUID, error) {
-	return nil, nil
-}
-
-func (r *extendedMockAnalysisRepo) GetReagentsByIDs(ctx context.Context, reagentIDs []uuid.UUID) (map[uuid.UUID]Reagent, error) {
-	return nil, nil
-}
-
-func (r *extendedMockAnalysisRepo) GetControlResultsByIDs(ctx context.Context, controlResultIDs []uuid.UUID) (map[uuid.UUID]ControlResult, error) {
-	return nil, nil
-}
-
-func (r *extendedMockAnalysisRepo) UpdateCerberusQueueItemStatus(ctx context.Context, queueItem CerberusQueueItem) error {
-	return nil
-}
-
 func (r *extendedMockAnalysisRepo) CreateReagents(ctx context.Context, reagents []Reagent) ([]uuid.UUID, error) {
 	ids := make([]uuid.UUID, 0)
 	r.uniqueReagentIDMap = make(map[string]uuid.UUID)
@@ -1704,10 +1684,6 @@ func (r *extendedMockAnalysisRepo) CreateControlResultBatch(ctx context.Context,
 	return controlResults, nil
 }
 
-func (r *extendedMockAnalysisRepo) UpdateControlResultBatch(ctx context.Context, controlResults []ControlResult) error {
-	return nil
-}
-
 func (r *extendedMockAnalysisRepo) CreateReagentControlResultRelations(ctx context.Context, relationDAOs []reagentControlResultRelationDAO) error {
 	r.reagentControlResultRelationDAOs = relationDAOs
 	return nil
@@ -1723,28 +1699,8 @@ func (r *extendedMockAnalysisRepo) CreateAnalysisResultReagentRelations(ctx cont
 	return nil
 }
 
-func (r *extendedMockAnalysisRepo) SaveCerberusIDForAnalysisResult(ctx context.Context, analysisResultID uuid.UUID, cerberusID uuid.UUID) error {
-	return nil
-}
-
-func (r *extendedMockAnalysisRepo) GetAnalysisResultIdsWithoutControlByReagent(ctx context.Context, controlResult ControlResult, reagent Reagent) ([]uuid.UUID, error) {
-	return nil, nil
-}
-
 func (r *extendedMockAnalysisRepo) GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMappingId uuid.UUID, instrumentId uuid.UUID) ([]ControlResult, error) {
 	return nil, nil
-}
-
-func (r *extendedMockAnalysisRepo) GetControlResultsToValidate(ctx context.Context, analyteMappingIds []uuid.UUID) ([]ControlResult, error) {
-	return nil, nil
-}
-
-func (r *extendedMockAnalysisRepo) MarkReagentControlResultRelationsAsProcessed(ctx context.Context, controlResultID uuid.UUID, reagentIDs []uuid.UUID) error {
-	return nil
-}
-
-func (r *extendedMockAnalysisRepo) MarkAnalysisResultControlResultRelationsAsProcessed(ctx context.Context, controlResultID uuid.UUID, analysisResultIDs []uuid.UUID) error {
-	return nil
 }
 
 func (r *extendedMockAnalysisRepo) WithTransaction(tx db.DbConnection) AnalysisRepository {

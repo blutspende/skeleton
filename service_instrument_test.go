@@ -13,11 +13,7 @@ import (
 func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
 	dbConn, schemaName := setupDbConnectorAndRunMigration("instrument_test")
 
-	cerberusClientMock := &cerberusClientMock{
-		registerInstrumentFunc: func(instrument Instrument) error {
-			return nil
-		},
-	}
+	cerberusClientMock := &cerberusClientMock{}
 	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
 
 	ctx, cancelSkeleton := context.WithCancel(context.Background())
@@ -136,11 +132,7 @@ func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
 func TestFtpConfigConnectionModeChange(t *testing.T) {
 	dbConn, schemaName := setupDbConnectorAndRunMigration("instrument_test")
 
-	cerberusClientMock := &cerberusClientMock{
-		registerInstrumentFunc: func(instrument Instrument) error {
-			return nil
-		},
-	}
+	cerberusClientMock := &cerberusClientMock{}
 	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
 
 	ctx, cancelSkeleton := context.WithCancel(context.Background())
@@ -251,9 +243,6 @@ func TestUpdateInstrument(t *testing.T) {
 	dbConn, schemaName := setupDbConnectorAndRunMigration("instrument_test")
 
 	cerberusClientMock := &cerberusClientMock{
-		registerInstrumentFunc: func(instrument Instrument) error {
-			return nil
-		},
 		verifyInstrumentHashFunc: func(hash string) error {
 			return nil
 		},
@@ -540,9 +529,6 @@ func TestNotVerifiedInstrument(t *testing.T) {
 	dbConn, schemaName := setupDbConnectorAndRunMigration("instrument_test")
 
 	cerberusClientMock := &cerberusClientMock{
-		registerInstrumentFunc: func(instrument Instrument) error {
-			return nil
-		},
 		verifyInstrumentHashFunc: func(hash string) error {
 			return errors.New("instrument hash verification failed")
 		},
@@ -598,9 +584,6 @@ func TestUpdateExpectedControlResult(t *testing.T) {
 	dbConn, schemaName := setupDbConnectorAndRunMigration("expectedcontrolresult_test")
 
 	cerberusClientMock := &cerberusClientMock{
-		registerInstrumentFunc: func(instrument Instrument) error {
-			return nil
-		},
 		verifyExpectedControlResultHashFunc: func(hash string) error {
 			return nil
 		},
@@ -751,9 +734,6 @@ func TestUpdateExpectedControlResult2(t *testing.T) {
 	dbConn, schemaName := setupDbConnectorAndRunMigration("expectedcontrolresult_test")
 
 	cerberusClientMock := &cerberusClientMock{
-		registerInstrumentFunc: func(instrument Instrument) error {
-			return nil
-		},
 		verifyExpectedControlResultHashFunc: func(hash string) error {
 			return nil
 		},
@@ -951,9 +931,6 @@ func TestNotVerifiedExpectedControlResults(t *testing.T) {
 	dbConn, schemaName := setupDbConnectorAndRunMigration("expectedcontrolresult_test")
 
 	cerberusClientMock := &cerberusClientMock{
-		registerInstrumentFunc: func(instrument Instrument) error {
-			return nil
-		},
 		verifyExpectedControlResultHashFunc: func(hash string) error {
 			return nil
 		},
@@ -1125,14 +1102,6 @@ func (r *instrumentRepositoryMock) GetFtpConfigByInstrumentId(ctx context.Contex
 	return FTPConfig{}, nil
 }
 
-func (r *instrumentRepositoryMock) UpdateFtpConfig(ctx context.Context, ftpConfig FTPConfig) error {
-	return nil
-}
-
-func (r *instrumentRepositoryMock) FtpConfigExists(ctx context.Context, instrumentId uuid.UUID) (bool, error) {
-	return true, nil
-}
-
 func (r *instrumentRepositoryMock) DeleteFtpConfig(ctx context.Context, instrumentId uuid.UUID) error {
 	return nil
 }
@@ -1184,9 +1153,6 @@ func (r *instrumentRepositoryMock) GetAnalyteMappings(ctx context.Context, instr
 	}
 	return make(map[uuid.UUID][]AnalyteMapping), nil
 }
-func (r *instrumentRepositoryMock) UpdateAnalyteMapping(ctx context.Context, analyteMapping AnalyteMapping) error {
-	return nil
-}
 func (r *instrumentRepositoryMock) DeleteAnalyteMappings(ctx context.Context, ids []uuid.UUID) error {
 	return nil
 }
@@ -1195,9 +1161,6 @@ func (r *instrumentRepositoryMock) UpsertChannelMappings(ctx context.Context, ch
 }
 func (r *instrumentRepositoryMock) GetChannelMappings(ctx context.Context, analyteMappingIDs []uuid.UUID) (map[uuid.UUID][]ChannelMapping, error) {
 	return make(map[uuid.UUID][]ChannelMapping), nil
-}
-func (r *instrumentRepositoryMock) UpdateChannelMapping(ctx context.Context, channelMapping ChannelMapping) error {
-	return nil
 }
 func (r *instrumentRepositoryMock) DeleteChannelMappings(ctx context.Context, ids []uuid.UUID) error {
 	return nil
@@ -1210,9 +1173,6 @@ func (r *instrumentRepositoryMock) GetResultMappings(ctx context.Context, analyt
 		return r.resultMappings, nil
 	}
 	return make(map[uuid.UUID][]ResultMapping), nil
-}
-func (r *instrumentRepositoryMock) UpdateResultMapping(ctx context.Context, resultMapping ResultMapping) error {
-	return nil
 }
 func (r *instrumentRepositoryMock) DeleteResultMappings(ctx context.Context, ids []uuid.UUID) error {
 	return nil

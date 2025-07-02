@@ -41,15 +41,12 @@ const (
 	msgUpdateInstrumentStatusFailed                = "update instrument status failed"
 	msgUpsertAnalyteMappingsFailed                 = "upsert analyte mappings failed"
 	msgGetAnalyteMappingsFailed                    = "get analyte mappings failed"
-	msgUpdateAnalyteMappingFailed                  = "update analyte mapping failed"
 	msgDeleteAnalyteMappingFailed                  = "delete analyte mapping failed"
 	msgCreateChannelMappingsFailed                 = "create channel mappings failed"
 	msgGetChannelMappingsFailed                    = "get channel mappings failed"
-	msgUpdateChannelMappingFailed                  = "update channel mapping failed"
 	msgDeleteChannelMappingFailed                  = "delete channel mapping failed"
 	msgGetResultMappingsFailed                     = "get result mappings failed"
 	msgDeleteResultMappingFailed                   = "delete result mapping failed"
-	msgUpdateResultMappingFailed                   = "update result mapping failed"
 	msgCreateExpectedControlResultsFailed          = "create expected control results failed"
 	msgGetExpectedControlResultsFailed             = "get expected control results failed"
 	msgGetNotSpecifiedExpectedControlResultsFailed = "get not specified expected control results failed"
@@ -67,7 +64,6 @@ const (
 	msgUpsertInstrumentSettingsFailed              = "upsert instrument settings failed"
 	msgDeleteInstrumentSettingsFailed              = "delete instrument settings failed"
 	msgCheckAnalyteUsageFailed                     = "check analyte usage failed"
-	msgGetUnsentInstrumentIdsFailed                = "get unsent instrument IDs failed"
 	msgUniqueViolationInstrumentControlAnalyte     = "Instrument Control Analyte already set to an Analyte Mapping for this instrument"
 	msgUniqueViolationInstrumentAnalyte            = "Instrument Analyte already set to an Analyte Mapping for this instrument"
 )
@@ -96,15 +92,12 @@ var (
 	ErrUpdateInstrumentStatusFailed                = errors.New(msgUpdateInstrumentStatusFailed)
 	ErrUpsertAnalyteMappingsFailed                 = errors.New(msgUpsertAnalyteMappingsFailed)
 	ErrGetAnalyteMappingsFailed                    = errors.New(msgGetAnalyteMappingsFailed)
-	ErrUpdateAnalyteMappingFailed                  = errors.New(msgUpdateAnalyteMappingFailed)
 	ErrDeleteAnalyteMappingFailed                  = errors.New(msgDeleteAnalyteMappingFailed)
 	ErrCreateChannelMappingsFailed                 = errors.New(msgCreateChannelMappingsFailed)
 	ErrGetChannelMappingsFailed                    = errors.New(msgGetChannelMappingsFailed)
-	ErrUpdateChannelMappingFailed                  = errors.New(msgUpdateChannelMappingFailed)
 	ErrDeleteChannelMappingFailed                  = errors.New(msgDeleteChannelMappingFailed)
 	ErrGetResultMappingsFailed                     = errors.New(msgGetResultMappingsFailed)
 	ErrDeleteResultMappingFailed                   = errors.New(msgDeleteResultMappingFailed)
-	ErrUpdateResultMappingFailed                   = errors.New(msgUpdateResultMappingFailed)
 	ErrCreateExpectedControlResultsFailed          = errors.New(msgCreateExpectedControlResultsFailed)
 	ErrGetExpectedControlResultsFailed             = errors.New(msgGetExpectedControlResultsFailed)
 	ErrGetNotSpecifiedExpectedControlResultsFailed = errors.New(msgGetNotSpecifiedExpectedControlResultsFailed)
@@ -122,7 +115,6 @@ var (
 	ErrUpsertInstrumentSettingsFailed              = errors.New(msgUpsertInstrumentSettingsFailed)
 	ErrDeleteInstrumentSettingsFailed              = errors.New(msgDeleteInstrumentSettingsFailed)
 	ErrCheckAnalyteUsageFailed                     = errors.New(msgCheckAnalyteUsageFailed)
-	ErrGetUnsentInstrumentIdsFailed                = errors.New(msgGetUnsentInstrumentIdsFailed)
 	ErrUniqueViolationInstrumentControlAnalyte     = errors.New(msgUniqueViolationInstrumentControlAnalyte)
 	ErrUniqueViolationInstrumentAnalyte            = errors.New(msgUniqueViolationInstrumentAnalyte)
 )
