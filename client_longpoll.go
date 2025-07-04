@@ -57,7 +57,7 @@ type ReprocessMessageType string
 const (
 	MessageTypeRetransmitResult      ReprocessMessageType = "RETRANSMIT_RESULT"
 	MessageTypeReprocessBySampleCode ReprocessMessageType = "REPROCESS_BY_SAMPLE_CODE"
-	MessageTypeReprocessByBatchIds   ReprocessMessageType = "REPROCESS_BY_BATCH_IDS"
+	MessageTypeReprocessByDEAIds     ReprocessMessageType = "REPROCESS_BY_DEA_IDS"
 )
 
 type ReprocessMessageTO struct {

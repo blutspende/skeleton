@@ -14,7 +14,9 @@ import (
 type MessageService interface {
 	AddAnalysisRequestsToMessageOutOrder(ctx context.Context, messageOutOrderID uuid.UUID, analysisRequestIDs []uuid.UUID) error
 	DeleteRevokedUnsentOrderMessagesByAnalysisRequestIDs(ctx context.Context, analysisRequestIDs []uuid.UUID) ([]uuid.UUID, error)
-	GetMessageInsByIDs(ctx context.Context, messageIDs []uuid.UUID) (map[uuid.UUID]MessageIn, error)
+	GetMessageInsByDEAIDs(ctx context.Context, deaIDs []uuid.UUID) ([]MessageIn, error)
+	GetMessageInsByIDs(ctx context.Context, messageIDs []uuid.UUID) ([]MessageIn, error)
+	GetMessageInsBySampleCode(ctx context.Context, sampleCode string) ([]MessageIn, error)
 	GetUnprocessedMessageIns(ctx context.Context, limit, offset int, cutoffTime time.Time) ([]MessageIn, error)
 	GetUnprocessedMessageInsByInstrumentID(ctx context.Context, instrumentID uuid.UUID, limit, offset int) ([]MessageIn, error)
 	GetUnsyncedMessageIns(ctx context.Context, limit, offset int, cutoffTime time.Time) ([]MessageIn, error)
@@ -76,17 +78,21 @@ func (s *messageService) DeleteRevokedUnsentOrderMessagesByAnalysisRequestIDs(ct
 	return messageIDs, nil
 }
 
-func (s *messageService) GetMessageInsByIDs(ctx context.Context, messageIDs []uuid.UUID) (map[uuid.UUID]MessageIn, error) {
-	messages, err := s.messageInRepository.GetByIDs(ctx, messageIDs)
+func (s *messageService) GetMessageInsBySampleCode(ctx context.Context, sampleCode string) ([]MessageIn, error) {
+	messageIDs, err := s.messageInRepository.GetMessageInIDsBySampleCode(ctx, sampleCode)
 	if err != nil {
 		return nil, err
 	}
-	messagesByIDs := make(map[uuid.UUID]MessageIn)
-	for i := range messages {
-		messagesByIDs[messages[i].ID] = messages[i]
-	}
 
-	return messagesByIDs, nil
+	return s.messageInRepository.GetByIDs(ctx, messageIDs)
+}
+
+func (s *messageService) GetMessageInsByDEAIDs(ctx context.Context, deaIDs []uuid.UUID) ([]MessageIn, error) {
+	return s.messageInRepository.GetByDEAIDs(ctx, deaIDs)
+}
+
+func (s *messageService) GetMessageInsByIDs(ctx context.Context, messageIDs []uuid.UUID) ([]MessageIn, error) {
+	return s.messageInRepository.GetByIDs(ctx, messageIDs)
 }
 
 func (s *messageService) GetUnprocessedMessageIns(ctx context.Context, limit, offset int, cutoffTime time.Time) ([]MessageIn, error) {
@@ -438,13 +444,17 @@ func (s *messageService) StartSampleCodeRegisteringToDEA(ctx context.Context) {
 			for i := range sampleCodesWithMessageIDAndIDs {
 				messageIDs[i] = sampleCodesWithMessageIDAndIDs[i].MessageID
 			}
-			messagesByIDs, err := s.GetMessageInsByIDs(ctx, messageIDs)
+			messages, err := s.GetMessageInsByIDs(ctx, messageIDs)
 			if err != nil {
 				log.Error().Err(err).Msg("register message in sample codes failed")
 				time.AfterFunc(deaRetryTimeoutSeconds*time.Second, func() {
 					s.messageInSampleCodeIDChan <- sampleCodesWithMessageIDAndIDs
 				})
 				continue
+			}
+			messagesByIDs := make(map[uuid.UUID]MessageIn)
+			for i := range messages {
+				messagesByIDs[messages[i].ID] = messages[i]
 			}
 			for i := range sampleCodesWithMessageIDAndIDs {
 				messageIn := messagesByIDs[sampleCodesWithMessageIDAndIDs[i].MessageID]

@@ -693,7 +693,7 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 type skeletonCallbackHandlerV1Mock struct {
 	handleAnalysisRequestsFunc func(request []AnalysisRequest) error
 	revokeAnalysisRequests     func(request []AnalysisRequest) error
-	reprocessInstrumentData    func(batchIDs []uuid.UUID) error
+	reprocessMessageIns        func(messages []MessageIn) error
 }
 
 func (m *skeletonCallbackHandlerV1Mock) HandleAnalysisRequests(request []AnalysisRequest) error {
@@ -717,18 +717,11 @@ func (m *skeletonCallbackHandlerV1Mock) RevokeAnalysisRequests(request []Analysi
 	m.revokeAnalysisRequests(request)
 }
 
-func (m *skeletonCallbackHandlerV1Mock) ReprocessInstrumentData(batchIDs []uuid.UUID) error {
-	if m.reprocessInstrumentData == nil {
+func (m *skeletonCallbackHandlerV1Mock) ReprocessMessageIns(messageIns []MessageIn) error {
+	if m.reprocessMessageIns == nil {
 		return nil
 	}
-	return m.reprocessInstrumentData(batchIDs)
-}
-
-func (m *skeletonCallbackHandlerV1Mock) ReprocessInstrumentDataBySampleCode(sampleCode string) error {
-	if m.reprocessInstrumentData == nil {
-		return nil
-	}
-	return m.ReprocessInstrumentDataBySampleCode(sampleCode)
+	return m.reprocessMessageIns(messageIns)
 }
 
 type longPollClientMock struct {

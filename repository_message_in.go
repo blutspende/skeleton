@@ -18,6 +18,7 @@ import (
 
 type MessageInRepository interface {
 	Create(ctx context.Context, message MessageIn) (uuid.UUID, error)
+	GetByDEAIDs(ctx context.Context, deaIDs []uuid.UUID) ([]MessageIn, error)
 	GetByIDs(ctx context.Context, ids []uuid.UUID) ([]MessageIn, error)
 	GetUnprocessed(ctx context.Context, limit, offset int, cutoffTime time.Time) ([]MessageIn, error)
 	GetUnprocessedByInstrumentID(ctx context.Context, instrumentID uuid.UUID, limit, offset int) ([]MessageIn, error)
@@ -26,6 +27,7 @@ type MessageInRepository interface {
 	UpdateDEAInfo(ctx context.Context, message MessageIn) error
 
 	DeleteMessageInSampleCodesByIDs(ctx context.Context, ids []uuid.UUID) error
+	GetMessageInIDsBySampleCode(ctx context.Context, sampleCode string) ([]uuid.UUID, error)
 	GetMessageInSampleCodeIDsToDelete(ctx context.Context, limit int) ([]uuid.UUID, error)
 	GetUnsentMessageInSampleCodes(ctx context.Context) (map[uuid.UUID]map[uuid.UUID]string, error)
 	MarkSampleCodesAsUploadedByIDs(ctx context.Context, ids []uuid.UUID) error
@@ -60,13 +62,44 @@ func (r *messageInRepository) Create(ctx context.Context, message MessageIn) (uu
 	return message.ID, nil
 }
 
+func (r *messageInRepository) GetByDEAIDs(ctx context.Context, deaIDs []uuid.UUID) ([]MessageIn, error) {
+	if len(deaIDs) == 0 {
+		return nil, nil
+	}
+	messages := make([]MessageIn, 0)
+	err := utils.Partition(len(deaIDs), idPartitionSize, func(low int, high int) error {
+		query := fmt.Sprintf(`SELECT * FROM %s.sk_message_in WHERE dea_raw_message_id IN (?) ORDER BY created_at DESC;`, r.dbSchema)
+		query, args, _ := sqlx.In(query, deaIDs[low:high])
+		query = r.db.Rebind(query)
+		rows, err := r.db.QueryxContext(ctx, query, args...)
+		if err != nil {
+			log.Error().Err(err).Msg(msgGetMessageInsByDEAIDsFailed)
+			return ErrGetMessageInsByDEAIDsFailed
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var dao messageInDAO
+			err = rows.StructScan(&dao)
+			if err != nil {
+				log.Error().Err(err).Msg(msgGetMessageInsByDEAIDsFailed)
+				return ErrGetMessageInsByDEAIDsFailed
+			}
+			messages = append(messages, convertDAOToMessageIn(dao))
+		}
+		return nil
+	})
+
+	return messages, err
+}
+
 func (r *messageInRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]MessageIn, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
 	messages := make([]MessageIn, 0)
 	err := utils.Partition(len(ids), idPartitionSize, func(low int, high int) error {
-		query := fmt.Sprintf(`SELECT * FROM %s.sk_message_in WHERE ID IN (?);`, r.dbSchema)
+		query := fmt.Sprintf(`SELECT * FROM %s.sk_message_in WHERE ID IN (?) ORDER BY created_at;`, r.dbSchema)
 		query, args, _ := sqlx.In(query, ids[low:high])
 		query = r.db.Rebind(query)
 		rows, err := r.db.QueryxContext(ctx, query, args...)
@@ -214,6 +247,29 @@ func (r *messageInRepository) DeleteMessageInSampleCodesByIDs(ctx context.Contex
 	})
 
 	return err
+}
+
+func (r *messageInRepository) GetMessageInIDsBySampleCode(ctx context.Context, sampleCode string) ([]uuid.UUID, error) {
+	query := fmt.Sprintf(`SELECT message_in_id FROM %s.sk_message_in_sample_codes WHERE sample_code = $1;`, r.dbSchema)
+	rows, err := r.db.QueryxContext(ctx, query, sampleCode)
+	if err != nil {
+		log.Error().Err(err).Msg(msgGetMessageInIDsBySampleCodeFailed)
+		return nil, ErrGetMessageInIDsBySampleCodeFailed
+	}
+	defer rows.Close()
+
+	ids := make([]uuid.UUID, 0)
+	for rows.Next() {
+		var id uuid.UUID
+		err = rows.Scan(&id)
+		if err != nil {
+			log.Error().Err(err).Msg(msgGetMessageInIDsBySampleCodeFailed)
+			return nil, ErrGetMessageInIDsBySampleCodeFailed
+		}
+		ids = append(ids, id)
+	}
+
+	return ids, nil
 }
 
 func (r *messageInRepository) GetMessageInSampleCodeIDsToDelete(ctx context.Context, limit int) ([]uuid.UUID, error) {
@@ -408,6 +464,7 @@ func convertDAOToMessageIn(dao messageInDAO) MessageIn {
 
 const (
 	msgCreateMessageInFailed          = "create message in failed"
+	msgGetMessageInsByDEAIDsFailed    = "get message ins by DEA IDs failed"
 	msgGetMessageInsByIDsFailed       = "get message ins by IDs failed"
 	msgGetUnprocessedMessageInsFailed = "get unprocessed message ins failed"
 	msgGetUnsyncedMessageInsFailed    = "get unsynced message ins failed"
@@ -415,6 +472,7 @@ const (
 	msgUpdateMessageInFailed          = "update message in failed"
 
 	msgDeleteMessageInSampleCodesByIDsFailed         = "delete message in sample codes by IDs failed"
+	msgGetMessageInIDsBySampleCodeFailed             = "get message in IDs by sample code failed"
 	msgGetMessageInSampleCodeIDsToDeleteFailed       = "get message in sample code IDs to delete failed"
 	msgGetUnsentMessageInSampleCodeIDsFailed         = "get unsent message in sample codes failed"
 	msgMarkMessageInSampleCodesAsUploadedByIDsFailed = "mark message in sample codes as uploaded to DEA by IDs failed"
@@ -423,6 +481,7 @@ const (
 
 var (
 	ErrCreateMessageInFailed          = errors.New(msgCreateMessageInFailed)
+	ErrGetMessageInsByDEAIDsFailed    = errors.New(msgGetMessageInsByDEAIDsFailed)
 	ErrGetMessageInsByIDsFailed       = errors.New(msgGetMessageInsByIDsFailed)
 	ErrGetUnprocessedMessageInsFailed = errors.New(msgGetUnprocessedMessageInsFailed)
 	ErrGetUnsyncedMessageInsFailed    = errors.New(msgGetUnsyncedMessageInsFailed)
@@ -430,6 +489,7 @@ var (
 	ErrUpdateMessageInFailed          = errors.New(msgUpdateMessageInFailed)
 
 	ErrDeleteMessageInSampleCodesByIDsFailed         = errors.New(msgDeleteMessageInSampleCodesByIDsFailed)
+	ErrGetMessageInIDsBySampleCodeFailed             = errors.New(msgGetMessageInIDsBySampleCodeFailed)
 	ErrGetMessageInSampleCodeIDsToDeleteFailed       = errors.New(msgGetMessageInSampleCodeIDsToDeleteFailed)
 	ErrGetUnsentMessageInSampleCodeIDsFailed         = errors.New(msgGetUnsentMessageInSampleCodeIDsFailed)
 	ErrMarkMessageInSampleCodesAsUploadedByIDsFailed = errors.New(msgMarkMessageInSampleCodesAsUploadedByIDsFailed)
