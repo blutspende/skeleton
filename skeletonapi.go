@@ -23,9 +23,7 @@ type SkeletonCallbackHandlerV1 interface {
 
 	ReexamineAnalysisRequests(request []AnalysisRequest)
 
-	ReprocessInstrumentData(batchIDs []uuid.UUID) error
-
-	ReprocessInstrumentDataBySampleCode(sampleCode string) error
+	ReprocessMessageIns(messageIns []MessageIn) error
 }
 
 // SkeletonAPI is the interface for accessing the skeleton driver capabilities
