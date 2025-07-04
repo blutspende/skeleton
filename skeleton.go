@@ -25,7 +25,6 @@ type skeleton struct {
 	dbConn                                     db.DbConnection
 	dbSchema                                   string
 	migrator                                   migrator.SkeletonMigrator
-	api                                        GinApi
 	analysisRepository                         AnalysisRepository
 	analysisService                            AnalysisService
 	instrumentService                          InstrumentService
@@ -1006,12 +1005,16 @@ func (s *skeleton) processAnalysisResultBatches(ctx context.Context) {
 			messageInIDs = append(messageInIDs, resultsBatch[i].MessageInID)
 			resultsNotYetSyncedToDEA = append(resultsNotYetSyncedToDEA, resultsBatch[i])
 		}
-		messagesByIDs, err := s.messageService.GetMessageInsByIDs(ctx, messageInIDs)
+		messages, err := s.messageService.GetMessageInsByIDs(ctx, messageInIDs)
 		if err != nil {
 			time.AfterFunc(time.Duration(s.resultTransferFlushTimeout)*time.Second, func() {
 				s.resultBatchesChan <- results
 			})
 			continue
+		}
+		messagesByIDs := make(map[uuid.UUID]MessageIn)
+		for i := range messages {
+			messagesByIDs[messages[i].ID] = messages[i]
 		}
 		for _, result := range resultsNotYetSyncedToDEA {
 			message, ok := messagesByIDs[result.MessageInID]
@@ -1507,36 +1510,49 @@ func (s *skeleton) processReprocessMessage(ctx context.Context, message Reproces
 			return fmt.Errorf("unexpected reprocess id type for message type: %s", MessageTypeRetransmitResult)
 		}
 	case MessageTypeReprocessBySampleCode:
-		if sampleCode, ok := message.ReprocessId.(string); ok {
-			err := s.manager.GetCallbackHandler().ReprocessInstrumentDataBySampleCode(sampleCode)
+		var sampleCode string
+		var ok bool
+		if sampleCode, ok = message.ReprocessId.(string); !ok {
+			return fmt.Errorf("unexpected reprocess id type for message type: %s", MessageTypeReprocessBySampleCode)
+		}
+		messages, err := s.messageService.GetMessageInsBySampleCode(ctx, sampleCode)
+		if err != nil {
+			return err
+		}
+		if len(messages) > 0 {
+			err = s.GetCallbackHandler().ReprocessMessageIns(messages)
 			if err != nil {
 				return err
 			}
-		} else {
-			return fmt.Errorf("unexpected reprocess id type for message type: %s", MessageTypeReprocessBySampleCode)
 		}
-	case MessageTypeReprocessByBatchIds:
+	case MessageTypeReprocessByDEAIds:
 		if slice, ok := message.ReprocessId.([]interface{}); ok {
-			var batchIds []uuid.UUID
+			var deaIDs []uuid.UUID
 			for _, item := range slice {
 				if str, ok := item.(string); ok {
 					parsedUUID, err := uuid.Parse(str)
 					if err != nil {
-						log.Error().Err(err).Msgf("Invalid UUID in batch list for message type: %s", MessageTypeReprocessByBatchIds)
+						log.Error().Err(err).Msgf("Invalid UUID in DEA ID list for message type: %s", MessageTypeReprocessByDEAIds)
 						continue
 					}
-					batchIds = append(batchIds, parsedUUID)
+					deaIDs = append(deaIDs, parsedUUID)
 				} else {
-					log.Error().Msgf("Unexpected batch ID type for message type: %s", MessageTypeReprocessByBatchIds)
+					log.Error().Msgf("Unexpected DEA ID type for message type: %s", MessageTypeReprocessByDEAIds)
 					continue
 				}
 			}
-			err := s.manager.GetCallbackHandler().ReprocessInstrumentData(batchIds)
+			messages, err := s.messageService.GetMessageInsByDEAIDs(ctx, deaIDs)
 			if err != nil {
 				return err
 			}
+			if len(messages) > 0 {
+				err = s.GetCallbackHandler().ReprocessMessageIns(messages)
+				if err != nil {
+					return err
+				}
+			}
 		} else {
-			return fmt.Errorf("unexpected reprocess id type for message type: %s", MessageTypeReprocessByBatchIds)
+			return fmt.Errorf("unexpected reprocess id type for message type: %s", MessageTypeReprocessByDEAIds)
 		}
 	default:
 		log.Warn().Interface("Received message", message).Msg("Unknown message type for Reprocess")

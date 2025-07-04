@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/MicahParks/keyfunc"
 	"github.com/blutspende/skeleton/config"
 	"github.com/blutspende/skeleton/db"
 	"github.com/blutspende/skeleton/migrator"
@@ -48,9 +47,6 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 		},
 	})
 	cerberusClientMock := &cerberusClientMock{
-		registerInstrumentFunc: func(instrument Instrument) error {
-			return nil
-		},
 		sendAnalysisResultBatchFunc: func(analysisResults []AnalysisResultTO) (AnalysisResultBatchResponse, error) {
 			result1ID := uuid.MustParse("dcb320af-e842-46af-a4ee-878db18c95a3")
 			result2ID := uuid.MustParse("147bff1c-55e0-4318-8ce5-23e0e12d073e")
@@ -160,11 +156,7 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 			return nil
 		},
 	})
-	cerberusClientMock := &cerberusClientMock{
-		registerInstrumentFunc: func(instrument Instrument) error {
-			return nil
-		},
-	}
+	cerberusClientMock := &cerberusClientMock{}
 
 	longPollClientMock := &longPollClientMock{}
 	deaClientMock := &deaClientMock{}
@@ -273,7 +265,6 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 		DeletedAt:  nil,
 	}
 
-	batchID := uuid.MustParse("ddd34c4d-62f9-4621-bb16-efad459a9bfe")
 	analysisResults := []AnalysisResult{
 		{
 			AnalysisRequest: AnalysisRequest{},
@@ -284,7 +275,6 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 				UUID:  uuid.MustParse("2f369489-77d3-464e-87e2-edbeffa62ae7"),
 				Valid: true,
 			},
-			BatchID:                  batchID,
 			Result:                   "pos",
 			ResultMode:               "PRODUCTION",
 			Status:                   "PRE",
@@ -311,7 +301,6 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 				UUID:  uuid.MustParse("43a7b261-3e1d-4065-935a-ac15841f13e4"),
 				Valid: true,
 			},
-			BatchID:                  batchID,
 			Result:                   "pos",
 			ResultMode:               "PRODUCTION",
 			Status:                   "PRE",
@@ -368,9 +357,6 @@ func TestAnalysisResultsReprocessing(t *testing.T) {
 		},
 	})
 	cerberusClientMock := &cerberusClientMock{
-		registerInstrumentFunc: func(instrument Instrument) error {
-			return nil
-		},
 		sendAnalysisResultBatchFunc: func(analysisResults []AnalysisResultTO) (AnalysisResultBatchResponse, error) {
 			return AnalysisResultBatchResponse{}, nil
 		},
@@ -422,9 +408,6 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 
 	skeletonManagerMock := &mockManager{}
 	cerberusClientMock := &cerberusClientMock{
-		registerInstrumentFunc: func(instrument Instrument) error {
-			return nil
-		},
 		sendAnalysisResultBatchFunc: func(analysisResults []AnalysisResultTO) (AnalysisResultBatchResponse, error) {
 			return AnalysisResultBatchResponse{}, nil
 		},
@@ -535,7 +518,6 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 		ControlResults: nil,
 	}
 
-	batchID := uuid.MustParse("ddd34c4d-62f9-4621-bb16-efad459a9bfe")
 	analysisResultId1 := uuid.MustParse("88888acb-5449-4012-96c2-2dd761b62b19")
 	analysisResultId2 := uuid.MustParse("69f853b0-fe43-4bd1-a8d4-64c0ff704558")
 	analysisResults := []AnalysisResult{
@@ -549,7 +531,6 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 				UUID:  uuid.MustParse("2f369489-77d3-464e-87e2-edbeffa62ae7"),
 				Valid: true,
 			},
-			BatchID:                  batchID,
 			Result:                   "pos",
 			ResultMode:               "PRODUCTION",
 			Status:                   "PRE",
@@ -577,7 +558,6 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 				UUID:  uuid.MustParse("43a7b261-3e1d-4065-935a-ac15841f13e4"),
 				Valid: true,
 			},
-			BatchID:                  batchID,
 			Result:                   "pos",
 			ResultMode:               "PRODUCTION",
 			Status:                   "PRE",
@@ -712,10 +692,8 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 
 type skeletonCallbackHandlerV1Mock struct {
 	handleAnalysisRequestsFunc func(request []AnalysisRequest) error
-	getManufacturerTestFunc    func(instrumentId uuid.UUID, protocolId uuid.UUID) ([]SupportedManufacturerTests, error)
-	getEncodingList            func(protocolId uuid.UUID) ([]string, error)
 	revokeAnalysisRequests     func(request []AnalysisRequest) error
-	reprocessInstrumentData    func(batchIDs []uuid.UUID) error
+	reprocessMessageIns        func(messages []MessageIn) error
 }
 
 func (m *skeletonCallbackHandlerV1Mock) HandleAnalysisRequests(request []AnalysisRequest) error {
@@ -739,45 +717,11 @@ func (m *skeletonCallbackHandlerV1Mock) RevokeAnalysisRequests(request []Analysi
 	m.revokeAnalysisRequests(request)
 }
 
-func (m *skeletonCallbackHandlerV1Mock) ReprocessInstrumentData(batchIDs []uuid.UUID) error {
-	if m.reprocessInstrumentData == nil {
+func (m *skeletonCallbackHandlerV1Mock) ReprocessMessageIns(messageIns []MessageIn) error {
+	if m.reprocessMessageIns == nil {
 		return nil
 	}
-	return m.reprocessInstrumentData(batchIDs)
-}
-
-func (m *skeletonCallbackHandlerV1Mock) ReprocessInstrumentDataBySampleCode(sampleCode string) error {
-	if m.reprocessInstrumentData == nil {
-		return nil
-	}
-	return m.ReprocessInstrumentDataBySampleCode(sampleCode)
-}
-
-type authManagerMock struct {
-	getJWKSFunc                    func() (*keyfunc.JWKS, error)
-	getClientCredentialFunc        func() (string, error)
-	invalidateClientCredentialFunc func()
-}
-
-func (m *authManagerMock) GetJWKS() (*keyfunc.JWKS, error) {
-	if m.getJWKSFunc == nil {
-		return nil, errors.New("not implemented")
-	}
-	return m.getJWKSFunc()
-}
-
-func (m *authManagerMock) GetClientCredential() (string, error) {
-	if m.getClientCredentialFunc == nil {
-		return "", errors.New("not implemented")
-	}
-	return m.getClientCredentialFunc()
-}
-
-func (m *authManagerMock) InvalidateClientCredential() {
-	if m.invalidateClientCredentialFunc == nil {
-		return
-	}
-	m.invalidateClientCredentialFunc()
+	return m.reprocessMessageIns(messageIns)
 }
 
 type longPollClientMock struct {
@@ -881,16 +825,13 @@ func (m *deaClientMock) UploadImage(fileData []byte, name string) (uuid.UUID, er
 }
 
 type cerberusClientMock struct {
-	registerInstrumentFunc              func(instrument Instrument) error
 	registerInstrumentDriverFunc        func(name, displayName string, extraValueKeys []string, protocols []supportedProtocolTO, tests []supportedManufacturerTestTO, encodings []string, reagentManufacturers []string) error
 	sendAnalysisResultBatchFunc         func(analysisResults []AnalysisResultTO) (AnalysisResultBatchResponse, error)
-	sendControlResultBatchFunc          func(controlResults []StandaloneControlResultTO) (ControlResultBatchResponse, error)
 	sendAnalysisResultImageBatchFunc    func(images []WorkItemResultImageTO) error
 	verifyInstrumentHashFunc            func(hash string) error
 	verifyExpectedControlResultHashFunc func(hash string) error
 
 	AnalysisResults                     []AnalysisResultTO
-	ControlResults                      []StandaloneControlResultTO
 	BatchResponse                       AnalysisResultBatchResponse
 	ControlBatchResponse                ControlResultBatchResponse
 	VerifiedInstrumentHashes            []string
@@ -906,16 +847,6 @@ func (m *cerberusClientMock) VerifyExpectedControlResultsHash(hash string) error
 		m.VerifiedExpectedControlResultHashes = append(m.VerifiedExpectedControlResultHashes, hash)
 	}
 	return err
-}
-
-func (m *cerberusClientMock) SendControlResultBatch(controlResults []StandaloneControlResultTO) (ControlResultBatchResponse, error) {
-	m.ControlResults = append(m.ControlResults, controlResults...)
-	if m.sendControlResultBatchFunc == nil {
-		return ControlResultBatchResponse{}, errors.New("not implemented")
-	}
-	response, err := m.sendControlResultBatchFunc(controlResults)
-	m.ControlBatchResponse = response
-	return response, err
 }
 
 func (m *cerberusClientMock) RegisterInstrumentDriver(name, displayName string, extraValueKeys []string, protocols []supportedProtocolTO, tests []supportedManufacturerTestTO, encodings []string, reagentManufacturers []string) error {
@@ -952,13 +883,6 @@ func (m *cerberusClientMock) SetInstrumentOnlineStatus(instrumentId uuid.UUID, s
 	return nil
 }
 
-func (m *cerberusClientMock) RegisterInstrument(instrument Instrument) error {
-	if m.registerInstrumentFunc == nil {
-		return errors.New("not implemented")
-	}
-	return m.registerInstrumentFunc(instrument)
-}
-
 func (m *cerberusClientMock) SendAnalysisResultBatch(analysisResults []AnalysisResultTO) (AnalysisResultBatchResponse, error) {
 	m.AnalysisResults = append(m.AnalysisResults, analysisResults...)
 	if m.sendAnalysisResultBatchFunc == nil {
@@ -975,30 +899,6 @@ func (m *cerberusClientMock) SendAnalysisResultImageBatch(images []WorkItemResul
 	}
 
 	return m.sendAnalysisResultImageBatchFunc(images)
-}
-
-func generateAnalysisRequestsJson(count int) string {
-	json := `[`
-
-	for i := 0; i < count; i++ {
-		json += fmt.Sprintf(`{
-					"workItemId": "%s",
-					"analyteId": "51bfea41-1b7e-48f7-8b35-46d930216de7",
-					"sampleCode": "TestSampleCode%d",
-					"materialId": "50820d7e-3f5b-4452-aa4b-bebfc3c15002",
-					"laboratoryId": "3072973a-25d7-43d0-840f-d5a3de8e3aa5",
-					"validUntilTime": "2099-01-10T11:30:59.000Z",
-					"subject": null
-				}`, uuid.New(), i)
-
-		if i != count-1 {
-			json += `,`
-		}
-	}
-
-	json += `]`
-
-	return json
 }
 
 type analysisServiceMock struct {
@@ -1018,15 +918,6 @@ func (m *analysisServiceMock) RevokeAnalysisRequests(ctx context.Context, workIt
 }
 func (m *analysisServiceMock) ReexamineAnalysisRequestsBatch(ctx context.Context, workItemIDs []uuid.UUID) error {
 	return nil
-}
-func (m *analysisServiceMock) GetAnalysisRequestsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisRequestInfo, int, error) {
-	return nil, 0, nil
-}
-func (m *analysisServiceMock) GetAnalysisResultsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisResultInfo, int, error) {
-	return nil, 0, nil
-}
-func (m *analysisServiceMock) GetAnalysisBatches(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisBatch, int, error) {
-	return nil, 0, nil
 }
 func (m *analysisServiceMock) CreateAnalysisResultsBatch(ctx context.Context, analysisResults AnalysisResultSet) ([]AnalysisResult, error) {
 	for i := range analysisResults.Results {
@@ -1053,18 +944,12 @@ func (m *analysisServiceMock) QueueAnalysisResults(ctx context.Context, results 
 func (m *analysisServiceMock) RetransmitResult(ctx context.Context, resultID uuid.UUID) error {
 	return nil
 }
-func (m *analysisServiceMock) RetransmitResultBatches(ctx context.Context, batchIDs []uuid.UUID) error {
-	return nil
-}
-func (m *analysisServiceMock) ReprocessInstrumentData(ctx context.Context, batchIDs []uuid.UUID) {
-}
 func (m *analysisServiceMock) ProcessStuckImagesToDEA(ctx context.Context) {
 }
 func (m *analysisServiceMock) ProcessStuckImagesToCerberus(ctx context.Context) {
 }
 
 type analysisRepositoryMock struct {
-	callCount           int
 	analysisResultsById []AnalysisResult
 	analysisRequests    []AnalysisRequest
 	savedWorkItemIDs    map[uuid.UUID]any
@@ -1088,14 +973,6 @@ func (m *analysisRepositoryMock) DeleteOldAnalysisResultsWithTx(ctx context.Cont
 
 func (m *analysisRepositoryMock) UpdateCerberusQueueItemStatus(ctx context.Context, queueItem CerberusQueueItem) error {
 	return nil
-}
-
-func (m *analysisRepositoryMock) GetUnprocessedAnalysisResultIDsByControlResultIDs(ctx context.Context, controlResultIDs []uuid.UUID) (map[uuid.UUID]map[uuid.UUID]uuid.UUID, error) {
-	return make(map[uuid.UUID]map[uuid.UUID]uuid.UUID), nil
-}
-
-func (m *analysisRepositoryMock) GetUnprocessedReagentIDsByControlResultIDs(ctx context.Context, controlResultIDs []uuid.UUID) (map[uuid.UUID][]uuid.UUID, error) {
-	return make(map[uuid.UUID][]uuid.UUID), nil
 }
 
 func (m *analysisRepositoryMock) CreateReagents(ctx context.Context, reagents []Reagent) ([]uuid.UUID, error) {
@@ -1135,19 +1012,7 @@ func (m *analysisRepositoryMock) CreateAnalysisResultControlResultRelations(ctx 
 	return nil
 }
 
-func (m *analysisRepositoryMock) GetCerberusIDForAnalysisResults(ctx context.Context, analysisResultIDs []uuid.UUID) (map[uuid.UUID]uuid.UUID, error) {
-	return make(map[uuid.UUID]uuid.UUID), nil
-}
-
 func (m *analysisRepositoryMock) SaveCerberusIDForAnalysisResult(ctx context.Context, analysisResultID uuid.UUID, cerberusID uuid.UUID) error {
-	return nil
-}
-
-func (m *analysisRepositoryMock) SaveCerberusIDForControlResult(ctx context.Context, controlResultID uuid.UUID, cerberusID uuid.UUID) error {
-	return nil
-}
-
-func (m *analysisRepositoryMock) SaveCerberusIDForReagent(ctx context.Context, reagentID uuid.UUID, cerberusID uuid.UUID) error {
 	return nil
 }
 
@@ -1157,10 +1022,6 @@ func (m *analysisRepositoryMock) GetAnalysisResultIdsWithoutControlByReagent(ctx
 
 func (m *analysisRepositoryMock) GetAnalysisResultIdsWhereLastestControlIsInvalid(ctx context.Context, controlResult ControlResult, reagent Reagent) ([]uuid.UUID, error) {
 	return nil, nil
-}
-
-func (m *analysisRepositoryMock) GetLatestControlResultIdByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time) (ControlResult, error) {
-	return ControlResult{}, nil
 }
 
 func (m *analysisRepositoryMock) MarkReagentControlResultRelationsAsProcessed(ctx context.Context, controlResultID uuid.UUID, reagentIDs []uuid.UUID) error {
@@ -1212,15 +1073,6 @@ func (m *analysisRepositoryMock) GetAnalysisRequestsBySampleCodeAndAnalyteID(ctx
 func (m *analysisRepositoryMock) GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string, allowResending bool) (map[string][]AnalysisRequest, error) {
 	return nil, nil
 }
-func (m *analysisRepositoryMock) GetAnalysisRequestsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisRequestInfo, int, error) {
-	return nil, 0, nil
-}
-func (m *analysisRepositoryMock) GetAnalysisResultsInfo(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisResultInfo, int, error) {
-	return nil, 0, nil
-}
-func (m *analysisRepositoryMock) GetAnalysisBatches(ctx context.Context, instrumentID uuid.UUID, filter Filter) ([]AnalysisBatch, int, error) {
-	return nil, 0, nil
-}
 func (m *analysisRepositoryMock) CreateSubjectsBatch(ctx context.Context, subjectInfosByAnalysisRequestID map[uuid.UUID]SubjectInfo) (map[uuid.UUID]uuid.UUID, error) {
 	return nil, nil
 }
@@ -1263,9 +1115,6 @@ func (m *analysisRepositoryMock) GetAnalysisResultsBySampleCodeAndAnalyteID(ctx 
 func (m *analysisRepositoryMock) GetAnalysisResultByCerberusID(ctx context.Context, id uuid.UUID, allowDeletedAnalyteMapping bool) (AnalysisResult, error) {
 	return AnalysisResult{}, nil
 }
-func (m *analysisRepositoryMock) GetAnalysisResultsByBatchIDs(ctx context.Context, batchIDs []uuid.UUID) ([]AnalysisResult, error) {
-	return nil, nil
-}
 func (m *analysisRepositoryMock) GetAnalysisResultIdsForStatusRecalculationByControlIds(ctx context.Context, controlResultIds []uuid.UUID) ([]uuid.UUID, error) {
 	return nil, nil
 }
@@ -1301,17 +1150,11 @@ func (m *analysisRepositoryMock) UpdateControlResultBatch(ctx context.Context, c
 func (m *analysisRepositoryMock) CreateWarnings(ctx context.Context, warningsByAnalysisResultID map[uuid.UUID][]string) error {
 	return nil
 }
-func (m *analysisRepositoryMock) GetAnalysisResultsByBatchIDsMapped(ctx context.Context, batchIDs []uuid.UUID) (map[uuid.UUID][]AnalysisResultInfo, error) {
-	return nil, nil
-}
 func (m *analysisRepositoryMock) GetAnalysisRequestExtraValuesByAnalysisRequestID(ctx context.Context, analysisRequestID uuid.UUID) (map[string]string, error) {
 	return nil, nil
 }
 func (m *analysisRepositoryMock) GetAnalysisResultQueueItems(ctx context.Context) ([]CerberusQueueItem, error) {
 	return nil, nil
-}
-func (m *analysisRepositoryMock) UpdateAnalysisResultQueueItemStatus(ctx context.Context, queueItem CerberusQueueItem) error {
-	return nil
 }
 func (m *analysisRepositoryMock) CreateAnalysisResultQueueItem(ctx context.Context, analysisResults []AnalysisResult) (uuid.UUID, error) {
 	return uuid.New(), nil
@@ -1376,7 +1219,6 @@ var analysisResultsWithoutAnalysisRequestsTest_analysisResults = []AnalysisResul
 			UUID:  uuid.MustParse("2f369489-77d3-464e-87e2-edbeffa62ae7"),
 			Valid: true,
 		},
-		BatchID:                  uuid.MustParse("ddd34c4d-62f9-4621-bb16-efad459a9bfe"),
 		Result:                   "pos",
 		ResultMode:               "PRODUCTION",
 		Status:                   "PRE",
@@ -1415,7 +1257,6 @@ var analysisResultsWithoutAnalysisRequestsTest_analysisResults = []AnalysisResul
 			UUID:  uuid.MustParse("43a7b261-3e1d-4065-935a-ac15841f13e4"),
 			Valid: true,
 		},
-		BatchID:                  uuid.MustParse("ddd34c4d-62f9-4621-bb16-efad459a9bfe"),
 		Result:                   "pos",
 		ResultMode:               "PRODUCTION",
 		Status:                   "PRE",
