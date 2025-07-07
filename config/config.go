@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"github.com/rs/zerolog"
+	"golang.org/x/time/rate"
 
 	"github.com/kelseyhightower/envconfig"
 	"github.com/rs/zerolog/log"
@@ -68,6 +69,7 @@ type Configuration struct {
 	LongPollingRetrySeconds                    int           `envconfig:"LONG_POLLING_RETRY_SECONDS" default:"30"`
 	MessageMaxRetries                          int           `envconfig:"MESSAGE_MAX_RETRIES" default:"25"`
 	BlackListedTCPClientIPAddresses            string        `envconfig:"BLACKLISTED_TCP_CLIENT_IP_ADDRESSES" default:""`
+	MaxRequestsPerSecond                       rate.Limit    `envconfig:"MAX_REQUESTS_PER_SECOND" default:"15"`
 	ClientCredentialAuthHeaderValue            string
 }
 

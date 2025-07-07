@@ -21,6 +21,7 @@ require (
 	github.com/rs/zerolog v1.34.0
 	github.com/shopspring/decimal v1.4.0
 	github.com/stretchr/testify v1.10.0
+	golang.org/x/time v0.6.0
 )
 
 require (
