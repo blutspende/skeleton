@@ -97,7 +97,6 @@ type AnalysisResultTO struct {
 	Mode                     string            `json:"mode"` // ResultMode
 	ResultYieldDateTime      *time.Time        `json:"resultYieldDateTime"`
 	ExaminedMaterial         uuid.UUID         `json:"examinedMaterial"`
-	BatchId                  uuid.UUID         `json:"batchId"`
 	Result                   string            `json:"result"`
 	Operator                 string            `json:"operator"`
 	TechnicalReleaseDateTime *time.Time        `json:"technicalReleaseDateTime"`

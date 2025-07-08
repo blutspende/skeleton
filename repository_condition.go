@@ -410,8 +410,6 @@ var (
 )
 
 const (
-	msgInvalidConditionIDUpdate                     = "invalid condition id update"
-	msgInvalidConditionOperandIDUpdate              = "invalid condition operand id update"
 	msgInvalidOperandForExistOrNotExist             = "invalid operand for exists or not exists operator"
 	msgInvalidOperatorForArithmeticFilter           = "invalid operator for arithmetic filter"
 	msgInvalidOperatorForLogicFilter                = "invalid operator for logic filter"
@@ -430,8 +428,6 @@ const (
 
 var (
 	ErrDecimalFieldValueParseFailed                 = errors.New(msgDecimalFieldValueParseFailed)
-	ErrInvalidConditionIDUpdate                     = errors.New(msgInvalidConditionIDUpdate)
-	ErrInvalidConditionOperandIDUpdate              = errors.New(msgInvalidConditionOperandIDUpdate)
 	ErrInvalidOperandForExistOrNotExist             = errors.New(msgInvalidOperandForExistOrNotExist)
 	ErrInvalidOperatorForArithmeticFilter           = errors.New(msgInvalidOperatorForArithmeticFilter)
 	ErrInvalidOperatorForLogicFilter                = errors.New(msgInvalidOperatorForLogicFilter)
