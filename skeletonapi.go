@@ -7,6 +7,7 @@ import (
 	"github.com/blutspende/skeleton/migrator"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
+	"golang.org/x/time/rate"
 	"time"
 )
 
@@ -155,8 +156,9 @@ func New(ctx context.Context, serviceName, displayName string, requestedExtraVal
 	}
 	authManager := NewAuthManager(&config,
 		NewRestyClient(context.Background(), &config, true))
-	internalApiRestyClient := NewRestyClientWithAuthManager(context.Background(), &config, authManager, config.StandardAPIClientTimeoutSeconds)
-	longPollingApiRestyClient := NewRestyClientWithAuthManager(context.Background(), &config, authManager, 0) // do not set timeout for resty client, it is handled by longpollClient (prevents unnecessary context deadline exceeded errors)
+	rateLimiter := rate.NewLimiter(config.MaxRequestsPerSecond, 1)
+	internalApiRestyClient := NewRestyClientWithAuthManager(context.Background(), &config, authManager, rateLimiter, config.StandardAPIClientTimeoutSeconds)
+	longPollingApiRestyClient := NewRestyClientWithAuthManager(context.Background(), &config, authManager, rateLimiter, 0) // do not set timeout for resty client, it is handled by longpollClient (prevents unnecessary context deadline exceeded errors)
 	cerberusClient, err := NewCerberusClient(config.CerberusURL, internalApiRestyClient)
 	if err != nil {
 		return nil, err
