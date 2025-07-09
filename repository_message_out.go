@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/rs/zerolog/log"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -27,6 +28,7 @@ type MessageOutRepository interface {
 	GetUnsynced(ctx context.Context, limit, offset int, cutoffTime time.Time) ([]MessageOut, error)
 	Update(ctx context.Context, message MessageOut) error
 	UpdateDEAInfo(ctx context.Context, message MessageOut) error
+	DeleteOldMessageOutRecords(ctx context.Context, cleanupDays int, limit int) (int64, error)
 
 	DeleteMessageOutSampleCodesByIDs(ctx context.Context, ids []uuid.UUID) error
 	GetMessageOutSampleCodeIDsToDelete(ctx context.Context, limit int) ([]uuid.UUID, error)
@@ -395,6 +397,20 @@ func (r *messageOutRepository) UpdateDEAInfo(ctx context.Context, message Messag
 	return nil
 }
 
+func (r *messageOutRepository) DeleteOldMessageOutRecords(ctx context.Context, cleanupDays int, limit int) (int64, error) {
+	query := fmt.Sprintf(`DELETE FROM %s.sk_message_out WHERE id IN 
+                                      (SELECT id FROM %s.sk_message_out mo 
+                                                 WHERE mo.dea_raw_message_id IS NOT NULL
+                                                   AND mo.created_at <= current_date - ($1 ||' DAY')::INTERVAL ORDER BY mo.created_at ASC LIMIT $2);`, r.dbSchema, r.dbSchema)
+	result, err := r.db.ExecContext(ctx, query, strconv.Itoa(cleanupDays), limit)
+	if err != nil {
+		log.Error().Err(err).Msg(msgDeleteOldMessageOutRecordsFailed)
+		return 0, ErrDeleteOldMessageOutRecordsFailed
+	}
+
+	return result.RowsAffected()
+}
+
 func (r *messageOutRepository) WithTransaction(tx db.DbConnection) MessageOutRepository {
 	txRepo := *r
 	txRepo.db = tx
@@ -506,12 +522,12 @@ const (
 	msgUpdateMessageOutFailed                                       = "update message out failed"
 	msgUpdateMessageOutDEAInfoFailed                                = "update message out DEA info failed"
 	msgGetFullyRevokedUnsentMessageOutIDsByAnalysisRequestIDsFailed = "get fully revoked unsent message out IDs by analysis requests failed"
-
-	msgDeleteMessageOutSampleCodesByIDsFailed         = "delete message out sample codes by IDs failed"
-	msgGetMessageOutSampleCodeIDsToDeleteFailed       = "get message out sample code IDs to delete failed"
-	msgGetUnsentMessageOutSampleCodesFailed           = "get unsent message out sample codes failed"
-	msgMarkMessageOutSampleCodesAsUploadedByIDsFailed = "mark message out sample codes as uploaded to DEA by IDs failed"
-	msgRegisterSampleCodesToMessageOutFailed          = "register sample codes to message out failed"
+	msgDeleteMessageOutSampleCodesByIDsFailed                       = "delete message out sample codes by IDs failed"
+	msgGetMessageOutSampleCodeIDsToDeleteFailed                     = "get message out sample code IDs to delete failed"
+	msgGetUnsentMessageOutSampleCodesFailed                         = "get unsent message out sample codes failed"
+	msgMarkMessageOutSampleCodesAsUploadedByIDsFailed               = "mark message out sample codes as uploaded to DEA by IDs failed"
+	msgRegisterSampleCodesToMessageOutFailed                        = "register sample codes to message out failed"
+	msgDeleteOldMessageOutRecordsFailed                             = "delete old message out records failed"
 )
 
 var (
@@ -524,10 +540,10 @@ var (
 	ErrUpdateMessageOutFailed                                       = errors.New(msgUpdateMessageOutFailed)
 	ErrUpdateMessageOutDEAInfoFailed                                = errors.New(msgUpdateMessageOutDEAInfoFailed)
 	ErrGetFullyRevokedUnsentMessageOutIDsByAnalysisRequestIDsFailed = errors.New(msgGetFullyRevokedUnsentMessageOutIDsByAnalysisRequestIDsFailed)
-
-	ErrDeleteMessageOutSampleCodesByIDsFailed         = errors.New(msgDeleteMessageOutSampleCodesByIDsFailed)
-	ErrGetMessageOutSampleCodeIDsToDeleteFailed       = errors.New(msgGetMessageOutSampleCodeIDsToDeleteFailed)
-	ErrGetUnsentMessageOutSampleCodesFailed           = errors.New(msgGetUnsentMessageOutSampleCodesFailed)
-	ErrMarkMessageOutSampleCodesAsUploadedByIDsFailed = errors.New(msgMarkMessageOutSampleCodesAsUploadedByIDsFailed)
-	ErrRegisterSampleCodesToMessageOutFailed          = errors.New(msgRegisterSampleCodesToMessageOutFailed)
+	ErrDeleteOldMessageOutRecordsFailed                             = errors.New(msgDeleteOldMessageOutRecordsFailed)
+	ErrDeleteMessageOutSampleCodesByIDsFailed                       = errors.New(msgDeleteMessageOutSampleCodesByIDsFailed)
+	ErrGetMessageOutSampleCodeIDsToDeleteFailed                     = errors.New(msgGetMessageOutSampleCodeIDsToDeleteFailed)
+	ErrGetUnsentMessageOutSampleCodesFailed                         = errors.New(msgGetUnsentMessageOutSampleCodesFailed)
+	ErrMarkMessageOutSampleCodesAsUploadedByIDsFailed               = errors.New(msgMarkMessageOutSampleCodesAsUploadedByIDsFailed)
+	ErrRegisterSampleCodesToMessageOutFailed                        = errors.New(msgRegisterSampleCodesToMessageOutFailed)
 )

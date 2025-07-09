@@ -13,6 +13,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/rs/zerolog/log"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -25,6 +27,7 @@ type MessageInRepository interface {
 	GetUnsynced(ctx context.Context, limit, offset int, cutoffTime time.Time) ([]MessageIn, error)
 	Update(ctx context.Context, message MessageIn) error
 	UpdateDEAInfo(ctx context.Context, message MessageIn) error
+	DeleteOldMessageInRecords(ctx context.Context, cleanupDays int, limit int) (int64, error)
 
 	DeleteMessageInSampleCodesByIDs(ctx context.Context, ids []uuid.UUID) error
 	GetMessageInIDsBySampleCode(ctx context.Context, sampleCode string) ([]uuid.UUID, error)
@@ -372,6 +375,23 @@ func (r *messageInRepository) RegisterSampleCodes(ctx context.Context, id uuid.U
 	return ids, err
 }
 
+func (r *messageInRepository) DeleteOldMessageInRecords(ctx context.Context, cleanupDays int, limit int) (int64, error) {
+	query := `DELETE FROM %schema_name%.sk_message_in WHERE id IN 
+                                      (SELECT smi.id
+											FROM %schema_name%.sk_message_in smi
+												LEFT JOIN %schema_name%.sk_message_out smo ON smi.id = smo.trigger_message_in_id OR smi.id = smo.response_message_in_id
+											WHERE smi.dea_raw_message_id IS NOT NULL AND smo.ID IS NULL
+                                                   AND smi.created_at <= current_date - ($1 ||' DAY')::INTERVAL ORDER BY smi.created_at ASC LIMIT $2);`
+	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
+	result, err := r.db.ExecContext(ctx, query, strconv.Itoa(cleanupDays), limit)
+	if err != nil {
+		log.Error().Err(err).Msg(msgDeleteOldMessageInRecordsFailed)
+		return 0, ErrDeleteOldMessageInRecordsFailed
+	}
+
+	return result.RowsAffected()
+}
+
 func (r *messageInRepository) WithTransaction(tx db.DbConnection) MessageInRepository {
 	txRepo := *r
 	txRepo.db = tx
@@ -463,13 +483,14 @@ func convertDAOToMessageIn(dao messageInDAO) MessageIn {
 }
 
 const (
-	msgCreateMessageInFailed          = "create message in failed"
-	msgGetMessageInsByDEAIDsFailed    = "get message ins by DEA IDs failed"
-	msgGetMessageInsByIDsFailed       = "get message ins by IDs failed"
-	msgGetUnprocessedMessageInsFailed = "get unprocessed message ins failed"
-	msgGetUnsyncedMessageInsFailed    = "get unsynced message ins failed"
-	msgUpdateMessageInDEAInfoFailed   = "update message in DEA info failed"
-	msgUpdateMessageInFailed          = "update message in failed"
+	msgCreateMessageInFailed           = "create message in failed"
+	msgGetMessageInsByDEAIDsFailed     = "get message ins by DEA IDs failed"
+	msgGetMessageInsByIDsFailed        = "get message ins by IDs failed"
+	msgGetUnprocessedMessageInsFailed  = "get unprocessed message ins failed"
+	msgGetUnsyncedMessageInsFailed     = "get unsynced message ins failed"
+	msgUpdateMessageInDEAInfoFailed    = "update message in DEA info failed"
+	msgUpdateMessageInFailed           = "update message in failed"
+	msgDeleteOldMessageInRecordsFailed = "delete old message in records failed"
 
 	msgDeleteMessageInSampleCodesByIDsFailed         = "delete message in sample codes by IDs failed"
 	msgGetMessageInIDsBySampleCodeFailed             = "get message in IDs by sample code failed"
@@ -480,13 +501,14 @@ const (
 )
 
 var (
-	ErrCreateMessageInFailed          = errors.New(msgCreateMessageInFailed)
-	ErrGetMessageInsByDEAIDsFailed    = errors.New(msgGetMessageInsByDEAIDsFailed)
-	ErrGetMessageInsByIDsFailed       = errors.New(msgGetMessageInsByIDsFailed)
-	ErrGetUnprocessedMessageInsFailed = errors.New(msgGetUnprocessedMessageInsFailed)
-	ErrGetUnsyncedMessageInsFailed    = errors.New(msgGetUnsyncedMessageInsFailed)
-	ErrUpdateMessageInDEAInfoFailed   = errors.New(msgUpdateMessageInDEAInfoFailed)
-	ErrUpdateMessageInFailed          = errors.New(msgUpdateMessageInFailed)
+	ErrCreateMessageInFailed           = errors.New(msgCreateMessageInFailed)
+	ErrGetMessageInsByDEAIDsFailed     = errors.New(msgGetMessageInsByDEAIDsFailed)
+	ErrGetMessageInsByIDsFailed        = errors.New(msgGetMessageInsByIDsFailed)
+	ErrGetUnprocessedMessageInsFailed  = errors.New(msgGetUnprocessedMessageInsFailed)
+	ErrGetUnsyncedMessageInsFailed     = errors.New(msgGetUnsyncedMessageInsFailed)
+	ErrUpdateMessageInDEAInfoFailed    = errors.New(msgUpdateMessageInDEAInfoFailed)
+	ErrUpdateMessageInFailed           = errors.New(msgUpdateMessageInFailed)
+	ErrDeleteOldMessageInRecordsFailed = errors.New(msgDeleteOldMessageInRecordsFailed)
 
 	ErrDeleteMessageInSampleCodesByIDsFailed         = errors.New(msgDeleteMessageInSampleCodesByIDsFailed)
 	ErrGetMessageInIDsBySampleCodeFailed             = errors.New(msgGetMessageInIDsBySampleCodeFailed)
