@@ -11,7 +11,7 @@ import (
 )
 
 func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
-	dbConn, schemaName := setupDbConnectorAndRunMigration("instrument_test")
+	dbConn, schemaName, _, _ := setupDbConnectorAndRunMigration("instrument_test")
 
 	cerberusClientMock := &cerberusClientMock{}
 	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
@@ -130,7 +130,7 @@ func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
 }
 
 func TestFtpConfigConnectionModeChange(t *testing.T) {
-	dbConn, schemaName := setupDbConnectorAndRunMigration("instrument_test")
+	dbConn, schemaName, _, _ := setupDbConnectorAndRunMigration("instrument_test")
 
 	cerberusClientMock := &cerberusClientMock{}
 	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
@@ -240,7 +240,7 @@ func TestFtpConfigConnectionModeChange(t *testing.T) {
 }
 
 func TestUpdateInstrument(t *testing.T) {
-	dbConn, schemaName := setupDbConnectorAndRunMigration("instrument_test")
+	dbConn, schemaName, _, _ := setupDbConnectorAndRunMigration("instrument_test")
 
 	cerberusClientMock := &cerberusClientMock{
 		verifyInstrumentHashFunc: func(hash string) error {
@@ -526,7 +526,7 @@ func TestUpdateInstrument(t *testing.T) {
 }
 
 func TestNotVerifiedInstrument(t *testing.T) {
-	dbConn, schemaName := setupDbConnectorAndRunMigration("instrument_test")
+	dbConn, schemaName, _, _ := setupDbConnectorAndRunMigration("instrument_test")
 
 	cerberusClientMock := &cerberusClientMock{
 		verifyInstrumentHashFunc: func(hash string) error {
@@ -581,7 +581,7 @@ func TestNotVerifiedInstrument(t *testing.T) {
 }
 
 func TestUpdateExpectedControlResult(t *testing.T) {
-	dbConn, schemaName := setupDbConnectorAndRunMigration("expectedcontrolresult_test")
+	dbConn, schemaName, _, _ := setupDbConnectorAndRunMigration("expectedcontrolresult_test")
 
 	cerberusClientMock := &cerberusClientMock{
 		verifyExpectedControlResultHashFunc: func(hash string) error {
@@ -731,7 +731,7 @@ func TestUpdateExpectedControlResult(t *testing.T) {
 }
 
 func TestUpdateExpectedControlResult2(t *testing.T) {
-	dbConn, schemaName := setupDbConnectorAndRunMigration("expectedcontrolresult_test")
+	dbConn, schemaName, _, _ := setupDbConnectorAndRunMigration("expectedcontrolresult_test")
 
 	cerberusClientMock := &cerberusClientMock{
 		verifyExpectedControlResultHashFunc: func(hash string) error {
@@ -928,7 +928,7 @@ func TestUpdateExpectedControlResult2(t *testing.T) {
 }
 
 func TestNotVerifiedExpectedControlResults(t *testing.T) {
-	dbConn, schemaName := setupDbConnectorAndRunMigration("expectedcontrolresult_test")
+	dbConn, schemaName, _, _ := setupDbConnectorAndRunMigration("expectedcontrolresult_test")
 
 	cerberusClientMock := &cerberusClientMock{
 		verifyExpectedControlResultHashFunc: func(hash string) error {
@@ -1000,6 +1000,85 @@ func TestNotVerifiedExpectedControlResults(t *testing.T) {
 
 	ecrs, _ := instrumentService.GetExpectedControlResultsByInstrumentId(ctxWithCancel, instrumentId)
 	assert.Empty(t, ecrs)
+}
+
+func TestTrimHostname(t *testing.T) {
+	dbConn, schemaName, _, _ := setupDbConnectorAndRunMigration("instrument_test")
+
+	cerberusClientMock := &cerberusClientMock{
+		verifyInstrumentHashFunc: func(hash string) error {
+			return nil
+		},
+	}
+	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
+
+	ctx, cancelSkeleton := context.WithCancel(context.Background())
+	defer cancelSkeleton()
+
+	conditionRepository := NewConditionRepository(dbConn, schemaName)
+	conditionService := NewConditionService(conditionRepository)
+	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
+	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
+	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
+	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
+
+	var protocolID uuid.UUID
+	err := dbConn.QueryRowx(`INSERT INTO instrument_test.sk_supported_protocols (name, description) VALUES('TestProtocol', 'Test Protocol Description') RETURNING id;`).Scan(&protocolID)
+	assert.Nil(t, err)
+	clientPort := 1234
+
+	ctx = context.Background()
+	ctx = context.WithValue(ctx, "Authorization", "BearerToken")
+
+	instr := Instrument{
+		ID:                 uuid.New(),
+		Name:               "TestInstrument",
+		Type:               Analyzer,
+		ProtocolID:         protocolID,
+		ProtocolName:       "TestProtocol",
+		Enabled:            true,
+		ConnectionMode:     TCPMixed,
+		ResultMode:         Simulation,
+		CaptureResults:     true,
+		CaptureDiagnostics: false,
+		ReplyToQuery:       false,
+		Status:             "TestStatus",
+		Encoding:           "UTF8",
+		TimeZone:           "Europe/Berlin",
+		Hostname:           "                \t\n   TestHostWithWhiteSpaces    \t\n     ",
+		ClientPort:         &clientPort,
+	}
+	instrumentID, err := instrumentService.CreateInstrument(ctx, instr)
+	assert.Nil(t, err)
+
+	instrument, err := instrumentService.GetInstrumentByID(ctx, nil, instrumentID, false)
+	assert.Nil(t, err)
+	assert.Equal(t, "TestHostWithWhiteSpaces", instrument.Hostname)
+
+	instr = Instrument{
+		ID:                 instrumentID,
+		Name:               "TestInstrumentUpdated",
+		Type:               Analyzer,
+		ProtocolID:         protocolID,
+		ProtocolName:       "TestProtocol",
+		Enabled:            true,
+		ConnectionMode:     TCPMixed,
+		ResultMode:         Simulation,
+		CaptureResults:     true,
+		CaptureDiagnostics: false,
+		ReplyToQuery:       false,
+		Status:             "TestStatus",
+		Encoding:           "UTF8",
+		TimeZone:           "Europe/Berlin",
+		Hostname:           "\n\t                 TestHostWithWhiteSpaces2                    \n\t",
+		ClientPort:         &clientPort,
+	}
+	err = instrumentService.UpdateInstrument(ctx, instr, uuid.MustParse("9d5fb5e9-65a1-4479-8f82-25b04145bfe1"))
+	assert.Nil(t, err)
+
+	instrument, err = instrumentService.GetInstrumentByID(ctx, nil, instrumentID, false)
+	assert.Nil(t, err)
+	assert.Equal(t, "TestHostWithWhiteSpaces2", instrument.Hostname)
 }
 
 type instrumentRepositoryMock struct {

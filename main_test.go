@@ -62,12 +62,12 @@ func setupDbConnector(schemaName string) (db.DbConnection, string, db.DbConnecto
 	return dbConn, schemaName, postgres, sqlConn
 }
 
-func setupDbConnectorAndRunMigration(schemaName string) (db.DbConnection, string) {
-	dbConn, _, _, sqlConn := setupDbConnector(schemaName)
+func setupDbConnectorAndRunMigration(schemaName string) (db.DbConnection, string, db.DbConnector, *sqlx.DB) {
+	dbConn, _, postgres, sqlConn := setupDbConnector(schemaName)
 
 	mig := migrator.NewSkeletonMigrator()
 	_ = mig.Run(context.Background(), sqlConn, schemaName)
 	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
 
-	return dbConn, schemaName
+	return dbConn, schemaName, postgres, sqlConn
 }
