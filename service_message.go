@@ -128,22 +128,12 @@ func (s *messageService) SaveMessageIn(ctx context.Context, message MessageIn) (
 }
 
 func (s *messageService) SaveMessageOut(ctx context.Context, message MessageOut) (uuid.UUID, error) {
-	message.CreatedAt = time.Now().UTC()
-	if !isStatusValid(message.Status) {
-		message.Status = messagestatus.Stored
-	}
-	if !isTypeValid(message.Type) {
-		message.Type = messagetype.Unidentified
-	}
-
-	messageIDs, err := s.messageOutRepository.CreateBatch(ctx, []MessageOut{message})
+	messageIDs, err := s.SaveMessageOutBatch(ctx, []MessageOut{message})
 	if err != nil {
 		return uuid.Nil, err
 	}
-	message.ID = messageIDs[0]
-	s.EnqueueMessageOutsForArchiving(message)
 
-	return message.ID, nil
+	return messageIDs[0], nil
 }
 
 func (s *messageService) SaveMessageOutBatch(ctx context.Context, messages []MessageOut) ([]uuid.UUID, error) {
@@ -158,7 +148,9 @@ func (s *messageService) SaveMessageOutBatch(ctx context.Context, messages []Mes
 		if !isTypeValid(messages[i].Type) {
 			messages[i].Type = messagetype.Unidentified
 		}
-		messages[i].CreatedAt = ts
+		if messages[i].CreatedAt.IsZero() {
+			messages[i].CreatedAt = ts
+		}
 	}
 	tx, err := s.messageOutRepository.CreateTransaction()
 	if err != nil {
@@ -272,10 +264,7 @@ func (s *messageService) StartDEAArchiving(ctx context.Context, maxRetries int) 
 						failedMessagesByIDs[messagesToArchive[i].ID] = messagesToArchive[i]
 					}
 				}
-				messagesToArchive[i].DEARawMessageID = uuid.NullUUID{
-					UUID:  deaID,
-					Valid: deaID != uuid.Nil,
-				}
+				messagesToArchive[i].deaRawMessageID = utils.UUIDToNullUUID(deaID)
 				err = s.messageInRepository.UpdateDEAInfo(ctx, messagesToArchive[i])
 				if err != nil {
 					failedMessagesByIDs[messagesToArchive[i].ID] = messagesToArchive[i]
@@ -314,10 +303,7 @@ func (s *messageService) StartDEAArchiving(ctx context.Context, maxRetries int) 
 					messagesToArchive[i].RetryCount += 1
 					failedMessagesByIDs[messagesToArchive[i].ID] = messagesToArchive[i]
 				}
-				messagesToArchive[i].DEARawMessageID = uuid.NullUUID{
-					UUID:  deaID,
-					Valid: deaID != uuid.Nil,
-				}
+				messagesToArchive[i].deaRawMessageID = utils.UUIDToNullUUID(deaID)
 				err = s.messageOutRepository.UpdateDEAInfo(ctx, messagesToArchive[i])
 				if err != nil {
 					failedMessagesByIDs[messagesToArchive[i].ID] = messagesToArchive[i]
@@ -423,11 +409,11 @@ func (s *messageService) StartSampleCodeRegisteringToDEA(ctx context.Context) {
 			}
 			for i := range sampleCodesWithMessageIDAndIDs {
 				messageOut := messagesByIDs[sampleCodesWithMessageIDAndIDs[i].MessageID]
-				if !messageOut.DEARawMessageID.Valid {
+				if !messageOut.deaRawMessageID.Valid {
 					messagesToRetry = append(messagesToRetry, sampleCodesWithMessageIDAndIDs[i])
 					continue
 				}
-				err = s.deaClient.RegisterSampleCodes(messageOut.DEARawMessageID.UUID, sampleCodesWithMessageIDAndIDs[i].SampleCodes)
+				err = s.deaClient.RegisterSampleCodes(messageOut.deaRawMessageID.UUID, sampleCodesWithMessageIDAndIDs[i].SampleCodes)
 				if err != nil {
 					log.Error().Err(err).Msg("register message out sample codes failed")
 					messagesToRetry = append(messagesToRetry, sampleCodesWithMessageIDAndIDs[i])
@@ -466,11 +452,11 @@ func (s *messageService) StartSampleCodeRegisteringToDEA(ctx context.Context) {
 			}
 			for i := range sampleCodesWithMessageIDAndIDs {
 				messageIn := messagesByIDs[sampleCodesWithMessageIDAndIDs[i].MessageID]
-				if !messageIn.DEARawMessageID.Valid {
+				if !messageIn.deaRawMessageID.Valid {
 					messagesToRetry = append(messagesToRetry, sampleCodesWithMessageIDAndIDs[i])
 					continue
 				}
-				err := s.deaClient.RegisterSampleCodes(messageIn.DEARawMessageID.UUID, sampleCodesWithMessageIDAndIDs[i].SampleCodes)
+				err := s.deaClient.RegisterSampleCodes(messageIn.deaRawMessageID.UUID, sampleCodesWithMessageIDAndIDs[i].SampleCodes)
 				if err != nil {
 					log.Error().Err(err).Msg("register message in sample codes failed")
 					messagesToRetry = append(messagesToRetry, sampleCodesWithMessageIDAndIDs[i])

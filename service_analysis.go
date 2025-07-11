@@ -219,11 +219,17 @@ func (as *analysisService) CreateAnalysisResultsBatch(ctx context.Context, analy
 func (as *analysisService) createAnalysisResultsBatch(ctx context.Context, tx db.DbConnection, analysisResultSet AnalysisResultSet) (AnalysisResultSet, error) {
 	var err error
 	for i := range analysisResultSet.Results {
+		if analysisResultSet.Results[i].SampleCode == "" {
+			return analysisResultSet, fmt.Errorf("sample code missing at index %d", i)
+		}
 		if analysisResultSet.Results[i].AnalyteMapping.ID == uuid.Nil {
-			return analysisResultSet, errors.New(fmt.Sprintf("analyte mapping CerberusID is missing at index: %d", i))
+			return analysisResultSet, fmt.Errorf("analyte mapping ID is missing at index: %d", i)
 		}
 		if analysisResultSet.Results[i].Instrument.ID == uuid.Nil {
-			return analysisResultSet, errors.New(fmt.Sprintf("instrument CerberusID is missing at index: %d", i))
+			return analysisResultSet, fmt.Errorf("instrument ID is missing at index: %d", i)
+		}
+		if analysisResultSet.Results[i].MessageInID == uuid.Nil {
+			return analysisResultSet, fmt.Errorf("message in ID is missing at index: %d", i)
 		}
 		if analysisResultSet.Results[i].ResultMode == "" {
 			analysisResultSet.Results[i].ResultMode = analysisResultSet.Results[i].Instrument.ResultMode
@@ -232,8 +238,25 @@ func (as *analysisService) createAnalysisResultsBatch(ctx context.Context, tx db
 		if err != nil {
 			return analysisResultSet, err
 		}
+		for j, reagent := range analysisResultSet.Results[i].Reagents {
+			if reagent.Type != Standard && reagent.Type != Diluent {
+				return analysisResultSet, fmt.Errorf("invalid type '%s' for reagent at index %d in analysis result at index %d", reagent.Type, j, i)
+			}
+		}
 	}
-
+	for i := range analysisResultSet.Reagents {
+		if analysisResultSet.Reagents[i].Type != Standard && analysisResultSet.Reagents[i].Type != Diluent {
+			return analysisResultSet, fmt.Errorf("invalid type '%s' for reagent at index %d", analysisResultSet.Reagents[i].Type, i)
+		}
+	}
+	for i := range analysisResultSet.ControlResults {
+		if analysisResultSet.ControlResults[i].InstrumentID == uuid.Nil {
+			return AnalysisResultSet{}, fmt.Errorf("missing instrumentID on standalone control result at index %d", i)
+		}
+		if analysisResultSet.ControlResults[i].AnalyteMapping.ID == uuid.Nil {
+			return AnalysisResultSet{}, fmt.Errorf("missing analyte mapping ID on standalone control result at index %d", i)
+		}
+	}
 	analysisResultSet.Results, err = as.analysisRepository.WithTransaction(tx).CreateAnalysisResultsBatch(ctx, analysisResultSet.Results)
 	if err != nil {
 		return analysisResultSet, err

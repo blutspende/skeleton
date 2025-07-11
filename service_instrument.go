@@ -5,6 +5,7 @@ import (
 	"github.com/blutspende/skeleton/db"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
+	"strings"
 )
 
 type InstrumentService interface {
@@ -57,7 +58,7 @@ func (s *instrumentService) CreateInstrument(ctx context.Context, instrument Ins
 	if err != nil {
 		return uuid.Nil, err
 	}
-
+	instrument.Hostname = strings.TrimSpace(instrument.Hostname)
 	id, err := s.instrumentRepository.WithTransaction(transaction).CreateInstrument(ctx, instrument)
 	if err != nil {
 		_ = transaction.Rollback()
@@ -536,6 +537,7 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 		}
 	}
 
+	instrument.Hostname = strings.TrimSpace(instrument.Hostname)
 	err = s.instrumentRepository.WithTransaction(tx).UpdateInstrument(ctx, instrument)
 	if err != nil {
 		_ = tx.Rollback()

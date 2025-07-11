@@ -57,19 +57,7 @@ type SkeletonAPI interface {
 	GetSortingTarget(ctx context.Context, instrumentIP string, sampleCode string, programme string) (string, error)
 	// MarkSortingTargetAsApplied - should be called after sorting instructions were successfully passed from driver to instrument
 	MarkSortingTargetAsApplied(ctx context.Context, instrumentIP, sampleCode, programme, target string) error
-	// SubmitAnalysisResult - Submit result to Skeleton and Cerberus,
-	// By default this function batches the transmissions by collecting them and
-	// use the batch-endpoint of cerberus for performance reasons.
-	// Analysis results must have their DEARawMessageID set, therefore calling UploadRawMessageToDEA
-	// on the raw instrument message is a prerequisite to submitting analysis results.
-	//SubmitAnalysisResult(ctx context.Context, resultData AnalysisResultSet) error
-
-	// SubmitAnalysisResultBatch - Submit result batch to Skeleton and Cerberus,
-	// By default this function batches the transmissions by collecting them and
-	// use the batch-endpoint of cerberus for performance reasons.
-	// Analysis results must have their DEARawMessageID set, therefore calling UploadRawMessageToDEA
-	// on the raw instrument message is a prerequisite to submitting analysis results.
-	// use the batch-endpoint of cerberus for performance reasons
+	// SubmitAnalysisResultBatch - Submit result batch to Skeleton and Cerberus.
 	SubmitAnalysisResultBatch(ctx context.Context, resultBatch AnalysisResultSet) error
 
 	SubmitControlResults(ctx context.Context, controlResults []StandaloneControlResult) error

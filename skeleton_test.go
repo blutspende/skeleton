@@ -20,7 +20,7 @@ const serviceName = "testInstrumentDriver"
 const displayName = "testDisplayName"
 
 func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
-	dbConn, schemaName, pg, sqlConn := setupDbConnector("testSubmitAnalysisRequestsParallel")
+	dbConn, schemaName, pg, sqlConn := setupDbConnectorAndRunMigration("testSubmitAnalysisRequestsParallel")
 
 	configuration := config.Configuration{
 		APIPort:                          5000,
@@ -85,26 +85,27 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 
 	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, []string{}, nil, pg, dbConn, schemaName, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, messageService, skeletonManager, cerberusClientMock, &longPollClientMock{AnalysisRequests: analysisResultsWithoutAnalysisRequestsTest_AnalysisRequests}, deaClientMock, configuration)
 
-	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description)
+	_, _ = dbConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description)
 		VALUES ('abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
-	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_instruments(id, protocol_id, "name", hostname, client_port, enabled, connection_mode, running_mode, captureresults, capturediagnostics, replytoquery, status, timezone, file_encoding) 
+	_, _ = dbConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_instruments(id, protocol_id, "name", hostname, client_port, enabled, connection_mode, running_mode, captureresults, capturediagnostics, replytoquery, status, timezone, file_encoding)
 		VALUES ('93f36696-5ff0-45a9-87eb-ca5c064c5890', 'abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'TestInstrument', '192.168.1.13', NULL, TRUE, 'TCP_SERVER_ONLY', 'PRODUCTION', TRUE, TRUE, TRUE, 'ONLINE', 'Europe/Budapest', 'UTF8');`, schemaName))
-	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_analyte_mappings(id, instrument_id, instrument_analyte, analyte_id, result_type)
+	_, _ = dbConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_analyte_mappings(id, instrument_id, instrument_analyte, analyte_id, result_type)
 		VALUES ('8facbaeb-368f-482a-9169-4b128632f9e0', '93f36696-5ff0-45a9-87eb-ca5c064c5890', 'TESTANALYTE', '51bfea41-1b7e-48f7-8b35-46d930216de7', 'pein');`, schemaName))
-	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_channel_mappings(id, instrument_channel, channel_id, analyte_mapping_id) 
+	_, _ = dbConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_channel_mappings(id, instrument_channel, channel_id, analyte_mapping_id)
 		VALUES ('eb780147-a519-4e88-9a5f-961ce531f219', 'TestInstrumentChannel', '9fe9b1f9-e1fd-4669-873b-c2446d5d6b6f', '8facbaeb-368f-482a-9169-4b128632f9e0');`, schemaName))
-	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_result_mappings(id, analyte_mapping_id, "key", "value", "index") 
+	_, _ = dbConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_result_mappings(id, analyte_mapping_id, "key", "value", "index")
 		VALUES ('0e49a9a7-8ef0-4ef3-a1e1-6277398fcc08', :analyte_mapping_id, 'pos', 'pos', 0),
 		       ('329080eb-2dca-4a05-9730-24444cc3b487', :analyte_mapping_id, 'neg', 'neg', 1);`, schemaName))
-	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_request_mappings(id, code, instrument_id) 
+	_, err := dbConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_request_mappings(id, code, instrument_id)
 		VALUES ('9e83ad17-40bc-44b2-b6c9-50a9f559387b', 'Test1', '93f36696-5ff0-45a9-87eb-ca5c064c5890');`, schemaName))
-
+	_, err = dbConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_message_in(id, dea_raw_message_id, instrument_id,protocol_id,type,encoding,raw) VALUES ('2f369489-77d3-464e-87e2-edbeffa62ae7', '2f369489-77d3-464e-87e2-edbeffa62ae7','93f36696-5ff0-45a9-87eb-ca5c064c5890','abb539a3-286f-4c15-a7b7-2e9adf6eab91','RESULT','ASCII','')`, schemaName))
+	_, err = dbConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_message_in(id, dea_raw_message_id, instrument_id,protocol_id,type,encoding,raw) VALUES ('43a7b261-3e1d-4065-935a-ac15841f13e4', '43a7b261-3e1d-4065-935a-ac15841f13e4','93f36696-5ff0-45a9-87eb-ca5c064c5890','abb539a3-286f-4c15-a7b7-2e9adf6eab91','RESULT','ASCII','')`, schemaName))
 	go func() {
 		_ = skeletonInstance.Start()
 	}()
 
 	time.Sleep(1 * time.Second)
-	err := skeletonInstance.SubmitAnalysisResultBatch(context.TODO(), AnalysisResultSet{
+	err = skeletonInstance.SubmitAnalysisResultBatch(context.TODO(), AnalysisResultSet{
 		Results: analysisResultsWithoutAnalysisRequestsTest_analysisResults,
 	})
 	time.Sleep(5 * time.Second)
@@ -267,14 +268,11 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 
 	analysisResults := []AnalysisResult{
 		{
-			AnalysisRequest: AnalysisRequest{},
-			AnalyteMapping:  analyteMappings[0],
-			Instrument:      instrument,
-			SampleCode:      "testSampleCode",
-			DEARawMessageID: uuid.NullUUID{
-				UUID:  uuid.MustParse("2f369489-77d3-464e-87e2-edbeffa62ae7"),
-				Valid: true,
-			},
+			AnalysisRequest:          AnalysisRequest{},
+			AnalyteMapping:           analyteMappings[0],
+			Instrument:               instrument,
+			SampleCode:               "testSampleCode",
+			MessageInID:              uuid.MustParse("2f369489-77d3-464e-87e2-edbeffa62ae7"),
 			Result:                   "pos",
 			ResultMode:               "PRODUCTION",
 			Status:                   "PRE",
@@ -293,14 +291,11 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 			Images:                   []Image{},
 		},
 		{
-			AnalysisRequest: AnalysisRequest{},
-			AnalyteMapping:  analyteMappings[0],
-			Instrument:      instrument,
-			SampleCode:      "testSampleCode2",
-			DEARawMessageID: uuid.NullUUID{
-				UUID:  uuid.MustParse("43a7b261-3e1d-4065-935a-ac15841f13e4"),
-				Valid: true,
-			},
+			AnalysisRequest:          AnalysisRequest{},
+			AnalyteMapping:           analyteMappings[0],
+			Instrument:               instrument,
+			SampleCode:               "testSampleCode2",
+			MessageInID:              uuid.MustParse("43a7b261-3e1d-4065-935a-ac15841f13e4"),
 			Result:                   "pos",
 			ResultMode:               "PRODUCTION",
 			Status:                   "PRE",
@@ -522,15 +517,12 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 	analysisResultId2 := uuid.MustParse("69f853b0-fe43-4bd1-a8d4-64c0ff704558")
 	analysisResults := []AnalysisResult{
 		{
-			ID:              analysisResultId1,
-			AnalysisRequest: AnalysisRequest{},
-			AnalyteMapping:  analyteMappings[0],
-			Instrument:      instrument,
-			SampleCode:      "testSampleCode",
-			DEARawMessageID: uuid.NullUUID{
-				UUID:  uuid.MustParse("2f369489-77d3-464e-87e2-edbeffa62ae7"),
-				Valid: true,
-			},
+			ID:                       analysisResultId1,
+			AnalysisRequest:          AnalysisRequest{},
+			AnalyteMapping:           analyteMappings[0],
+			Instrument:               instrument,
+			SampleCode:               "testSampleCode",
+			MessageInID:              uuid.MustParse("2f369489-77d3-464e-87e2-edbeffa62ae7"),
 			Result:                   "pos",
 			ResultMode:               "PRODUCTION",
 			Status:                   "PRE",
@@ -549,15 +541,12 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 			Images:                   []Image{},
 		},
 		{
-			ID:              analysisResultId2,
-			AnalysisRequest: AnalysisRequest{},
-			AnalyteMapping:  analyteMappings[0],
-			Instrument:      instrument,
-			SampleCode:      "testSampleCode2",
-			DEARawMessageID: uuid.NullUUID{
-				UUID:  uuid.MustParse("43a7b261-3e1d-4065-935a-ac15841f13e4"),
-				Valid: true,
-			},
+			ID:                       analysisResultId2,
+			AnalysisRequest:          AnalysisRequest{},
+			AnalyteMapping:           analyteMappings[0],
+			Instrument:               instrument,
+			SampleCode:               "testSampleCode2",
+			MessageInID:              uuid.MustParse("43a7b261-3e1d-4065-935a-ac15841f13e4"),
 			Result:                   "pos",
 			ResultMode:               "PRODUCTION",
 			Status:                   "PRE",
@@ -688,6 +677,239 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 
 	time.Sleep(6 * time.Second)
 	assert.Equal(t, 2, len(skeletonManagerMock.AnalysisResultsForProcessing))
+}
+
+func TestSubmitAnalysisResultFieldValidations(t *testing.T) {
+	dbConn, schemaName, pg, sqlConn := setupDbConnector("testSubmitAnalysisResultsWithRequests")
+	configuration := config.Configuration{
+		APIPort:                          5000,
+		Authorization:                    false,
+		PermittedOrigin:                  "*",
+		ApplicationName:                  "Instrument API Test",
+		TCPListenerPort:                  5401,
+		InstrumentTransferRetryDelayInMs: 100,
+		ResultTransferFlushTimeout:       5,
+		ImageRetrySeconds:                60,
+	}
+
+	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
+	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
+	ctx, cancel := context.WithCancel(context.Background())
+
+	defer cancel()
+
+	skeletonManager := NewSkeletonManager(ctx)
+	skeletonManager.SetCallbackHandler(&skeletonCallbackHandlerV1Mock{
+		handleAnalysisRequestsFunc: func(request []AnalysisRequest) error {
+			return nil
+		},
+	})
+	cerberusClientMock := &cerberusClientMock{}
+
+	longPollClientMock := &longPollClientMock{}
+	deaClientMock := &deaClientMock{}
+
+	analysisService := NewAnalysisService(analysisRepository, deaClientMock, cerberusClientMock, skeletonManager)
+	conditionRepository := NewConditionRepository(dbConn, schemaName)
+	conditionService := NewConditionService(conditionRepository)
+	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
+	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
+	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
+	consoleLogService := NewConsoleLogService(cerberusClientMock)
+	messageInRepository := NewMessageInRepository(dbConn, schemaName, 0, 0)
+	messageOutRepository := NewMessageOutRepository(dbConn, schemaName, 0, 0)
+	messageOutOrderRepository := NewMessageOutOrderRepository(dbConn, schemaName, 0)
+	messageService := NewMessageService(deaClientMock, messageInRepository, messageOutRepository, messageOutOrderRepository, schemaName)
+	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, []string{}, nil, pg, dbConn, schemaName, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, messageService, skeletonManager, cerberusClientMock, longPollClientMock, deaClientMock, configuration)
+	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('9bec3063-435d-490f-bec0-88a6633ef4c2', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
+	_ = skeletonInstance.Start()
+	err := skeletonInstance.SubmitAnalysisResultBatch(context.TODO(), AnalysisResultSet{
+		Results: []AnalysisResult{
+			{
+				AnalyteMapping: AnalyteMapping{
+					ID: uuid.New(),
+				},
+				Instrument: Instrument{
+					ID: uuid.New(),
+				},
+				SampleCode:  "1",
+				MessageInID: uuid.UUID{},
+			},
+		},
+	})
+	assert.NotNil(t, err)
+	assert.Equal(t, "message in ID is missing at index: 0", err.Error())
+	err = skeletonInstance.SubmitAnalysisResultBatch(context.TODO(), AnalysisResultSet{
+		Results: []AnalysisResult{
+			{
+				AnalyteMapping: AnalyteMapping{
+					ID: uuid.New(),
+				},
+				Instrument: Instrument{
+					ID: uuid.New(),
+				},
+				SampleCode:  "",
+				MessageInID: uuid.New(),
+			},
+		},
+	})
+	assert.NotNil(t, err)
+	assert.Equal(t, "sample code missing at index 0", err.Error())
+	err = skeletonInstance.SubmitAnalysisResultBatch(context.TODO(), AnalysisResultSet{
+		Results: []AnalysisResult{
+			{
+				AnalyteMapping: AnalyteMapping{},
+				Instrument: Instrument{
+					ID: uuid.New(),
+				},
+				SampleCode:  "1",
+				MessageInID: uuid.New(),
+			},
+		},
+	})
+	assert.NotNil(t, err)
+	assert.Equal(t, "analyte mapping ID is missing at index: 0", err.Error())
+	err = skeletonInstance.SubmitAnalysisResultBatch(context.TODO(), AnalysisResultSet{
+		Results: []AnalysisResult{
+			{
+				AnalyteMapping: AnalyteMapping{
+					ID: uuid.New(),
+				},
+				Instrument: Instrument{
+					ID: uuid.New(),
+				},
+				SampleCode:  "1",
+				MessageInID: uuid.New(),
+				Reagents: []Reagent{
+					{
+						Type: "unknown",
+					},
+				},
+			},
+		},
+	})
+	assert.NotNil(t, err)
+	assert.Equal(t, "invalid type 'unknown' for reagent at index 0 in analysis result at index 0", err.Error())
+	err = skeletonInstance.SubmitAnalysisResultBatch(context.TODO(), AnalysisResultSet{
+		Reagents: []Reagent{
+			{
+				Type: "unknown",
+			},
+		},
+	})
+	assert.NotNil(t, err)
+	assert.Equal(t, "invalid type 'unknown' for reagent at index 0", err.Error())
+	err = skeletonInstance.SubmitAnalysisResultBatch(context.TODO(), AnalysisResultSet{
+		ControlResults: []ControlResult{
+			{
+				AnalyteMapping: AnalyteMapping{
+					ID: uuid.New(),
+				},
+				InstrumentID: uuid.UUID{},
+			},
+		},
+	})
+	assert.NotNil(t, err)
+	assert.Equal(t, "missing instrumentID on standalone control result at index 0", err.Error())
+	err = skeletonInstance.SubmitAnalysisResultBatch(context.TODO(), AnalysisResultSet{
+		ControlResults: []ControlResult{
+			{
+				AnalyteMapping: AnalyteMapping{
+					ID: uuid.UUID{},
+				},
+				InstrumentID: uuid.New(),
+			},
+		},
+	})
+	assert.NotNil(t, err)
+	assert.Equal(t, "missing analyte mapping ID on standalone control result at index 0", err.Error())
+}
+
+func TestSubmitControlResultsFieldValidations(t *testing.T) {
+	dbConn, schemaName, pg, sqlConn := setupDbConnector("testSubmitAnalysisResultsWithRequests")
+	configuration := config.Configuration{
+		APIPort:                          5000,
+		Authorization:                    false,
+		PermittedOrigin:                  "*",
+		ApplicationName:                  "Instrument API Test",
+		TCPListenerPort:                  5401,
+		InstrumentTransferRetryDelayInMs: 100,
+		ResultTransferFlushTimeout:       5,
+		ImageRetrySeconds:                60,
+	}
+
+	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
+	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
+	ctx, cancel := context.WithCancel(context.Background())
+
+	defer cancel()
+
+	skeletonManager := NewSkeletonManager(ctx)
+	skeletonManager.SetCallbackHandler(&skeletonCallbackHandlerV1Mock{
+		handleAnalysisRequestsFunc: func(request []AnalysisRequest) error {
+			return nil
+		},
+	})
+	cerberusClientMock := &cerberusClientMock{}
+
+	longPollClientMock := &longPollClientMock{}
+	deaClientMock := &deaClientMock{}
+
+	analysisService := NewAnalysisService(analysisRepository, deaClientMock, cerberusClientMock, skeletonManager)
+	conditionRepository := NewConditionRepository(dbConn, schemaName)
+	conditionService := NewConditionService(conditionRepository)
+	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
+	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
+	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
+	consoleLogService := NewConsoleLogService(cerberusClientMock)
+	messageInRepository := NewMessageInRepository(dbConn, schemaName, 0, 0)
+	messageOutRepository := NewMessageOutRepository(dbConn, schemaName, 0, 0)
+	messageOutOrderRepository := NewMessageOutOrderRepository(dbConn, schemaName, 0)
+	messageService := NewMessageService(deaClientMock, messageInRepository, messageOutRepository, messageOutOrderRepository, schemaName)
+	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, []string{}, nil, pg, dbConn, schemaName, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, messageService, skeletonManager, cerberusClientMock, longPollClientMock, deaClientMock, configuration)
+	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('9bec3063-435d-490f-bec0-88a6633ef4c2', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
+	_ = skeletonInstance.Start()
+	err := skeletonInstance.SubmitControlResults(ctx, []StandaloneControlResult{
+		{
+			ControlResult: ControlResult{
+				AnalyteMapping: AnalyteMapping{
+					ID: uuid.UUID{},
+				},
+				InstrumentID: uuid.New(),
+			},
+		},
+	})
+	assert.NotNil(t, err)
+	assert.Equal(t, "invalid analyte mapping ID at index 0", err.Error())
+	err = skeletonInstance.SubmitControlResults(ctx, []StandaloneControlResult{
+		{
+			ControlResult: ControlResult{
+				AnalyteMapping: AnalyteMapping{
+					ID: uuid.New(),
+				},
+				InstrumentID: uuid.UUID{},
+			},
+		},
+	})
+	assert.NotNil(t, err)
+	assert.Equal(t, "invalid instrumentID at index 0", err.Error())
+	err = skeletonInstance.SubmitControlResults(ctx, []StandaloneControlResult{
+		{
+			ControlResult: ControlResult{
+				AnalyteMapping: AnalyteMapping{
+					ID: uuid.New(),
+				},
+				InstrumentID: uuid.New(),
+			},
+			Reagents: []Reagent{
+				{
+					Type: "unknown",
+				},
+			},
+		},
+	})
+	assert.NotNil(t, err)
+	assert.Equal(t, "invalid reagent type at index 0 in control result at index 0", err.Error())
 }
 
 type skeletonCallbackHandlerV1Mock struct {
@@ -1211,14 +1433,11 @@ func (m *analysisRepositoryMock) WithTransaction(tx db.DbConnection) AnalysisRep
 
 var analysisResultsWithoutAnalysisRequestsTest_analysisResults = []AnalysisResult{
 	{
-		AnalysisRequest: AnalysisRequest{},
-		AnalyteMapping:  analysisResultsWithoutAnalysisRequestsTest_analyteMappings[0],
-		Instrument:      analysisResultsWithoutAnalysisRequestsTest_instrument,
-		SampleCode:      "TestSampleCode1",
-		DEARawMessageID: uuid.NullUUID{
-			UUID:  uuid.MustParse("2f369489-77d3-464e-87e2-edbeffa62ae7"),
-			Valid: true,
-		},
+		AnalysisRequest:          AnalysisRequest{},
+		AnalyteMapping:           analysisResultsWithoutAnalysisRequestsTest_analyteMappings[0],
+		Instrument:               analysisResultsWithoutAnalysisRequestsTest_instrument,
+		SampleCode:               "TestSampleCode1",
+		MessageInID:              uuid.MustParse("2f369489-77d3-464e-87e2-edbeffa62ae7"),
 		Result:                   "pos",
 		ResultMode:               "PRODUCTION",
 		Status:                   "PRE",
@@ -1249,14 +1468,11 @@ var analysisResultsWithoutAnalysisRequestsTest_analysisResults = []AnalysisResul
 		Images: []Image{},
 	},
 	{
-		AnalysisRequest: AnalysisRequest{},
-		AnalyteMapping:  analysisResultsWithoutAnalysisRequestsTest_analyteMappings[0],
-		Instrument:      analysisResultsWithoutAnalysisRequestsTest_instrument,
-		SampleCode:      "TestSampleCode2",
-		DEARawMessageID: uuid.NullUUID{
-			UUID:  uuid.MustParse("43a7b261-3e1d-4065-935a-ac15841f13e4"),
-			Valid: true,
-		},
+		AnalysisRequest:          AnalysisRequest{},
+		AnalyteMapping:           analysisResultsWithoutAnalysisRequestsTest_analyteMappings[0],
+		Instrument:               analysisResultsWithoutAnalysisRequestsTest_instrument,
+		SampleCode:               "TestSampleCode2",
+		MessageInID:              uuid.MustParse("43a7b261-3e1d-4065-935a-ac15841f13e4"),
 		Result:                   "pos",
 		ResultMode:               "PRODUCTION",
 		Status:                   "PRE",

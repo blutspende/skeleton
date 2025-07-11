@@ -934,14 +934,11 @@ func TestCreateAnalysisResultReagentRelations(t *testing.T) {
 
 	analysisResults := []AnalysisResult{
 		{
-			AnalysisRequest: AnalysisRequest{},
-			AnalyteMapping:  analyteMappings[0],
-			Instrument:      instrument,
-			SampleCode:      "",
-			DEARawMessageID: uuid.NullUUID{
-				UUID:  uuid.MustParse("92a2ba34-d891-4a1b-89fb-e0c4d717f729"),
-				Valid: true,
-			},
+			AnalysisRequest:          AnalysisRequest{},
+			AnalyteMapping:           analyteMappings[0],
+			Instrument:               instrument,
+			SampleCode:               "SampleCode1",
+			MessageInID:              uuid.MustParse("92a2ba34-d891-4a1b-89fb-e0c4d717f729"),
 			Result:                   "pos",
 			ResultMode:               Qualification,
 			Status:                   Final,
@@ -961,14 +958,11 @@ func TestCreateAnalysisResultReagentRelations(t *testing.T) {
 			ControlResults:           []ControlResult{},
 			Images:                   nil,
 		}, {
-			AnalysisRequest: AnalysisRequest{},
-			AnalyteMapping:  analyteMappings[1],
-			Instrument:      instrument,
-			SampleCode:      "",
-			DEARawMessageID: uuid.NullUUID{
-				UUID:  uuid.MustParse("92a2ba34-d891-4a1b-89fb-e0c4d717f729"),
-				Valid: true,
-			},
+			AnalysisRequest:          AnalysisRequest{},
+			AnalyteMapping:           analyteMappings[1],
+			Instrument:               instrument,
+			SampleCode:               "SampleCode2",
+			MessageInID:              uuid.MustParse("92a2ba34-d891-4a1b-89fb-e0c4d717f729"),
 			Result:                   "pos",
 			ResultMode:               Qualification,
 			Status:                   Final,
@@ -988,14 +982,11 @@ func TestCreateAnalysisResultReagentRelations(t *testing.T) {
 			ControlResults:           []ControlResult{},
 			Images:                   nil,
 		}, {
-			AnalysisRequest: AnalysisRequest{},
-			AnalyteMapping:  analyteMappings[2],
-			Instrument:      instrument,
-			SampleCode:      "",
-			DEARawMessageID: uuid.NullUUID{
-				UUID:  uuid.MustParse("92a2ba34-d891-4a1b-89fb-e0c4d717f729"),
-				Valid: true,
-			},
+			AnalysisRequest:          AnalysisRequest{},
+			AnalyteMapping:           analyteMappings[2],
+			Instrument:               instrument,
+			SampleCode:               "SampleCode3",
+			MessageInID:              uuid.MustParse("92a2ba34-d891-4a1b-89fb-e0c4d717f729"),
 			Result:                   "pos",
 			ResultMode:               Qualification,
 			Status:                   Final,
@@ -1015,14 +1006,11 @@ func TestCreateAnalysisResultReagentRelations(t *testing.T) {
 			ControlResults:           []ControlResult{},
 			Images:                   nil,
 		}, {
-			AnalysisRequest: AnalysisRequest{},
-			AnalyteMapping:  analyteMappings[3],
-			Instrument:      instrument,
-			SampleCode:      "",
-			DEARawMessageID: uuid.NullUUID{
-				UUID:  uuid.MustParse("92a2ba34-d891-4a1b-89fb-e0c4d717f729"),
-				Valid: true,
-			},
+			AnalysisRequest:          AnalysisRequest{},
+			AnalyteMapping:           analyteMappings[3],
+			Instrument:               instrument,
+			SampleCode:               "SampleCode4",
+			MessageInID:              uuid.MustParse("92a2ba34-d891-4a1b-89fb-e0c4d717f729"),
 			Result:                   "pos",
 			ResultMode:               Qualification,
 			Status:                   Final,
@@ -1042,14 +1030,11 @@ func TestCreateAnalysisResultReagentRelations(t *testing.T) {
 			ControlResults:           []ControlResult{},
 			Images:                   nil,
 		}, {
-			AnalysisRequest: AnalysisRequest{},
-			AnalyteMapping:  analyteMappings[4],
-			Instrument:      instrument,
-			SampleCode:      "",
-			DEARawMessageID: uuid.NullUUID{
-				UUID:  uuid.MustParse("92a2ba34-d891-4a1b-89fb-e0c4d717f729"),
-				Valid: true,
-			},
+			AnalysisRequest:          AnalysisRequest{},
+			AnalyteMapping:           analyteMappings[4],
+			Instrument:               instrument,
+			SampleCode:               "SampleCode5",
+			MessageInID:              uuid.MustParse("92a2ba34-d891-4a1b-89fb-e0c4d717f729"),
 			Result:                   "pos",
 			ResultMode:               Qualification,
 			Status:                   Final,
@@ -1320,7 +1305,7 @@ func setupTestDataForAnalysisResultStatusAndControlResultValidCheck(addExpectedC
 		AnalyteMapping:  analyteMappings[0],
 		Instrument:      instrument,
 		SampleCode:      "",
-		DEARawMessageID: uuid.NullUUID{
+		deaRawMessageID: uuid.NullUUID{
 			UUID:  uuid.MustParse("92a2ba34-d891-4a1b-89fb-e0c4d717f729"),
 			Valid: true,
 		},
@@ -1506,14 +1491,11 @@ func setupTestDataForAnalysisResultReagentAndControlRelationCheck(addExpectedCon
 
 	analysisResults := []AnalysisResult{
 		{
-			AnalysisRequest: AnalysisRequest{},
-			AnalyteMapping:  analyteMappings[0],
-			Instrument:      instrument,
-			SampleCode:      "",
-			DEARawMessageID: uuid.NullUUID{
-				UUID:  uuid.MustParse("92a2ba34-d891-4a1b-89fb-e0c4d717f729"),
-				Valid: true,
-			},
+			AnalysisRequest:          AnalysisRequest{},
+			AnalyteMapping:           analyteMappings[0],
+			Instrument:               instrument,
+			SampleCode:               "SampleCode1",
+			MessageInID:              uuid.MustParse("92a2ba34-d891-4a1b-89fb-e0c4d717f729"),
 			Result:                   "",
 			ResultMode:               Qualification,
 			Status:                   Final,
