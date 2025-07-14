@@ -242,16 +242,14 @@ func (sr *SkeletonTestRig) GetTestCodesToRevokeBySampleCodes(ctx context.Context
 	return nil, nil
 }
 
-func (sr *SkeletonTestRig) GetMessageOutOrdersBySampleCodesAndRequestMappingIDs(ctx context.Context, sampleCodes []string, requestMappingIDs []uuid.UUID, includePending bool) (map[string]map[uuid.UUID][]MessageOutOrder, error) {
+func (sr *SkeletonTestRig) GetMessageOutOrdersBySampleCodesAndRequestMappingIDs(ctx context.Context, sampleCodes []string, instrumentID uuid.UUID, includePending bool) (map[string]map[uuid.UUID][]MessageOutOrder, error) {
 	messageOutOrdersBySampleCodesAndRequestMappingIDs := make(map[string]map[uuid.UUID][]MessageOutOrder)
 	for _, m := range sr.MessageOutOrders {
 		if slices.Contains(sampleCodes, m.SampleCode) {
 			if _, ok := messageOutOrdersBySampleCodesAndRequestMappingIDs[m.SampleCode]; !ok {
 				messageOutOrdersBySampleCodesAndRequestMappingIDs[m.SampleCode] = make(map[uuid.UUID][]MessageOutOrder)
 			}
-			if slices.Contains(requestMappingIDs, m.RequestMappingID) {
-				messageOutOrdersBySampleCodesAndRequestMappingIDs[m.SampleCode][m.RequestMappingID] = append(messageOutOrdersBySampleCodesAndRequestMappingIDs[m.SampleCode][m.RequestMappingID], m)
-			}
+			messageOutOrdersBySampleCodesAndRequestMappingIDs[m.SampleCode][m.RequestMappingID] = append(messageOutOrdersBySampleCodesAndRequestMappingIDs[m.SampleCode][m.RequestMappingID], m)
 		}
 	}
 	return messageOutOrdersBySampleCodesAndRequestMappingIDs, nil

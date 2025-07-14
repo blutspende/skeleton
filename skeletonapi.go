@@ -99,9 +99,9 @@ type SkeletonAPI interface {
 	// GetTestCodesToRevokeBySampleCodes - returns a map where the key is the sample code, and the values are the test codes that need
 	// to be revoked as per the provided analysis request IDs
 	GetTestCodesToRevokeBySampleCodes(ctx context.Context, instrumentID uuid.UUID, analysisRequestIDs []uuid.UUID) (map[string][]string, error)
-	// GetMessageOutOrdersBySampleCodesAndRequestMappingIDs - returns all existing orders belonging to a MessageOut organized by sample codes and request mapping IDs.
+	// GetMessageOutOrdersBySampleCodesAndRequestMappingIDs - returns all existing orders belonging to a MessageOut for the provided instrument, organized by sample codes and request mapping IDs.
 	// If the includePending parameter is set to true, orders are included where the message has not been sent out yet
-	GetMessageOutOrdersBySampleCodesAndRequestMappingIDs(ctx context.Context, sampleCodes []string, requestMappingIDs []uuid.UUID, includePending bool) (map[string]map[uuid.UUID][]MessageOutOrder, error)
+	GetMessageOutOrdersBySampleCodesAndRequestMappingIDs(ctx context.Context, sampleCodes []string, instrumentID uuid.UUID, includePending bool) (map[string]map[uuid.UUID][]MessageOutOrder, error)
 	// RegisterSampleCodesToMessageIn - add sample codes to a message by ID, for lookup purposes
 	RegisterSampleCodesToMessageIn(ctx context.Context, messageID uuid.UUID, sampleCodes []string) error
 	// RegisterSampleCodesToMessageOut - add sample codes to a message by ID, for lookup purposes

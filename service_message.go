@@ -28,7 +28,7 @@ type MessageService interface {
 	GetUnsyncedMessageOuts(ctx context.Context, limit, offset int, cutoffTime time.Time) ([]MessageOut, error)
 	UpdateMessageIn(ctx context.Context, message MessageIn) error
 	UpdateMessageOut(ctx context.Context, message MessageOut) error
-	GetMessageOutOrdersBySampleCodesAndRequestMappingIDs(ctx context.Context, sampleCodes []string, analyteIDs []uuid.UUID, includePending bool) (map[string]map[uuid.UUID][]MessageOutOrder, error)
+	GetMessageOutOrdersBySampleCodesAndRequestMappingIDs(ctx context.Context, sampleCodes []string, instrumentID uuid.UUID, includePending bool) (map[string]map[uuid.UUID][]MessageOutOrder, error)
 	GetTestCodesToRevokeBySampleCodes(ctx context.Context, instrumentID uuid.UUID, analysisRequestIDs []uuid.UUID) (map[string][]string, error)
 	EnqueueMessageInsForArchiving(messages ...MessageIn)
 	EnqueueMessageOutsForArchiving(messages ...MessageOut)
@@ -221,8 +221,8 @@ func (s *messageService) UpdateMessageOut(ctx context.Context, message MessageOu
 	return s.messageOutRepository.Update(ctx, message)
 }
 
-func (s *messageService) GetMessageOutOrdersBySampleCodesAndRequestMappingIDs(ctx context.Context, sampleCodes []string, analyteIDs []uuid.UUID, includePending bool) (map[string]map[uuid.UUID][]MessageOutOrder, error) {
-	return s.messageOutOrderRepository.GetBySampleCodesAndRequestMappingIDs(ctx, sampleCodes, analyteIDs, includePending)
+func (s *messageService) GetMessageOutOrdersBySampleCodesAndRequestMappingIDs(ctx context.Context, sampleCodes []string, instrumentID uuid.UUID, includePending bool) (map[string]map[uuid.UUID][]MessageOutOrder, error) {
+	return s.messageOutOrderRepository.GetBySampleCodesAndRequestMappingIDs(ctx, sampleCodes, instrumentID, includePending)
 }
 
 func (s *messageService) GetTestCodesToRevokeBySampleCodes(ctx context.Context, instrumentID uuid.UUID, analysisRequestIDs []uuid.UUID) (map[string][]string, error) {
