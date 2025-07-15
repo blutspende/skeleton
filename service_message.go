@@ -32,7 +32,7 @@ type MessageService interface {
 	GetTestCodesToRevokeBySampleCodes(ctx context.Context, instrumentID uuid.UUID, analysisRequestIDs []uuid.UUID) (map[string][]string, error)
 	EnqueueMessageInsForArchiving(messages ...MessageIn)
 	EnqueueMessageOutsForArchiving(messages ...MessageOut)
-	StartDEAArchiving(ctx context.Context)
+	StartDEAArchiving(ctx context.Context, maxRetries int)
 	DeleteOldMessageInRecords(ctx context.Context, cleanupDays int, limit int) (int64, error)
 	DeleteOldMessageOutRecords(ctx context.Context, cleanupDays int, limit int) (int64, error)
 	RegisterSampleCodesToMessageIn(ctx context.Context, messageID uuid.UUID, sampleCodes []string) error
@@ -245,7 +245,7 @@ func (s *messageService) EnqueueMessageOutsForArchiving(messages ...MessageOut) 
 
 const deaRetryTimeoutSeconds = 30
 
-func (s *messageService) StartDEAArchiving(ctx context.Context) {
+func (s *messageService) StartDEAArchiving(ctx context.Context, maxRetries int) {
 	for {
 		select {
 		case messagesToArchive := <-s.messageInArchivingChan:
@@ -268,7 +268,9 @@ func (s *messageService) StartDEAArchiving(ctx context.Context) {
 					messagesToArchive[i].Status = messagestatus.Error
 					messagesToArchive[i].Error = &errorMsg
 					messagesToArchive[i].RetryCount += 1
-					failedMessagesByIDs[messagesToArchive[i].ID] = messagesToArchive[i]
+					if messagesToArchive[i].RetryCount <= maxRetries {
+						failedMessagesByIDs[messagesToArchive[i].ID] = messagesToArchive[i]
+					}
 				}
 				messagesToArchive[i].DEARawMessageID = uuid.NullUUID{
 					UUID:  deaID,

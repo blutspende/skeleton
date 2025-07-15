@@ -731,7 +731,7 @@ func (s *skeleton) Start() error {
 	for i := 0; i < s.config.AnalysisRequestWorkerPoolSize; i++ {
 		go s.processAnalysisRequests(s.ctx)
 	}
-	go s.messageService.StartDEAArchiving(s.ctx)
+	go s.messageService.StartDEAArchiving(s.ctx, s.config.MessageMaxRetries)
 	go s.messageService.StartSampleCodeRegisteringToDEA(s.ctx)
 	s.enqueueUnsyncedMessages(s.ctx)
 	go s.processAnalysisResults(s.ctx)
