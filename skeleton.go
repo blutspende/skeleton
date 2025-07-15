@@ -632,8 +632,8 @@ func (s *skeleton) GetTestCodesToRevokeBySampleCodes(ctx context.Context, instru
 	return s.messageService.GetTestCodesToRevokeBySampleCodes(ctx, instrumentID, analysisRequestIDs)
 }
 
-func (s *skeleton) GetMessageOutOrdersBySampleCodesAndRequestMappingIDs(ctx context.Context, sampleCodes []string, requestMappingIDs []uuid.UUID, includePending bool) (map[string]map[uuid.UUID][]MessageOutOrder, error) {
-	return s.messageService.GetMessageOutOrdersBySampleCodesAndRequestMappingIDs(ctx, sampleCodes, requestMappingIDs, includePending)
+func (s *skeleton) GetMessageOutOrdersBySampleCodesAndRequestMappingIDs(ctx context.Context, sampleCodes []string, instrumentID uuid.UUID, includePending bool) (map[string]map[uuid.UUID][]MessageOutOrder, error) {
+	return s.messageService.GetMessageOutOrdersBySampleCodesAndRequestMappingIDs(ctx, sampleCodes, instrumentID, includePending)
 }
 
 func (s *skeleton) AddAnalysisRequestsToMessageOutOrder(ctx context.Context, messageOutOrderID uuid.UUID, analysisRequestIDs []uuid.UUID) error {
@@ -731,7 +731,7 @@ func (s *skeleton) Start() error {
 	for i := 0; i < s.config.AnalysisRequestWorkerPoolSize; i++ {
 		go s.processAnalysisRequests(s.ctx)
 	}
-	go s.messageService.StartDEAArchiving(s.ctx)
+	go s.messageService.StartDEAArchiving(s.ctx, s.config.MessageMaxRetries)
 	go s.messageService.StartSampleCodeRegisteringToDEA(s.ctx)
 	s.enqueueUnsyncedMessages(s.ctx)
 	go s.processAnalysisResults(s.ctx)

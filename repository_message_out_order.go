@@ -16,7 +16,7 @@ import (
 type MessageOutOrderRepository interface {
 	CreateBatch(ctx context.Context, messageOutOrders []MessageOutOrder) ([]uuid.UUID, error)
 	AddAnalysisRequestsToMessageOutOrder(ctx context.Context, messageOutOrderID uuid.UUID, analysisRequestIDs []uuid.UUID) error
-	GetBySampleCodesAndRequestMappingIDs(ctx context.Context, sampleCodes []string, requestMappingIDs []uuid.UUID, includePending bool) (map[string]map[uuid.UUID][]MessageOutOrder, error)
+	GetBySampleCodesAndRequestMappingIDs(ctx context.Context, sampleCodes []string, instrumentID uuid.UUID, includePending bool) (map[string]map[uuid.UUID][]MessageOutOrder, error)
 	GetTestCodesToRevokeBySampleCodes(ctx context.Context, instrumentID uuid.UUID, analysisRequestIDs []uuid.UUID) (map[string][]string, error)
 	CreateTransaction() (db.DbConnection, error)
 
@@ -86,17 +86,19 @@ func (r *messageOutOrderRepository) AddAnalysisRequestsToMessageOutOrder(ctx con
 	return err
 }
 
-func (r *messageOutOrderRepository) GetBySampleCodesAndRequestMappingIDs(ctx context.Context, sampleCodes []string, requestMappingIDs []uuid.UUID, includePending bool) (map[string]map[uuid.UUID][]MessageOutOrder, error) {
+func (r *messageOutOrderRepository) GetBySampleCodesAndRequestMappingIDs(ctx context.Context, sampleCodes []string, instrumentID uuid.UUID, includePending bool) (map[string]map[uuid.UUID][]MessageOutOrder, error) {
+	queryArgs := []interface{}{sampleCodes, instrumentID, messagestatus.Sent}
 	filterCondition := " AND (smo.status = ?"
 	if includePending {
 		filterCondition += " OR smo.retry_count < ?"
+		queryArgs = append(queryArgs, r.maxRetries)
 	}
 	filterCondition += ")"
 
 	query := fmt.Sprintf(`SELECT DISTINCT smoo.* FROM %s.sk_message_out smo
 	INNER JOIN %s.sk_message_out_orders smoo ON smo.id = smoo.message_out_id
-		WHERE smoo.sample_code IN (?) AND smoo.request_mapping_id IN (?) %s;`, r.dbSchema, r.dbSchema, filterCondition)
-	query, args, _ := sqlx.In(query, sampleCodes, requestMappingIDs, messagestatus.Sent, r.maxRetries)
+		WHERE smoo.sample_code IN (?) AND smo.instrument_id = ? %s;`, r.dbSchema, r.dbSchema, filterCondition)
+	query, args, _ := sqlx.In(query, queryArgs...)
 	query = r.db.Rebind(query)
 	rows, err := r.db.QueryxContext(ctx, query, args...)
 	if err != nil {

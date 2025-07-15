@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/jmoiron/sqlx"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -16,6 +17,11 @@ type SkeletonTestRig struct {
 
 	storedInstrumentsMap              map[string]Instrument
 	StoredAnalysisResults             []AnalysisResultSet
+	StoredMessageIns                  []MessageIn
+	UpdatedMessageIns                 []MessageIn
+	StoredMessageOuts                 []MessageOut
+	UpdatedMessageOuts                []MessageOut
+	MessageOutOrders                  []MessageOutOrder
 	ControlResults                    map[string][]ControlResult
 	StoredStandaloneControlResultSets []StandaloneControlResult
 	AnalysisRequests                  []*AnalysisRequest
@@ -188,18 +194,22 @@ func (sr *SkeletonTestRig) RegisterManufacturerTests(ctx context.Context, manufa
 }
 
 func (sr *SkeletonTestRig) SaveMessageIn(ctx context.Context, messageIn MessageIn) (uuid.UUID, error) {
-	return uuid.Nil, nil
+	sr.StoredMessageIns = append(sr.StoredMessageIns, messageIn)
+	return messageIn.ID, nil
 }
 
 func (sr *SkeletonTestRig) UpdateMessageIn(ctx context.Context, messageIn MessageIn) error {
+	sr.UpdatedMessageIns = append(sr.UpdatedMessageIns, messageIn)
 	return nil
 }
 
 func (sr *SkeletonTestRig) SaveMessageOut(ctx context.Context, messageOut MessageOut) (uuid.UUID, error) {
-	return uuid.Nil, nil
+	sr.StoredMessageOuts = append(sr.StoredMessageOuts, messageOut)
+	return messageOut.ID, nil
 }
 
 func (sr *SkeletonTestRig) UpdateMessageOut(ctx context.Context, messageOut MessageOut) error {
+	sr.UpdatedMessageOuts = append(sr.UpdatedMessageOuts, messageOut)
 	return nil
 }
 
@@ -208,6 +218,11 @@ func (sr *SkeletonTestRig) GetUnprocessedMessageInsByInstrumentID(ctx context.Co
 }
 
 func (sr *SkeletonTestRig) SaveMessageOutBatch(ctx context.Context, messageOuts []MessageOut) ([]uuid.UUID, error) {
+	ids := make([]uuid.UUID, len(messageOuts))
+	for i := range messageOuts {
+		ids[i] = messageOuts[i].ID
+		sr.StoredMessageOuts = append(sr.StoredMessageOuts, messageOuts[i])
+	}
 	return nil, nil
 }
 
@@ -227,8 +242,17 @@ func (sr *SkeletonTestRig) GetTestCodesToRevokeBySampleCodes(ctx context.Context
 	return nil, nil
 }
 
-func (sr *SkeletonTestRig) GetMessageOutOrdersBySampleCodesAndRequestMappingIDs(ctx context.Context, sampleCodes []string, requestMappingIDs []uuid.UUID, includePending bool) (map[string]map[uuid.UUID][]MessageOutOrder, error) {
-	return nil, nil
+func (sr *SkeletonTestRig) GetMessageOutOrdersBySampleCodesAndRequestMappingIDs(ctx context.Context, sampleCodes []string, instrumentID uuid.UUID, includePending bool) (map[string]map[uuid.UUID][]MessageOutOrder, error) {
+	messageOutOrdersBySampleCodesAndRequestMappingIDs := make(map[string]map[uuid.UUID][]MessageOutOrder)
+	for _, m := range sr.MessageOutOrders {
+		if slices.Contains(sampleCodes, m.SampleCode) {
+			if _, ok := messageOutOrdersBySampleCodesAndRequestMappingIDs[m.SampleCode]; !ok {
+				messageOutOrdersBySampleCodesAndRequestMappingIDs[m.SampleCode] = make(map[uuid.UUID][]MessageOutOrder)
+			}
+			messageOutOrdersBySampleCodesAndRequestMappingIDs[m.SampleCode][m.RequestMappingID] = append(messageOutOrdersBySampleCodesAndRequestMappingIDs[m.SampleCode][m.RequestMappingID], m)
+		}
+	}
+	return messageOutOrdersBySampleCodesAndRequestMappingIDs, nil
 }
 
 func (sr *SkeletonTestRig) GetUnprocessedMessageIns(ctx context.Context) ([]MessageIn, error) {
