@@ -122,42 +122,6 @@ func (s *skeleton) SaveAnalysisRequestsInstrumentTransmissions(ctx context.Conte
 	return nil
 }
 
-func (s *skeleton) SubmitAnalysisResult(ctx context.Context, resultData AnalysisResultSet) error {
-	s.unprocessedHandlingWaitGroup.Wait()
-
-	savedResultDataList, err := s.analysisService.CreateAnalysisResultsBatch(ctx, resultData)
-	if err != nil {
-		return err
-	}
-
-	savedResultData := savedResultDataList[0]
-
-	go func(analysisResult AnalysisResult) {
-		err := s.saveImages(ctx, &analysisResult)
-		if err != nil {
-			log.Error().Err(err).Str("analysisResultID", analysisResult.ID.String()).Msg("save images of analysis result failed")
-		}
-		for j := range analysisResult.ControlResults {
-			err := s.SaveControlResultImages(ctx, &analysisResult.ControlResults[j])
-			if err != nil {
-				log.Error().Err(err).Str("controlResultID", analysisResult.ControlResults[j].ID.String()).Msg("save images of control result failed")
-			}
-		}
-		analyteRequests, err := s.analysisRepository.GetAnalysisRequestsBySampleCodeAndAnalyteID(ctx, analysisResult.SampleCode, analysisResult.AnalyteMapping.AnalyteID)
-		if err != nil {
-			log.Error().Err(err).Msg("get analysis requests by sample code and analyteID failed after saving results")
-			return
-		}
-
-		for i := range analyteRequests {
-			savedResultData.AnalysisRequest = analyteRequests[i]
-			s.manager.SendResultForProcessing(savedResultData)
-		}
-	}(savedResultData)
-
-	return nil
-}
-
 func (s *skeleton) SubmitAnalysisResultBatch(ctx context.Context, resultBatch AnalysisResultSet) error {
 	s.unprocessedHandlingWaitGroup.Wait()
 
@@ -197,7 +161,19 @@ func (s *skeleton) SubmitAnalysisResultBatch(ctx context.Context, resultBatch An
 
 func (s *skeleton) SubmitControlResults(ctx context.Context, controlResults []StandaloneControlResult) error {
 	s.unprocessedHandlingWaitGroup.Wait()
-
+	for i := range controlResults {
+		if controlResults[i].AnalyteMapping.ID == uuid.Nil {
+			return fmt.Errorf("invalid analyte mapping ID at index %d", i)
+		}
+		if controlResults[i].InstrumentID == uuid.Nil {
+			return fmt.Errorf("invalid instrument ID at index %d", i)
+		}
+		for j, reagent := range controlResults[i].Reagents {
+			if reagent.Type != Standard && reagent.Type != Diluent {
+				return fmt.Errorf("invalid reagent type at index %d in control result at index %d", j, i)
+			}
+		}
+	}
 	var err error
 	var analysisResultIds []uuid.UUID
 	controlResults, analysisResultIds, err = s.analysisService.CreateControlResultBatch(ctx, controlResults)
