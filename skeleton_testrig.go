@@ -108,7 +108,7 @@ func (sr *SkeletonTestRig) GetAnalysisResultIdsWhereLastestControlIsInvalid(ctx 
 	return make([]uuid.UUID, 0), nil
 }
 
-func (sr *SkeletonTestRig) GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMappingId uuid.UUID, instrumentId uuid.UUID) ([]ControlResult, error) {
+func (sr *SkeletonTestRig) GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMapping AnalyteMapping, instrumentId uuid.UUID) ([]ControlResult, error) {
 	return sr.ControlResults[fmt.Sprintf("%s%s%s", reagent.Manufacturer, reagent.LotNo, reagent.SerialNumber)], nil
 }
 

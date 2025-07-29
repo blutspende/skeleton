@@ -1699,7 +1699,7 @@ func (r *extendedMockAnalysisRepo) CreateAnalysisResultReagentRelations(ctx cont
 	return nil
 }
 
-func (r *extendedMockAnalysisRepo) GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMappingId uuid.UUID, instrumentId uuid.UUID) ([]ControlResult, error) {
+func (r *extendedMockAnalysisRepo) GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMapping AnalyteMapping, instrumentId uuid.UUID) ([]ControlResult, error) {
 	return nil, nil
 }
 

@@ -37,6 +37,7 @@ type instrumentTO struct {
 	FtpServerType       *string               `json:"ftpServerType"`
 	AnalyteMappings     []analyteMappingTO    `json:"analyteMappings"`
 	RequestMappings     []requestMappingTO    `json:"requestMappings"`
+	ControlMappings     []controlMappingTO    `json:"controlMappings"`
 	Settings            []instrumentSettingTO `json:"instrumentSettings"`
 	SortingRuleGroups   []sortingRuleGroupTO  `json:"sortingRuleGroups"`
 }
@@ -57,6 +58,12 @@ type requestMappingTO struct {
 	Code       string      `json:"code"`
 	IsDefault  bool        `json:"isDefault"`
 	AnalyteIDs []uuid.UUID `json:"requestMappingAnalyteIds"`
+}
+
+type controlMappingTO struct {
+	ID                uuid.UUID   `json:"id"`
+	AnalyteID         uuid.UUID   `json:"analyteId"`
+	ControlAnalyteIDs []uuid.UUID `json:"controlAnalyteIds"`
 }
 
 type channelMappingTO struct {
@@ -162,6 +169,7 @@ func convertInstrumentTOToInstrument(instrumentTO instrumentTO) Instrument {
 		ClientPort:         instrumentTO.ClientPort,
 		AnalyteMappings:    make([]AnalyteMapping, len(instrumentTO.AnalyteMappings)),
 		RequestMappings:    make([]RequestMapping, len(instrumentTO.RequestMappings)),
+		ControlMappings:    make([]ControlMapping, len(instrumentTO.ControlMappings)),
 		SortingRules:       make([]SortingRule, 0),
 		Settings:           convertInstrumentSettingTOsToInstrumentSettings(instrumentTO.Settings),
 	}
@@ -191,6 +199,10 @@ func convertInstrumentTOToInstrument(instrumentTO instrumentTO) Instrument {
 
 	for i, requestMapping := range instrumentTO.RequestMappings {
 		model.RequestMappings[i] = convertRequestMappingTOToRequestMapping(requestMapping)
+	}
+
+	for i, controlMapping := range instrumentTO.ControlMappings {
+		model.ControlMappings[i] = convertControlMappingTOToControlMapping(controlMapping)
 	}
 
 	model.SortingRules = convertSortingRuleGroupTOsToSortingRules(instrumentTO.SortingRuleGroups, instrumentTO.ID)
@@ -243,6 +255,14 @@ func convertRequestMappingTOToRequestMapping(requestMappingTO requestMappingTO) 
 		Code:       requestMappingTO.Code,
 		IsDefault:  requestMappingTO.IsDefault,
 		AnalyteIDs: requestMappingTO.AnalyteIDs,
+	}
+}
+
+func convertControlMappingTOToControlMapping(controlMappingTO controlMappingTO) ControlMapping {
+	return ControlMapping{
+		ID:                controlMappingTO.ID,
+		AnalyteID:         controlMappingTO.AnalyteID,
+		ControlAnalyteIDs: controlMappingTO.ControlAnalyteIDs,
 	}
 }
 

@@ -157,6 +157,7 @@ type Instrument struct {
 	FTPConfig          *FTPConfig
 	AnalyteMappings    []AnalyteMapping
 	RequestMappings    []RequestMapping
+	ControlMappings    []ControlMapping
 	SortingRules       []SortingRule
 	Settings           []InstrumentSetting
 	CreatedAt          time.Time
@@ -231,6 +232,12 @@ type RequestMapping struct {
 	Code       string
 	IsDefault  bool
 	AnalyteIDs []uuid.UUID
+}
+
+type ControlMapping struct {
+	ID                uuid.UUID
+	AnalyteID         uuid.UUID
+	ControlAnalyteIDs []uuid.UUID
 }
 
 type UploadLogStatus string

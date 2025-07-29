@@ -389,8 +389,8 @@ func (s *skeleton) GetAnalysisResultIdsWhereLastestControlIsInvalid(ctx context.
 	return s.analysisRepository.GetAnalysisResultIdsWhereLastestControlIsInvalid(ctx, controlResult, reagent)
 }
 
-func (s *skeleton) GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMappingId uuid.UUID, instrumentId uuid.UUID) ([]ControlResult, error) {
-	return s.analysisRepository.GetLatestControlResultsByReagent(ctx, reagent, resultYieldTime, analyteMappingId, instrumentId)
+func (s *skeleton) GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMapping AnalyteMapping, instrumentId uuid.UUID) ([]ControlResult, error) {
+	return s.analysisRepository.GetLatestControlResultsByReagent(ctx, reagent, resultYieldTime, analyteMapping, instrumentId)
 }
 
 func (s *skeleton) GetInstrument(ctx context.Context, instrumentID uuid.UUID) (Instrument, error) {

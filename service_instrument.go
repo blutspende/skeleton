@@ -105,6 +105,21 @@ func (s *instrumentService) CreateInstrument(ctx context.Context, instrument Ins
 		return uuid.Nil, err
 	}
 
+	controlMappingIDs, err := s.instrumentRepository.WithTransaction(transaction).CreateControlMappings(ctx, instrument.ControlMappings, id)
+	if err != nil {
+		_ = transaction.Rollback()
+		return uuid.Nil, err
+	}
+	controlAnalyteIDsByControlMappingIDs := make(map[uuid.UUID][]uuid.UUID)
+	for i, controlMappingID := range controlMappingIDs {
+		controlAnalyteIDsByControlMappingIDs[controlMappingID] = instrument.ControlMappings[i].ControlAnalyteIDs
+	}
+	err = s.instrumentRepository.WithTransaction(transaction).CreateControlMappingAnalytes(ctx, controlAnalyteIDsByControlMappingIDs)
+	if err != nil {
+		_ = transaction.Rollback()
+		return uuid.Nil, err
+	}
+
 	protocolSettings, err := s.instrumentRepository.GetProtocolSettings(ctx, instrument.ProtocolID)
 	if err != nil {
 		return uuid.Nil, err
@@ -253,6 +268,29 @@ func (s *instrumentService) GetInstruments(ctx context.Context) ([]Instrument, e
 		requestMappingsByIDs[requestMappingID].AnalyteIDs = analyteIDs
 	}
 
+	controlAnalyteMappingsByInstrumentID, err := s.instrumentRepository.GetControlMappings(ctx, instrumentIDs)
+	if err != nil {
+		return nil, err
+	}
+	controlMappingIDs := make([]uuid.UUID, 0)
+	controlMappingsByIDs := make(map[uuid.UUID]*ControlMapping)
+	for instrumentID, controlMappings := range controlAnalyteMappingsByInstrumentID {
+		instrumentsByIDs[instrumentID].ControlMappings = controlMappings
+		for i := range instrumentsByIDs[instrumentID].ControlMappings {
+			controlMappingIDs = append(controlMappingIDs, controlMappings[i].ID)
+			controlMappingsByIDs[controlMappings[i].ID] = &instrumentsByIDs[instrumentID].ControlMappings[i]
+		}
+	}
+
+	controlMappingControlAnalyteIDs, err := s.instrumentRepository.GetControlMappingAnalytes(ctx, controlMappingIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	for controlMappingID, controlAnalyteIDs := range controlMappingControlAnalyteIDs {
+		controlMappingsByIDs[controlMappingID].ControlAnalyteIDs = controlAnalyteIDs
+	}
+
 	settingsMap, err := s.instrumentRepository.GetInstrumentsSettings(ctx, instrumentIDs)
 	if err != nil {
 		return nil, err
@@ -372,6 +410,29 @@ func (s *instrumentService) GetInstrumentByID(ctx context.Context, tx db.DbConne
 		requestMappingsByIDs[requestMappingID].AnalyteIDs = analyteIDs
 	}
 
+	controlAnalyteMappingsByInstrumentID, err := s.instrumentRepository.WithTransaction(tx).GetControlMappings(ctx, instrumentIDs)
+	if err != nil {
+		return instrument, err
+	}
+	controlMappingIDs := make([]uuid.UUID, 0)
+	controlMappingsByIDs := make(map[uuid.UUID]*ControlMapping)
+	for _, controlMappings := range controlAnalyteMappingsByInstrumentID {
+		instrument.ControlMappings = controlMappings
+		for i := range instrument.ControlMappings {
+			controlMappingIDs = append(controlMappingIDs, controlMappings[i].ID)
+			controlMappingsByIDs[controlMappings[i].ID] = &instrument.ControlMappings[i]
+		}
+	}
+
+	controlMappingControlAnalyteIDs, err := s.instrumentRepository.WithTransaction(tx).GetControlMappingAnalytes(ctx, controlMappingIDs)
+	if err != nil {
+		return instrument, err
+	}
+
+	for controlMappingID, controlAnalyteIDs := range controlMappingControlAnalyteIDs {
+		controlMappingsByIDs[controlMappingID].ControlAnalyteIDs = controlAnalyteIDs
+	}
+
 	settingsMap, err := s.instrumentRepository.WithTransaction(tx).GetInstrumentsSettings(ctx, instrumentIDs)
 	if err != nil {
 		return instrument, err
@@ -481,6 +542,29 @@ func (s *instrumentService) GetInstrumentByIP(ctx context.Context, ip string) (I
 
 	for requestMappingID, analyteIDs := range requestMappingAnalyteIDs {
 		requestMappingsByIDs[requestMappingID].AnalyteIDs = analyteIDs
+	}
+
+	controlAnalyteMappingsByInstrumentID, err := s.instrumentRepository.GetControlMappings(ctx, instrumentIDs)
+	if err != nil {
+		return instrument, err
+	}
+	controlMappingIDs := make([]uuid.UUID, 0)
+	controlMappingsByIDs := make(map[uuid.UUID]*ControlMapping)
+	for _, controlMappings := range controlAnalyteMappingsByInstrumentID {
+		instrument.ControlMappings = controlMappings
+		for i := range instrument.ControlMappings {
+			controlMappingIDs = append(controlMappingIDs, controlMappings[i].ID)
+			controlMappingsByIDs[controlMappings[i].ID] = &instrument.ControlMappings[i]
+		}
+	}
+
+	controlMappingControlAnalyteIDs, err := s.instrumentRepository.GetControlMappingAnalytes(ctx, controlMappingIDs)
+	if err != nil {
+		return instrument, err
+	}
+
+	for controlMappingID, controlAnalyteIDs := range controlMappingControlAnalyteIDs {
+		controlMappingsByIDs[controlMappingID].ControlAnalyteIDs = controlAnalyteIDs
 	}
 
 	settingsMap, err := s.instrumentRepository.GetInstrumentsSettings(ctx, instrumentIDs)
@@ -693,6 +777,117 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 		return err
 	}
 
+	updateControlAnalyteMappings := make([]ControlMapping, 0)
+	deletedControlAnalyteMappingIDs := make([]uuid.UUID, 0)
+	deletedControlMappingAnalyteIDsMap := make(map[uuid.UUID][]uuid.UUID)
+	createControlMappingAnalyteIDsMap := make(map[uuid.UUID][]uuid.UUID)
+	for i := range oldInstrument.ControlMappings {
+		isMappingFound := false
+		for j := range instrument.ControlMappings {
+			if instrument.ControlMappings[j].ID == oldInstrument.ControlMappings[i].ID {
+				isMappingFound = true
+				if instrument.ControlMappings[j].AnalyteID != oldInstrument.ControlMappings[i].AnalyteID {
+					updateControlAnalyteMappings = append(updateControlAnalyteMappings, instrument.ControlMappings[j])
+				}
+				for _, oldControlAnalyteID := range oldInstrument.ControlMappings[i].ControlAnalyteIDs {
+					isControlAnalyteFound := false
+					for _, newControlAnalyteID := range instrument.ControlMappings[i].ControlAnalyteIDs {
+						if oldControlAnalyteID == newControlAnalyteID {
+							isControlAnalyteFound = true
+							break
+						}
+					}
+					if !isControlAnalyteFound {
+						if _, ok := deletedControlMappingAnalyteIDsMap[instrument.ControlMappings[j].ID]; !ok {
+							deletedControlMappingAnalyteIDsMap[instrument.ControlMappings[j].ID] = make([]uuid.UUID, 0)
+						}
+						deletedControlMappingAnalyteIDsMap[instrument.ControlMappings[j].ID] = append(deletedControlMappingAnalyteIDsMap[instrument.ControlMappings[j].ID], oldControlAnalyteID)
+					}
+				}
+
+				for _, newControlAnalyteID := range instrument.ControlMappings[i].ControlAnalyteIDs {
+					isControlAnalyteFound := false
+					for _, oldControlAnalyteID := range oldInstrument.ControlMappings[i].ControlAnalyteIDs {
+						if oldControlAnalyteID == newControlAnalyteID {
+							isControlAnalyteFound = true
+							break
+						}
+					}
+					if !isControlAnalyteFound {
+						if _, ok := createControlMappingAnalyteIDsMap[instrument.ControlMappings[j].ID]; !ok {
+							createControlMappingAnalyteIDsMap[instrument.ControlMappings[j].ID] = make([]uuid.UUID, 0)
+						}
+						createControlMappingAnalyteIDsMap[instrument.ControlMappings[j].ID] = append(createControlMappingAnalyteIDsMap[instrument.ControlMappings[j].ID], newControlAnalyteID)
+					}
+				}
+
+				break
+			}
+		}
+		if !isMappingFound {
+			deletedControlAnalyteMappingIDs = append(deletedControlAnalyteMappingIDs, oldInstrument.ControlMappings[i].ID)
+		}
+	}
+	err = s.instrumentRepository.WithTransaction(tx).DeleteControlMappings(ctx, deletedControlAnalyteMappingIDs)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	err = s.instrumentRepository.WithTransaction(tx).DeleteControlMappingAnalytesByControlMappingIDs(ctx, deletedControlAnalyteMappingIDs)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	for controlAnalyteMappingID, controlAnalyteIDs := range deletedControlMappingAnalyteIDsMap {
+		err = s.instrumentRepository.WithTransaction(tx).DeleteControlMappingAnalytesByControlMappingIDAndControlAnalyteIDs(ctx, controlAnalyteMappingID, controlAnalyteIDs)
+		if err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+	}
+
+	createControlAnalyteMappings := make([]ControlMapping, 0)
+	for i := range instrument.ControlMappings {
+		isMappingFound := false
+		for j := range oldInstrument.ControlMappings {
+			if instrument.ControlMappings[i].ID == oldInstrument.ControlMappings[j].ID {
+				isMappingFound = true
+				break
+			}
+		}
+		if !isMappingFound {
+			createControlAnalyteMappings = append(createControlAnalyteMappings, instrument.ControlMappings[i])
+		}
+	}
+	controlAnalyteMappingIDs, err := s.instrumentRepository.WithTransaction(tx).CreateControlMappings(ctx, createControlAnalyteMappings, instrument.ID)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	for i, controlAnalyteMappingID := range controlAnalyteMappingIDs {
+		createControlAnalyteMappings[i].ID = controlAnalyteMappingID
+		if _, ok := createControlMappingAnalyteIDsMap[controlAnalyteMappingID]; !ok {
+			createControlMappingAnalyteIDsMap[controlAnalyteMappingID] = make([]uuid.UUID, 0)
+		}
+		createControlMappingAnalyteIDsMap[controlAnalyteMappingID] = append(createControlMappingAnalyteIDsMap[controlAnalyteMappingID], createControlAnalyteMappings[i].ControlAnalyteIDs...)
+	}
+
+	err = s.instrumentRepository.WithTransaction(tx).CreateControlMappingAnalytes(ctx, createControlMappingAnalyteIDsMap)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	for i := range updateControlAnalyteMappings {
+		err = s.instrumentRepository.WithTransaction(tx).UpdateControlMapping(ctx, updateControlAnalyteMappings[i], instrument.ID)
+		if err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+	}
+
 	protocolSettings, err := s.instrumentRepository.GetProtocolSettings(ctx, instrument.ProtocolID)
 	if err != nil {
 		return err
@@ -791,6 +986,18 @@ func (s *instrumentService) DeleteInstrument(ctx context.Context, id uuid.UUID) 
 		return err
 	}
 
+	err = s.instrumentRepository.WithTransaction(tx).DeleteControlMappingsByInstrumentId(ctx, id)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	err = s.instrumentRepository.WithTransaction(tx).DeleteControlMappingAnalytesByInstrumentID(ctx, id)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
 	deletionHash := HashDeletedInstrument(id)
 	err = s.cerberusClient.VerifyInstrumentHash(deletionHash)
 	if err != nil {
@@ -872,6 +1079,7 @@ func (s *instrumentService) UpdateExpectedControlResults(ctx context.Context, in
 
 	expectedControlResultsMapBySampleCode := make(map[string]bool)
 	updatedSampleCodes := make([]string, 0)
+	analyteMappingIds := make([]uuid.UUID, 0)
 
 	for _, expectedControlResult := range expectedControlResults {
 		if _, ok := expectedControlResultsMapBySampleCode[expectedControlResult.SampleCode]; !ok {
@@ -890,6 +1098,7 @@ func (s *instrumentService) UpdateExpectedControlResults(ctx context.Context, in
 		for _, expectedControlResult := range expectedControlResults {
 			if existingExpectedControlResult.ID == expectedControlResult.ID {
 				updateExpectedControlResults = append(updateExpectedControlResults, expectedControlResult)
+				analyteMappingIds = append(analyteMappingIds, expectedControlResult.AnalyteMappingId)
 			}
 		}
 	}
@@ -907,6 +1116,7 @@ func (s *instrumentService) UpdateExpectedControlResults(ctx context.Context, in
 		if !alreadyExists {
 			expectedControlResult.CreatedBy = userId
 			createExpectedControlResults = append(createExpectedControlResults, expectedControlResult)
+			analyteMappingIds = append(analyteMappingIds, expectedControlResult.AnalyteMappingId)
 		}
 	}
 
@@ -945,6 +1155,8 @@ func (s *instrumentService) UpdateExpectedControlResults(ctx context.Context, in
 		_ = tx.Rollback()
 		return db.ErrCommitTransactionFailed
 	}
+
+	s.manager.SendAnalyteMappingsToValidateControlResults(analyteMappingIds)
 
 	return nil
 }

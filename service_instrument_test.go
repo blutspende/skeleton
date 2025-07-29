@@ -296,8 +296,11 @@ func TestUpdateInstrument(t *testing.T) {
 	assert.Contains(t, cerberusClientMock.VerifiedInstrumentHashes, HashInstrument(instr))
 
 	analyteID1 := uuid.New()
+	controlAnalyteID1 := uuid.New()
 	analyteMappingID1 := uuid.New()
+	controlAnalyteMappingID1 := uuid.New()
 	channelID1 := uuid.New()
+	controlMappingID1 := uuid.New()
 
 	instr = Instrument{
 		ID:                 instrumentID,
@@ -341,6 +344,30 @@ func TestUpdateInstrument(t *testing.T) {
 				},
 				ResultType: "pein",
 			},
+			{
+				ID:                controlAnalyteMappingID1,
+				InstrumentAnalyte: "TESTCONTROLANALYTE",
+				AnalyteID:         controlAnalyteID1,
+				ChannelMappings: []ChannelMapping{
+					{
+						InstrumentChannel: "TestInstrumentChannel",
+						ChannelID:         channelID1,
+					},
+				},
+				ResultMappings: []ResultMapping{
+					{
+						Key:   "pos",
+						Value: "pos",
+						Index: 0,
+					},
+					{
+						Key:   "neg",
+						Value: "neg",
+						Index: 1,
+					},
+				},
+				ResultType: "pein",
+			},
 		},
 		RequestMappings: []RequestMapping{
 			{
@@ -351,6 +378,15 @@ func TestUpdateInstrument(t *testing.T) {
 				},
 			},
 		},
+		ControlMappings: []ControlMapping{
+			{
+				ID:        controlMappingID1,
+				AnalyteID: analyteID1,
+				ControlAnalyteIDs: []uuid.UUID{
+					controlAnalyteID1,
+				},
+			},
+		},
 	}
 	err = instrumentService.UpdateInstrument(ctx, instr, uuid.MustParse("9d5fb5e9-65a1-4479-8f82-25b04145bfe1"))
 	assert.Nil(t, err)
@@ -358,7 +394,7 @@ func TestUpdateInstrument(t *testing.T) {
 
 	instrument, err = instrumentService.GetInstrumentByID(ctx, nil, instrumentID, false)
 	assert.Equal(t, "TestInstrumentUpdated", instrument.Name)
-	assert.Len(t, instrument.AnalyteMappings, 1)
+	assert.Len(t, instrument.AnalyteMappings, 2)
 	assert.Equal(t, analyteID1, instrument.AnalyteMappings[0].AnalyteID)
 	assert.Equal(t, "pein", string(instrument.AnalyteMappings[0].ResultType))
 	assert.Len(t, instrument.AnalyteMappings[0].ChannelMappings, 1)
@@ -378,15 +414,28 @@ func TestUpdateInstrument(t *testing.T) {
 		}
 	}
 
+	assert.Equal(t, controlAnalyteID1, instrument.AnalyteMappings[1].AnalyteID)
+	assert.Equal(t, "pein", string(instrument.AnalyteMappings[1].ResultType))
+	assert.Len(t, instrument.AnalyteMappings[1].ChannelMappings, 1)
+	assert.Equal(t, "TestInstrumentChannel", instrument.AnalyteMappings[1].ChannelMappings[0].InstrumentChannel)
+	assert.Equal(t, channelID1, instrument.AnalyteMappings[1].ChannelMappings[0].ChannelID)
+	assert.Len(t, instrument.AnalyteMappings[1].ResultMappings, 2)
+
 	assert.Len(t, instrument.RequestMappings, 1)
 	assert.Equal(t, "ReqMap", instrument.RequestMappings[0].Code)
 	assert.Equal(t, true, instrument.RequestMappings[0].IsDefault)
 	assert.Len(t, instrument.RequestMappings[0].AnalyteIDs, 1)
 	assert.Equal(t, analyteID1, instrument.RequestMappings[0].AnalyteIDs[0])
+	assert.Len(t, instrument.ControlMappings, 1)
+	assert.Equal(t, analyteID1, instrument.ControlMappings[0].AnalyteID)
+	assert.Len(t, instrument.ControlMappings[0].ControlAnalyteIDs, 1)
+	assert.Equal(t, controlAnalyteID1, instrument.ControlMappings[0].ControlAnalyteIDs[0])
 
 	analyteID2 := uuid.New()
 	analyteID3 := uuid.New()
 	channelID2 := uuid.New()
+	controlMappingID2 := uuid.New()
+	controlMappingID3 := uuid.New()
 
 	instr = Instrument{
 		ID:                 instrumentID,
@@ -464,6 +513,22 @@ func TestUpdateInstrument(t *testing.T) {
 				},
 			},
 		},
+		ControlMappings: []ControlMapping{
+			{
+				ID:        controlMappingID2,
+				AnalyteID: analyteID1,
+				ControlAnalyteIDs: []uuid.UUID{
+					controlAnalyteID1,
+				},
+			},
+			{
+				ID:        controlMappingID3,
+				AnalyteID: analyteID2,
+				ControlAnalyteIDs: []uuid.UUID{
+					controlAnalyteID1,
+				},
+			},
+		},
 	}
 	err = instrumentService.UpdateInstrument(ctx, instr, uuid.MustParse("9d5fb5e9-65a1-4479-8f82-25b04145bfe1"))
 	assert.Nil(t, err)
@@ -523,6 +588,14 @@ func TestUpdateInstrument(t *testing.T) {
 	assert.Len(t, instrument.RequestMappings[0].AnalyteIDs, 2)
 	assert.Contains(t, instrument.RequestMappings[0].AnalyteIDs, analyteID2)
 	assert.Contains(t, instrument.RequestMappings[0].AnalyteIDs, analyteID3)
+
+	assert.Len(t, instrument.ControlMappings, 2)
+	assert.Contains(t, []uuid.UUID{analyteID1, analyteID2}, instrument.ControlMappings[0].AnalyteID)
+	assert.Contains(t, []uuid.UUID{analyteID1, analyteID2}, instrument.ControlMappings[1].AnalyteID)
+	assert.Len(t, instrument.ControlMappings[0].ControlAnalyteIDs, 1)
+	assert.Equal(t, controlAnalyteID1, instrument.ControlMappings[0].ControlAnalyteIDs[0])
+	assert.Len(t, instrument.ControlMappings[1].ControlAnalyteIDs, 1)
+	assert.Equal(t, controlAnalyteID1, instrument.ControlMappings[1].ControlAnalyteIDs[0])
 }
 
 func TestNotVerifiedInstrument(t *testing.T) {
@@ -1224,6 +1297,38 @@ func (r *instrumentRepositoryMock) DeleteRequestMappings(ctx context.Context, re
 func (r *instrumentRepositoryMock) DeleteRequestMappingAnalytes(ctx context.Context, requestMappingID uuid.UUID, analyteIDs []uuid.UUID) error {
 	return nil
 }
+
+func (r *instrumentRepositoryMock) GetControlMappings(ctx context.Context, instrumentIDs []uuid.UUID) (map[uuid.UUID][]ControlMapping, error) {
+	return nil, nil
+}
+func (r *instrumentRepositoryMock) CreateControlMappings(ctx context.Context, controlMappings []ControlMapping, instrumentID uuid.UUID) ([]uuid.UUID, error) {
+	return nil, nil
+}
+func (r *instrumentRepositoryMock) UpdateControlMapping(ctx context.Context, controlMapping ControlMapping, instrumentID uuid.UUID) error {
+	return nil
+}
+func (r *instrumentRepositoryMock) DeleteControlMappings(ctx context.Context, controlMappingIDs []uuid.UUID) error {
+	return nil
+}
+func (r *instrumentRepositoryMock) DeleteControlMappingsByInstrumentId(ctx context.Context, instrumentId uuid.UUID) error {
+	return nil
+}
+func (r *instrumentRepositoryMock) GetControlMappingAnalytes(ctx context.Context, controlMappingIDs []uuid.UUID) (map[uuid.UUID][]uuid.UUID, error) {
+	return nil, nil
+}
+func (r *instrumentRepositoryMock) CreateControlMappingAnalytes(ctx context.Context, controlAnalyteIDsByControlAnalyteMappingID map[uuid.UUID][]uuid.UUID) error {
+	return nil
+}
+func (r *instrumentRepositoryMock) DeleteControlMappingAnalytesByControlMappingIDs(ctx context.Context, controlMappingIDs []uuid.UUID) error {
+	return nil
+}
+func (r *instrumentRepositoryMock) DeleteControlMappingAnalytesByInstrumentID(ctx context.Context, instrumentID uuid.UUID) error {
+	return nil
+}
+func (r *instrumentRepositoryMock) DeleteControlMappingAnalytesByControlMappingIDAndControlAnalyteIDs(ctx context.Context, controlAnalyteMapping uuid.UUID, controlAnalyteIDs []uuid.UUID) error {
+	return nil
+}
+
 func (r *instrumentRepositoryMock) GetEncodings(ctx context.Context) ([]string, error) {
 	return make([]string, 0), nil
 }

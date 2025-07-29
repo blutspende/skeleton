@@ -1190,7 +1190,7 @@ func (m *analysisRepositoryMock) GetUnprocessedAnalysisRequests(ctx context.Cont
 	return nil, nil
 }
 
-func (m *analysisRepositoryMock) GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMappingId uuid.UUID, instrumentId uuid.UUID) ([]ControlResult, error) {
+func (m *analysisRepositoryMock) GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMapping AnalyteMapping, instrumentId uuid.UUID) ([]ControlResult, error) {
 	return nil, nil
 }
 func (m *analysisRepositoryMock) GetControlResultsToValidate(ctx context.Context, analyteMappingIds []uuid.UUID) ([]ControlResult, error) {

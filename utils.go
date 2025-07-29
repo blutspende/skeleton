@@ -98,6 +98,23 @@ func HashInstrument(instrument Instrument) string {
 		return reqBuilder.String()
 	})
 
+	hashSlice(&builder, instrument.ControlMappings, func(r ControlMapping) string {
+		var reqBuilder strings.Builder
+		reqBuilder.WriteString(r.AnalyteID.String())
+
+		// Hash ControlAnalyteIDs (sorting ensures consistent order)
+		controlAnalyteIDs := make([]string, len(r.ControlAnalyteIDs))
+		for i, id := range r.ControlAnalyteIDs {
+			controlAnalyteIDs[i] = id.String()
+		}
+		sort.Strings(controlAnalyteIDs)
+		for _, id := range controlAnalyteIDs {
+			reqBuilder.WriteString(id)
+		}
+
+		return reqBuilder.String()
+	})
+
 	hashSlice(&builder, instrument.SortingRules, func(s SortingRule) string {
 		var ruleBuilder strings.Builder
 		ruleBuilder.WriteString(s.InstrumentID.String())
