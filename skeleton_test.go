@@ -1016,11 +1016,11 @@ func (m *analysisRepositoryMock) SaveCerberusIDForAnalysisResult(ctx context.Con
 	return nil
 }
 
-func (m *analysisRepositoryMock) GetAnalysisResultIdsWithoutControlByReagent(ctx context.Context, controlResult ControlResult, reagent Reagent) ([]uuid.UUID, error) {
+func (m *analysisRepositoryMock) GetAnalysisResultIdsWithoutControlByReagent(ctx context.Context, controlResult ControlResult, reagent Reagent, analysisResultWithoutControlSearchDays int) ([]uuid.UUID, error) {
 	return nil, nil
 }
 
-func (m *analysisRepositoryMock) GetAnalysisResultIdsWhereLastestControlIsInvalid(ctx context.Context, controlResult ControlResult, reagent Reagent) ([]uuid.UUID, error) {
+func (m *analysisRepositoryMock) GetAnalysisResultIdsWhereLastestControlIsInvalid(ctx context.Context, controlResult ControlResult, reagent Reagent, analysisResultWithInvalidControlSearchDays int) ([]uuid.UUID, error) {
 	return nil, nil
 }
 
@@ -1190,7 +1190,7 @@ func (m *analysisRepositoryMock) GetUnprocessedAnalysisRequests(ctx context.Cont
 	return nil, nil
 }
 
-func (m *analysisRepositoryMock) GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMapping AnalyteMapping, instrumentId uuid.UUID) ([]ControlResult, error) {
+func (m *analysisRepositoryMock) GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMapping AnalyteMapping, instrumentId uuid.UUID, ControlResultSearchDays int) ([]ControlResult, error) {
 	return nil, nil
 }
 func (m *analysisRepositoryMock) GetControlResultsToValidate(ctx context.Context, analyteMappingIds []uuid.UUID) ([]ControlResult, error) {

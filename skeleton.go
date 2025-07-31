@@ -382,15 +382,15 @@ func (s *skeleton) SaveControlResultImages(ctx context.Context, controlResult *C
 }
 
 func (s *skeleton) GetAnalysisResultIdsWithoutControlByReagent(ctx context.Context, controlResult ControlResult, reagent Reagent) ([]uuid.UUID, error) {
-	return s.analysisRepository.GetAnalysisResultIdsWithoutControlByReagent(ctx, controlResult, reagent)
+	return s.analysisRepository.GetAnalysisResultIdsWithoutControlByReagent(ctx, controlResult, reagent, s.config.AnalysisResultWithoutControlSearchDays)
 }
 
 func (s *skeleton) GetAnalysisResultIdsWhereLastestControlIsInvalid(ctx context.Context, controlResult ControlResult, reagent Reagent) ([]uuid.UUID, error) {
-	return s.analysisRepository.GetAnalysisResultIdsWhereLastestControlIsInvalid(ctx, controlResult, reagent)
+	return s.analysisRepository.GetAnalysisResultIdsWhereLastestControlIsInvalid(ctx, controlResult, reagent, s.config.AnalysisResultWithInvalidControlSearchDays)
 }
 
 func (s *skeleton) GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMapping AnalyteMapping, instrumentId uuid.UUID) ([]ControlResult, error) {
-	return s.analysisRepository.GetLatestControlResultsByReagent(ctx, reagent, resultYieldTime, analyteMapping, instrumentId)
+	return s.analysisRepository.GetLatestControlResultsByReagent(ctx, reagent, resultYieldTime, analyteMapping, instrumentId, s.config.ControlResultSearchDays)
 }
 
 func (s *skeleton) GetInstrument(ctx context.Context, instrumentID uuid.UUID) (Instrument, error) {

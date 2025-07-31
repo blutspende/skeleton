@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"github.com/blutspende/bloodlab-common/utils"
 	"github.com/google/uuid"
 	"sort"
 	"strings"
@@ -64,8 +63,8 @@ func HashInstrument(instrument Instrument) string {
 		analyteBuilder.WriteString(a.AnalyteID.String())
 		analyteBuilder.WriteString(a.InstrumentAnalyte)
 		analyteBuilder.WriteString(string(a.ResultType))
-		analyteBuilder.WriteString(utils.StringPointerToString(a.ControlInstrumentAnalyte))
 		analyteBuilder.WriteString(fmt.Sprintf("%t", a.ControlResultRequired))
+		analyteBuilder.WriteString(string(a.AnalyteType))
 
 		// Hash nested ChannelMappings
 		hashSlice(&analyteBuilder, a.ChannelMappings, func(c ChannelMapping) string {

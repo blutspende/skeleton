@@ -342,7 +342,8 @@ func TestUpdateInstrument(t *testing.T) {
 						Index: 1,
 					},
 				},
-				ResultType: "pein",
+				ResultType:  "pein",
+				AnalyteType: Result,
 			},
 			{
 				ID:                controlAnalyteMappingID1,
@@ -366,7 +367,8 @@ func TestUpdateInstrument(t *testing.T) {
 						Index: 1,
 					},
 				},
-				ResultType: "pein",
+				ResultType:  "pein",
+				AnalyteType: Control,
 			},
 		},
 		RequestMappings: []RequestMapping{
@@ -395,7 +397,8 @@ func TestUpdateInstrument(t *testing.T) {
 	instrument, err = instrumentService.GetInstrumentByID(ctx, nil, instrumentID, false)
 	assert.Equal(t, "TestInstrumentUpdated", instrument.Name)
 	assert.Len(t, instrument.AnalyteMappings, 2)
-	assert.Equal(t, analyteID1, instrument.AnalyteMappings[0].AnalyteID)
+	assert.Contains(t, []uuid.UUID{analyteID1, controlAnalyteID1}, instrument.AnalyteMappings[0].AnalyteID)
+	assert.Contains(t, []uuid.UUID{analyteID1, controlAnalyteID1}, instrument.AnalyteMappings[1].AnalyteID)
 	assert.Equal(t, "pein", string(instrument.AnalyteMappings[0].ResultType))
 	assert.Len(t, instrument.AnalyteMappings[0].ChannelMappings, 1)
 	assert.Equal(t, "TestInstrumentChannel", instrument.AnalyteMappings[0].ChannelMappings[0].InstrumentChannel)
@@ -414,7 +417,6 @@ func TestUpdateInstrument(t *testing.T) {
 		}
 	}
 
-	assert.Equal(t, controlAnalyteID1, instrument.AnalyteMappings[1].AnalyteID)
 	assert.Equal(t, "pein", string(instrument.AnalyteMappings[1].ResultType))
 	assert.Len(t, instrument.AnalyteMappings[1].ChannelMappings, 1)
 	assert.Equal(t, "TestInstrumentChannel", instrument.AnalyteMappings[1].ChannelMappings[0].InstrumentChannel)
@@ -481,7 +483,8 @@ func TestUpdateInstrument(t *testing.T) {
 						Index: 2,
 					},
 				},
-				ResultType: "pein",
+				ResultType:  "pein",
+				AnalyteType: Result,
 			},
 			{
 				ID:                uuid.New(),
@@ -500,7 +503,8 @@ func TestUpdateInstrument(t *testing.T) {
 						Index: 2,
 					},
 				},
-				ResultType: "pein",
+				ResultType:  "pein",
+				AnalyteType: Result,
 			},
 		},
 		RequestMappings: []RequestMapping{

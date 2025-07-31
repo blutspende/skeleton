@@ -1150,7 +1150,6 @@ func TestCreateControlResultBatchWithOnlyPostControlResults(t *testing.T) {
 func TestCreateControlResultBatch(t *testing.T) {
 	resultYieldedAt, _ := formatTimeStringToBerlinTime("20240927162727", "20060102150405")
 	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
-	controlInstrumentAnalyte := "TESTCONTROLANALYTE"
 
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
@@ -1166,10 +1165,9 @@ func TestCreateControlResultBatch(t *testing.T) {
 
 	analyteMappings := []AnalyteMapping{
 		{
-			ID:                       uuid.MustParse("c31edad9-586e-4add-bdd7-be37c28c3560"),
-			InstrumentAnalyte:        "TESTANALYTE",
-			ControlInstrumentAnalyte: &controlInstrumentAnalyte,
-			AnalyteID:                uuid.MustParse("fc1948d2-4381-4049-a1d3-8b010b65a0cc"),
+			ID:                uuid.MustParse("c31edad9-586e-4add-bdd7-be37c28c3560"),
+			InstrumentAnalyte: "TESTANALYTE",
+			AnalyteID:         uuid.MustParse("fc1948d2-4381-4049-a1d3-8b010b65a0cc"),
 			ChannelMappings: []ChannelMapping{
 				{
 					InstrumentChannel: "TestInstrumentChannel",
@@ -1348,12 +1346,10 @@ func setupTestDataForAnalysisResultStatusAndControlResultValidCheck(addExpectedC
 }
 
 func setupAnalyteMappingForControlValidation() AnalyteMapping {
-	controlInstrumentAnalyte := "TESTCONTROLANALYTE"
 	return AnalyteMapping{
-		ID:                       uuid.MustParse("c31edad9-586e-4add-bdd7-be37c28c3560"),
-		InstrumentAnalyte:        "TESTANALYTE",
-		ControlInstrumentAnalyte: &controlInstrumentAnalyte,
-		AnalyteID:                uuid.MustParse("fc1948d2-4381-4049-a1d3-8b010b65a0cc"),
+		ID:                uuid.MustParse("c31edad9-586e-4add-bdd7-be37c28c3560"),
+		InstrumentAnalyte: "TESTANALYTE",
+		AnalyteID:         uuid.MustParse("fc1948d2-4381-4049-a1d3-8b010b65a0cc"),
 		ChannelMappings: []ChannelMapping{
 			{
 				InstrumentChannel: "TestInstrumentChannel",
@@ -1396,7 +1392,6 @@ func setupTestDataForAnalysisResultReagentAndControlRelationCheck(addExpectedCon
 	resultYieldedAt, _ := formatTimeStringToBerlinTime("20240927162727", "20060102150405")
 	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	validUntil, _ := formatTimeStringToBerlinTime("20240930162727", "20060102150405")
-	controlInstrumentAnalyte := "TESTCONTROLANALYTE"
 
 	expectedControlResults := make([]ExpectedControlResult, 0)
 
@@ -1421,10 +1416,9 @@ func setupTestDataForAnalysisResultReagentAndControlRelationCheck(addExpectedCon
 
 	analyteMappings := []AnalyteMapping{
 		{
-			ID:                       uuid.MustParse("c31edad9-586e-4add-bdd7-be37c28c3560"),
-			InstrumentAnalyte:        "TESTANALYTE",
-			ControlInstrumentAnalyte: &controlInstrumentAnalyte,
-			AnalyteID:                uuid.MustParse("fc1948d2-4381-4049-a1d3-8b010b65a0cc"),
+			ID:                uuid.MustParse("c31edad9-586e-4add-bdd7-be37c28c3560"),
+			InstrumentAnalyte: "TESTANALYTE",
+			AnalyteID:         uuid.MustParse("fc1948d2-4381-4049-a1d3-8b010b65a0cc"),
 			ChannelMappings: []ChannelMapping{
 				{
 					InstrumentChannel: "TestInstrumentChannel",
@@ -1541,7 +1535,6 @@ func setupTestDataForAnalysisResultReagentAndControlRelationCheck(addExpectedCon
 func setupTestDataForStandaloneControlProcessing() (ControlResult, Reagent) {
 	resultYieldedAt, _ := formatTimeStringToBerlinTime("20240927162727", "20060102150405")
 	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
-	controlInstrumentAnalyte := "TESTCONTROLANALYTE"
 
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
@@ -1559,10 +1552,9 @@ func setupTestDataForStandaloneControlProcessing() (ControlResult, Reagent) {
 
 	analyteMappings := []AnalyteMapping{
 		{
-			ID:                       uuid.MustParse("c31edad9-586e-4add-bdd7-be37c28c3560"),
-			InstrumentAnalyte:        "TESTANALYTE",
-			ControlInstrumentAnalyte: &controlInstrumentAnalyte,
-			AnalyteID:                uuid.MustParse("fc1948d2-4381-4049-a1d3-8b010b65a0cc"),
+			ID:                uuid.MustParse("c31edad9-586e-4add-bdd7-be37c28c3560"),
+			InstrumentAnalyte: "TESTANALYTE",
+			AnalyteID:         uuid.MustParse("fc1948d2-4381-4049-a1d3-8b010b65a0cc"),
 			ChannelMappings: []ChannelMapping{
 				{
 					InstrumentChannel: "TestInstrumentChannel",
@@ -1699,7 +1691,7 @@ func (r *extendedMockAnalysisRepo) CreateAnalysisResultReagentRelations(ctx cont
 	return nil
 }
 
-func (r *extendedMockAnalysisRepo) GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMapping AnalyteMapping, instrumentId uuid.UUID) ([]ControlResult, error) {
+func (r *extendedMockAnalysisRepo) GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMapping AnalyteMapping, instrumentId uuid.UUID, ControlResultSearchDays int) ([]ControlResult, error) {
 	return nil, nil
 }
 

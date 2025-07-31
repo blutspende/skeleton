@@ -179,6 +179,7 @@ type analyteMappingDAO struct {
 	AnalyteID             uuid.UUID    `db:"analyte_id"`
 	ResultType            ResultType   `db:"result_type"`
 	ControlResultRequired bool         `db:"control_result_required"`
+	AnalyteType           AnalyteType  `db:"analyte_type"`
 	CreatedAt             time.Time    `db:"created_at"`
 	ModifiedAt            sql.NullTime `db:"modified_at"`
 	DeletedAt             sql.NullTime `db:"deleted_at"`
@@ -773,10 +774,10 @@ func (r *instrumentRepository) UpsertAnalyteMappings(ctx context.Context, analyt
 	for i := range analyteMappings {
 		ids[i] = analyteMappings[i].ID
 	}
-	query := fmt.Sprintf(`INSERT INTO %s.sk_analyte_mappings(id, instrument_id, instrument_analyte, analyte_id, result_type, control_result_required) 
-		VALUES(:id, :instrument_id, :instrument_analyte, :analyte_id, :result_type, :control_result_required)
+	query := fmt.Sprintf(`INSERT INTO %s.sk_analyte_mappings(id, instrument_id, instrument_analyte, analyte_id, result_type, control_result_required, analyte_type) 
+		VALUES(:id, :instrument_id, :instrument_analyte, :analyte_id, :result_type, :control_result_required, :analyte_type)
 		ON CONFLICT (id) WHERE deleted_at IS NULL DO UPDATE SET instrument_analyte = excluded.instrument_analyte, analyte_id = excluded.analyte_id,
-		    result_type = excluded.result_type, control_result_required = excluded.control_result_required, modified_at = timezone('utc', now());`, r.dbSchema)
+		    result_type = excluded.result_type, control_result_required = excluded.control_result_required, analyte_type = excluded.analyte_type, modified_at = timezone('utc', now());`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, convertAnalyteMappingsToDAOs(analyteMappings, instrumentID))
 	if err != nil {
 		log.Error().Err(err).Msg(msgUpsertAnalyteMappingsFailed)
@@ -1713,6 +1714,7 @@ func convertAnalyteMappingToDAO(analyteMapping AnalyteMapping, instrumentID uuid
 		AnalyteID:             analyteMapping.AnalyteID,
 		ResultType:            analyteMapping.ResultType,
 		ControlResultRequired: analyteMapping.ControlResultRequired,
+		AnalyteType:           analyteMapping.AnalyteType,
 	}
 	return dao
 }
@@ -1732,6 +1734,7 @@ func convertAnalyteMappingDaoToAnalyteMapping(dao analyteMappingDAO) AnalyteMapp
 		AnalyteID:             dao.AnalyteID,
 		ResultType:            dao.ResultType,
 		ControlResultRequired: dao.ControlResultRequired,
+		AnalyteType:           dao.AnalyteType,
 	}
 
 	return analyteMapping
