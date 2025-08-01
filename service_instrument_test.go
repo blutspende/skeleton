@@ -1230,6 +1230,9 @@ func (r *instrumentRepositoryMock) GetAnalyteMappings(ctx context.Context, instr
 	}
 	return make(map[uuid.UUID][]AnalyteMapping), nil
 }
+func (r *instrumentRepositoryMock) GetExpectedControlResultsForControlValidation(ctx context.Context, instrumentID uuid.UUID, analyteID uuid.UUID) ([]ExpectedControlResult, error) {
+	return nil, nil
+}
 func (r *instrumentRepositoryMock) DeleteAnalyteMappings(ctx context.Context, ids []uuid.UUID) error {
 	return nil
 }

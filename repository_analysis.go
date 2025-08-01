@@ -3246,6 +3246,9 @@ func (r *analysisRepository) gatherAndAttachAllConnectedDataToControlResults(ctx
 	controlResults := make([]ControlResult, 0)
 	analyteMappingIDs := make([]uuid.UUID, 0)
 	controlResultIDs := make([]uuid.UUID, 0)
+	if len(controlResultDAOs) == 0 {
+		return controlResults, nil
+	}
 
 	for i := range controlResultDAOs {
 		analyteMappingIDs = append(analyteMappingIDs, controlResultDAOs[i].AnalyteMappingID)
@@ -3623,7 +3626,7 @@ func (r *analysisRepository) GetAnalysisResultIdsWithoutControlByReagent(ctx con
 		INNER JOIN analyteMapping am ON skar.analyte_mapping_id = am.id
 		LEFT JOIN assignedControl ac ON skar.id = ac.analysis_result_id
 	WHERE skr.manufacturer = :manufacturer AND skr.lot_no = :lot_no AND skr.serial = :serial AND skr.name = :name AND skar.instrument_id = :instrument_id
-		AND ac.control_result_id IS NULL AND skar.yielded_at >= (current_date - make_interval(days := :result_without_control_look_back_days));`
+		AND ac.control_result_id IS NULL AND skar.yielded_at >= (current_date - make_interval(days := :analysis_result_without_control_search_days));`
 	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
 	rows, err := r.db.NamedQueryContext(ctx, query, preparedValues)
 	if err != nil {
@@ -3670,7 +3673,7 @@ func (r *analysisRepository) GetAnalysisResultIdsWhereLastestControlIsInvalid(ct
 	FROM %schema_name%.sk_analysis_result_control_result_relations sarcrr 
 		INNER JOIN latestControl ON sarcrr.control_result_id = latestControl.id 
 		INNER JOIN %schema_name% .sk_analysis_results skar ON skar.id = sarcrr.analysis_result_id
-	WHERE (latestControl.is_compared_to_expected_result = false OR latestControl.is_valid = false) AND skar.yielded_at >= (current_date - make_interval(days := :result_without_control_look_back_days);`
+	WHERE (latestControl.is_compared_to_expected_result = false OR latestControl.is_valid = false) AND skar.yielded_at >= (current_date - make_interval(days := :analysis_result_with_invalid_control_search_days));`
 	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
 	rows, err := r.db.NamedQueryContext(ctx, query, preparedValues)
 	if err != nil {
@@ -3693,16 +3696,15 @@ func (r *analysisRepository) GetAnalysisResultIdsWhereLastestControlIsInvalid(ct
 	return analysisResultIds, err
 }
 
-func (r *analysisRepository) GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMapping AnalyteMapping, instrumentId uuid.UUID, ControlResultSearchDays int) ([]ControlResult, error) {
+func (r *analysisRepository) GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMapping AnalyteMapping, instrumentId uuid.UUID, controlResultSearchDays int) ([]ControlResult, error) {
 	controlResults := make([]ControlResult, 0)
 	preparedValues := map[string]interface{}{
-		"manufacturer":               reagent.Manufacturer,
-		"lot_no":                     reagent.LotNo,
-		"serial":                     reagent.SerialNumber,
-		"name":                       reagent.Name,
-		"result_analyte_id":          analyteMapping.AnalyteID,
-		"instrument_id":              instrumentId,
-		"control_result_search_days": ControlResultSearchDays,
+		"manufacturer":      reagent.Manufacturer,
+		"lot_no":            reagent.LotNo,
+		"serial":            reagent.SerialNumber,
+		"name":              reagent.Name,
+		"result_analyte_id": analyteMapping.AnalyteID,
+		"instrument_id":     instrumentId,
 	}
 
 	query := `WITH controlAnalyteMapping AS (select sam.id from %schema_name%.sk_control_mapping_control_analyte scmca
@@ -3719,7 +3721,8 @@ func (r *analysisRepository) GetLatestControlResultsByReagent(ctx context.Contex
     WHERE skr.manufacturer = :manufacturer AND skr.lot_no = :lot_no AND skr.serial = :serial AND skr.name = :name AND skcr.instrument_id = :instrument_id`
 	if resultYieldTime != nil {
 		preparedValues["result_yield_time"] = resultYieldTime
-		query += ` AND skcr.examined_at < :result_yield_time AND skcr.examined_at >= (:result_yield_time - make_interval(days := :control_result_search_days)`
+		preparedValues["yield_time_lookback"] = resultYieldTime.Add(time.Hour * 24 * time.Duration(-controlResultSearchDays))
+		query += ` AND skcr.examined_at < :result_yield_time AND skcr.examined_at >= :yield_time_lookback`
 	}
 	query += ` ORDER BY skcr.sample_code, skcr.analyte_mapping_id, skcr. examined_at desc, skcr.created_at desc;`
 	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)

@@ -171,7 +171,7 @@ func New(ctx context.Context, serviceName, displayName string, requestedExtraVal
 	instrumentCache := NewInstrumentCache()
 	analysisRepository := NewAnalysisRepository(dbConn, dbSchema)
 	instrumentRepository := NewInstrumentRepository(dbConn, dbSchema)
-	analysisService := NewAnalysisService(analysisRepository, deaClient, cerberusClient, manager)
+	analysisService := NewAnalysisService(analysisRepository, instrumentRepository, deaClient, cerberusClient, manager)
 	conditionRepository := NewConditionRepository(dbConn, dbSchema)
 	conditionService := NewConditionService(conditionRepository)
 	sortingRuleRepository := NewSortingRuleRepository(dbConn, dbSchema)
