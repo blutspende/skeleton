@@ -274,3 +274,7 @@ func (sr *SkeletonTestRig) RegisterSampleCodesToMessageIn(ctx context.Context, m
 func (sr *SkeletonTestRig) RegisterSampleCodesToMessageOut(ctx context.Context, messageID uuid.UUID, sampleCodes []string) error {
 	return nil
 }
+
+func (sr *SkeletonTestRig) FindAnalyteMapping(instrument Instrument, analyteType AnalyteType, instrumentAnalyte string) (*AnalyteMapping, error) {
+	return nil, nil
+}

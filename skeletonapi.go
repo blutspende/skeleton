@@ -145,6 +145,9 @@ type SkeletonAPI interface {
 	// GetDbConnection - Provides access to internal database connection
 	// - returns database connection
 	GetDbConnection() (*sqlx.DB, error)
+
+	// FindAnalyteMapping - Reusable filter method to find analyte mapping by name and type
+	FindAnalyteMapping(instrument Instrument, analyteType AnalyteType, instrumentAnalyte string) (*AnalyteMapping, error)
 }
 
 func New(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, reagentManufacturers []string, protocols []SupportedProtocol, dbSchema string) (SkeletonAPI, error) {

@@ -1529,8 +1529,8 @@ func (r *analysisRepository) createAnalysisRequestExtraValues(ctx context.Contex
 
 func (r *analysisRepository) createControlResultExtraValues(ctx context.Context, extraValues []controlResultExtraValueDAO) error {
 	err := utils.Partition(len(extraValues), extraValueBatchSize, func(low int, high int) error {
-		query := fmt.Sprintf(`INSERT INTO %s.sk_control_result_extravalues(id, control_resilt_id, "key", "value")
-		VALUES(:id, :control_resilt_id, :key, :value)`, r.dbSchema)
+		query := fmt.Sprintf(`INSERT INTO %s.sk_control_result_extravalues(id, control_result_id, "key", "value")
+		VALUES(:id, :control_result_id, :key, :value)`, r.dbSchema)
 		_, err := r.db.NamedExecContext(ctx, query, extraValues[low:high])
 		if err != nil {
 			log.Error().Err(err).Msg(msgCreateControlResultExtraValuesFailed)
