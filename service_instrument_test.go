@@ -1087,6 +1087,7 @@ type instrumentRepositoryMock struct {
 	analyteMappings                 map[uuid.UUID][]AnalyteMapping
 	resultMappings                  map[uuid.UUID][]ResultMapping
 	db                              db.DbConnection
+	ExpectedControlResults          []ExpectedControlResult
 }
 
 func (r *instrumentRepositoryMock) UpsertRequestMappings(ctx context.Context, requestMappings []RequestMapping, instrumentID uuid.UUID) error {
@@ -1231,7 +1232,7 @@ func (r *instrumentRepositoryMock) GetAnalyteMappings(ctx context.Context, instr
 	return make(map[uuid.UUID][]AnalyteMapping), nil
 }
 func (r *instrumentRepositoryMock) GetExpectedControlResultsForControlValidation(ctx context.Context, instrumentID uuid.UUID, analyteID uuid.UUID) ([]ExpectedControlResult, error) {
-	return nil, nil
+	return r.ExpectedControlResults, nil
 }
 func (r *instrumentRepositoryMock) DeleteAnalyteMappings(ctx context.Context, ids []uuid.UUID) error {
 	return nil

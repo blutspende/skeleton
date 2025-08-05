@@ -71,7 +71,7 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 	}
 	deaClientMock := &deaClientMock{}
 
-	analysisService := NewAnalysisService(analysisRepository, deaClientMock, cerberusClientMock, skeletonManager)
+	analysisService := NewAnalysisService(analysisRepository, instrumentRepository, deaClientMock, cerberusClientMock, skeletonManager)
 	conditionRepository := NewConditionRepository(dbConn, schemaName)
 	conditionService := NewConditionService(conditionRepository)
 	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
@@ -161,7 +161,7 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 	longPollClientMock := &longPollClientMock{}
 	deaClientMock := &deaClientMock{}
 
-	analysisService := NewAnalysisService(analysisRepository, deaClientMock, cerberusClientMock, skeletonManager)
+	analysisService := NewAnalysisService(analysisRepository, instrumentRepository, deaClientMock, cerberusClientMock, skeletonManager)
 	conditionRepository := NewConditionRepository(dbConn, schemaName)
 	conditionService := NewConditionService(conditionRepository)
 	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
@@ -413,7 +413,7 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 		},
 	}
 	deaClientMock := &deaClientMock{}
-	analysisService := NewAnalysisService(analysisRepositoryMock, deaClientMock, cerberusClientMock, skeletonManagerMock)
+	analysisService := NewAnalysisService(analysisRepositoryMock, instrumentRepository, deaClientMock, cerberusClientMock, skeletonManagerMock)
 	conditionService := NewConditionService(conditionRepository)
 	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
 	sortingRuleService := NewSortingRuleService(analysisRepositoryMock, conditionService, sortingRuleRepository)
@@ -947,6 +947,9 @@ func (m *analysisServiceMock) RetransmitResult(ctx context.Context, resultID uui
 func (m *analysisServiceMock) ProcessStuckImagesToDEA(ctx context.Context) {
 }
 func (m *analysisServiceMock) ProcessStuckImagesToCerberus(ctx context.Context) {
+}
+func (m *analysisServiceMock) SetAnalysisResultStatusBasedOnControlResults(ctx context.Context, analysisResult AnalysisResult, commonControlResults []ControlResult, reValidateControlResult bool) (AnalysisResult, error) {
+	return analysisResult, nil
 }
 
 type analysisRepositoryMock struct {
