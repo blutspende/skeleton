@@ -32,7 +32,6 @@ type AnalysisService interface {
 	ProcessStuckImagesToDEA(ctx context.Context)
 	ProcessStuckImagesToCerberus(ctx context.Context)
 	SaveCerberusIDsForAnalysisResultBatchItems(ctx context.Context, analysisResults []AnalysisResultBatchItemInfo)
-	FindAnalyteMapping(instrument Instrument, analyteType AnalyteType, instrumentAnalyte string) (*AnalyteMapping, error)
 }
 
 type analysisService struct {
@@ -923,18 +922,4 @@ func (as *analysisService) SaveCerberusIDsForAnalysisResultBatchItems(ctx contex
 			_ = as.analysisRepository.SaveCerberusIDForAnalysisResult(ctx, analysisResult.AnalysisResult.ID, *analysisResult.CerberusAnalysisResultID)
 		}
 	}
-}
-
-func (as *analysisService) FindAnalyteMapping(instrument Instrument, analyteType AnalyteType, instrumentAnalyte string) (*AnalyteMapping, error) {
-	// Searching for matching control analyte mapping based on the instrument analyte string from the message
-	for _, aMapping := range instrument.AnalyteMappings {
-		if aMapping.AnalyteType == analyteType && aMapping.InstrumentAnalyte == instrumentAnalyte {
-			// Note: it should not be possible but if there are multiple mappings with the same name and type the first one is returned
-			return &aMapping, nil
-		}
-	}
-	// If no mapping is found, log a warning and return the error
-	err := fmt.Errorf("%w - instrumentID: %s, analyte type: %s, instrument analyte: %s", ErrNoMatchingAnalyteMappingFound, instrument.ID, analyteType, instrumentAnalyte)
-	log.Warn().Msg(err.Error())
-	return nil, err
 }

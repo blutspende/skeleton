@@ -276,5 +276,5 @@ func (sr *SkeletonTestRig) RegisterSampleCodesToMessageOut(ctx context.Context, 
 }
 
 func (sr *SkeletonTestRig) FindAnalyteMapping(instrument Instrument, analyteType AnalyteType, instrumentAnalyte string) (*AnalyteMapping, error) {
-	return nil, nil
+	return FindAnalyteMapping(instrument, analyteType, instrumentAnalyte)
 }
