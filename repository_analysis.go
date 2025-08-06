@@ -101,7 +101,7 @@ const (
 	msgGetControlResultWarningsFailed                                = "Get control result warnings failed"
 	msgGetControlResultExtraValuesFailed                             = "Get control result extra values failed"
 	msgAnalyteMappingNotFound                                        = "Analyte Mapping not found"
-	msgUpdateAnalysisResultDEARawMessageIDFailed                     = "update analysis result DEARawMessageID failed"
+	msgUpdateAnalysisResultDEARawMessageIDFailed                     = "update analysis result deaRawMessageID failed"
 	msgMissingDEARawMessageID                                        = "missing DEA raw message ID"
 )
 
@@ -2681,7 +2681,7 @@ func convertAnalysisResultToTO(ar AnalysisResult) (AnalysisResultTO, error) {
 	analysisResultTO := AnalysisResultTO{
 		ID:                       ar.ID,
 		WorkingItemID:            ar.AnalysisRequest.WorkItemID,
-		DEARawMessageID:          ar.DEARawMessageID.UUID,
+		DEARawMessageID:          ar.deaRawMessageID.UUID,
 		ValidUntil:               ar.ValidUntil,
 		ResultYieldDateTime:      ar.ResultYieldDateTime,
 		ExaminedMaterial:         ar.AnalysisRequest.MaterialID,
@@ -2702,7 +2702,7 @@ func convertAnalysisResultToTO(ar AnalysisResult) (AnalysisResultTO, error) {
 		WarnFlag:                 ar.WarnFlag,
 		Warnings:                 ar.Warnings,
 	}
-	if !ar.DEARawMessageID.Valid {
+	if !ar.deaRawMessageID.Valid {
 		return analysisResultTO, ErrMissingDEARawMessageID
 	}
 	switch ar.Status {
@@ -3874,7 +3874,7 @@ func convertAnalysisResultToDAO(analysisResult AnalysisResult) analysisResultDAO
 		ResultMode:       analysisResult.ResultMode,
 		SampleCode:       analysisResult.SampleCode,
 		InstrumentRunID:  analysisResult.InstrumentRunID,
-		DEARawMessageID:  analysisResult.DEARawMessageID,
+		DEARawMessageID:  analysisResult.deaRawMessageID,
 		MessageInID:      analysisResult.MessageInID,
 		Result:           analysisResult.Result,
 		Status:           analysisResult.Status,
@@ -3921,7 +3921,7 @@ func convertAnalysisResultDAOToAnalysisResult(analysisResultDAO analysisResultDA
 			ID: analysisResultDAO.InstrumentID,
 		},
 		SampleCode:      analysisResultDAO.SampleCode,
-		DEARawMessageID: analysisResultDAO.DEARawMessageID,
+		deaRawMessageID: analysisResultDAO.DEARawMessageID,
 		MessageInID:     analysisResultDAO.MessageInID,
 		Result:          analysisResultDAO.Result,
 		ResultMode:      analysisResultDAO.ResultMode,

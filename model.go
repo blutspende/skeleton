@@ -263,7 +263,6 @@ type AnalysisResult struct {
 	Instrument               Instrument
 	SampleCode               string
 	MessageInID              uuid.UUID
-	DEARawMessageID          uuid.NullUUID
 	Result                   string
 	ResultMode               ResultMode
 	Status                   ResultStatus
@@ -282,6 +281,8 @@ type AnalysisResult struct {
 	Reagents                 []Reagent
 	ControlResults           []ControlResult
 	Images                   []Image
+
+	deaRawMessageID uuid.NullUUID
 }
 
 type ControlResult struct {
@@ -573,7 +574,6 @@ type MessageIn struct {
 	InstrumentID       uuid.UUID
 	InstrumentModuleID uuid.NullUUID
 	Status             messagestatus.MessageStatus
-	DEARawMessageID    uuid.NullUUID
 	ProtocolID         uuid.UUID
 	Type               messagetype.MessageType
 	Encoding           encoding.Encoding
@@ -582,13 +582,14 @@ type MessageIn struct {
 	RetryCount         int
 	CreatedAt          time.Time
 	ModifiedAt         *time.Time
+
+	deaRawMessageID uuid.NullUUID
 }
 
 type MessageOut struct {
 	ID                  uuid.UUID
 	InstrumentID        uuid.UUID
 	Status              messagestatus.MessageStatus
-	DEARawMessageID     uuid.NullUUID
 	ProtocolID          uuid.UUID
 	Type                messagetype.MessageType
 	Encoding            encoding.Encoding
@@ -600,6 +601,7 @@ type MessageOut struct {
 	CreatedAt           time.Time
 	ModifiedAt          *time.Time
 
+	deaRawMessageID  uuid.NullUUID
 	MessageOutOrders []MessageOutOrder
 }
 
