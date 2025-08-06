@@ -81,7 +81,7 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 	messageInRepository := NewMessageInRepository(dbConn, schemaName, 0, 0)
 	messageOutRepository := NewMessageOutRepository(dbConn, schemaName, 0, 0)
 	messageOutOrderRepository := NewMessageOutOrderRepository(dbConn, schemaName, 0)
-	messageService := NewMessageService(deaClientMock, messageInRepository, messageOutRepository, messageOutOrderRepository, schemaName)
+	messageService := NewMessageService(deaClientMock, cerberusClientMock, messageInRepository, messageOutRepository, messageOutOrderRepository, schemaName)
 
 	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, []string{}, nil, pg, dbConn, schemaName, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, messageService, skeletonManager, cerberusClientMock, &longPollClientMock{AnalysisRequests: analysisResultsWithoutAnalysisRequestsTest_AnalysisRequests}, deaClientMock, configuration)
 
@@ -171,7 +171,7 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 	messageInRepository := NewMessageInRepository(dbConn, schemaName, 0, 0)
 	messageOutRepository := NewMessageOutRepository(dbConn, schemaName, 0, 0)
 	messageOutOrderRepository := NewMessageOutOrderRepository(dbConn, schemaName, 0)
-	messageService := NewMessageService(deaClientMock, messageInRepository, messageOutRepository, messageOutOrderRepository, schemaName)
+	messageService := NewMessageService(deaClientMock, cerberusClientMock, messageInRepository, messageOutRepository, messageOutOrderRepository, schemaName)
 	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, []string{}, nil, pg, dbConn, schemaName, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, messageService, skeletonManager, cerberusClientMock, longPollClientMock, deaClientMock, configuration)
 	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('9bec3063-435d-490f-bec0-88a6633ef4c2', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
 
@@ -375,7 +375,7 @@ func TestAnalysisResultsReprocessing(t *testing.T) {
 	messageInRepository := NewMessageInRepository(dbConn, schemaName, 0, 0)
 	messageOutRepository := NewMessageOutRepository(dbConn, schemaName, 0, 0)
 	messageOutOrderRepository := NewMessageOutOrderRepository(dbConn, schemaName, 0)
-	messageService := NewMessageService(deaClientMock, messageInRepository, messageOutRepository, messageOutOrderRepository, schemaName)
+	messageService := NewMessageService(deaClientMock, cerberusClientMock, messageInRepository, messageOutRepository, messageOutOrderRepository, schemaName)
 	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, []string{}, nil, pg, dbConn, schemaName, migrator.NewSkeletonMigrator(), analysisRepositoryMock, analysisServiceMock, instrumentService, consoleLogService, messageService, skeletonManager, cerberusClientMock, longPollClient, deaClientMock, configuration)
 	go func() {
 		_ = skeletonInstance.Start()
@@ -423,7 +423,7 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 	messageInRepository := NewMessageInRepository(dbConn, schemaName, 0, 0)
 	messageOutRepository := NewMessageOutRepository(dbConn, schemaName, 0, 0)
 	messageOutOrderRepository := NewMessageOutOrderRepository(dbConn, schemaName, 0)
-	messageService := NewMessageService(deaClientMock, messageInRepository, messageOutRepository, messageOutOrderRepository, schemaName)
+	messageService := NewMessageService(deaClientMock, cerberusClientMock, messageInRepository, messageOutRepository, messageOutOrderRepository, schemaName)
 
 	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, []string{}, nil, pg, dbConn, schemaName, migrator.NewSkeletonMigrator(), analysisRepositoryMock, analysisService, instrumentService, consoleLogService, messageService, skeletonManagerMock, cerberusClientMock, &longPollClientMock{AnalysisRequests: analysisResultsWithoutAnalysisRequestsTest_AnalysisRequests}, deaClientMock, configuration)
 	go func() {
@@ -836,6 +836,10 @@ type cerberusClientMock struct {
 	ControlBatchResponse                ControlResultBatchResponse
 	VerifiedInstrumentHashes            []string
 	VerifiedExpectedControlResultHashes []string
+}
+
+func (m *cerberusClientMock) SendSampleSeenMessageBatch(messages []SampleSeenMessage) error {
+	return nil
 }
 
 func (m *cerberusClientMock) VerifyExpectedControlResultsHash(hash string) error {
