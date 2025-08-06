@@ -108,7 +108,7 @@ func (sr *SkeletonTestRig) GetAnalysisResultIdsWhereLastestControlIsInvalid(ctx 
 	return make([]uuid.UUID, 0), nil
 }
 
-func (sr *SkeletonTestRig) GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMappingId uuid.UUID, instrumentId uuid.UUID) ([]ControlResult, error) {
+func (sr *SkeletonTestRig) GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMapping AnalyteMapping, instrumentId uuid.UUID) ([]ControlResult, error) {
 	return sr.ControlResults[fmt.Sprintf("%s%s%s", reagent.Manufacturer, reagent.LotNo, reagent.SerialNumber)], nil
 }
 
@@ -273,4 +273,8 @@ func (sr *SkeletonTestRig) RegisterSampleCodesToMessageIn(ctx context.Context, m
 
 func (sr *SkeletonTestRig) RegisterSampleCodesToMessageOut(ctx context.Context, messageID uuid.UUID, sampleCodes []string) error {
 	return nil
+}
+
+func (sr *SkeletonTestRig) FindAnalyteMapping(instrument Instrument, analyteType AnalyteType, instrumentAnalyte string) (*AnalyteMapping, error) {
+	return FindAnalyteMapping(instrument, analyteType, instrumentAnalyte)
 }

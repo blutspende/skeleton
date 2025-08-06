@@ -101,6 +101,13 @@ const (
 	Diluent  ReagentType = "diluent"
 )
 
+type AnalyteType string
+
+const (
+	Result  AnalyteType = "INSTRUMENTAL_RESULT"
+	Control AnalyteType = "INSTRUMENTAL_CONTROL"
+)
+
 type Reagent struct {
 	ID             uuid.UUID
 	Manufacturer   string
@@ -157,6 +164,7 @@ type Instrument struct {
 	FTPConfig          *FTPConfig
 	AnalyteMappings    []AnalyteMapping
 	RequestMappings    []RequestMapping
+	ControlMappings    []ControlMapping
 	SortingRules       []SortingRule
 	Settings           []InstrumentSetting
 	CreatedAt          time.Time
@@ -181,15 +189,15 @@ type FTPConfig struct {
 }
 
 type AnalyteMapping struct {
-	ID                       uuid.UUID
-	InstrumentAnalyte        string
-	ControlInstrumentAnalyte *string
-	AnalyteID                uuid.UUID
-	ChannelMappings          []ChannelMapping
-	ResultMappings           []ResultMapping
-	ResultType               ResultType
-	ControlResultRequired    bool
-	ExpectedControlResults   []ExpectedControlResult
+	ID                     uuid.UUID
+	InstrumentAnalyte      string
+	AnalyteID              uuid.UUID
+	ChannelMappings        []ChannelMapping
+	ResultMappings         []ResultMapping
+	ResultType             ResultType
+	ControlResultRequired  bool
+	AnalyteType            AnalyteType
+	ExpectedControlResults []ExpectedControlResult
 }
 
 type ChannelMapping struct {
@@ -231,6 +239,12 @@ type RequestMapping struct {
 	Code       string
 	IsDefault  bool
 	AnalyteIDs []uuid.UUID
+}
+
+type ControlMapping struct {
+	ID                uuid.UUID
+	AnalyteID         uuid.UUID
+	ControlAnalyteIDs []uuid.UUID
 }
 
 type UploadLogStatus string

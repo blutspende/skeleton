@@ -37,19 +37,20 @@ type instrumentTO struct {
 	FtpServerType       *string               `json:"ftpServerType"`
 	AnalyteMappings     []analyteMappingTO    `json:"analyteMappings"`
 	RequestMappings     []requestMappingTO    `json:"requestMappings"`
+	ControlMappings     []controlMappingTO    `json:"controlMappings"`
 	Settings            []instrumentSettingTO `json:"instrumentSettings"`
 	SortingRuleGroups   []sortingRuleGroupTO  `json:"sortingRuleGroups"`
 }
 
 type analyteMappingTO struct {
-	ID                       uuid.UUID          `json:"id"`
-	InstrumentAnalyte        string             `json:"instrumentAnalyte"`
-	AnalyteID                uuid.UUID          `json:"analyteId"`
-	ChannelMappings          []channelMappingTO `json:"channelMappings"`
-	ResultMappings           []resultMappingTO  `json:"resultMappings"`
-	ResultType               ResultType         `json:"resultType"`
-	ControlRequired          bool               `json:"controlRequired"`
-	InstrumentControlAnalyte *string            `json:"instrumentControlAnalyte"`
+	ID                uuid.UUID          `json:"id"`
+	InstrumentAnalyte string             `json:"instrumentAnalyte"`
+	AnalyteID         uuid.UUID          `json:"analyteId"`
+	ChannelMappings   []channelMappingTO `json:"channelMappings"`
+	ResultMappings    []resultMappingTO  `json:"resultMappings"`
+	ResultType        ResultType         `json:"resultType"`
+	ControlRequired   bool               `json:"controlRequired"`
+	AnalyteType       AnalyteType        `json:"analyteType"`
 }
 
 type requestMappingTO struct {
@@ -57,6 +58,12 @@ type requestMappingTO struct {
 	Code       string      `json:"code"`
 	IsDefault  bool        `json:"isDefault"`
 	AnalyteIDs []uuid.UUID `json:"requestMappingAnalyteIds"`
+}
+
+type controlMappingTO struct {
+	ID                uuid.UUID   `json:"id"`
+	AnalyteID         uuid.UUID   `json:"analyteId"`
+	ControlAnalyteIDs []uuid.UUID `json:"controlAnalyteIds"`
 }
 
 type channelMappingTO struct {
@@ -162,6 +169,7 @@ func convertInstrumentTOToInstrument(instrumentTO instrumentTO) Instrument {
 		ClientPort:         instrumentTO.ClientPort,
 		AnalyteMappings:    make([]AnalyteMapping, len(instrumentTO.AnalyteMappings)),
 		RequestMappings:    make([]RequestMapping, len(instrumentTO.RequestMappings)),
+		ControlMappings:    make([]ControlMapping, len(instrumentTO.ControlMappings)),
 		SortingRules:       make([]SortingRule, 0),
 		Settings:           convertInstrumentSettingTOsToInstrumentSettings(instrumentTO.Settings),
 	}
@@ -193,6 +201,10 @@ func convertInstrumentTOToInstrument(instrumentTO instrumentTO) Instrument {
 		model.RequestMappings[i] = convertRequestMappingTOToRequestMapping(requestMapping)
 	}
 
+	for i, controlMapping := range instrumentTO.ControlMappings {
+		model.ControlMappings[i] = convertControlMappingTOToControlMapping(controlMapping)
+	}
+
 	model.SortingRules = convertSortingRuleGroupTOsToSortingRules(instrumentTO.SortingRuleGroups, instrumentTO.ID)
 
 	return model
@@ -216,14 +228,14 @@ func convertInstrumentSettingTOToInstrumentSetting(settingTO instrumentSettingTO
 
 func convertAnalyteMappingTOToAnalyteMapping(analyteMappingTO analyteMappingTO) AnalyteMapping {
 	model := AnalyteMapping{
-		ID:                       analyteMappingTO.ID,
-		InstrumentAnalyte:        analyteMappingTO.InstrumentAnalyte,
-		AnalyteID:                analyteMappingTO.AnalyteID,
-		ChannelMappings:          make([]ChannelMapping, len(analyteMappingTO.ChannelMappings)),
-		ResultMappings:           make([]ResultMapping, len(analyteMappingTO.ResultMappings)),
-		ResultType:               analyteMappingTO.ResultType,
-		ControlResultRequired:    analyteMappingTO.ControlRequired,
-		ControlInstrumentAnalyte: analyteMappingTO.InstrumentControlAnalyte,
+		ID:                    analyteMappingTO.ID,
+		InstrumentAnalyte:     analyteMappingTO.InstrumentAnalyte,
+		AnalyteID:             analyteMappingTO.AnalyteID,
+		ChannelMappings:       make([]ChannelMapping, len(analyteMappingTO.ChannelMappings)),
+		ResultMappings:        make([]ResultMapping, len(analyteMappingTO.ResultMappings)),
+		ResultType:            analyteMappingTO.ResultType,
+		ControlResultRequired: analyteMappingTO.ControlRequired,
+		AnalyteType:           analyteMappingTO.AnalyteType,
 	}
 
 	for i, channelMapping := range analyteMappingTO.ChannelMappings {
@@ -243,6 +255,14 @@ func convertRequestMappingTOToRequestMapping(requestMappingTO requestMappingTO) 
 		Code:       requestMappingTO.Code,
 		IsDefault:  requestMappingTO.IsDefault,
 		AnalyteIDs: requestMappingTO.AnalyteIDs,
+	}
+}
+
+func convertControlMappingTOToControlMapping(controlMappingTO controlMappingTO) ControlMapping {
+	return ControlMapping{
+		ID:                controlMappingTO.ID,
+		AnalyteID:         controlMappingTO.AnalyteID,
+		ControlAnalyteIDs: controlMappingTO.ControlAnalyteIDs,
 	}
 }
 

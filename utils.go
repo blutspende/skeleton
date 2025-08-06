@@ -4,8 +4,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"github.com/blutspende/bloodlab-common/utils"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 	"sort"
 	"strings"
 )
@@ -64,8 +64,8 @@ func HashInstrument(instrument Instrument) string {
 		analyteBuilder.WriteString(a.AnalyteID.String())
 		analyteBuilder.WriteString(a.InstrumentAnalyte)
 		analyteBuilder.WriteString(string(a.ResultType))
-		analyteBuilder.WriteString(utils.StringPointerToString(a.ControlInstrumentAnalyte))
 		analyteBuilder.WriteString(fmt.Sprintf("%t", a.ControlResultRequired))
+		analyteBuilder.WriteString(string(a.AnalyteType))
 
 		// Hash nested ChannelMappings
 		hashSlice(&analyteBuilder, a.ChannelMappings, func(c ChannelMapping) string {
@@ -92,6 +92,23 @@ func HashInstrument(instrument Instrument) string {
 		}
 		sort.Strings(analyteIDs)
 		for _, id := range analyteIDs {
+			reqBuilder.WriteString(id)
+		}
+
+		return reqBuilder.String()
+	})
+
+	hashSlice(&builder, instrument.ControlMappings, func(r ControlMapping) string {
+		var reqBuilder strings.Builder
+		reqBuilder.WriteString(r.AnalyteID.String())
+
+		// Hash ControlAnalyteIDs (sorting ensures consistent order)
+		controlAnalyteIDs := make([]string, len(r.ControlAnalyteIDs))
+		for i, id := range r.ControlAnalyteIDs {
+			controlAnalyteIDs[i] = id.String()
+		}
+		sort.Strings(controlAnalyteIDs)
+		for _, id := range controlAnalyteIDs {
 			reqBuilder.WriteString(id)
 		}
 
@@ -216,4 +233,18 @@ func hashOperand(operand *ConditionOperand) string {
 	}
 
 	return operandBuilder.String()
+}
+
+func FindAnalyteMapping(instrument Instrument, analyteType AnalyteType, instrumentAnalyte string) (*AnalyteMapping, error) {
+	// Searching for matching control analyte mapping based on the instrument analyte string from the message
+	for _, aMapping := range instrument.AnalyteMappings {
+		if aMapping.AnalyteType == analyteType && aMapping.InstrumentAnalyte == instrumentAnalyte {
+			// Note: it should not be possible but if there are multiple mappings with the same name and type the first one is returned
+			return &aMapping, nil
+		}
+	}
+	// If no mapping is found, log a warning and return the error
+	err := fmt.Errorf("%w - instrumentID: %s, analyte type: %s, instrument analyte: %s", ErrNoMatchingAnalyteMappingFound, instrument.ID, analyteType, instrumentAnalyte)
+	log.Warn().Msg(err.Error())
+	return nil, err
 }

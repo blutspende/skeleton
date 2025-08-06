@@ -71,7 +71,7 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 	}
 	deaClientMock := &deaClientMock{}
 
-	analysisService := NewAnalysisService(analysisRepository, deaClientMock, cerberusClientMock, skeletonManager)
+	analysisService := NewAnalysisService(analysisRepository, instrumentRepository, deaClientMock, cerberusClientMock, skeletonManager)
 	conditionRepository := NewConditionRepository(dbConn, schemaName)
 	conditionService := NewConditionService(conditionRepository)
 	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
@@ -162,7 +162,7 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 	longPollClientMock := &longPollClientMock{}
 	deaClientMock := &deaClientMock{}
 
-	analysisService := NewAnalysisService(analysisRepository, deaClientMock, cerberusClientMock, skeletonManager)
+	analysisService := NewAnalysisService(analysisRepository, instrumentRepository, deaClientMock, cerberusClientMock, skeletonManager)
 	conditionRepository := NewConditionRepository(dbConn, schemaName)
 	conditionService := NewConditionService(conditionRepository)
 	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
@@ -408,7 +408,7 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 		},
 	}
 	deaClientMock := &deaClientMock{}
-	analysisService := NewAnalysisService(analysisRepositoryMock, deaClientMock, cerberusClientMock, skeletonManagerMock)
+	analysisService := NewAnalysisService(analysisRepositoryMock, instrumentRepository, deaClientMock, cerberusClientMock, skeletonManagerMock)
 	conditionService := NewConditionService(conditionRepository)
 	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
 	sortingRuleService := NewSortingRuleService(analysisRepositoryMock, conditionService, sortingRuleRepository)
@@ -1170,6 +1170,9 @@ func (m *analysisServiceMock) ProcessStuckImagesToDEA(ctx context.Context) {
 }
 func (m *analysisServiceMock) ProcessStuckImagesToCerberus(ctx context.Context) {
 }
+func (m *analysisServiceMock) SetAnalysisResultStatusBasedOnControlResults(ctx context.Context, analysisResult AnalysisResult, commonControlResults []ControlResult, reValidateControlResult bool) (AnalysisResult, error) {
+	return analysisResult, nil
+}
 
 type analysisRepositoryMock struct {
 	analysisResultsById []AnalysisResult
@@ -1238,11 +1241,11 @@ func (m *analysisRepositoryMock) SaveCerberusIDForAnalysisResult(ctx context.Con
 	return nil
 }
 
-func (m *analysisRepositoryMock) GetAnalysisResultIdsWithoutControlByReagent(ctx context.Context, controlResult ControlResult, reagent Reagent) ([]uuid.UUID, error) {
+func (m *analysisRepositoryMock) GetAnalysisResultIdsWithoutControlByReagent(ctx context.Context, controlResult ControlResult, reagent Reagent, analysisResultWithoutControlSearchDays int) ([]uuid.UUID, error) {
 	return nil, nil
 }
 
-func (m *analysisRepositoryMock) GetAnalysisResultIdsWhereLastestControlIsInvalid(ctx context.Context, controlResult ControlResult, reagent Reagent) ([]uuid.UUID, error) {
+func (m *analysisRepositoryMock) GetAnalysisResultIdsWhereLastestControlIsInvalid(ctx context.Context, controlResult ControlResult, reagent Reagent, analysisResultWithInvalidControlSearchDays int) ([]uuid.UUID, error) {
 	return nil, nil
 }
 
@@ -1412,7 +1415,7 @@ func (m *analysisRepositoryMock) GetUnprocessedAnalysisRequests(ctx context.Cont
 	return nil, nil
 }
 
-func (m *analysisRepositoryMock) GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMappingId uuid.UUID, instrumentId uuid.UUID) ([]ControlResult, error) {
+func (m *analysisRepositoryMock) GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMapping AnalyteMapping, instrumentId uuid.UUID, ControlResultSearchDays int) ([]ControlResult, error) {
 	return nil, nil
 }
 func (m *analysisRepositoryMock) GetControlResultsToValidate(ctx context.Context, analyteMappingIds []uuid.UUID) ([]ControlResult, error) {

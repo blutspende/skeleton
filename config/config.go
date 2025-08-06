@@ -70,6 +70,9 @@ type Configuration struct {
 	MessageMaxRetries                          int           `envconfig:"MESSAGE_MAX_RETRIES" default:"25"`
 	BlackListedTCPClientIPAddresses            string        `envconfig:"BLACKLISTED_TCP_CLIENT_IP_ADDRESSES" default:""`
 	MaxRequestsPerSecond                       rate.Limit    `envconfig:"MAX_REQUESTS_PER_SECOND" default:"15"`
+	AnalysisResultWithoutControlSearchDays     int           `envconfig:"ANALYSIS_RESULT_WITHOUT_CONTROL_SEARCH_DAYS" default:"14"`
+	AnalysisResultWithInvalidControlSearchDays int           `envconfig:"ANALYSIS_RESULT_WITH_INVALID_CONTROL_SEARCH_DAYS" default:"14"`
+	ControlResultSearchDays                    int           `envconfig:"CONTROL_RESULT_SEARCH_DAYS" default:"14"`
 	ClientCredentialAuthHeaderValue            string
 }
 

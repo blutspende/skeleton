@@ -14,6 +14,7 @@ import (
 var (
 	ErrAnalysisRequestWithMatchingWorkItemIdFound = errors.New("analysis request with matching workitem id found")
 	ErrUnsupportedExpectedControlResultFound      = errors.New("unsupported expected control result operator found")
+	ErrNoMatchingAnalyteMappingFound              = errors.New("no matching analyte mapping found")
 )
 
 type AnalysisService interface {
@@ -31,21 +32,24 @@ type AnalysisService interface {
 	ProcessStuckImagesToDEA(ctx context.Context)
 	ProcessStuckImagesToCerberus(ctx context.Context)
 	SaveCerberusIDsForAnalysisResultBatchItems(ctx context.Context, analysisResults []AnalysisResultBatchItemInfo)
+	SetAnalysisResultStatusBasedOnControlResults(ctx context.Context, analysisResult AnalysisResult, commonControlResults []ControlResult, reValidateControlResult bool) (AnalysisResult, error)
 }
 
 type analysisService struct {
-	analysisRepository AnalysisRepository
-	deaClient          DeaClientV1
-	cerberusClient     CerberusClient
-	manager            Manager
+	analysisRepository   AnalysisRepository
+	instrumentRepository InstrumentRepository
+	deaClient            DeaClientV1
+	cerberusClient       CerberusClient
+	manager              Manager
 }
 
-func NewAnalysisService(analysisRepository AnalysisRepository, deaClient DeaClientV1, cerberusClient CerberusClient, manager Manager) AnalysisService {
+func NewAnalysisService(analysisRepository AnalysisRepository, instrumentRepository InstrumentRepository, deaClient DeaClientV1, cerberusClient CerberusClient, manager Manager) AnalysisService {
 	return &analysisService{
-		analysisRepository: analysisRepository,
-		deaClient:          deaClient,
-		cerberusClient:     cerberusClient,
-		manager:            manager,
+		analysisRepository:   analysisRepository,
+		instrumentRepository: instrumentRepository,
+		deaClient:            deaClient,
+		cerberusClient:       cerberusClient,
+		manager:              manager,
 	}
 }
 
@@ -107,7 +111,7 @@ func (as *analysisService) ProcessAnalysisRequests(ctx context.Context, analysis
 			return err
 		}
 		for i := range analysisResults {
-			analysisResults[i], err = setAnalysisResultStatusBasedOnControlResults(analysisResults[i], nil, false)
+			analysisResults[i], err = as.SetAnalysisResultStatusBasedOnControlResults(ctx, analysisResults[i], nil, false)
 			if err != nil {
 				return err
 			}
@@ -234,7 +238,7 @@ func (as *analysisService) createAnalysisResultsBatch(ctx context.Context, tx db
 		if analysisResultSet.Results[i].ResultMode == "" {
 			analysisResultSet.Results[i].ResultMode = analysisResultSet.Results[i].Instrument.ResultMode
 		}
-		analysisResultSet.Results[i], err = setAnalysisResultStatusBasedOnControlResults(analysisResultSet.Results[i], analysisResultSet.ControlResults, true)
+		analysisResultSet.Results[i], err = as.SetAnalysisResultStatusBasedOnControlResults(ctx, analysisResultSet.Results[i], analysisResultSet.ControlResults, true)
 		if err != nil {
 			return analysisResultSet, err
 		}
@@ -423,13 +427,17 @@ func (as *analysisService) createAnalysisResultsBatch(ctx context.Context, tx db
 	return analysisResultSet, nil
 }
 
-func setAnalysisResultStatusBasedOnControlResults(analysisResult AnalysisResult, commonControlResults []ControlResult, reValidateControlResult bool) (AnalysisResult, error) {
+func (as *analysisService) SetAnalysisResultStatusBasedOnControlResults(ctx context.Context, analysisResult AnalysisResult, commonControlResults []ControlResult, reValidateControlResult bool) (AnalysisResult, error) {
 	analysisResult.Status = Preliminary
 	if analysisResult.AnalyteMapping.ControlResultRequired {
 		controlSampleCodeMap := make(map[string]bool)
 		expectedControlSampleCodeMap := make(map[string]bool)
-		for j := range analysisResult.AnalyteMapping.ExpectedControlResults {
-			expectedControlSampleCodeMap[analysisResult.AnalyteMapping.ExpectedControlResults[j].SampleCode] = false
+		expectedControlResults, err := as.instrumentRepository.GetExpectedControlResultsForControlValidation(ctx, analysisResult.Instrument.ID, analysisResult.AnalyteMapping.AnalyteID)
+		if err != nil {
+			return analysisResult, err
+		}
+		for k := range expectedControlResults {
+			expectedControlSampleCodeMap[expectedControlResults[k].SampleCode] = false
 		}
 
 		for j := range analysisResult.Reagents {
@@ -680,7 +688,7 @@ func (as *analysisService) GetAnalysisResultsByIDsWithRecalculatedStatus(ctx con
 	}
 
 	for i := range analysisResults {
-		analysisResults[i], err = setAnalysisResultStatusBasedOnControlResults(analysisResults[i], nil, reValidateControlResult)
+		analysisResults[i], err = as.SetAnalysisResultStatusBasedOnControlResults(ctx, analysisResults[i], nil, reValidateControlResult)
 		if err != nil {
 			return analysisResults, err
 		}
