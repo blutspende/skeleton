@@ -73,6 +73,7 @@ type Configuration struct {
 	AnalysisResultWithoutControlSearchDays     int           `envconfig:"ANALYSIS_RESULT_WITHOUT_CONTROL_SEARCH_DAYS" default:"14"`
 	AnalysisResultWithInvalidControlSearchDays int           `envconfig:"ANALYSIS_RESULT_WITH_INVALID_CONTROL_SEARCH_DAYS" default:"14"`
 	ControlResultSearchDays                    int           `envconfig:"CONTROL_RESULT_SEARCH_DAYS" default:"14"`
+	SampleSeenMessageFlushSeconds              int           `envconfig:"SAMPLE_SEEN_MESSAGE_FLUSH_SECONDS" default:"30"`
 	ClientCredentialAuthHeaderValue            string
 }
 

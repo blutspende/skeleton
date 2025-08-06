@@ -615,3 +615,10 @@ type MessageOutOrder struct {
 
 	AnalysisRequestIDs []uuid.UUID
 }
+
+type SampleSeenMessage struct {
+	InstrumentID uuid.UUID
+	ModuleName   string
+	SampleCode   string
+	SeenAt       time.Time
+}
