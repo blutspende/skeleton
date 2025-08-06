@@ -70,6 +70,7 @@ type Configuration struct {
 	MessageMaxRetries                          int           `envconfig:"MESSAGE_MAX_RETRIES" default:"25"`
 	BlackListedTCPClientIPAddresses            string        `envconfig:"BLACKLISTED_TCP_CLIENT_IP_ADDRESSES" default:""`
 	MaxRequestsPerSecond                       rate.Limit    `envconfig:"MAX_REQUESTS_PER_SECOND" default:"15"`
+	SampleSeenMessageFlushSeconds              int           `envconfig:"SAMPLE_SEEN_MESSAGE_FLUSH_SECONDS" default:"30"`
 	ClientCredentialAuthHeaderValue            string
 }
 
