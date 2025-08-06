@@ -38,9 +38,12 @@ type MessageService interface {
 	RegisterSampleCodesToMessageIn(ctx context.Context, messageID uuid.UUID, sampleCodes []string) error
 	RegisterSampleCodesToMessageOut(ctx context.Context, messageID uuid.UUID, sampleCodes []string) error
 	StartSampleCodeRegisteringToDEA(ctx context.Context)
+	CreateSampleSeenMessages(sampleSeenMessages ...SampleSeenMessage)
+	StartSampleSeenRegisteringToCerberus(ctx context.Context)
 }
 
 type messageService struct {
+	cerberusClient             CerberusClient
 	deaClient                  DeaClientV1
 	messageInRepository        MessageInRepository
 	messageOutRepository       MessageOutRepository
@@ -49,6 +52,7 @@ type messageService struct {
 	messageOutArchivingChan    chan []MessageOut
 	messageInSampleCodeIDChan  chan []sampleCodesWithIDsAndMessageID
 	messageOutSampleCodeIDChan chan []sampleCodesWithIDsAndMessageID
+	sampleSeenMessageChan      chan []SampleSeenMessage
 	serviceName                string
 }
 
@@ -659,9 +663,60 @@ func (s *messageService) DeleteOldMessageOutRecords(ctx context.Context, cleanup
 	return deletedRows, nil
 }
 
-func NewMessageService(deaClient DeaClientV1, messageInRepository MessageInRepository, messageOutRepository MessageOutRepository, messageOutOrderRepository MessageOutOrderRepository, serviceName string) MessageService {
+func (s *messageService) CreateSampleSeenMessages(sampleSeenMessages ...SampleSeenMessage) {
+	if len(sampleSeenMessages) == 0 {
+		return
+	}
+	s.sampleSeenMessageChan <- sampleSeenMessages
+}
+
+func (s *messageService) StartSampleSeenRegisteringToCerberus(ctx context.Context) {
+	sampleSeenBatchChan := make(chan []SampleSeenMessage, 1)
+	go startSampleSeenBatching(ctx, s.sampleSeenMessageChan, sampleSeenBatchChan)
+	for {
+		select {
+		case messages := <-sampleSeenBatchChan:
+			err := s.cerberusClient.SendSampleSeenMessageBatch(messages)
+			if err != nil {
+				time.AfterFunc(time.Minute, func() {
+					s.sampleSeenMessageChan <- messages
+				})
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func startSampleSeenBatching(ctx context.Context, listeningChan chan []SampleSeenMessage, batchChan chan []SampleSeenMessage) {
+	batchSize := 200
+	timeout := time.Minute
+	batch := make([]SampleSeenMessage, 0, batchSize)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case sampleCodesWithMessageIDAndIDs := <-listeningChan:
+			batch = append(batch, sampleCodesWithMessageIDAndIDs...)
+			if len(batch) < batchSize {
+				continue
+			}
+			batchChan <- batch
+			batch = make([]SampleSeenMessage, 0, batchSize)
+		case <-time.After(timeout):
+			if len(batch) == 0 {
+				continue
+			}
+			batchChan <- batch
+			batch = make([]SampleSeenMessage, 0, batchSize)
+		}
+	}
+}
+
+func NewMessageService(deaClient DeaClientV1, cerberusClient CerberusClient, messageInRepository MessageInRepository, messageOutRepository MessageOutRepository, messageOutOrderRepository MessageOutOrderRepository, serviceName string) MessageService {
 	return &messageService{
 		deaClient:                  deaClient,
+		cerberusClient:             cerberusClient,
 		messageInRepository:        messageInRepository,
 		messageOutRepository:       messageOutRepository,
 		messageOutOrderRepository:  messageOutOrderRepository,
@@ -669,6 +724,7 @@ func NewMessageService(deaClient DeaClientV1, messageInRepository MessageInRepos
 		messageOutArchivingChan:    make(chan []MessageOut, 100),
 		messageInSampleCodeIDChan:  make(chan []sampleCodesWithIDsAndMessageID, 100),
 		messageOutSampleCodeIDChan: make(chan []sampleCodesWithIDsAndMessageID, 100),
+		sampleSeenMessageChan:      make(chan []SampleSeenMessage, 100),
 		serviceName:                serviceName,
 	}
 }
