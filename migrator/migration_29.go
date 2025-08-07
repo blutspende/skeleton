@@ -1,17 +1,6 @@
 package migrator
 
 const migration_29 = `
-	CREATE TABLE IF NOT EXISTS <SCHEMA_PLACEHOLDER>.sk_control_mappings(
-    id uuid NOT NULL DEFAULT uuid_generate_v4(),
-    analyte_id uuid NOT NULL,
-    instrument_id uuid NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT timezone('utc', NOW()),
-    modified_at TIMESTAMP,
-    deleted_at TIMESTAMP,
-    CONSTRAINT pk_sk_control_mappings PRIMARY KEY (id),
-    CONSTRAINT fk_sk_control_mappings_instruments FOREIGN KEY (instrument_id) REFERENCES <SCHEMA_PLACEHOLDER>.sk_instruments(id)
-	);
-
 	CREATE TABLE IF NOT EXISTS <SCHEMA_PLACEHOLDER>.sk_control_mapping_control_analyte(
 		id uuid NOT NULL DEFAULT uuid_generate_v4(),
 		control_analyte_id uuid NOT NULL,

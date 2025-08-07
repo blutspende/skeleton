@@ -3,11 +3,12 @@ package skeleton
 import (
 	"context"
 	"errors"
+	"testing"
+	"time"
+
 	"github.com/blutspende/skeleton/db"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
-	"testing"
-	"time"
 )
 
 func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
@@ -1306,21 +1307,6 @@ func (r *instrumentRepositoryMock) DeleteRequestMappingAnalytes(ctx context.Cont
 	return nil
 }
 
-func (r *instrumentRepositoryMock) GetControlMappings(ctx context.Context, instrumentIDs []uuid.UUID) (map[uuid.UUID][]ControlMapping, error) {
-	return nil, nil
-}
-func (r *instrumentRepositoryMock) CreateControlMappings(ctx context.Context, controlMappings []ControlMapping, instrumentID uuid.UUID) ([]uuid.UUID, error) {
-	return nil, nil
-}
-func (r *instrumentRepositoryMock) UpdateControlMapping(ctx context.Context, controlMapping ControlMapping, instrumentID uuid.UUID) error {
-	return nil
-}
-func (r *instrumentRepositoryMock) DeleteControlMappings(ctx context.Context, controlMappingIDs []uuid.UUID) error {
-	return nil
-}
-func (r *instrumentRepositoryMock) DeleteControlMappingsByInstrumentId(ctx context.Context, instrumentId uuid.UUID) error {
-	return nil
-}
 func (r *instrumentRepositoryMock) GetControlMappingAnalytes(ctx context.Context, controlMappingIDs []uuid.UUID) (map[uuid.UUID][]uuid.UUID, error) {
 	return nil, nil
 }
