@@ -183,12 +183,14 @@ type analyteMappingDAO struct {
 	AnalyteID             uuid.UUID    `db:"analyte_id"`
 	ResultType            ResultType   `db:"result_type"`
 	ControlResultRequired bool         `db:"control_result_required"`
-	AnalyteType           AnalyteType  `db:"analyte_type"`
+	IsControl             bool         `db:"is_control"`
 	CreatedAt             time.Time    `db:"created_at"`
 	ModifiedAt            sql.NullTime `db:"modified_at"`
 	DeletedAt             sql.NullTime `db:"deleted_at"`
 	ChannelMapping        []channelMappingDAO
 	ResultMapping         []resultMappingDAO
+	// TODO: do we explicitly define it here, despite the cross-table, or is it just implied?
+	ValidatedAnalyteIDs []uuid.UUID
 }
 
 type channelMappingDAO struct {
@@ -1646,7 +1648,7 @@ func convertAnalyteMappingToDAO(analyteMapping AnalyteMapping, instrumentID uuid
 		AnalyteID:             analyteMapping.AnalyteID,
 		ResultType:            analyteMapping.ResultType,
 		ControlResultRequired: analyteMapping.ControlResultRequired,
-		AnalyteType:           analyteMapping.AnalyteType,
+		IsControl:             analyteMapping.IsControl,
 	}
 	return dao
 }
@@ -1666,7 +1668,7 @@ func convertAnalyteMappingDaoToAnalyteMapping(dao analyteMappingDAO) AnalyteMapp
 		AnalyteID:             dao.AnalyteID,
 		ResultType:            dao.ResultType,
 		ControlResultRequired: dao.ControlResultRequired,
-		AnalyteType:           dao.AnalyteType,
+		IsControl:             dao.IsControl,
 	}
 
 	return analyteMapping

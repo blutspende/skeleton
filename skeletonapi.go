@@ -2,13 +2,14 @@ package skeleton
 
 import (
 	"context"
+	"time"
+
 	config2 "github.com/blutspende/skeleton/config"
 	"github.com/blutspende/skeleton/db"
 	"github.com/blutspende/skeleton/migrator"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"golang.org/x/time/rate"
-	"time"
 )
 
 type SkeletonError error
@@ -147,7 +148,7 @@ type SkeletonAPI interface {
 	GetDbConnection() (*sqlx.DB, error)
 
 	// FindAnalyteMapping - Reusable filter method to find analyte mapping by name and type
-	FindAnalyteMapping(instrument Instrument, analyteType AnalyteType, instrumentAnalyte string) (*AnalyteMapping, error)
+	FindAnalyteMapping(instrument Instrument, isControl bool, instrumentAnalyte string) (*AnalyteMapping, error)
 }
 
 func New(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, reagentManufacturers []string, protocols []SupportedProtocol, dbSchema string) (SkeletonAPI, error) {

@@ -301,7 +301,6 @@ func TestUpdateInstrument(t *testing.T) {
 	analyteMappingID1 := uuid.New()
 	controlAnalyteMappingID1 := uuid.New()
 	channelID1 := uuid.New()
-	controlMappingID1 := uuid.New()
 
 	instr = Instrument{
 		ID:                 instrumentID,
@@ -343,8 +342,8 @@ func TestUpdateInstrument(t *testing.T) {
 						Index: 1,
 					},
 				},
-				ResultType:  "pein",
-				AnalyteType: Result,
+				ResultType: "pein",
+				IsControl:  false,
 			},
 			{
 				ID:                controlAnalyteMappingID1,
@@ -368,8 +367,11 @@ func TestUpdateInstrument(t *testing.T) {
 						Index: 1,
 					},
 				},
-				ResultType:  "pein",
-				AnalyteType: Control,
+				ResultType: "pein",
+				IsControl:  true,
+				ValidatedAnalyteIDs: []uuid.UUID{
+					analyteID1,
+				},
 			},
 		},
 		RequestMappings: []RequestMapping{
@@ -378,15 +380,6 @@ func TestUpdateInstrument(t *testing.T) {
 				IsDefault: true,
 				AnalyteIDs: []uuid.UUID{
 					analyteID1,
-				},
-			},
-		},
-		ControlMappings: []ControlMapping{
-			{
-				ID:        controlMappingID1,
-				AnalyteID: analyteID1,
-				ControlAnalyteIDs: []uuid.UUID{
-					controlAnalyteID1,
 				},
 			},
 		},
@@ -424,21 +417,19 @@ func TestUpdateInstrument(t *testing.T) {
 	assert.Equal(t, channelID1, instrument.AnalyteMappings[1].ChannelMappings[0].ChannelID)
 	assert.Len(t, instrument.AnalyteMappings[1].ResultMappings, 2)
 
+	// TODO: extend the control analyte mapping verification
+	assert.Equal(t, true, instrument.AnalyteMappings[2].IsControl)
+	assert.Len(t, instrument.AnalyteMappings[2].ValidatedAnalyteIDs, 1)
+
 	assert.Len(t, instrument.RequestMappings, 1)
 	assert.Equal(t, "ReqMap", instrument.RequestMappings[0].Code)
 	assert.Equal(t, true, instrument.RequestMappings[0].IsDefault)
 	assert.Len(t, instrument.RequestMappings[0].AnalyteIDs, 1)
 	assert.Equal(t, analyteID1, instrument.RequestMappings[0].AnalyteIDs[0])
-	assert.Len(t, instrument.ControlMappings, 1)
-	assert.Equal(t, analyteID1, instrument.ControlMappings[0].AnalyteID)
-	assert.Len(t, instrument.ControlMappings[0].ControlAnalyteIDs, 1)
-	assert.Equal(t, controlAnalyteID1, instrument.ControlMappings[0].ControlAnalyteIDs[0])
 
 	analyteID2 := uuid.New()
 	analyteID3 := uuid.New()
 	channelID2 := uuid.New()
-	controlMappingID2 := uuid.New()
-	controlMappingID3 := uuid.New()
 
 	instr = Instrument{
 		ID:                 instrumentID,
@@ -484,8 +475,8 @@ func TestUpdateInstrument(t *testing.T) {
 						Index: 2,
 					},
 				},
-				ResultType:  "pein",
-				AnalyteType: Result,
+				ResultType: "pein",
+				IsControl:  false,
 			},
 			{
 				ID:                uuid.New(),
@@ -504,8 +495,18 @@ func TestUpdateInstrument(t *testing.T) {
 						Index: 2,
 					},
 				},
-				ResultType:  "pein",
-				AnalyteType: Result,
+				ResultType: "pein",
+				IsControl:  false,
+			},
+			{
+				ID:                controlAnalyteMappingID1,
+				InstrumentAnalyte: "TESTCONTROLANALYTE",
+				AnalyteID:         controlAnalyteID1, //TODO: is it tho?
+				IsControl:         true,
+				ValidatedAnalyteIDs: []uuid.UUID{
+					analyteID1,
+					analyteID2,
+				},
 			},
 		},
 		RequestMappings: []RequestMapping{
@@ -515,22 +516,6 @@ func TestUpdateInstrument(t *testing.T) {
 				AnalyteIDs: []uuid.UUID{
 					analyteID2,
 					analyteID3,
-				},
-			},
-		},
-		ControlMappings: []ControlMapping{
-			{
-				ID:        controlMappingID2,
-				AnalyteID: analyteID1,
-				ControlAnalyteIDs: []uuid.UUID{
-					controlAnalyteID1,
-				},
-			},
-			{
-				ID:        controlMappingID3,
-				AnalyteID: analyteID2,
-				ControlAnalyteIDs: []uuid.UUID{
-					controlAnalyteID1,
 				},
 			},
 		},
@@ -582,6 +567,12 @@ func TestUpdateInstrument(t *testing.T) {
 			assert.Equal(t, "alt", analyteMapping.ResultMappings[0].Key)
 			assert.Equal(t, "alt", analyteMapping.ResultMappings[0].Value)
 			assert.Equal(t, 2, analyteMapping.ResultMappings[0].Index)
+		} else if analyteMapping.InstrumentAnalyte == "TESTCONTROLANALYTE" {
+			assert.Equal(t, controlAnalyteID1, analyteMapping.AnalyteID)
+			assert.Equal(t, true, analyteMapping.IsControl)
+			assert.Len(t, analyteMapping.ValidatedAnalyteIDs, 2)
+			assert.Equal(t, analyteID1, analyteMapping.ValidatedAnalyteIDs[0])
+			assert.Equal(t, analyteID2, analyteMapping.ValidatedAnalyteIDs[1])
 		} else {
 			assert.Fail(t, "analyte mapping should not exists")
 		}
@@ -593,14 +584,6 @@ func TestUpdateInstrument(t *testing.T) {
 	assert.Len(t, instrument.RequestMappings[0].AnalyteIDs, 2)
 	assert.Contains(t, instrument.RequestMappings[0].AnalyteIDs, analyteID2)
 	assert.Contains(t, instrument.RequestMappings[0].AnalyteIDs, analyteID3)
-
-	assert.Len(t, instrument.ControlMappings, 2)
-	assert.Contains(t, []uuid.UUID{analyteID1, analyteID2}, instrument.ControlMappings[0].AnalyteID)
-	assert.Contains(t, []uuid.UUID{analyteID1, analyteID2}, instrument.ControlMappings[1].AnalyteID)
-	assert.Len(t, instrument.ControlMappings[0].ControlAnalyteIDs, 1)
-	assert.Equal(t, controlAnalyteID1, instrument.ControlMappings[0].ControlAnalyteIDs[0])
-	assert.Len(t, instrument.ControlMappings[1].ControlAnalyteIDs, 1)
-	assert.Equal(t, controlAnalyteID1, instrument.ControlMappings[1].ControlAnalyteIDs[0])
 }
 
 func TestNotVerifiedInstrument(t *testing.T) {

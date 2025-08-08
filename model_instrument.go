@@ -37,7 +37,6 @@ type instrumentTO struct {
 	FtpServerType       *string               `json:"ftpServerType"`
 	AnalyteMappings     []analyteMappingTO    `json:"analyteMappings"`
 	RequestMappings     []requestMappingTO    `json:"requestMappings"`
-	ControlMappings     []controlMappingTO    `json:"controlMappings"`
 	Settings            []instrumentSettingTO `json:"instrumentSettings"`
 	SortingRuleGroups   []sortingRuleGroupTO  `json:"sortingRuleGroups"`
 }
@@ -50,7 +49,9 @@ type analyteMappingTO struct {
 	ResultMappings    []resultMappingTO  `json:"resultMappings"`
 	ResultType        ResultType         `json:"resultType"`
 	ControlRequired   bool               `json:"controlRequired"`
-	AnalyteType       AnalyteType        `json:"analyteType"`
+	//TODO: why are ExpectedControlResults not here?
+	IsControl           bool        `json:"isControl"`
+	ValidatedAnalyteIDs []uuid.UUID `json:"validatedAnalyteIDs"`
 }
 
 type requestMappingTO struct {
@@ -169,7 +170,6 @@ func convertInstrumentTOToInstrument(instrumentTO instrumentTO) Instrument {
 		ClientPort:         instrumentTO.ClientPort,
 		AnalyteMappings:    make([]AnalyteMapping, len(instrumentTO.AnalyteMappings)),
 		RequestMappings:    make([]RequestMapping, len(instrumentTO.RequestMappings)),
-		ControlMappings:    make([]ControlMapping, len(instrumentTO.ControlMappings)),
 		SortingRules:       make([]SortingRule, 0),
 		Settings:           convertInstrumentSettingTOsToInstrumentSettings(instrumentTO.Settings),
 	}
@@ -199,10 +199,6 @@ func convertInstrumentTOToInstrument(instrumentTO instrumentTO) Instrument {
 
 	for i, requestMapping := range instrumentTO.RequestMappings {
 		model.RequestMappings[i] = convertRequestMappingTOToRequestMapping(requestMapping)
-	}
-
-	for i, controlMapping := range instrumentTO.ControlMappings {
-		model.ControlMappings[i] = convertControlMappingTOToControlMapping(controlMapping)
 	}
 
 	model.SortingRules = convertSortingRuleGroupTOsToSortingRules(instrumentTO.SortingRuleGroups, instrumentTO.ID)
@@ -235,7 +231,8 @@ func convertAnalyteMappingTOToAnalyteMapping(analyteMappingTO analyteMappingTO) 
 		ResultMappings:        make([]ResultMapping, len(analyteMappingTO.ResultMappings)),
 		ResultType:            analyteMappingTO.ResultType,
 		ControlResultRequired: analyteMappingTO.ControlRequired,
-		AnalyteType:           analyteMappingTO.AnalyteType,
+		IsControl:             analyteMappingTO.IsControl,
+		ValidatedAnalyteIDs:   make([]uuid.UUID, len(analyteMappingTO.ValidatedAnalyteIDs)),
 	}
 
 	for i, channelMapping := range analyteMappingTO.ChannelMappings {
@@ -244,6 +241,10 @@ func convertAnalyteMappingTOToAnalyteMapping(analyteMappingTO analyteMappingTO) 
 
 	for i, resultMapping := range analyteMappingTO.ResultMappings {
 		model.ResultMappings[i] = convertResultMappingTOToResultMapping(resultMapping)
+	}
+
+	for i, validatedAnalyteID := range analyteMappingTO.ValidatedAnalyteIDs {
+		model.ValidatedAnalyteIDs[i] = validatedAnalyteID
 	}
 
 	return model
@@ -255,14 +256,6 @@ func convertRequestMappingTOToRequestMapping(requestMappingTO requestMappingTO) 
 		Code:       requestMappingTO.Code,
 		IsDefault:  requestMappingTO.IsDefault,
 		AnalyteIDs: requestMappingTO.AnalyteIDs,
-	}
-}
-
-func convertControlMappingTOToControlMapping(controlMappingTO controlMappingTO) ControlMapping {
-	return ControlMapping{
-		ID:                controlMappingTO.ID,
-		AnalyteID:         controlMappingTO.AnalyteID,
-		ControlAnalyteIDs: controlMappingTO.ControlAnalyteIDs,
 	}
 }
 

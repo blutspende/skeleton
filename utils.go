@@ -4,10 +4,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"github.com/google/uuid"
-	"github.com/rs/zerolog/log"
 	"sort"
 	"strings"
+
+	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 )
 
 func HashDeletedInstrument(instrumentID uuid.UUID) string {
@@ -60,12 +61,14 @@ func HashInstrument(instrument Instrument) string {
 
 	// Hash slices AnalyteMappings, RequestMappings, SortingRules, and Settings
 	hashSlice(&builder, instrument.AnalyteMappings, func(a AnalyteMapping) string {
+		// TODO: why is the order of the fields in the string not consistent with the order in the model struct?
+
 		var analyteBuilder strings.Builder
 		analyteBuilder.WriteString(a.AnalyteID.String())
 		analyteBuilder.WriteString(a.InstrumentAnalyte)
 		analyteBuilder.WriteString(string(a.ResultType))
 		analyteBuilder.WriteString(fmt.Sprintf("%t", a.ControlResultRequired))
-		analyteBuilder.WriteString(string(a.AnalyteType))
+		analyteBuilder.WriteString(fmt.Sprintf("%t", a.IsControl))
 
 		// Hash nested ChannelMappings
 		hashSlice(&analyteBuilder, a.ChannelMappings, func(c ChannelMapping) string {
@@ -76,6 +79,20 @@ func HashInstrument(instrument Instrument) string {
 		hashSlice(&analyteBuilder, a.ResultMappings, func(r ResultMapping) string {
 			return r.Key + r.Value + fmt.Sprintf("%d", r.Index)
 		})
+
+		// TODO: why wasn't a mapping for expected control results added here?
+		// Hash ExpectedControlResults
+		analyteBuilder.WriteString(HashExpectedControlResults(a.ExpectedControlResults))
+
+		// Hash ValidatedAnalyteIDs (sorting ensures consistent order)
+		validatedAnalyteIDs := make([]string, len(a.ValidatedAnalyteIDs))
+		for i, id := range a.ValidatedAnalyteIDs {
+			validatedAnalyteIDs[i] = id.String()
+		}
+		sort.Strings(validatedAnalyteIDs)
+		for _, id := range validatedAnalyteIDs {
+			analyteBuilder.WriteString(id)
+		}
 
 		return analyteBuilder.String()
 	})
@@ -92,23 +109,6 @@ func HashInstrument(instrument Instrument) string {
 		}
 		sort.Strings(analyteIDs)
 		for _, id := range analyteIDs {
-			reqBuilder.WriteString(id)
-		}
-
-		return reqBuilder.String()
-	})
-
-	hashSlice(&builder, instrument.ControlMappings, func(r ControlMapping) string {
-		var reqBuilder strings.Builder
-		reqBuilder.WriteString(r.AnalyteID.String())
-
-		// Hash ControlAnalyteIDs (sorting ensures consistent order)
-		controlAnalyteIDs := make([]string, len(r.ControlAnalyteIDs))
-		for i, id := range r.ControlAnalyteIDs {
-			controlAnalyteIDs[i] = id.String()
-		}
-		sort.Strings(controlAnalyteIDs)
-		for _, id := range controlAnalyteIDs {
 			reqBuilder.WriteString(id)
 		}
 
@@ -235,16 +235,16 @@ func hashOperand(operand *ConditionOperand) string {
 	return operandBuilder.String()
 }
 
-func FindAnalyteMapping(instrument Instrument, analyteType AnalyteType, instrumentAnalyte string) (*AnalyteMapping, error) {
+func FindAnalyteMapping(instrument Instrument, isControl bool, instrumentAnalyte string) (*AnalyteMapping, error) {
 	// Searching for matching control analyte mapping based on the instrument analyte string from the message
 	for _, aMapping := range instrument.AnalyteMappings {
-		if aMapping.AnalyteType == analyteType && aMapping.InstrumentAnalyte == instrumentAnalyte {
+		if aMapping.IsControl == isControl && aMapping.InstrumentAnalyte == instrumentAnalyte {
 			// Note: it should not be possible but if there are multiple mappings with the same name and type the first one is returned
 			return &aMapping, nil
 		}
 	}
 	// If no mapping is found, log a warning and return the error
-	err := fmt.Errorf("%w - instrumentID: %s, analyte type: %s, instrument analyte: %s", ErrNoMatchingAnalyteMappingFound, instrument.ID, analyteType, instrumentAnalyte)
+	err := fmt.Errorf("%w - instrumentID: %s, is control: %t, instrument analyte: %s", ErrNoMatchingAnalyteMappingFound, instrument.ID, isControl, instrumentAnalyte)
 	log.Warn().Msg(err.Error())
 	return nil, err
 }

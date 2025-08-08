@@ -1,11 +1,12 @@
 package skeleton
 
 import (
+	"net/http"
+	"time"
+
 	"github.com/blutspende/bloodlab-common/encoding"
 	"github.com/blutspende/bloodlab-common/messagetype"
 	"github.com/blutspende/bloodlab-common/timezone"
-	"net/http"
-	"time"
 
 	"github.com/blutspende/bloodlab-common/messagestatus"
 	"github.com/google/uuid"
@@ -101,13 +102,6 @@ const (
 	Diluent  ReagentType = "diluent"
 )
 
-type AnalyteType string
-
-const (
-	Result  AnalyteType = "INSTRUMENTAL_RESULT"
-	Control AnalyteType = "INSTRUMENTAL_CONTROL"
-)
-
 type Reagent struct {
 	ID             uuid.UUID
 	Manufacturer   string
@@ -164,7 +158,6 @@ type Instrument struct {
 	FTPConfig          *FTPConfig
 	AnalyteMappings    []AnalyteMapping
 	RequestMappings    []RequestMapping
-	ControlMappings    []ControlMapping
 	SortingRules       []SortingRule
 	Settings           []InstrumentSetting
 	CreatedAt          time.Time
@@ -196,8 +189,9 @@ type AnalyteMapping struct {
 	ResultMappings         []ResultMapping
 	ResultType             ResultType
 	ControlResultRequired  bool
-	AnalyteType            AnalyteType
 	ExpectedControlResults []ExpectedControlResult
+	IsControl              bool
+	ValidatedAnalyteIDs    []uuid.UUID //links to InstrumentalAnalyte type
 }
 
 type ChannelMapping struct {
@@ -239,12 +233,6 @@ type RequestMapping struct {
 	Code       string
 	IsDefault  bool
 	AnalyteIDs []uuid.UUID
-}
-
-type ControlMapping struct {
-	ID                uuid.UUID
-	AnalyteID         uuid.UUID
-	ControlAnalyteIDs []uuid.UUID
 }
 
 type UploadLogStatus string
