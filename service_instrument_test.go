@@ -11,6 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// TODO: make all green again
+
 func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
 	dbConn, schemaName := setupDbConnectorAndRunMigration("instrument_test")
 
@@ -1290,19 +1292,16 @@ func (r *instrumentRepositoryMock) DeleteRequestMappingAnalytes(ctx context.Cont
 	return nil
 }
 
-func (r *instrumentRepositoryMock) GetControlMappingAnalytes(ctx context.Context, controlMappingIDs []uuid.UUID) (map[uuid.UUID][]uuid.UUID, error) {
+func (r *instrumentRepositoryMock) CreateValidatedAnalyteIDs(ctx context.Context, analyteMappingID uuid.UUID, validatedAnalyteIDs []uuid.UUID) error {
+	return nil
+}
+func (r *instrumentRepositoryMock) GetValidatedAnalyteIDsByAnalyteMappingID(ctx context.Context, analyteMappingIDs []uuid.UUID) (map[uuid.UUID][]uuid.UUID, error) {
 	return nil, nil
 }
-func (r *instrumentRepositoryMock) CreateControlMappingAnalytes(ctx context.Context, controlAnalyteIDsByControlAnalyteMappingID map[uuid.UUID][]uuid.UUID) error {
+func (r *instrumentRepositoryMock) DeleteValidatedAnalyteIDsByAnalyteMappingID(ctx context.Context, analyteMappingID uuid.UUID, validatedAnalyteIDs []uuid.UUID) error {
 	return nil
 }
-func (r *instrumentRepositoryMock) DeleteControlMappingAnalytesByControlMappingIDs(ctx context.Context, controlMappingIDs []uuid.UUID) error {
-	return nil
-}
-func (r *instrumentRepositoryMock) DeleteControlMappingAnalytesByInstrumentID(ctx context.Context, instrumentID uuid.UUID) error {
-	return nil
-}
-func (r *instrumentRepositoryMock) DeleteControlMappingAnalytesByControlMappingIDAndControlAnalyteIDs(ctx context.Context, controlAnalyteMapping uuid.UUID, controlAnalyteIDs []uuid.UUID) error {
+func (r *instrumentRepositoryMock) DeleteAllValidatedAnalyteIDsByInstrumentID(ctx context.Context, instrumentID uuid.UUID) error {
 	return nil
 }
 

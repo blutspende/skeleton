@@ -5,12 +5,14 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"github.com/blutspende/bloodlab-common/utils"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/blutspende/bloodlab-common/utils"
+
 	"errors"
+
 	"github.com/blutspende/skeleton/db"
 
 	"github.com/google/uuid"
@@ -3593,6 +3595,8 @@ func (r *analysisRepository) SaveCerberusIDForAnalysisResult(ctx context.Context
 	return nil
 }
 
+// TODO: rework it with new validated analyte concept
+
 func (r *analysisRepository) GetAnalysisResultIdsWithoutControlByReagent(ctx context.Context, controlResult ControlResult, reagent Reagent, analysisResultWithoutControlSearchDays int) ([]uuid.UUID, error) {
 	analysisResultIds := make([]uuid.UUID, 0)
 
@@ -3695,6 +3699,8 @@ func (r *analysisRepository) GetAnalysisResultIdsWhereLastestControlIsInvalid(ct
 
 	return analysisResultIds, err
 }
+
+// TODO: rework it with new validated analyte concept
 
 func (r *analysisRepository) GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMapping AnalyteMapping, instrumentId uuid.UUID, controlResultSearchDays int) ([]ControlResult, error) {
 	controlResults := make([]ControlResult, 0)

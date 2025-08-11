@@ -82,7 +82,7 @@ func HashInstrument(instrument Instrument) string {
 
 		// TODO: why wasn't a mapping for expected control results added here?
 		// Hash ExpectedControlResults
-		analyteBuilder.WriteString(HashExpectedControlResults(a.ExpectedControlResults))
+		//analyteBuilder.WriteString(HashExpectedControlResults(a.ExpectedControlResults))
 
 		// Hash ValidatedAnalyteIDs (sorting ensures consistent order)
 		validatedAnalyteIDs := make([]string, len(a.ValidatedAnalyteIDs))

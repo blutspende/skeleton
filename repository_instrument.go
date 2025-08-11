@@ -246,15 +246,6 @@ type requestMappingAnalyteDAO struct {
 	DeletedAt        sql.NullTime `db:"deleted_at"`
 }
 
-type controlMappingControlAnalyteDAO struct {
-	ID               uuid.UUID    `db:"id"`
-	ControlAnalyteID uuid.UUID    `db:"control_analyte_id"`
-	ControlMappingId uuid.UUID    `db:"control_mapping_id"`
-	CreatedAt        time.Time    `db:"created_at"`
-	ModifiedAt       sql.NullTime `db:"modified_at"`
-	DeletedAt        sql.NullTime `db:"deleted_at"`
-}
-
 type instrumentSettingDao struct {
 	ID                uuid.UUID    `db:"id"`
 	InstrumentID      uuid.UUID    `db:"instrument_id"`
@@ -354,11 +345,13 @@ type InstrumentRepository interface {
 	GetRequestMappingAnalytes(ctx context.Context, requestMappingIDs []uuid.UUID) (map[uuid.UUID][]uuid.UUID, error)
 	DeleteRequestMappings(ctx context.Context, requestMappingIDs []uuid.UUID) error
 	DeleteRequestMappingAnalytes(ctx context.Context, requestMappingID uuid.UUID, analyteIDs []uuid.UUID) error
-	GetControlMappingAnalytes(ctx context.Context, controlMappingIDs []uuid.UUID) (map[uuid.UUID][]uuid.UUID, error)
-	CreateControlMappingAnalytes(ctx context.Context, controlAnalyteIDsByControlAnalyteMappingID map[uuid.UUID][]uuid.UUID) error
-	DeleteControlMappingAnalytesByControlMappingIDs(ctx context.Context, controlMappingIDs []uuid.UUID) error
-	DeleteControlMappingAnalytesByInstrumentID(ctx context.Context, instrumentID uuid.UUID) error
-	DeleteControlMappingAnalytesByControlMappingIDAndControlAnalyteIDs(ctx context.Context, controlAnalyteMapping uuid.UUID, controlAnalyteIDs []uuid.UUID) error
+
+	// Validated analytes
+	CreateValidatedAnalyteIDs(ctx context.Context, analyteMappingID uuid.UUID, validatedAnalyteIDs []uuid.UUID) error
+	GetValidatedAnalyteIDsByAnalyteMappingID(ctx context.Context, analyteMappingIDs []uuid.UUID) (map[uuid.UUID][]uuid.UUID, error)
+	DeleteValidatedAnalyteIDsByAnalyteMappingID(ctx context.Context, analyteMappingID uuid.UUID, validatedAnalyteIDs []uuid.UUID) error
+	DeleteAllValidatedAnalyteIDsByInstrumentID(ctx context.Context, instrumentID uuid.UUID) error
+
 	GetEncodings(ctx context.Context) ([]string, error)
 	GetInstrumentsSettings(ctx context.Context, instrumentIDs []uuid.UUID) (map[uuid.UUID][]InstrumentSetting, error)
 	UpsertInstrumentSetting(ctx context.Context, instrumentID uuid.UUID, setting InstrumentSetting) error
@@ -807,6 +800,8 @@ func (r *instrumentRepository) GetAnalyteMappings(ctx context.Context, instrumen
 	}
 	return analyteMappingsByInstrumentID, nil
 }
+
+// TODO: rework it with new validated analyte concept
 
 func (r *instrumentRepository) GetExpectedControlResultsForControlValidation(ctx context.Context, instrumentID uuid.UUID, analyteID uuid.UUID) ([]ExpectedControlResult, error) {
 	expectedControlResults := make([]ExpectedControlResult, 0)
@@ -1300,50 +1295,22 @@ func (r *instrumentRepository) DeleteRequestMappingAnalytes(ctx context.Context,
 	return nil
 }
 
-func (r *instrumentRepository) GetControlMappingAnalytes(ctx context.Context, controlMappingIDs []uuid.UUID) (map[uuid.UUID][]uuid.UUID, error) {
-	query := fmt.Sprintf(`SELECT control_mapping_id, control_analyte_id FROM %s.sk_control_mapping_control_analyte WHERE control_mapping_id IN (?) AND deleted_at IS NULL;`, r.dbSchema)
-	query, args, _ := sqlx.In(query, controlMappingIDs)
-	query = r.db.Rebind(query)
-	rows, err := r.db.QueryxContext(ctx, query, args...)
-	if err != nil {
-		log.Error().Err(err).Msg(msgGetControlMappingAnalytesFailed)
-		return nil, ErrGetControlMappingAnalytesFailed
-	}
-	defer rows.Close()
-	controlAnalyteIDsByControlMappingIDs := make(map[uuid.UUID][]uuid.UUID)
-	for rows.Next() {
-		var controlMappingID, controlAnalyteID uuid.UUID
-		err = rows.Scan(&controlMappingID, &controlAnalyteID)
-		if err != nil {
-			log.Error().Err(err).Msg(msgGetControlMappingAnalytesFailed)
-			return nil, ErrGetControlMappingAnalytesFailed
-		}
-		controlAnalyteIDsByControlMappingIDs[controlMappingID] = append(controlAnalyteIDsByControlMappingIDs[controlMappingID], controlAnalyteID)
-	}
-	return controlAnalyteIDsByControlMappingIDs, nil
-}
+// Validated analytes
 
-func (r *instrumentRepository) CreateControlMappingAnalytes(ctx context.Context, controlAnalyteIDsByControlAnalyteMappingID map[uuid.UUID][]uuid.UUID) error {
-	controlMappingAnalyteDAOs := make([]controlMappingControlAnalyteDAO, 0)
-	for controlAnalyteMappingID, controlAnalyteIDs := range controlAnalyteIDsByControlAnalyteMappingID {
-		for _, controlAnalyteID := range controlAnalyteIDs {
-			controlMappingAnalyteDAOs = append(controlMappingAnalyteDAOs, controlMappingControlAnalyteDAO{
-				ID:               uuid.New(),
-				ControlAnalyteID: controlAnalyteID,
-				ControlMappingId: controlAnalyteMappingID,
-				CreatedAt:        time.Time{},
-				ModifiedAt:       sql.NullTime{},
-				DeletedAt:        sql.NullTime{},
-			})
-		}
-	}
-	if len(controlMappingAnalyteDAOs) < 1 {
+func (r *instrumentRepository) CreateValidatedAnalyteIDs(ctx context.Context, analyteMappingID uuid.UUID, validatedAnalyteIDs []uuid.UUID) error {
+	if len(validatedAnalyteIDs) == 1 {
 		return nil
 	}
-	query := fmt.Sprintf(`INSERT INTO %s.sk_control_mapping_control_analyte(id, control_analyte_id, control_mapping_id)
-		VALUES(:id, :control_analyte_id, :control_mapping_id);`, r.dbSchema)
-	_, err := r.db.NamedExecContext(ctx, query, controlMappingAnalyteDAOs)
+
+	values := make([]string, len(validatedAnalyteIDs))
+	for i, validatedAnalyteID := range validatedAnalyteIDs {
+		values[i] = fmt.Sprintf("('%s', '%s')", analyteMappingID, validatedAnalyteID)
+	}
+	query := fmt.Sprintf(`INSERT INTO %s.sk_validated_analytes(analyte_mapping_id, validated_analyte_id) VALUES %s;`, r.dbSchema, strings.Join(values, ","))
+
+	_, err := r.db.ExecContext(ctx, query)
 	if err != nil {
+		// TODO: update error messages
 		log.Error().Err(err).Msg(msgCreateControlMappingAnalytesFailed)
 		if IsErrorCode(err, UniqueViolationErrorCode) {
 			return ErrUniqueViolationControlMappingAnalytes
@@ -1353,34 +1320,50 @@ func (r *instrumentRepository) CreateControlMappingAnalytes(ctx context.Context,
 	return nil
 }
 
-func (r *instrumentRepository) DeleteControlMappingAnalytesByControlMappingIDs(ctx context.Context, controlMappingIDs []uuid.UUID) error {
-	query := fmt.Sprintf(`UPDATE %s.sk_control_mapping_control_analyte SET deleted_at = timezone('utc', now()) WHERE control_mapping_id in (?);`, r.dbSchema)
-	query, args, _ := sqlx.In(query, controlMappingIDs)
+func (r *instrumentRepository) GetValidatedAnalyteIDsByAnalyteMappingID(ctx context.Context, analyteMappingIDs []uuid.UUID) (map[uuid.UUID][]uuid.UUID, error) {
+	query := fmt.Sprintf(`SELECT analyte_mapping_id, validated_analyte_id FROM %s.sk_validated_analytes WHERE analyte_mapping_id IN (?) AND deleted_at IS NULL;`, r.dbSchema)
+	query, args, _ := sqlx.In(query, analyteMappingIDs)
+	query = r.db.Rebind(query)
+	rows, err := r.db.QueryxContext(ctx, query, args...)
+	if err != nil {
+		// TODO: update error messages
+		log.Error().Err(err).Msg(msgGetControlMappingAnalytesFailed)
+		return nil, ErrGetControlMappingAnalytesFailed
+	}
+	defer rows.Close()
+
+	validatedAnalyteIDsByAnalyteMappingID := make(map[uuid.UUID][]uuid.UUID)
+	for rows.Next() {
+		var analyteMappingID, validatedAnalyteID uuid.UUID
+		err = rows.Scan(&analyteMappingID, &validatedAnalyteID)
+		if err != nil {
+			// TODO: update error messages
+			log.Error().Err(err).Msg(msgGetControlMappingAnalytesFailed)
+			return nil, ErrGetControlMappingAnalytesFailed
+		}
+		validatedAnalyteIDsByAnalyteMappingID[analyteMappingID] = append(validatedAnalyteIDsByAnalyteMappingID[analyteMappingID], validatedAnalyteID)
+	}
+	return validatedAnalyteIDsByAnalyteMappingID, nil
+}
+
+func (r *instrumentRepository) DeleteValidatedAnalyteIDsByAnalyteMappingID(ctx context.Context, analyteMappingID uuid.UUID, validatedAnalyteIDs []uuid.UUID) error {
+	query := fmt.Sprintf(`UPDATE %s.sk_validated_analytes SET deleted_at = timezone('utc', now()) WHERE analyte_mapping_id = ? AND validated_analyte_id IN (?);`, r.dbSchema)
+	query, args, _ := sqlx.In(query, analyteMappingID, validatedAnalyteIDs)
 	query = r.db.Rebind(query)
 	_, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
+		// TODO: update error messages
 		log.Error().Err(err).Msg(msgDeleteControlMappingAnalytesFailed)
 		return ErrDeleteControlMappingAnalytesFailed
 	}
 	return nil
 }
 
-func (r *instrumentRepository) DeleteControlMappingAnalytesByInstrumentID(ctx context.Context, instrumentID uuid.UUID) error {
-	query := fmt.Sprintf(`UPDATE %s.sk_control_mapping_control_analyte SET deleted_at = timezone('utc', now()) FROM %s.sk_control_mappings cm WHERE control_mapping_id = cm.id AND cm.instrument_id = $1;`, r.dbSchema, r.dbSchema)
+func (r *instrumentRepository) DeleteAllValidatedAnalyteIDsByInstrumentID(ctx context.Context, instrumentID uuid.UUID) error {
+	query := fmt.Sprintf(`UPDATE %s.sk_validated_analytes SET deleted_at = timezone('utc', now()) FROM %s.sk_analyte_mappings am WHERE analyte_mapping_id = am.id AND am.instrument_id = $1;`, r.dbSchema, r.dbSchema)
 	_, err := r.db.ExecContext(ctx, query, instrumentID)
 	if err != nil {
-		log.Error().Err(err).Msg(msgDeleteControlMappingAnalytesFailed)
-		return ErrDeleteControlMappingAnalytesFailed
-	}
-	return nil
-}
-
-func (r *instrumentRepository) DeleteControlMappingAnalytesByControlMappingIDAndControlAnalyteIDs(ctx context.Context, controlAnalyteMapping uuid.UUID, controlAnalyteIDs []uuid.UUID) error {
-	query := fmt.Sprintf(`UPDATE %s.sk_control_mapping_control_analyte SET deleted_at = timezone('utc', now()) WHERE control_mapping_id = ? AND control_analyte_id IN (?);`, r.dbSchema)
-	query, args, _ := sqlx.In(query, controlAnalyteMapping, controlAnalyteIDs)
-	query = r.db.Rebind(query)
-	_, err := r.db.ExecContext(ctx, query, args...)
-	if err != nil {
+		// TODO: update error messages
 		log.Error().Err(err).Msg(msgDeleteControlMappingAnalytesFailed)
 		return ErrDeleteControlMappingAnalytesFailed
 	}
