@@ -189,8 +189,7 @@ type analyteMappingDAO struct {
 	DeletedAt             sql.NullTime `db:"deleted_at"`
 	ChannelMapping        []channelMappingDAO
 	ResultMapping         []resultMappingDAO
-	// TODO: do we explicitly define it here, despite the cross-table, or is it just implied?
-	ValidatedAnalyteIDs []uuid.UUID
+	ValidatedAnalyteIDs   []uuid.UUID
 }
 
 type channelMappingDAO struct {
@@ -1298,7 +1297,7 @@ func (r *instrumentRepository) DeleteRequestMappingAnalytes(ctx context.Context,
 // Validated analytes
 
 func (r *instrumentRepository) CreateValidatedAnalyteIDs(ctx context.Context, analyteMappingID uuid.UUID, validatedAnalyteIDs []uuid.UUID) error {
-	if len(validatedAnalyteIDs) == 1 {
+	if len(validatedAnalyteIDs) == 0 {
 		return nil
 	}
 
@@ -1347,9 +1346,14 @@ func (r *instrumentRepository) GetValidatedAnalyteIDsByAnalyteMappingID(ctx cont
 }
 
 func (r *instrumentRepository) DeleteValidatedAnalyteIDsByAnalyteMappingID(ctx context.Context, analyteMappingID uuid.UUID, validatedAnalyteIDs []uuid.UUID) error {
+	if len(validatedAnalyteIDs) == 0 {
+		return nil
+	}
+
 	query := fmt.Sprintf(`UPDATE %s.sk_validated_analytes SET deleted_at = timezone('utc', now()) WHERE analyte_mapping_id = ? AND validated_analyte_id IN (?);`, r.dbSchema)
 	query, args, _ := sqlx.In(query, analyteMappingID, validatedAnalyteIDs)
 	query = r.db.Rebind(query)
+
 	_, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		// TODO: update error messages

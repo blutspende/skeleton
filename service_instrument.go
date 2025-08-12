@@ -92,7 +92,6 @@ func (s *instrumentService) CreateInstrument(ctx context.Context, instrument Ins
 			return uuid.Nil, err
 		}
 
-		// TODO: is this even possible? to have mappings and analytes for a newly created instrument?
 		err = s.instrumentRepository.WithTransaction(transaction).CreateValidatedAnalyteIDs(ctx, analyteMappingID, instrument.AnalyteMappings[i].ValidatedAnalyteIDs)
 		if err != nil {
 			_ = transaction.Rollback()

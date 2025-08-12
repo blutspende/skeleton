@@ -42,16 +42,15 @@ type instrumentTO struct {
 }
 
 type analyteMappingTO struct {
-	ID                uuid.UUID          `json:"id"`
-	InstrumentAnalyte string             `json:"instrumentAnalyte"`
-	AnalyteID         uuid.UUID          `json:"analyteId"`
-	ChannelMappings   []channelMappingTO `json:"channelMappings"`
-	ResultMappings    []resultMappingTO  `json:"resultMappings"`
-	ResultType        ResultType         `json:"resultType"`
-	ControlRequired   bool               `json:"controlRequired"`
-	//TODO: why are ExpectedControlResults not here?
-	IsControl           bool        `json:"isControl"`
-	ValidatedAnalyteIDs []uuid.UUID `json:"validatedAnalyteIDs"`
+	ID                  uuid.UUID          `json:"id"`
+	InstrumentAnalyte   string             `json:"instrumentAnalyte"`
+	AnalyteID           uuid.UUID          `json:"analyteId"`
+	ChannelMappings     []channelMappingTO `json:"channelMappings"`
+	ResultMappings      []resultMappingTO  `json:"resultMappings"`
+	ResultType          ResultType         `json:"resultType"`
+	ControlRequired     bool               `json:"controlRequired"`
+	IsControl           bool               `json:"isControl"`
+	ValidatedAnalyteIDs []uuid.UUID        `json:"validatedAnalyteIDs"`
 }
 
 type requestMappingTO struct {

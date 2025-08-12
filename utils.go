@@ -61,7 +61,7 @@ func HashInstrument(instrument Instrument) string {
 
 	// Hash slices AnalyteMappings, RequestMappings, SortingRules, and Settings
 	hashSlice(&builder, instrument.AnalyteMappings, func(a AnalyteMapping) string {
-		// TODO: why is the order of the fields in the string not consistent with the order in the model struct?
+		// Note: the order of the fields in the string not consistent with the order in the model struct
 
 		var analyteBuilder strings.Builder
 		analyteBuilder.WriteString(a.AnalyteID.String())
@@ -80,7 +80,7 @@ func HashInstrument(instrument Instrument) string {
 			return r.Key + r.Value + fmt.Sprintf("%d", r.Index)
 		})
 
-		// TODO: why wasn't a mapping for expected control results added here?
+		// Note: mapping for expected control results is not added probably because it's not created on the same page as the instrument on the UI
 		// Hash ExpectedControlResults
 		//analyteBuilder.WriteString(HashExpectedControlResults(a.ExpectedControlResults))
 
