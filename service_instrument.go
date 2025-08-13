@@ -639,7 +639,7 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 						}
 					}
 					if !validatedAnalyteIDFound {
-						createdValidatedAnalyteIDs[oldAnalyteMapping.ID] = append(createdValidatedAnalyteIDs[newAnalyteMapping.ID], newValidatedAnalyteID)
+						createdValidatedAnalyteIDs[newAnalyteMapping.ID] = append(createdValidatedAnalyteIDs[newAnalyteMapping.ID], newValidatedAnalyteID)
 					}
 				}
 
@@ -725,7 +725,7 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 		_ = tx.Rollback()
 		return err
 	}
-	for _, analyteMapping := range instrument.AnalyteMappings {
+	for i, analyteMapping := range instrument.AnalyteMappings {
 		_, err = s.instrumentRepository.WithTransaction(tx).UpsertChannelMappings(ctx, analyteMapping.ChannelMappings, analyteMapping.ID)
 		if err != nil {
 			_ = tx.Rollback()
@@ -735,6 +735,17 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 		if err != nil {
 			_ = tx.Rollback()
 			return err
+		}
+
+		analyteMappingFound := false
+		for _, oldAnalyteMapping := range oldInstrument.AnalyteMappings {
+			if oldAnalyteMapping.ID == analyteMapping.ID {
+				analyteMappingFound = true
+				break
+			}
+		}
+		if !analyteMappingFound {
+			createdValidatedAnalyteIDs[instrument.AnalyteMappings[i].ID] = append(createdValidatedAnalyteIDs[instrument.AnalyteMappings[i].ID], instrument.AnalyteMappings[i].ValidatedAnalyteIDs...)
 		}
 	}
 

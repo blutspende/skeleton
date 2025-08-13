@@ -59,15 +59,10 @@ const (
 	msgDeleteRequestMappingsFailed                   = "delete request mappings failed"
 	msgUpdateRequestMappingFailed                    = "update request mapping failed"
 	msgDeleteRequestMappingAnalytesFailed            = "delete request mapping analytes failed"
-	msgGetControlMappingsFailed                      = "get control mappings failed"
-	msgCreateControlMappingsFailed                   = "create control mappings failed"
-	msgUpdateControlMappingFailed                    = "update control mappings failed"
-	msgDeleteControlMappingsFailed                   = "delete control mappings failed"
-	msgUniqueViolationControlMapping                 = "analyte already set to a Control Mapping for this instrument"
-	msgGetControlMappingAnalytesFailed               = "get control mapping analytes failed"
-	msgCreateControlMappingAnalytesFailed            = "create control mapping analytes failed"
-	msgDeleteControlMappingAnalytesFailed            = "delete control mapping analytes failed"
-	msgUniqueViolationControlMappingAnalytes         = "control analyte already set to the specific Control Mapping for this instrument"
+	msgGetValidatedAnalytesFailed                    = "get validated analytes failed"
+	msgCreateValidatedAnalytesFailed                 = "create validated analytes failed"
+	msgDeleteValidatedAnalytesFailed                 = "delete validated analytes failed"
+	msgUniqueViolationValidatedAnalytes              = "validated analyte already set to the specific control mapping for this instrument"
 	msgGetEncodingsFailed                            = "get encodings failed"
 	msgGetProtocolSettingsFailed                     = "get protocol settings failed"
 	msgUpsertProtocolSettingsFailed                  = "upsert protocol settings failed"
@@ -119,15 +114,10 @@ var (
 	ErrDeleteRequestMappingsFailed                   = errors.New(msgDeleteRequestMappingsFailed)
 	ErrUpdateRequestMappingFailed                    = errors.New(msgUpdateRequestMappingFailed)
 	ErrDeleteRequestMappingAnalytesFailed            = errors.New(msgDeleteRequestMappingAnalytesFailed)
-	ErrGetControlMappingsFailed                      = errors.New(msgGetControlMappingsFailed)
-	ErrCreateControlMappingsFailed                   = errors.New(msgCreateControlMappingsFailed)
-	ErrUpdateControlMappingFailed                    = errors.New(msgUpdateControlMappingFailed)
-	ErrDeleteControlMappingsFailed                   = errors.New(msgDeleteControlMappingsFailed)
-	ErrUniqueViolationControlMapping                 = errors.New(msgUniqueViolationControlMapping)
-	ErrGetControlMappingAnalytesFailed               = errors.New(msgGetControlMappingAnalytesFailed)
-	ErrCreateControlMappingAnalytesFailed            = errors.New(msgCreateControlMappingAnalytesFailed)
-	ErrDeleteControlMappingAnalytesFailed            = errors.New(msgDeleteControlMappingAnalytesFailed)
-	ErrUniqueViolationControlMappingAnalytes         = errors.New(msgUniqueViolationControlMappingAnalytes)
+	ErrGetValidatedAnalytesFailed                    = errors.New(msgGetValidatedAnalytesFailed)
+	ErrCreateValidatedAnalytesFailed                 = errors.New(msgCreateValidatedAnalytesFailed)
+	ErrDeleteValidatedAnalytesFailed                 = errors.New(msgDeleteValidatedAnalytesFailed)
+	ErrUniqueViolationValidatedAnalytes              = errors.New(msgUniqueViolationValidatedAnalytes)
 	ErrGetEncodingsFailed                            = errors.New(msgGetEncodingsFailed)
 	ErrGetProtocolSettingsFailed                     = errors.New(msgGetProtocolSettingsFailed)
 	ErrUpsertProtocolSettingsFailed                  = errors.New(msgUpsertProtocolSettingsFailed)
@@ -759,10 +749,10 @@ func (r *instrumentRepository) UpsertAnalyteMappings(ctx context.Context, analyt
 	for i := range analyteMappings {
 		ids[i] = analyteMappings[i].ID
 	}
-	query := fmt.Sprintf(`INSERT INTO %s.sk_analyte_mappings(id, instrument_id, instrument_analyte, analyte_id, result_type, control_result_required, analyte_type) 
-		VALUES(:id, :instrument_id, :instrument_analyte, :analyte_id, :result_type, :control_result_required, :analyte_type)
+	query := fmt.Sprintf(`INSERT INTO %s.sk_analyte_mappings(id, instrument_id, instrument_analyte, analyte_id, result_type, control_result_required, is_control) 
+		VALUES(:id, :instrument_id, :instrument_analyte, :analyte_id, :result_type, :control_result_required, :is_control)
 		ON CONFLICT (id) WHERE deleted_at IS NULL DO UPDATE SET instrument_analyte = excluded.instrument_analyte, analyte_id = excluded.analyte_id,
-		    result_type = excluded.result_type, control_result_required = excluded.control_result_required, analyte_type = excluded.analyte_type, modified_at = timezone('utc', now());`, r.dbSchema)
+		    result_type = excluded.result_type, control_result_required = excluded.control_result_required, is_control = excluded.is_control, modified_at = timezone('utc', now());`, r.dbSchema)
 	_, err := r.db.NamedExecContext(ctx, query, convertAnalyteMappingsToDAOs(analyteMappings, instrumentID))
 	if err != nil {
 		log.Error().Err(err).Msg(msgUpsertAnalyteMappingsFailed)
@@ -800,8 +790,6 @@ func (r *instrumentRepository) GetAnalyteMappings(ctx context.Context, instrumen
 	return analyteMappingsByInstrumentID, nil
 }
 
-// TODO: rework it with new validated analyte concept
-
 func (r *instrumentRepository) GetExpectedControlResultsForControlValidation(ctx context.Context, instrumentID uuid.UUID, analyteID uuid.UUID) ([]ExpectedControlResult, error) {
 	expectedControlResults := make([]ExpectedControlResult, 0)
 	preparedValues := map[string]interface{}{
@@ -810,11 +798,10 @@ func (r *instrumentRepository) GetExpectedControlResultsForControlValidation(ctx
 	}
 
 	query := `SELECT secr.*
-		FROM %schema_name%.sk_control_mappings scm
-			INNER JOIN %schema_name%.sk_control_mapping_control_analyte scmca ON scm.id = scmca.control_mapping_id
-			INNER JOIN %schema_name%.sk_analyte_mappings sam ON scmca.control_analyte_id = sam.analyte_id
+		FROM %schema_name%.sk_validated_analytes sva
+			INNER JOIN %schema_name%.sk_analyte_mappings sam ON sva.analyte_mapping_id = sam.id
 			INNER JOIN %schema_name%.sk_expected_control_result secr ON sam.id = secr.analyte_mapping_id
-		WHERE scm.analyte_id = :analyte_id AND scm.instrument_id = :instrument_id AND sam.deleted_at IS NULL AND sam.instrument_id = :instrument_id;`
+		WHERE sva.validated_analyte_id = :analyte_id AND sam.instrument_id = :instrument_id AND sam.deleted_at IS NULL AND sva.deleted_at IS NULL;`
 	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
 	rows, err := r.db.NamedQueryContext(ctx, query, preparedValues)
 	if err != nil {
@@ -1309,12 +1296,11 @@ func (r *instrumentRepository) CreateValidatedAnalyteIDs(ctx context.Context, an
 
 	_, err := r.db.ExecContext(ctx, query)
 	if err != nil {
-		// TODO: update error messages
-		log.Error().Err(err).Msg(msgCreateControlMappingAnalytesFailed)
+		log.Error().Err(err).Msg(msgCreateValidatedAnalytesFailed)
 		if IsErrorCode(err, UniqueViolationErrorCode) {
-			return ErrUniqueViolationControlMappingAnalytes
+			return ErrUniqueViolationValidatedAnalytes
 		}
-		return ErrCreateControlMappingAnalytesFailed
+		return ErrCreateValidatedAnalytesFailed
 	}
 	return nil
 }
@@ -1325,9 +1311,8 @@ func (r *instrumentRepository) GetValidatedAnalyteIDsByAnalyteMappingID(ctx cont
 	query = r.db.Rebind(query)
 	rows, err := r.db.QueryxContext(ctx, query, args...)
 	if err != nil {
-		// TODO: update error messages
-		log.Error().Err(err).Msg(msgGetControlMappingAnalytesFailed)
-		return nil, ErrGetControlMappingAnalytesFailed
+		log.Error().Err(err).Msg(msgGetValidatedAnalytesFailed)
+		return nil, ErrGetValidatedAnalytesFailed
 	}
 	defer rows.Close()
 
@@ -1336,9 +1321,8 @@ func (r *instrumentRepository) GetValidatedAnalyteIDsByAnalyteMappingID(ctx cont
 		var analyteMappingID, validatedAnalyteID uuid.UUID
 		err = rows.Scan(&analyteMappingID, &validatedAnalyteID)
 		if err != nil {
-			// TODO: update error messages
-			log.Error().Err(err).Msg(msgGetControlMappingAnalytesFailed)
-			return nil, ErrGetControlMappingAnalytesFailed
+			log.Error().Err(err).Msg(msgGetValidatedAnalytesFailed)
+			return nil, ErrGetValidatedAnalytesFailed
 		}
 		validatedAnalyteIDsByAnalyteMappingID[analyteMappingID] = append(validatedAnalyteIDsByAnalyteMappingID[analyteMappingID], validatedAnalyteID)
 	}
@@ -1356,9 +1340,8 @@ func (r *instrumentRepository) DeleteValidatedAnalyteIDsByAnalyteMappingID(ctx c
 
 	_, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
-		// TODO: update error messages
-		log.Error().Err(err).Msg(msgDeleteControlMappingAnalytesFailed)
-		return ErrDeleteControlMappingAnalytesFailed
+		log.Error().Err(err).Msg(msgDeleteValidatedAnalytesFailed)
+		return ErrDeleteValidatedAnalytesFailed
 	}
 	return nil
 }
@@ -1367,9 +1350,8 @@ func (r *instrumentRepository) DeleteAllValidatedAnalyteIDsByInstrumentID(ctx co
 	query := fmt.Sprintf(`UPDATE %s.sk_validated_analytes SET deleted_at = timezone('utc', now()) FROM %s.sk_analyte_mappings am WHERE analyte_mapping_id = am.id AND am.instrument_id = $1;`, r.dbSchema, r.dbSchema)
 	_, err := r.db.ExecContext(ctx, query, instrumentID)
 	if err != nil {
-		// TODO: update error messages
-		log.Error().Err(err).Msg(msgDeleteControlMappingAnalytesFailed)
-		return ErrDeleteControlMappingAnalytesFailed
+		log.Error().Err(err).Msg(msgDeleteValidatedAnalytesFailed)
+		return ErrDeleteValidatedAnalytesFailed
 	}
 	return nil
 }

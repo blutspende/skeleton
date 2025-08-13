@@ -3595,42 +3595,31 @@ func (r *analysisRepository) SaveCerberusIDForAnalysisResult(ctx context.Context
 	return nil
 }
 
-// TODO: rework it with new validated analyte concept
-
 func (r *analysisRepository) GetAnalysisResultIdsWithoutControlByReagent(ctx context.Context, controlResult ControlResult, reagent Reagent, analysisResultWithoutControlSearchDays int) ([]uuid.UUID, error) {
 	analysisResultIds := make([]uuid.UUID, 0)
 
 	preparedValues := map[string]interface{}{
-		"manufacturer":               reagent.Manufacturer,
-		"lot_no":                     reagent.LotNo,
-		"serial":                     reagent.SerialNumber,
-		"name":                       reagent.Name,
-		"control_analyte_id":         controlResult.AnalyteMapping.AnalyteID,
-		"control_analyte_mapping_id": controlResult.AnalyteMapping.ID,
-		"sample_code":                controlResult.SampleCode,
-		"instrument_id":              controlResult.InstrumentID,
+		"manufacturer":       reagent.Manufacturer,
+		"lot_no":             reagent.LotNo,
+		"serial":             reagent.SerialNumber,
+		"name":               reagent.Name,
+		"control_mapping_id": controlResult.AnalyteMapping.ID,
+		"sample_code":        controlResult.SampleCode,
+		"instrument_id":      controlResult.InstrumentID,
 		"analysis_result_without_control_search_days": analysisResultWithoutControlSearchDays,
 	}
 
-	query := `WITH analyteMapping AS (select sam.id from %schema_name%.sk_control_mapping_control_analyte scmca
-		INNER JOIN %schema_name%.sk_control_mappings scm ON scmca.control_mapping_id = scm.id
-		INNER JOIN %schema_name%.sk_analyte_mappings sam ON scm.analyte_id = sam.analyte_id AND scm.instrument_id = sam.instrument_id
-		WHERE scmca.control_analyte_id = :control_analyte_id AND scm.instrument_id = :instrument_id),
-	assignedControl AS (SELECT DISTINCT sarcrr.analysis_result_id, sarcrr.control_result_id
-		FROM %schema_name%.sk_analysis_result_control_result_relations sarcrr
-		INNER JOIN %schema_name%.sk_control_results scr ON sarcrr.control_result_id = scr.id
-		INNER JOIN %schema_name%.sk_analyte_mappings sam ON scr.analyte_mapping_id = sam.id
-		INNER JOIN %schema_name%.sk_reagent_control_result_relations skrcrr ON scr.id = skrcrr.control_result_id
-		INNER JOIN %schema_name%.sk_reagents skr ON skrcrr.reagent_id = skr.id
-		WHERE skr.manufacturer = :manufacturer AND skr.lot_no = :lot_no AND skr.serial = :serial AND skr.name = :name AND scr.sample_code = :sample_code
-		  AND scr.analyte_mapping_id = :control_analyte_mapping_id AND scr.instrument_id = :instrument_id)
+	query := `WITH validatedAnalytes AS (select sva.id from %schema_name%.sk_validated_analytes sva
+		INNER JOIN %schema_name%.sk_analyte_mappings sam ON sva.analyte_mapping_id = sam.id
+		WHERE sam.id = :control_mapping_id AND sam.instrument_id = :instrument_id AND sam.is_control = true AND sva.deleted_at IS NULL AND sam.deleted_at IS NULL)
 	SELECT skar.id FROM %schema_name% .sk_analysis_results skar
 		INNER JOIN %schema_name%.sk_analysis_result_reagent_relations skarr ON skar.id = skarr.analysis_result_id
 		INNER JOIN %schema_name%.sk_reagents skr ON skarr.reagent_id = skr.id
-		INNER JOIN analyteMapping am ON skar.analyte_mapping_id = am.id
-		LEFT JOIN assignedControl ac ON skar.id = ac.analysis_result_id
+		INNER JOIN %schema_name%.sk_analyte_mappings sam ON skar.analyte_mapping_id = sam.id
+		INNER JOIN validatedAnalytes va ON sam.analyte_id = va.id
+		LEFT JOIN %schema_name%.sk_analysis_result_control_result_relations sarcrr ON skar.id = ac.analysis_result_id
 	WHERE skr.manufacturer = :manufacturer AND skr.lot_no = :lot_no AND skr.serial = :serial AND skr.name = :name AND skar.instrument_id = :instrument_id
-		AND ac.control_result_id IS NULL AND skar.yielded_at >= (current_date - make_interval(days := :analysis_result_without_control_search_days));`
+		AND sarcrr.control_result_id IS NULL AND skar.yielded_at >= (current_date - make_interval(days := :analysis_result_without_control_search_days));`
 	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
 	rows, err := r.db.NamedQueryContext(ctx, query, preparedValues)
 	if err != nil {
@@ -3700,8 +3689,6 @@ func (r *analysisRepository) GetAnalysisResultIdsWhereLastestControlIsInvalid(ct
 	return analysisResultIds, err
 }
 
-// TODO: rework it with new validated analyte concept
-
 func (r *analysisRepository) GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMapping AnalyteMapping, instrumentId uuid.UUID, controlResultSearchDays int) ([]ControlResult, error) {
 	controlResults := make([]ControlResult, 0)
 	preparedValues := map[string]interface{}{
@@ -3713,14 +3700,13 @@ func (r *analysisRepository) GetLatestControlResultsByReagent(ctx context.Contex
 		"instrument_id":     instrumentId,
 	}
 
-	query := `WITH controlAnalyteMapping AS (select sam.id from %schema_name%.sk_control_mapping_control_analyte scmca
-		INNER JOIN %schema_name%.sk_control_mappings scm ON scmca.control_mapping_id = scm.id
-		INNER JOIN %schema_name%.sk_analyte_mappings sam ON scmca.control_analyte_id = sam.analyte_id AND scm.instrument_id = sam.instrument_id
-	WHERE scm.analyte_id = :result_analyte_id AND scm.instrument_id = :instrument_id AND scm.deleted_at IS NULL AND sam.deleted_at IS NULL)
+	query := `WITH controlMapping AS (select sam.id from %schema_name%.sk_validated_analytes sva
+		INNER JOIN %schema_name%.sk_analyte_mappings sam ON sva.analyte_mapping_id = sam.id
+	WHERE sva.validated_analyte_id = :result_analyte_id AND sam.instrument_id = :instrument_id AND sva.deleted_at IS NULL AND sam.deleted_at IS NULL)
 	SELECT DISTINCT ON (skcr.sample_code, skcr.analyte_mapping_id) skcr.id, skcr.sample_code, skcr.analyte_mapping_id, skcr.instrument_id, skcr.expected_control_result_id, skcr.is_valid, skcr.is_compared_to_expected_result, skcr.result, skcr.examined_at, skcr.created_at,
     	sam.id AS "analyte_mapping.id", sam.instrument_id AS "analyte_mapping.instrument_id", sam.instrument_analyte AS "analyte_mapping.instrument_analyte", sam.analyte_id AS "analyte_mapping.analyte_id", sam.result_type AS "analyte_mapping.result_type", sam.created_at AS "analyte_mapping.created_at", sam.modified_at AS "analyte_mapping.modified_at"
     FROM %schema_name%.sk_control_results skcr
-        INNER JOIN controlAnalyteMapping cam ON skcr.analyte_mapping_id = cam.id
+        INNER JOIN controlMapping cam ON skcr.analyte_mapping_id = cam.id
 		INNER JOIN %schema_name%.sk_analyte_mappings sam ON cam.id = sam.id
         INNER JOIN %schema_name%.sk_reagent_control_result_relations skrcrr ON skcr.id = skrcrr.control_result_id
         INNER JOIN %schema_name%.sk_reagents skr ON skrcrr.reagent_id = skr.id

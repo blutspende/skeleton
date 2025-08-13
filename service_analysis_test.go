@@ -13,8 +13,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// TODO: make all green again
-
 func TestCreateAnalysisRequests(t *testing.T) {
 	mockManager := &mockManager{}
 	analysisRequests := []AnalysisRequest{
