@@ -6,6 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/blutspende/bloodlab-common/utils"
 	"github.com/blutspende/skeleton/config"
 	"github.com/blutspende/skeleton/db"
@@ -13,9 +17,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/rs/zerolog/log"
-	"strings"
-	"sync"
-	"time"
 )
 
 type skeleton struct {
@@ -358,15 +359,15 @@ func (s *skeleton) SaveControlResultImages(ctx context.Context, controlResult *C
 }
 
 func (s *skeleton) GetAnalysisResultIdsWithoutControlByReagent(ctx context.Context, controlResult ControlResult, reagent Reagent) ([]uuid.UUID, error) {
-	return s.analysisRepository.GetAnalysisResultIdsWithoutControlByReagent(ctx, controlResult, reagent)
+	return s.analysisRepository.GetAnalysisResultIdsWithoutControlByReagent(ctx, controlResult, reagent, s.config.AnalysisResultWithoutControlSearchDays)
 }
 
 func (s *skeleton) GetAnalysisResultIdsWhereLastestControlIsInvalid(ctx context.Context, controlResult ControlResult, reagent Reagent) ([]uuid.UUID, error) {
-	return s.analysisRepository.GetAnalysisResultIdsWhereLastestControlIsInvalid(ctx, controlResult, reagent)
+	return s.analysisRepository.GetAnalysisResultIdsWhereLastestControlIsInvalid(ctx, controlResult, reagent, s.config.AnalysisResultWithInvalidControlSearchDays)
 }
 
-func (s *skeleton) GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMappingId uuid.UUID, instrumentId uuid.UUID) ([]ControlResult, error) {
-	return s.analysisRepository.GetLatestControlResultsByReagent(ctx, reagent, resultYieldTime, analyteMappingId, instrumentId)
+func (s *skeleton) GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMapping AnalyteMapping, instrumentId uuid.UUID) ([]ControlResult, error) {
+	return s.analysisRepository.GetLatestControlResultsByReagent(ctx, reagent, resultYieldTime, analyteMapping, instrumentId, s.config.ControlResultSearchDays)
 }
 
 func (s *skeleton) GetInstrument(ctx context.Context, instrumentID uuid.UUID) (Instrument, error) {
@@ -1642,6 +1643,10 @@ func (s *skeleton) GetDbConnection() (*sqlx.DB, error) {
 		return nil, err
 	}
 	return dbConn, nil
+}
+
+func (s *skeleton) FindAnalyteMapping(instrument Instrument, isControl bool, instrumentAnalyte string) (AnalyteMapping, error) {
+	return FindAnalyteMapping(instrument, isControl, instrumentAnalyte)
 }
 
 func NewSkeleton(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, reagentManufacturers []string, protocols []SupportedProtocol, dbConnector db.DbConnector, dbConn db.DbConnection, dbSchema string, migrator migrator.SkeletonMigrator, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService ConsoleLogService, messageService MessageService, manager Manager, cerberusClient CerberusClient, longPollClient LongPollClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {

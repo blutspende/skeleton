@@ -4,10 +4,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"github.com/blutspende/bloodlab-common/utils"
-	"github.com/google/uuid"
 	"sort"
 	"strings"
+
+	"github.com/google/uuid"
 )
 
 func HashDeletedInstrument(instrumentID uuid.UUID) string {
@@ -60,12 +60,14 @@ func HashInstrument(instrument Instrument) string {
 
 	// Hash slices AnalyteMappings, RequestMappings, SortingRules, and Settings
 	hashSlice(&builder, instrument.AnalyteMappings, func(a AnalyteMapping) string {
+		// Note: the order of the fields in the string not consistent with the order in the model struct
+
 		var analyteBuilder strings.Builder
 		analyteBuilder.WriteString(a.AnalyteID.String())
 		analyteBuilder.WriteString(a.InstrumentAnalyte)
 		analyteBuilder.WriteString(string(a.ResultType))
-		analyteBuilder.WriteString(utils.StringPointerToString(a.ControlInstrumentAnalyte))
 		analyteBuilder.WriteString(fmt.Sprintf("%t", a.ControlResultRequired))
+		analyteBuilder.WriteString(fmt.Sprintf("%t", a.IsControl))
 
 		// Hash nested ChannelMappings
 		hashSlice(&analyteBuilder, a.ChannelMappings, func(c ChannelMapping) string {
@@ -76,6 +78,20 @@ func HashInstrument(instrument Instrument) string {
 		hashSlice(&analyteBuilder, a.ResultMappings, func(r ResultMapping) string {
 			return r.Key + r.Value + fmt.Sprintf("%d", r.Index)
 		})
+
+		// Note: mapping for expected control results is not added probably because it's not created on the same page as the instrument on the UI
+		// Hash ExpectedControlResults
+		//analyteBuilder.WriteString(HashExpectedControlResults(a.ExpectedControlResults))
+
+		// Hash ValidatedAnalyteIDs (sorting ensures consistent order)
+		validatedAnalyteIDs := make([]string, len(a.ValidatedAnalyteIDs))
+		for i, id := range a.ValidatedAnalyteIDs {
+			validatedAnalyteIDs[i] = id.String()
+		}
+		sort.Strings(validatedAnalyteIDs)
+		for _, id := range validatedAnalyteIDs {
+			analyteBuilder.WriteString(id)
+		}
 
 		return analyteBuilder.String()
 	})
@@ -216,4 +232,17 @@ func hashOperand(operand *ConditionOperand) string {
 	}
 
 	return operandBuilder.String()
+}
+
+func FindAnalyteMapping(instrument Instrument, isControl bool, instrumentAnalyte string) (AnalyteMapping, error) {
+	// Searching for matching control analyte mapping based on the instrument analyte string from the message
+	for _, aMapping := range instrument.AnalyteMappings {
+		if aMapping.IsControl == isControl && strings.TrimSpace(aMapping.InstrumentAnalyte) == strings.TrimSpace(instrumentAnalyte) {
+			// Note: it should not be possible but if there are multiple mappings with the same name and type the first one is returned
+			return aMapping, nil
+		}
+	}
+	// If no mapping is found, log a warning and return the error
+	err := fmt.Errorf("%w - instrumentID: %s, is control: %t, instrument analyte: %s", ErrNoMatchingAnalyteMappingFound, instrument.ID, isControl, instrumentAnalyte)
+	return AnalyteMapping{}, err
 }
