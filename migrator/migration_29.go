@@ -23,4 +23,8 @@ const migration_29 = `
 	CREATE UNIQUE INDEX IF NOT EXISTS sk_un_analyte_mapping_instrument_id_instrument_is_control ON <SCHEMA_PLACEHOLDER>.sk_analyte_mappings(instrument_id, instrument_analyte, is_control) WHERE deleted_at IS NULL;
 
 	ALTER TABLE <SCHEMA_PLACEHOLDER>.sk_analyte_mappings DROP COLUMN IF EXISTS control_instrument_analyte;
+
+	CREATE INDEX IF NOT EXISTS idx_sk_control_results_instrument_id ON <SCHEMA_PLACEHOLDER>.sk_control_results (instrument_id);
+	CREATE INDEX IF NOT EXISTS idx_sk_control_results_examined_at ON <SCHEMA_PLACEHOLDER>.sk_control_results (examined_at);
+	CREATE INDEX IF NOT EXISTS idx_sk_analysis_results_yielded_at ON <SCHEMA_PLACEHOLDER>.sk_analysis_results (yielded_at);
 `

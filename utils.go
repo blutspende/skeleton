@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/rs/zerolog/log"
 )
 
 func HashDeletedInstrument(instrumentID uuid.UUID) string {
@@ -235,16 +234,15 @@ func hashOperand(operand *ConditionOperand) string {
 	return operandBuilder.String()
 }
 
-func FindAnalyteMapping(instrument Instrument, isControl bool, instrumentAnalyte string) (*AnalyteMapping, error) {
+func FindAnalyteMapping(instrument Instrument, isControl bool, instrumentAnalyte string) (AnalyteMapping, error) {
 	// Searching for matching control analyte mapping based on the instrument analyte string from the message
 	for _, aMapping := range instrument.AnalyteMappings {
-		if aMapping.IsControl == isControl && aMapping.InstrumentAnalyte == instrumentAnalyte {
+		if aMapping.IsControl == isControl && strings.TrimSpace(aMapping.InstrumentAnalyte) == strings.TrimSpace(instrumentAnalyte) {
 			// Note: it should not be possible but if there are multiple mappings with the same name and type the first one is returned
-			return &aMapping, nil
+			return aMapping, nil
 		}
 	}
 	// If no mapping is found, log a warning and return the error
 	err := fmt.Errorf("%w - instrumentID: %s, is control: %t, instrument analyte: %s", ErrNoMatchingAnalyteMappingFound, instrument.ID, isControl, instrumentAnalyte)
-	log.Warn().Msg(err.Error())
-	return nil, err
+	return AnalyteMapping{}, err
 }

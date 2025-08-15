@@ -182,6 +182,14 @@ type analyteMappingDAO struct {
 	ValidatedAnalyteIDs   []uuid.UUID
 }
 
+type validatedAnalyteDAO struct {
+	ID                 uuid.UUID    `db:"id"`
+	AnalyteMappingID   uuid.UUID    `db:"analyte_mapping_id"`
+	ValidatedAnalyteID uuid.UUID    `db:"validated_analyte_id"`
+	CreatedAt          time.Time    `db:"created_at"`
+	DeletedAt          sql.NullTime `db:"deleted_at"`
+}
+
 type channelMappingDAO struct {
 	ID                uuid.UUID    `db:"id"`
 	ChannelID         uuid.UUID    `db:"channel_id"`
@@ -1288,13 +1296,21 @@ func (r *instrumentRepository) CreateValidatedAnalyteIDs(ctx context.Context, an
 		return nil
 	}
 
-	values := make([]string, len(validatedAnalyteIDs))
-	for i, validatedAnalyteID := range validatedAnalyteIDs {
-		values[i] = fmt.Sprintf("('%s', '%s')", analyteMappingID, validatedAnalyteID)
+	validatedAnalyteDAOs := make([]validatedAnalyteDAO, 0)
+	for _, validatedAnalyteID := range validatedAnalyteIDs {
+		validatedAnalyteDAOs = append(validatedAnalyteDAOs, validatedAnalyteDAO{
+			ID:                 uuid.New(),
+			AnalyteMappingID:   analyteMappingID,
+			ValidatedAnalyteID: validatedAnalyteID,
+			CreatedAt:          time.Time{},
+			DeletedAt:          sql.NullTime{},
+		})
 	}
-	query := fmt.Sprintf(`INSERT INTO %s.sk_validated_analytes(analyte_mapping_id, validated_analyte_id) VALUES %s;`, r.dbSchema, strings.Join(values, ","))
 
-	_, err := r.db.ExecContext(ctx, query)
+	query := fmt.Sprintf(`INSERT INTO %s.sk_validated_analytes(id, analyte_mapping_id, validated_analyte_id)
+		VALUES(:id, :analyte_mapping_id, :validated_analyte_id);`, r.dbSchema)
+	_, err := r.db.NamedExecContext(ctx, query, validatedAnalyteDAOs)
+
 	if err != nil {
 		log.Error().Err(err).Msg(msgCreateValidatedAnalytesFailed)
 		if IsErrorCode(err, UniqueViolationErrorCode) {

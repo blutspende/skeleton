@@ -3609,16 +3609,16 @@ func (r *analysisRepository) GetAnalysisResultIdsWithoutControlByReagent(ctx con
 		"analysis_result_without_control_search_days": analysisResultWithoutControlSearchDays,
 	}
 
-	query := `WITH validatedAnalytes AS (select sva.id from %schema_name%.sk_validated_analytes sva
+	query := `WITH validatedAnalytes AS (select sva.validated_analyte_id from %schema_name%.sk_validated_analytes sva
 		INNER JOIN %schema_name%.sk_analyte_mappings sam ON sva.analyte_mapping_id = sam.id
 		WHERE sam.id = :control_mapping_id AND sam.instrument_id = :instrument_id AND sam.is_control = true AND sva.deleted_at IS NULL AND sam.deleted_at IS NULL)
 	SELECT skar.id FROM %schema_name% .sk_analysis_results skar
 		INNER JOIN %schema_name%.sk_analysis_result_reagent_relations skarr ON skar.id = skarr.analysis_result_id
 		INNER JOIN %schema_name%.sk_reagents skr ON skarr.reagent_id = skr.id
 		INNER JOIN %schema_name%.sk_analyte_mappings sam ON skar.analyte_mapping_id = sam.id
-		INNER JOIN validatedAnalytes va ON sam.analyte_id = va.id
-		LEFT JOIN %schema_name%.sk_analysis_result_control_result_relations sarcrr ON skar.id = ac.analysis_result_id
-	WHERE skr.manufacturer = :manufacturer AND skr.lot_no = :lot_no AND skr.serial = :serial AND skr.name = :name AND skar.instrument_id = :instrument_id
+		INNER JOIN validatedAnalytes va ON sam.analyte_id = va.validated_analyte_id
+		LEFT JOIN %schema_name%.sk_analysis_result_control_result_relations sarcrr ON skar.id = sarcrr.analysis_result_id
+	WHERE skr.manufacturer = :manufacturer AND skr.serial = :serial AND skr.lot_no = :lot_no AND skr.name = :name AND skar.instrument_id = :instrument_id
 		AND sarcrr.control_result_id IS NULL AND skar.yielded_at >= (current_date - make_interval(days := :analysis_result_without_control_search_days));`
 	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
 	rows, err := r.db.NamedQueryContext(ctx, query, preparedValues)
@@ -3648,6 +3648,7 @@ func (r *analysisRepository) GetAnalysisResultIdsWhereLastestControlIsInvalid(ct
 		"manufacturer":               reagent.Manufacturer,
 		"lot_no":                     reagent.LotNo,
 		"serial":                     reagent.SerialNumber,
+		"name":                       reagent.Name,
 		"sample_code":                controlResult.SampleCode,
 		"control_analyte_mapping_id": controlResult.AnalyteMapping.ID,
 		"instrument_id":              controlResult.InstrumentID,
@@ -3659,7 +3660,7 @@ func (r *analysisRepository) GetAnalysisResultIdsWhereLastestControlIsInvalid(ct
 		INNER JOIN %schema_name%.sk_analyte_mappings sam ON skcr.analyte_mapping_id = sam.id
 		INNER JOIN %schema_name%.sk_reagent_control_result_relations skrcrr ON skcr.id = skrcrr.control_result_id
 		INNER JOIN %schema_name%.sk_reagents skr ON skrcrr.reagent_id = skr.id
-		WHERE skr.manufacturer = :manufacturer AND skr.lot_no = :lot_no AND skr.serial = :serial AND skr.name = '' AND skcr.sample_code = :sample_code 
+		WHERE skr.manufacturer = :manufacturer AND skr.serial = :serial AND skr.lot_no = :lot_no AND skr.name = :name AND skcr.sample_code = :sample_code 
 			AND skcr.analyte_mapping_id = :control_analyte_mapping_id AND skcr.instrument_id = :instrument_id
 		ORDER BY skcr.sample_code, skcr.analyte_mapping_id, skcr. examined_at desc, skcr.created_at desc limit 1)
 	SELECT sarcrr.analysis_result_id 
@@ -3710,7 +3711,7 @@ func (r *analysisRepository) GetLatestControlResultsByReagent(ctx context.Contex
 		INNER JOIN %schema_name%.sk_analyte_mappings sam ON cam.id = sam.id
         INNER JOIN %schema_name%.sk_reagent_control_result_relations skrcrr ON skcr.id = skrcrr.control_result_id
         INNER JOIN %schema_name%.sk_reagents skr ON skrcrr.reagent_id = skr.id
-    WHERE skr.manufacturer = :manufacturer AND skr.lot_no = :lot_no AND skr.serial = :serial AND skr.name = :name AND skcr.instrument_id = :instrument_id`
+    WHERE skr.manufacturer = :manufacturer AND skr.serial = :serial AND skr.lot_no = :lot_no AND skr.name = :name AND skcr.instrument_id = :instrument_id`
 	if resultYieldTime != nil {
 		preparedValues["result_yield_time"] = resultYieldTime
 		preparedValues["yield_time_lookback"] = resultYieldTime.Add(time.Hour * 24 * time.Duration(-controlResultSearchDays))

@@ -276,6 +276,6 @@ func (sr *SkeletonTestRig) RegisterSampleCodesToMessageOut(ctx context.Context, 
 	return nil
 }
 
-func (sr *SkeletonTestRig) FindAnalyteMapping(instrument Instrument, isControl bool, instrumentAnalyte string) (*AnalyteMapping, error) {
+func (sr *SkeletonTestRig) FindAnalyteMapping(instrument Instrument, isControl bool, instrumentAnalyte string) (AnalyteMapping, error) {
 	return FindAnalyteMapping(instrument, isControl, instrumentAnalyte)
 }

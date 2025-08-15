@@ -1669,7 +1669,7 @@ func (s *skeleton) GetDbConnection() (*sqlx.DB, error) {
 	return dbConn, nil
 }
 
-func (s *skeleton) FindAnalyteMapping(instrument Instrument, isControl bool, instrumentAnalyte string) (*AnalyteMapping, error) {
+func (s *skeleton) FindAnalyteMapping(instrument Instrument, isControl bool, instrumentAnalyte string) (AnalyteMapping, error) {
 	return FindAnalyteMapping(instrument, isControl, instrumentAnalyte)
 }
 
