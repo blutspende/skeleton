@@ -21,6 +21,7 @@ const (
 	MsgFailedToUnmarshalError                   = "Failed to unmarshal error of response"
 	MsgUnexpectedErrorFromCerberus              = "unexpected error from cerberus"
 	MsgEmptyAnalysisResultsBatch                = "Send analysis results batch called with empty array"
+	MsgSendSampleSeenMessageBatchFailed         = "send sample seen message batch failed"
 	MsgFailedToPrepareData                      = "Failed to prepare data for sending"
 	MsgFailedToSetOnlineStatus                  = "Failed to set instrument online status"
 	MsgFailedToCallImageBatchAPI                = "Failed to call Cerberus API (/v1/analysis-results/image/batch)"
@@ -29,11 +30,13 @@ const (
 	MsgFailedToCallSyncAPI                      = "Failed to call Cerberus API (/v1/instrument-drivers/analysis-requests/sync)"
 	MsgFailedToCallLogsAPI                      = "Failed to call Cerberus API (/v1/instruments/{instrumentId}/logs)"
 	MsgFailedToCallRegisterManufacturerTestsAPI = "Failed to call Cerberus API (/v1/instrument-drivers/manufacturer-tests)"
+	MsgFailedToCallSampleSeenAPI                = "Failed to call Cerberus API (/v1/instruments/sample-seen)"
 )
 
 var (
-	ErrSendResultBatchFailed = errors.New(MsgSendResultBatchFailed)
-	ErrBasePathNotSet        = errors.New(MsgBasepathNotSet)
+	ErrSendResultBatchFailed            = errors.New(MsgSendResultBatchFailed)
+	ErrBasePathNotSet                   = errors.New(MsgBasepathNotSet)
+	ErrSendSampleSeenMessageBatchFailed = errors.New(MsgSendSampleSeenMessageBatchFailed)
 )
 
 type CerberusClient interface {
@@ -41,6 +44,7 @@ type CerberusClient interface {
 	RegisterManufacturerTests(driverName string, tests []supportedManufacturerTestTO) error
 	SendAnalysisResultBatch(analysisResults []AnalysisResultTO) (AnalysisResultBatchResponse, error)
 	SendAnalysisResultImageBatch(images []WorkItemResultImageTO) error
+	SendSampleSeenMessageBatch(messages []SampleSeenMessage) error
 	VerifyInstrumentHash(hash string) error
 	VerifyExpectedControlResultsHash(hash string) error
 	SyncAnalysisRequests(workItemIDs []uuid.UUID, syncType string) error
@@ -179,6 +183,13 @@ type VerifyInstrumentTO struct {
 
 type instrumentStatusTO struct {
 	Status InstrumentStatus `json:"status"`
+}
+
+type sampleSeenMessageTO struct {
+	InstrumentID uuid.UUID `json:"instrumentID"`
+	ModuleName   string    `json:"moduleName"`
+	SampleCode   string    `json:"sampleCode"`
+	SeenAt       time.Time `json:"seenAt"`
 }
 
 func NewCerberusClient(cerberusUrl string, restyClient *resty.Client) (CerberusClient, error) {
@@ -469,6 +480,39 @@ func (c *cerberusClient) SetInstrumentOnlineStatus(instrumentId uuid.UUID, statu
 	if resp.IsError() {
 		log.Error().Str("Message", errResponse.Message).Str("InstrumentId", instrumentId.String()).Msg(MsgFailedToSetOnlineStatus)
 		return errors.New(errResponse.Message)
+	}
+
+	return nil
+}
+
+func (c *cerberusClient) SendSampleSeenMessageBatch(messages []SampleSeenMessage) error {
+	dtos := make([]sampleSeenMessageTO, len(messages))
+	for i := range messages {
+		dtos[i] = sampleSeenMessageTO{
+			InstrumentID: messages[i].InstrumentID,
+			ModuleName:   messages[i].ModuleName,
+			SampleCode:   messages[i].SampleCode,
+			SeenAt:       messages[i].SeenAt,
+		}
+	}
+	var errResponse clientError
+	resp, err := c.client.R().
+		SetHeader("Content-Type", "application/json").
+		SetBody(dtos).
+		SetError(&errResponse).
+		Post(c.cerberusUrl + "/v1/instruments/sample-seen")
+	if resp == nil {
+		log.Error().Msg(MsgFailedToCallSampleSeenAPI)
+		return ErrSendSampleSeenMessageBatchFailed
+	}
+	if err != nil {
+		log.Error().Err(err).Msg(MsgFailedToCallSampleSeenAPI)
+		return ErrSendSampleSeenMessageBatchFailed
+	}
+
+	if resp.IsError() {
+		log.Error().Str("message", errResponse.Message).Int("statusCode", resp.StatusCode()).Msg(MsgSendSampleSeenMessageBatchFailed)
+		return ErrSendSampleSeenMessageBatchFailed
 	}
 
 	return nil

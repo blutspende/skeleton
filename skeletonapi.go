@@ -99,6 +99,8 @@ type SkeletonAPI interface {
 	GetAnalysisResultIdsWhereLastestControlIsInvalid(ctx context.Context, controlResult ControlResult, reagent Reagent) ([]uuid.UUID, error)
 	GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMappingId uuid.UUID, instrumentId uuid.UUID) ([]ControlResult, error)
 
+	CreateSampleSeenMessages(sampleSeenMessages ...SampleSeenMessage)
+
 	// GetInstrument returns all the settings regarding an instrument
 	// contains AnalyteMappings[] and RequestMappings[]
 	GetInstrument(ctx context.Context, instrumentID uuid.UUID) (Instrument, error)
@@ -168,7 +170,7 @@ func New(ctx context.Context, serviceName, displayName string, requestedExtraVal
 	messageInRepository := NewMessageInRepository(dbConn, dbSchema, config.MessageMaxRetries, config.LookBackDays)
 	messageOutRepository := NewMessageOutRepository(dbConn, dbSchema, config.MessageMaxRetries, config.LookBackDays)
 	messageOutOrderRepository := NewMessageOutOrderRepository(dbConn, dbSchema, config.MessageMaxRetries)
-	messageService := NewMessageService(deaClient, messageInRepository, messageOutRepository, messageOutOrderRepository, serviceName)
+	messageService := NewMessageService(deaClient, cerberusClient, messageInRepository, messageOutRepository, messageOutOrderRepository, serviceName, config.SampleSeenMessageFlushSeconds)
 
 	consoleLogService := NewConsoleLogService(cerberusClient)
 
