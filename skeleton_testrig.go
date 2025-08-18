@@ -279,3 +279,5 @@ func (sr *SkeletonTestRig) RegisterSampleCodesToMessageOut(ctx context.Context, 
 func (sr *SkeletonTestRig) FindAnalyteMapping(instrument Instrument, isControl bool, instrumentAnalyte string) (AnalyteMapping, error) {
 	return FindAnalyteMapping(instrument, isControl, instrumentAnalyte)
 }
+
+func (sr *SkeletonTestRig) CreateSampleSeenMessages(sampleSeenMessages ...SampleSeenMessage) {}

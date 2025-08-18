@@ -640,6 +640,18 @@ func (s *skeleton) DeleteRevokedUnsentOrderMessagesByAnalysisRequestIDs(ctx cont
 	return s.messageService.DeleteRevokedUnsentOrderMessagesByAnalysisRequestIDs(ctx, analysisRequestIDs)
 }
 
+func (s *skeleton) CreateSampleSeenMessages(messages ...SampleSeenMessage) {
+	for i := range messages {
+		if messages[i].SeenAt.IsZero() {
+			log.Warn().Interface("instrument", messages[i].InstrumentID).Str("module", messages[i].ModuleName).Msg("zero time provided in sample seen message, check if machine data is malformed")
+		}
+		if messages[i].SampleCode == "" {
+			log.Warn().Interface("instrument", messages[i].InstrumentID).Str("module", messages[i].ModuleName).Msg("empty sample code provided in sample seen message, check if machine data is malformed")
+		}
+	}
+	s.messageService.CreateSampleSeenMessages(messages...)
+}
+
 func (s *skeleton) migrateUp(ctx context.Context, db *sqlx.DB, schemaName string) error {
 	return s.migrator.Run(ctx, db, schemaName)
 }
@@ -709,6 +721,7 @@ func (s *skeleton) Start() error {
 		go s.processAnalysisRequests(s.ctx)
 	}
 	go s.messageService.StartDEAArchiving(s.ctx, s.config.MessageMaxRetries)
+	go s.messageService.StartSampleSeenRegisteringToCerberus(s.ctx)
 	go s.messageService.StartSampleCodeRegisteringToDEA(s.ctx)
 	s.enqueueUnsyncedMessages(s.ctx)
 	go s.processAnalysisResults(s.ctx)
