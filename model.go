@@ -1,11 +1,12 @@
 package skeleton
 
 import (
+	"net/http"
+	"time"
+
 	"github.com/blutspende/bloodlab-common/encoding"
 	"github.com/blutspende/bloodlab-common/messagetype"
 	"github.com/blutspende/bloodlab-common/timezone"
-	"net/http"
-	"time"
 
 	"github.com/blutspende/bloodlab-common/messagestatus"
 	"github.com/google/uuid"
@@ -181,15 +182,16 @@ type FTPConfig struct {
 }
 
 type AnalyteMapping struct {
-	ID                       uuid.UUID
-	InstrumentAnalyte        string
-	ControlInstrumentAnalyte *string
-	AnalyteID                uuid.UUID
-	ChannelMappings          []ChannelMapping
-	ResultMappings           []ResultMapping
-	ResultType               ResultType
-	ControlResultRequired    bool
-	ExpectedControlResults   []ExpectedControlResult
+	ID                     uuid.UUID
+	InstrumentAnalyte      string
+	AnalyteID              uuid.UUID
+	ChannelMappings        []ChannelMapping
+	ResultMappings         []ResultMapping
+	ResultType             ResultType
+	ControlResultRequired  bool
+	ExpectedControlResults []ExpectedControlResult
+	IsControl              bool
+	ValidatedAnalyteIDs    []uuid.UUID //links to InstrumentalAnalyte type
 }
 
 type ChannelMapping struct {

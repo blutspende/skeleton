@@ -2,14 +2,15 @@ package skeleton
 
 import (
 	"context"
+	"testing"
+	"time"
+
 	"github.com/blutspende/bloodlab-common/timezone"
 	"github.com/blutspende/skeleton/db"
 	"github.com/blutspende/skeleton/utils"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
-	"testing"
-	"time"
 )
 
 func TestCreateAnalysisRequests(t *testing.T) {
@@ -18,7 +19,7 @@ func TestCreateAnalysisRequests(t *testing.T) {
 		{WorkItemID: uuid.MustParse("6cdc3aa0-a024-4c51-8d24-8aa12d489f41")},
 		{WorkItemID: uuid.MustParse("92a2ba34-d891-4a1b-89fb-e0c4d717f729")},
 	}
-	analysisService := NewAnalysisService(&analysisRepositoryMock{}, nil, nil, mockManager)
+	analysisService := NewAnalysisService(&analysisRepositoryMock{}, &instrumentRepositoryMock{}, nil, nil, mockManager)
 	err := analysisService.CreateAnalysisRequests(context.TODO(), analysisRequests)
 	assert.Nil(t, err)
 	assert.Equal(t, 2, len(mockManager.AnalysisRequestsSentForProcessing))
@@ -34,7 +35,7 @@ func TestCreateAnalysisRequestDuplicates(t *testing.T) {
 		{ID: uuid.MustParse("66c96c9b-cf3a-4916-adbe-3ae0db005391"), WorkItemID: uuid.MustParse("88b87019-ddcc-4d4b-bc04-9e213680e0db")},
 		{ID: uuid.MustParse("83a80ca2-54e9-4833-8cd1-e8bb5202b33e"), WorkItemID: uuid.MustParse("c0dbcfb6-6a90-4ab6-bcab-0cfbec4abd06")},
 	}
-	analysisService := NewAnalysisService(&analysisRepositoryMock{}, nil, nil, mockManager)
+	analysisService := NewAnalysisService(&analysisRepositoryMock{}, &instrumentRepositoryMock{}, nil, nil, mockManager)
 	err := analysisService.CreateAnalysisRequests(context.TODO(), analysisRequests)
 	assert.Nil(t, err)
 	assert.Equal(t, 3, len(mockManager.AnalysisRequestsSentForProcessing))
@@ -49,9 +50,11 @@ func TestCreateAnalysisRequestDuplicates(t *testing.T) {
 }
 
 func TestCreateAnalysisResultStatusAndControlResultValid(t *testing.T) {
-	analysisResult := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(true, nil)
+	analysisResult, instrumentRepositoryMock := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(true, nil)
 
-	result, err := setAnalysisResultStatusBasedOnControlResults(analysisResult, nil, true)
+	mockManager := &mockManager{}
+	analysisService := NewAnalysisService(&analysisRepositoryMock{}, &instrumentRepositoryMock, nil, nil, mockManager)
+	result, err := analysisService.SetAnalysisResultStatusBasedOnControlResults(context.TODO(), analysisResult, nil, true)
 	assert.Nil(t, err)
 	assert.Equal(t, 1, len(result.AnalyteMapping.ExpectedControlResults))
 	assert.True(t, result.Reagents[0].ControlResults[0].IsValid)
@@ -72,10 +75,11 @@ func TestCreateAnalysisResultStatusAndControlResultNotAllControlAvailable(t *tes
 		CreatedBy:      uuid.UUID{},
 		DeletedBy:      uuid.NullUUID{},
 	}
+	analysisResult, instrumentRepositoryMock := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(true, &expectedControlResult)
+	mockManager := &mockManager{}
+	analysisService := NewAnalysisService(&analysisRepositoryMock{}, &instrumentRepositoryMock, nil, nil, mockManager)
 
-	analysisResult := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(true, &expectedControlResult)
-
-	result, err := setAnalysisResultStatusBasedOnControlResults(analysisResult, nil, true)
+	result, err := analysisService.SetAnalysisResultStatusBasedOnControlResults(context.TODO(), analysisResult, nil, true)
 	assert.Nil(t, err)
 	assert.Equal(t, 2, len(result.AnalyteMapping.ExpectedControlResults))
 	assert.Equal(t, 1, len(result.Reagents[0].ControlResults))
@@ -99,11 +103,13 @@ func TestCreateAnalysisResultStatusAndControlResultIncludingCommonControlResults
 		DeletedBy:      uuid.NullUUID{},
 	}
 
-	analysisResult := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(true, &expectedControlResult)
+	analysisResult, instrumentRepositoryMock := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(true, &expectedControlResult)
 	commonControlResult := setupControlResultForValidation(analysisResult.AnalyteMapping, analysisResult.Instrument.ID)
 	commonControlResult.SampleCode = "Sample2"
 
-	result, err := setAnalysisResultStatusBasedOnControlResults(analysisResult, []ControlResult{commonControlResult}, true)
+	mockManager := &mockManager{}
+	analysisService := NewAnalysisService(&analysisRepositoryMock{}, &instrumentRepositoryMock, nil, nil, mockManager)
+	result, err := analysisService.SetAnalysisResultStatusBasedOnControlResults(context.TODO(), analysisResult, []ControlResult{commonControlResult}, true)
 	assert.Nil(t, err)
 	assert.Equal(t, 2, len(result.AnalyteMapping.ExpectedControlResults))
 	//Expected 2 sample codes, the second one is passed in as a common
@@ -111,10 +117,12 @@ func TestCreateAnalysisResultStatusAndControlResultIncludingCommonControlResults
 }
 
 func TestCreateAnalysisResultStatusAndControlResultNotValid(t *testing.T) {
-	analysisResult := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(true, nil)
+	analysisResult, instrumentRepositoryMock := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(true, nil)
 	analysisResult.Reagents[0].ControlResults[0].Result = "37.5"
 
-	result, err := setAnalysisResultStatusBasedOnControlResults(analysisResult, nil, true)
+	mockManager := &mockManager{}
+	analysisService := NewAnalysisService(&analysisRepositoryMock{}, &instrumentRepositoryMock, nil, nil, mockManager)
+	result, err := analysisService.SetAnalysisResultStatusBasedOnControlResults(context.TODO(), analysisResult, nil, true)
 	assert.Nil(t, err)
 	assert.Equal(t, 1, len(result.AnalyteMapping.ExpectedControlResults))
 	assert.False(t, result.Reagents[0].ControlResults[0].IsValid)
@@ -123,11 +131,13 @@ func TestCreateAnalysisResultStatusAndControlResultNotValid(t *testing.T) {
 }
 
 func TestCreateAnalysisResultStatusAndControlResultNotMatchingSampleCodes(t *testing.T) {
-	analysisResult := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(true, nil)
+	analysisResult, instrumentRepositoryMock := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(true, nil)
 	analysisResult.Reagents[0].ControlResults[0].SampleCode = "sample2"
 	analysisResult.Reagents[0].ControlResults[0].AnalyteMapping = AnalyteMapping{}
 
-	result, err := setAnalysisResultStatusBasedOnControlResults(analysisResult, nil, true)
+	mockManager := &mockManager{}
+	analysisService := NewAnalysisService(&analysisRepositoryMock{}, &instrumentRepositoryMock, nil, nil, mockManager)
+	result, err := analysisService.SetAnalysisResultStatusBasedOnControlResults(context.TODO(), analysisResult, nil, true)
 	assert.Nil(t, err)
 	assert.Equal(t, 1, len(result.AnalyteMapping.ExpectedControlResults))
 	assert.False(t, result.Reagents[0].ControlResults[0].IsValid)
@@ -136,10 +146,12 @@ func TestCreateAnalysisResultStatusAndControlResultNotMatchingSampleCodes(t *tes
 }
 
 func TestCreateAnalysisResultStatusAndControlResultNotRequiringExpectedControlResult(t *testing.T) {
-	analysisResult := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(false, nil)
+	analysisResult, instrumentRepositoryMock := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(false, nil)
 	analysisResult.AnalyteMapping.ControlResultRequired = false
 
-	result, err := setAnalysisResultStatusBasedOnControlResults(analysisResult, nil, true)
+	mockManager := &mockManager{}
+	analysisService := NewAnalysisService(&analysisRepositoryMock{}, &instrumentRepositoryMock, nil, nil, mockManager)
+	result, err := analysisService.SetAnalysisResultStatusBasedOnControlResults(context.TODO(), analysisResult, nil, true)
 	assert.Nil(t, err)
 	assert.Equal(t, 0, len(result.AnalyteMapping.ExpectedControlResults))
 	assert.False(t, result.Reagents[0].ControlResults[0].IsValid)
@@ -148,9 +160,11 @@ func TestCreateAnalysisResultStatusAndControlResultNotRequiringExpectedControlRe
 }
 
 func TestCreateAnalysisResultStatusAndControlResultWithoutExpectedControlResult(t *testing.T) {
-	analysisResult := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(false, nil)
+	analysisResult, instrumentRepositoryMock := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(false, nil)
 
-	result, err := setAnalysisResultStatusBasedOnControlResults(analysisResult, nil, true)
+	mockManager := &mockManager{}
+	analysisService := NewAnalysisService(&analysisRepositoryMock{}, &instrumentRepositoryMock, nil, nil, mockManager)
+	result, err := analysisService.SetAnalysisResultStatusBasedOnControlResults(context.TODO(), analysisResult, nil, true)
 	assert.Nil(t, err)
 	assert.Equal(t, 0, len(result.AnalyteMapping.ExpectedControlResults))
 	assert.False(t, result.Reagents[0].ControlResults[0].IsValid)
@@ -621,14 +635,14 @@ func TestCreateAnalysisResultControlRelationsWithControlAttachedToAnalysisResult
 		DeletedBy:      uuid.NullUUID{},
 	}
 
-	analysisResults := setupTestDataForAnalysisResultReagentAndControlRelationCheck(true, true, &expectedControlResult)
+	analysisResults, instrumentRepositoryMock := setupTestDataForAnalysisResultReagentAndControlRelationCheck(true, true, &expectedControlResult)
 	analysisResults[0].Reagents[0].ID = uuid.MustParse("e45a3bb9-a968-403b-9cb3-5895b5c89cde")
 	analysisResults[0].Reagents[1].ID = uuid.MustParse("e45a3bb9-a968-403b-9cb3-5895b5c89cdf")
 	analysisResults[0].ControlResults[0].ID = uuid.MustParse("cbb539a3-286f-4c15-a7b7-2e9adf6eab74")
 
 	mockManager := &mockManager{}
 	extendedMockAnalysisRepo := &extendedMockAnalysisRepo{}
-	analysisService := NewAnalysisService(extendedMockAnalysisRepo, nil, nil, mockManager)
+	analysisService := NewAnalysisService(extendedMockAnalysisRepo, &instrumentRepositoryMock, nil, nil, mockManager)
 	results, err := analysisService.CreateAnalysisResultsBatch(context.TODO(), AnalysisResultSet{
 		Results: analysisResults,
 	})
@@ -651,6 +665,7 @@ func TestCreateAnalysisResultControlRelationsWithControlAttachedToAnalysisResult
 }
 
 func TestCreateMultipleAnalysisResultControlRelationsWithControlAttachedToAnalysisResultSet(t *testing.T) {
+
 	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
@@ -664,16 +679,17 @@ func TestCreateMultipleAnalysisResultControlRelationsWithControlAttachedToAnalys
 		DeletedBy:      uuid.NullUUID{},
 	}
 
-	analysisResults := setupTestDataForAnalysisResultReagentAndControlRelationCheck(true, true, &expectedControlResult)
+	analysisResults, instrumentRepositoryMock := setupTestDataForAnalysisResultReagentAndControlRelationCheck(true, true, &expectedControlResult)
 	analysisResults[0].SampleCode = "Sample1"
 	controlResults := analysisResults[0].ControlResults
 	analysisResults[0].ControlResults = nil
-	analysisResults = append(analysisResults, setupTestDataForAnalysisResultReagentAndControlRelationCheck(true, true, &expectedControlResult)...)
+	analysisResults2, instrumentRepositoryMock := setupTestDataForAnalysisResultReagentAndControlRelationCheck(true, true, &expectedControlResult)
+	analysisResults = append(analysisResults, analysisResults2...)
 	analysisResults[1].ControlResults = nil
 
 	mockManager := &mockManager{}
 	extendedMockAnalysisRepo := &extendedMockAnalysisRepo{}
-	analysisService := NewAnalysisService(extendedMockAnalysisRepo, nil, nil, mockManager)
+	analysisService := NewAnalysisService(extendedMockAnalysisRepo, &instrumentRepositoryMock, nil, nil, mockManager)
 	results, err := analysisService.CreateAnalysisResultsBatch(context.TODO(), AnalysisResultSet{
 		Results:        analysisResults,
 		ControlResults: controlResults,
@@ -720,11 +736,12 @@ func TestCreateAnalysisResultReagentControlRelations(t *testing.T) {
 		DeletedBy:      uuid.NullUUID{},
 	}
 
-	analysisResults := setupTestDataForAnalysisResultReagentAndControlRelationCheck(true, true, &expectedControlResult)
+	analysisResults, instrumentRepositoryMock := setupTestDataForAnalysisResultReagentAndControlRelationCheck(true, true, &expectedControlResult)
 
 	mockManager := &mockManager{}
 	extendedMockAnalysisRepo := &extendedMockAnalysisRepo{}
-	analysisService := NewAnalysisService(extendedMockAnalysisRepo, nil, nil, mockManager)
+	analysisService := NewAnalysisService(extendedMockAnalysisRepo, &instrumentRepositoryMock, nil, nil, mockManager)
+
 	results, err := analysisService.CreateAnalysisResultsBatch(context.TODO(), AnalysisResultSet{
 		Results: analysisResults,
 	})
@@ -1058,7 +1075,7 @@ func TestCreateAnalysisResultReagentRelations(t *testing.T) {
 
 	mockManager := &mockManager{}
 	extendedMockAnalysisRepo := &extendedMockAnalysisRepo{}
-	analysisService := NewAnalysisService(extendedMockAnalysisRepo, nil, nil, mockManager)
+	analysisService := NewAnalysisService(extendedMockAnalysisRepo, &instrumentRepositoryMock{}, nil, nil, mockManager)
 	results, err := analysisService.CreateAnalysisResultsBatch(context.TODO(), AnalysisResultSet{
 		Results: analysisResults,
 	})
@@ -1089,7 +1106,7 @@ func TestCreateControlResultBatchWithOnlyPreControlResults(t *testing.T) {
 
 	mockManager := &mockManager{}
 	extendedMockAnalysisRepo := &extendedMockAnalysisRepo{}
-	analysisService := NewAnalysisService(extendedMockAnalysisRepo, nil, nil, mockManager)
+	analysisService := NewAnalysisService(extendedMockAnalysisRepo, &instrumentRepositoryMock{}, nil, nil, mockManager)
 	results, analysisResultIds, err := analysisService.CreateControlResultBatch(context.TODO(), standaloneControlResults)
 	assert.Nil(t, err)
 	assert.Equal(t, 1, len(results))
@@ -1117,7 +1134,7 @@ func TestCreateControlResultBatchWithOnlyPostControlResults(t *testing.T) {
 
 	mockManager := &mockManager{}
 	extendedMockAnalysisRepo := &extendedMockAnalysisRepo{}
-	analysisService := NewAnalysisService(extendedMockAnalysisRepo, nil, nil, mockManager)
+	analysisService := NewAnalysisService(extendedMockAnalysisRepo, &instrumentRepositoryMock{}, nil, nil, mockManager)
 	results, analysisResultIds, err := analysisService.CreateControlResultBatch(context.TODO(), standaloneControlResults)
 	assert.Nil(t, err)
 	assert.Equal(t, 1, len(results))
@@ -1135,7 +1152,6 @@ func TestCreateControlResultBatchWithOnlyPostControlResults(t *testing.T) {
 func TestCreateControlResultBatch(t *testing.T) {
 	resultYieldedAt, _ := formatTimeStringToBerlinTime("20240927162727", "20060102150405")
 	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
-	controlInstrumentAnalyte := "TESTCONTROLANALYTE"
 
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
@@ -1151,10 +1167,9 @@ func TestCreateControlResultBatch(t *testing.T) {
 
 	analyteMappings := []AnalyteMapping{
 		{
-			ID:                       uuid.MustParse("c31edad9-586e-4add-bdd7-be37c28c3560"),
-			InstrumentAnalyte:        "TESTANALYTE",
-			ControlInstrumentAnalyte: &controlInstrumentAnalyte,
-			AnalyteID:                uuid.MustParse("fc1948d2-4381-4049-a1d3-8b010b65a0cc"),
+			ID:                uuid.MustParse("c31edad9-586e-4add-bdd7-be37c28c3560"),
+			InstrumentAnalyte: "TESTANALYTE",
+			AnalyteID:         uuid.MustParse("fc1948d2-4381-4049-a1d3-8b010b65a0cc"),
 			ChannelMappings: []ChannelMapping{
 				{
 					InstrumentChannel: "TestInstrumentChannel",
@@ -1220,7 +1235,7 @@ func TestCreateControlResultBatch(t *testing.T) {
 
 	mockManager := &mockManager{}
 	extendedMockAnalysisRepo := &extendedMockAnalysisRepo{}
-	analysisService := NewAnalysisService(extendedMockAnalysisRepo, nil, nil, mockManager)
+	analysisService := NewAnalysisService(extendedMockAnalysisRepo, &instrumentRepositoryMock{}, nil, nil, mockManager)
 	results, analysisResultIds, err := analysisService.CreateControlResultBatch(context.TODO(), standaloneControlResults)
 	assert.Nil(t, err)
 	assert.Equal(t, 2, len(results))
@@ -1239,7 +1254,8 @@ func TestCreateControlResultBatch(t *testing.T) {
 	assert.Equal(t, 2, len(extendedMockAnalysisRepo.reagentControlResultRelationDAOs))
 }
 
-func setupTestDataForAnalysisResultStatusAndControlResultValidCheck(addExpectedControlResult bool, result *ExpectedControlResult) AnalysisResult {
+func setupTestDataForAnalysisResultStatusAndControlResultValidCheck(addExpectedControlResult bool, result *ExpectedControlResult) (AnalysisResult, instrumentRepositoryMock) {
+	instrumentRepositoryMock := &instrumentRepositoryMock{}
 	resultYieldedAt, _ := formatTimeStringToBerlinTime("20240927162727", "20060102150405")
 	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	validUntil, _ := formatTimeStringToBerlinTime("20240930162727", "20060102150405")
@@ -1266,6 +1282,7 @@ func setupTestDataForAnalysisResultStatusAndControlResultValidCheck(addExpectedC
 	analyteMappings := []AnalyteMapping{setupAnalyteMappingForControlValidation()}
 	if addExpectedControlResult {
 		analyteMappings[0].ExpectedControlResults = expectedControlResults
+		instrumentRepositoryMock.ExpectedControlResults = expectedControlResults
 	}
 
 	instrument := Instrument{
@@ -1329,16 +1346,14 @@ func setupTestDataForAnalysisResultStatusAndControlResultValidCheck(addExpectedC
 		Images:                   nil,
 	}
 
-	return analysisResult
+	return analysisResult, *instrumentRepositoryMock
 }
 
 func setupAnalyteMappingForControlValidation() AnalyteMapping {
-	controlInstrumentAnalyte := "TESTCONTROLANALYTE"
 	return AnalyteMapping{
-		ID:                       uuid.MustParse("c31edad9-586e-4add-bdd7-be37c28c3560"),
-		InstrumentAnalyte:        "TESTANALYTE",
-		ControlInstrumentAnalyte: &controlInstrumentAnalyte,
-		AnalyteID:                uuid.MustParse("fc1948d2-4381-4049-a1d3-8b010b65a0cc"),
+		ID:                uuid.MustParse("c31edad9-586e-4add-bdd7-be37c28c3560"),
+		InstrumentAnalyte: "TESTANALYTE",
+		AnalyteID:         uuid.MustParse("fc1948d2-4381-4049-a1d3-8b010b65a0cc"),
 		ChannelMappings: []ChannelMapping{
 			{
 				InstrumentChannel: "TestInstrumentChannel",
@@ -1377,11 +1392,11 @@ func setupControlResultForValidation(analyteMapping AnalyteMapping, instrumentId
 	}
 }
 
-func setupTestDataForAnalysisResultReagentAndControlRelationCheck(addExpectedControlResult bool, useOnlyTheIncludedExpectedResult bool, result *ExpectedControlResult) []AnalysisResult {
+func setupTestDataForAnalysisResultReagentAndControlRelationCheck(addExpectedControlResult bool, useOnlyTheIncludedExpectedResult bool, result *ExpectedControlResult) ([]AnalysisResult, instrumentRepositoryMock) {
+	instrumentRepositoryMock := &instrumentRepositoryMock{}
 	resultYieldedAt, _ := formatTimeStringToBerlinTime("20240927162727", "20060102150405")
 	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	validUntil, _ := formatTimeStringToBerlinTime("20240930162727", "20060102150405")
-	controlInstrumentAnalyte := "TESTCONTROLANALYTE"
 
 	expectedControlResults := make([]ExpectedControlResult, 0)
 
@@ -1406,10 +1421,9 @@ func setupTestDataForAnalysisResultReagentAndControlRelationCheck(addExpectedCon
 
 	analyteMappings := []AnalyteMapping{
 		{
-			ID:                       uuid.MustParse("c31edad9-586e-4add-bdd7-be37c28c3560"),
-			InstrumentAnalyte:        "TESTANALYTE",
-			ControlInstrumentAnalyte: &controlInstrumentAnalyte,
-			AnalyteID:                uuid.MustParse("fc1948d2-4381-4049-a1d3-8b010b65a0cc"),
+			ID:                uuid.MustParse("c31edad9-586e-4add-bdd7-be37c28c3560"),
+			InstrumentAnalyte: "TESTANALYTE",
+			AnalyteID:         uuid.MustParse("fc1948d2-4381-4049-a1d3-8b010b65a0cc"),
 			ChannelMappings: []ChannelMapping{
 				{
 					InstrumentChannel: "TestInstrumentChannel",
@@ -1434,6 +1448,7 @@ func setupTestDataForAnalysisResultReagentAndControlRelationCheck(addExpectedCon
 	}
 	if addExpectedControlResult {
 		analyteMappings[0].ExpectedControlResults = expectedControlResults
+		instrumentRepositoryMock.ExpectedControlResults = expectedControlResults
 	}
 
 	instrument := Instrument{
@@ -1517,13 +1532,12 @@ func setupTestDataForAnalysisResultReagentAndControlRelationCheck(addExpectedCon
 		},
 	}
 
-	return analysisResults
+	return analysisResults, *instrumentRepositoryMock
 }
 
 func setupTestDataForStandaloneControlProcessing() (ControlResult, Reagent) {
 	resultYieldedAt, _ := formatTimeStringToBerlinTime("20240927162727", "20060102150405")
 	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
-	controlInstrumentAnalyte := "TESTCONTROLANALYTE"
 
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
@@ -1541,10 +1555,9 @@ func setupTestDataForStandaloneControlProcessing() (ControlResult, Reagent) {
 
 	analyteMappings := []AnalyteMapping{
 		{
-			ID:                       uuid.MustParse("c31edad9-586e-4add-bdd7-be37c28c3560"),
-			InstrumentAnalyte:        "TESTANALYTE",
-			ControlInstrumentAnalyte: &controlInstrumentAnalyte,
-			AnalyteID:                uuid.MustParse("fc1948d2-4381-4049-a1d3-8b010b65a0cc"),
+			ID:                uuid.MustParse("c31edad9-586e-4add-bdd7-be37c28c3560"),
+			InstrumentAnalyte: "TESTANALYTE",
+			AnalyteID:         uuid.MustParse("fc1948d2-4381-4049-a1d3-8b010b65a0cc"),
 			ChannelMappings: []ChannelMapping{
 				{
 					InstrumentChannel: "TestInstrumentChannel",
@@ -1681,7 +1694,7 @@ func (r *extendedMockAnalysisRepo) CreateAnalysisResultReagentRelations(ctx cont
 	return nil
 }
 
-func (r *extendedMockAnalysisRepo) GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMappingId uuid.UUID, instrumentId uuid.UUID) ([]ControlResult, error) {
+func (r *extendedMockAnalysisRepo) GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMapping AnalyteMapping, instrumentId uuid.UUID, ControlResultSearchDays int) ([]ControlResult, error) {
 	return nil, nil
 }
 

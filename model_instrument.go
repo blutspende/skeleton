@@ -42,14 +42,15 @@ type instrumentTO struct {
 }
 
 type analyteMappingTO struct {
-	ID                       uuid.UUID          `json:"id"`
-	InstrumentAnalyte        string             `json:"instrumentAnalyte"`
-	AnalyteID                uuid.UUID          `json:"analyteId"`
-	ChannelMappings          []channelMappingTO `json:"channelMappings"`
-	ResultMappings           []resultMappingTO  `json:"resultMappings"`
-	ResultType               ResultType         `json:"resultType"`
-	ControlRequired          bool               `json:"controlRequired"`
-	InstrumentControlAnalyte *string            `json:"instrumentControlAnalyte"`
+	ID                  uuid.UUID          `json:"id"`
+	InstrumentAnalyte   string             `json:"instrumentAnalyte"`
+	AnalyteID           uuid.UUID          `json:"analyteId"`
+	ChannelMappings     []channelMappingTO `json:"channelMappings"`
+	ResultMappings      []resultMappingTO  `json:"resultMappings"`
+	ResultType          ResultType         `json:"resultType"`
+	ControlRequired     bool               `json:"controlRequired"`
+	IsControl           bool               `json:"isControl"`
+	ValidatedAnalyteIDs []uuid.UUID        `json:"validatedAnalyteIDs"`
 }
 
 type requestMappingTO struct {
@@ -57,6 +58,12 @@ type requestMappingTO struct {
 	Code       string      `json:"code"`
 	IsDefault  bool        `json:"isDefault"`
 	AnalyteIDs []uuid.UUID `json:"requestMappingAnalyteIds"`
+}
+
+type controlMappingTO struct {
+	ID                uuid.UUID   `json:"id"`
+	AnalyteID         uuid.UUID   `json:"analyteId"`
+	ControlAnalyteIDs []uuid.UUID `json:"controlAnalyteIds"`
 }
 
 type channelMappingTO struct {
@@ -216,14 +223,15 @@ func convertInstrumentSettingTOToInstrumentSetting(settingTO instrumentSettingTO
 
 func convertAnalyteMappingTOToAnalyteMapping(analyteMappingTO analyteMappingTO) AnalyteMapping {
 	model := AnalyteMapping{
-		ID:                       analyteMappingTO.ID,
-		InstrumentAnalyte:        analyteMappingTO.InstrumentAnalyte,
-		AnalyteID:                analyteMappingTO.AnalyteID,
-		ChannelMappings:          make([]ChannelMapping, len(analyteMappingTO.ChannelMappings)),
-		ResultMappings:           make([]ResultMapping, len(analyteMappingTO.ResultMappings)),
-		ResultType:               analyteMappingTO.ResultType,
-		ControlResultRequired:    analyteMappingTO.ControlRequired,
-		ControlInstrumentAnalyte: analyteMappingTO.InstrumentControlAnalyte,
+		ID:                    analyteMappingTO.ID,
+		InstrumentAnalyte:     analyteMappingTO.InstrumentAnalyte,
+		AnalyteID:             analyteMappingTO.AnalyteID,
+		ChannelMappings:       make([]ChannelMapping, len(analyteMappingTO.ChannelMappings)),
+		ResultMappings:        make([]ResultMapping, len(analyteMappingTO.ResultMappings)),
+		ResultType:            analyteMappingTO.ResultType,
+		ControlResultRequired: analyteMappingTO.ControlRequired,
+		IsControl:             analyteMappingTO.IsControl,
+		ValidatedAnalyteIDs:   make([]uuid.UUID, len(analyteMappingTO.ValidatedAnalyteIDs)),
 	}
 
 	for i, channelMapping := range analyteMappingTO.ChannelMappings {
@@ -232,6 +240,10 @@ func convertAnalyteMappingTOToAnalyteMapping(analyteMappingTO analyteMappingTO) 
 
 	for i, resultMapping := range analyteMappingTO.ResultMappings {
 		model.ResultMappings[i] = convertResultMappingTOToResultMapping(resultMapping)
+	}
+
+	for i, validatedAnalyteID := range analyteMappingTO.ValidatedAnalyteIDs {
+		model.ValidatedAnalyteIDs[i] = validatedAnalyteID
 	}
 
 	return model

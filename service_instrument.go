@@ -2,6 +2,7 @@ package skeleton
 
 import (
 	"context"
+
 	"github.com/blutspende/skeleton/db"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
@@ -85,12 +86,20 @@ func (s *instrumentService) CreateInstrument(ctx context.Context, instrument Ins
 			_ = transaction.Rollback()
 			return uuid.Nil, err
 		}
+
 		_, err = s.instrumentRepository.WithTransaction(transaction).UpsertResultMappings(ctx, instrument.AnalyteMappings[i].ResultMappings, analyteMappingID)
 		if err != nil {
 			_ = transaction.Rollback()
 			return uuid.Nil, err
 		}
+
+		err = s.instrumentRepository.WithTransaction(transaction).CreateValidatedAnalyteIDs(ctx, analyteMappingID, instrument.AnalyteMappings[i].ValidatedAnalyteIDs)
+		if err != nil {
+			_ = transaction.Rollback()
+			return uuid.Nil, err
+		}
 	}
+
 	err = s.instrumentRepository.WithTransaction(transaction).UpsertRequestMappings(ctx, instrument.RequestMappings, id)
 	if err != nil {
 		_ = transaction.Rollback()
@@ -196,18 +205,27 @@ func (s *instrumentService) GetInstruments(ctx context.Context) ([]Instrument, e
 	if err != nil {
 		return nil, err
 	}
-	analyteMappingsIDs := make([]uuid.UUID, 0)
+	analyteMappingIDs := make([]uuid.UUID, 0)
 	analyteMappingIDInstrumentIDMap := make(map[uuid.UUID]uuid.UUID)
 
 	for instrumentID, analyteMappings := range analyteMappingsByInstrumentID {
 		instrumentsByIDs[instrumentID].AnalyteMappings = analyteMappings
 		for i := range instrumentsByIDs[instrumentID].AnalyteMappings {
-			analyteMappingsIDs = append(analyteMappingsIDs, analyteMappings[i].ID)
+			analyteMappingIDs = append(analyteMappingIDs, analyteMappings[i].ID)
 			analyteMappingIDInstrumentIDMap[analyteMappings[i].ID] = instrumentID
 			analyteMappingsByIDs[analyteMappings[i].ID] = &instrumentsByIDs[instrumentID].AnalyteMappings[i]
 		}
 	}
-	channelMappingsByAnalyteMappingID, err := s.instrumentRepository.GetChannelMappings(ctx, analyteMappingsIDs)
+
+	validatedAnalyteIDsMapByAnalyteMappingIDs, err := s.instrumentRepository.GetValidatedAnalyteIDsByAnalyteMappingID(ctx, analyteMappingIDs)
+	if err != nil {
+		return nil, err
+	}
+	for analyteMappingID, validatedAnalyteIDs := range validatedAnalyteIDsMapByAnalyteMappingIDs {
+		analyteMappingsByIDs[analyteMappingID].ValidatedAnalyteIDs = validatedAnalyteIDs
+	}
+
+	channelMappingsByAnalyteMappingID, err := s.instrumentRepository.GetChannelMappings(ctx, analyteMappingIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -215,7 +233,7 @@ func (s *instrumentService) GetInstruments(ctx context.Context) ([]Instrument, e
 		analyteMappingsByIDs[analyteMappingID].ChannelMappings = channelMappings
 	}
 
-	resultMappingsByAnalyteMappingID, err := s.instrumentRepository.GetResultMappings(ctx, analyteMappingsIDs)
+	resultMappingsByAnalyteMappingID, err := s.instrumentRepository.GetResultMappings(ctx, analyteMappingIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -223,7 +241,7 @@ func (s *instrumentService) GetInstruments(ctx context.Context) ([]Instrument, e
 		analyteMappingsByIDs[analyteMappingID].ResultMappings = resultMappings
 	}
 
-	expectedControlResultMappingsByAnalyteMappingID, err := s.instrumentRepository.GetExpectedControlResultsByAnalyteMappingIds(ctx, analyteMappingsIDs)
+	expectedControlResultMappingsByAnalyteMappingID, err := s.instrumentRepository.GetExpectedControlResultsByAnalyteMappingIds(ctx, analyteMappingIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -303,7 +321,7 @@ func (s *instrumentService) GetInstrumentByID(ctx context.Context, tx db.DbConne
 		}
 	}
 
-	protocol, err := s.instrumentRepository.GetProtocolByID(ctx, instrument.ProtocolID)
+	protocol, err := s.instrumentRepository.WithTransaction(tx).GetProtocolByID(ctx, instrument.ProtocolID)
 	if err != nil {
 		return instrument, err
 	}
@@ -314,27 +332,36 @@ func (s *instrumentService) GetInstrumentByID(ctx context.Context, tx db.DbConne
 	if err != nil {
 		return instrument, err
 	}
-	analyteMappingsIDs := make([]uuid.UUID, 0)
+	analyteMappingIDs := make([]uuid.UUID, 0)
 	analyteMappingIDInstrumentIDMap := make(map[uuid.UUID]uuid.UUID)
 	analyteMappingsByIDs := make(map[uuid.UUID]*AnalyteMapping)
 
 	for instrumentID, analyteMappings := range analyteMappingsByInstrumentID {
 		instrument.AnalyteMappings = analyteMappings
 		for i := range instrument.AnalyteMappings {
-			analyteMappingsIDs = append(analyteMappingsIDs, analyteMappings[i].ID)
+			analyteMappingIDs = append(analyteMappingIDs, analyteMappings[i].ID)
 			analyteMappingIDInstrumentIDMap[analyteMappings[i].ID] = instrumentID
 			analyteMappingsByIDs[analyteMappings[i].ID] = &instrument.AnalyteMappings[i]
 		}
 	}
-	channelMappingsByAnalyteMappingID, err := s.instrumentRepository.WithTransaction(tx).GetChannelMappings(ctx, analyteMappingsIDs)
+
+	validatedAnalyteIDsMapByAnalyteMappingIDs, err := s.instrumentRepository.WithTransaction(tx).GetValidatedAnalyteIDsByAnalyteMappingID(ctx, analyteMappingIDs)
 	if err != nil {
 		return instrument, err
 	}
-	for analyteMappingID, channelMappings := range channelMappingsByAnalyteMappingID {
+	for analyteMappingID, validatedAnalyteIDs := range validatedAnalyteIDsMapByAnalyteMappingIDs {
+		analyteMappingsByIDs[analyteMappingID].ValidatedAnalyteIDs = validatedAnalyteIDs
+	}
+
+	channelMappingsMapByAnalyteMappingIDs, err := s.instrumentRepository.WithTransaction(tx).GetChannelMappings(ctx, analyteMappingIDs)
+	if err != nil {
+		return instrument, err
+	}
+	for analyteMappingID, channelMappings := range channelMappingsMapByAnalyteMappingIDs {
 		analyteMappingsByIDs[analyteMappingID].ChannelMappings = channelMappings
 	}
 
-	resultMappingsByAnalyteMappingID, err := s.instrumentRepository.WithTransaction(tx).GetResultMappings(ctx, analyteMappingsIDs)
+	resultMappingsByAnalyteMappingID, err := s.instrumentRepository.WithTransaction(tx).GetResultMappings(ctx, analyteMappingIDs)
 	if err != nil {
 		return instrument, err
 	}
@@ -342,7 +369,7 @@ func (s *instrumentService) GetInstrumentByID(ctx context.Context, tx db.DbConne
 		analyteMappingsByIDs[analyteMappingID].ResultMappings = resultMappings
 	}
 
-	expectedControlResultMappingsByAnalyteMappingID, err := s.instrumentRepository.GetExpectedControlResultsByAnalyteMappingIds(ctx, analyteMappingsIDs)
+	expectedControlResultMappingsByAnalyteMappingID, err := s.instrumentRepository.WithTransaction(tx).GetExpectedControlResultsByAnalyteMappingIds(ctx, analyteMappingIDs)
 	if err != nil {
 		return instrument, err
 	}
@@ -425,19 +452,28 @@ func (s *instrumentService) GetInstrumentByIP(ctx context.Context, ip string) (I
 	if err != nil {
 		return instrument, err
 	}
-	analyteMappingsIDs := make([]uuid.UUID, 0)
+	analyteMappingIDs := make([]uuid.UUID, 0)
 	analyteMappingIDInstrumentIDMap := make(map[uuid.UUID]uuid.UUID)
 	analyteMappingsByIDs := make(map[uuid.UUID]*AnalyteMapping)
 
 	for instrumentID, analyteMappings := range analyteMappingsByInstrumentID {
 		instrument.AnalyteMappings = analyteMappings
 		for i := range instrument.AnalyteMappings {
-			analyteMappingsIDs = append(analyteMappingsIDs, analyteMappings[i].ID)
+			analyteMappingIDs = append(analyteMappingIDs, analyteMappings[i].ID)
 			analyteMappingIDInstrumentIDMap[analyteMappings[i].ID] = instrumentID
 			analyteMappingsByIDs[analyteMappings[i].ID] = &instrument.AnalyteMappings[i]
 		}
 	}
-	channelMappingsByAnalyteMappingID, err := s.instrumentRepository.GetChannelMappings(ctx, analyteMappingsIDs)
+
+	validatedAnalyteIDsMapByAnalyteMappingIDs, err := s.instrumentRepository.GetValidatedAnalyteIDsByAnalyteMappingID(ctx, analyteMappingIDs)
+	if err != nil {
+		return instrument, err
+	}
+	for analyteMappingID, validatedAnalyteIDs := range validatedAnalyteIDsMapByAnalyteMappingIDs {
+		analyteMappingsByIDs[analyteMappingID].ValidatedAnalyteIDs = validatedAnalyteIDs
+	}
+
+	channelMappingsByAnalyteMappingID, err := s.instrumentRepository.GetChannelMappings(ctx, analyteMappingIDs)
 	if err != nil {
 		return instrument, err
 	}
@@ -445,7 +481,7 @@ func (s *instrumentService) GetInstrumentByIP(ctx context.Context, ip string) (I
 		analyteMappingsByIDs[analyteMappingID].ChannelMappings = channelMappings
 	}
 
-	resultMappingsByAnalyteMappingID, err := s.instrumentRepository.GetResultMappings(ctx, analyteMappingsIDs)
+	resultMappingsByAnalyteMappingID, err := s.instrumentRepository.GetResultMappings(ctx, analyteMappingIDs)
 	if err != nil {
 		return instrument, err
 	}
@@ -453,7 +489,7 @@ func (s *instrumentService) GetInstrumentByIP(ctx context.Context, ip string) (I
 		analyteMappingsByIDs[analyteMappingID].ResultMappings = resultMappings
 	}
 
-	expectedControlResultMappingsByAnalyteMappingID, err := s.instrumentRepository.GetExpectedControlResultsByAnalyteMappingIds(ctx, analyteMappingsIDs)
+	expectedControlResultMappingsByAnalyteMappingID, err := s.instrumentRepository.GetExpectedControlResultsByAnalyteMappingIds(ctx, analyteMappingIDs)
 	if err != nil {
 		return instrument, err
 	}
@@ -549,6 +585,8 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 	deletedResultMappingIDs := make([]uuid.UUID, 0)
 	deletedRequestMappingIDs := make([]uuid.UUID, 0)
 	deletedSettingIDs := make([]uuid.UUID, 0)
+	deletedValidatedAnalyteIDs := make(map[uuid.UUID][]uuid.UUID)
+	createdValidatedAnalyteIDs := make(map[uuid.UUID][]uuid.UUID)
 
 	for _, oldAnalyteMapping := range oldInstrument.AnalyteMappings {
 		analyteMappingFound := false
@@ -566,6 +604,7 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 						deletedChannelMappingIDs = append(deletedChannelMappingIDs, oldChannelMapping.ID)
 					}
 				}
+
 				for _, oldResultMapping := range oldAnalyteMapping.ResultMappings {
 					resultMappingFound := false
 					for _, newResultMapping := range newAnalyteMapping.ResultMappings {
@@ -578,6 +617,34 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 						deletedResultMappingIDs = append(deletedResultMappingIDs, oldResultMapping.ID)
 					}
 				}
+
+				// Extract removed validation links
+				for _, oldValidatedAnalyteID := range oldAnalyteMapping.ValidatedAnalyteIDs {
+					validatedAnalyteIDFound := false
+					for _, newValidatedAnalyteID := range newAnalyteMapping.ValidatedAnalyteIDs {
+						if oldValidatedAnalyteID == newValidatedAnalyteID {
+							validatedAnalyteIDFound = true
+							break
+						}
+					}
+					if !validatedAnalyteIDFound {
+						deletedValidatedAnalyteIDs[oldAnalyteMapping.ID] = append(deletedValidatedAnalyteIDs[oldAnalyteMapping.ID], oldValidatedAnalyteID)
+					}
+				}
+				// Extract added validation links
+				for _, newValidatedAnalyteID := range newAnalyteMapping.ValidatedAnalyteIDs {
+					validatedAnalyteIDFound := false
+					for _, oldValidatedAnalyteID := range oldAnalyteMapping.ValidatedAnalyteIDs {
+						if newValidatedAnalyteID == oldValidatedAnalyteID {
+							validatedAnalyteIDFound = true
+							break
+						}
+					}
+					if !validatedAnalyteIDFound {
+						createdValidatedAnalyteIDs[newAnalyteMapping.ID] = append(createdValidatedAnalyteIDs[newAnalyteMapping.ID], newValidatedAnalyteID)
+					}
+				}
+
 				analyteMappingFound = true
 				break
 			}
@@ -586,6 +653,7 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 			deletedAnalyteMappingIDs = append(deletedAnalyteMappingIDs, oldAnalyteMapping.ID)
 		}
 	}
+
 	for _, oldRequestMapping := range oldInstrument.RequestMappings {
 		found := false
 		for _, newRequestMapping := range instrument.RequestMappings {
@@ -610,6 +678,19 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 			deletedSettingIDs = append(deletedSettingIDs, oldSetting.ID)
 		}
 	}
+
+	// Delete removed validated analyte links
+	for analyteMappingID, validatedAnalyteIDs := range deletedValidatedAnalyteIDs {
+		if len(validatedAnalyteIDs) == 0 {
+			continue
+		}
+		err = s.instrumentRepository.WithTransaction(tx).DeleteValidatedAnalyteIDsByAnalyteMappingID(ctx, analyteMappingID, validatedAnalyteIDs)
+		if err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+	}
+
 	err = s.instrumentRepository.WithTransaction(tx).DeleteAnalyteMappings(ctx, deletedAnalyteMappingIDs)
 	if err != nil {
 		_ = tx.Rollback()
@@ -646,7 +727,7 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 		_ = tx.Rollback()
 		return err
 	}
-	for _, analyteMapping := range instrument.AnalyteMappings {
+	for i, analyteMapping := range instrument.AnalyteMappings {
 		_, err = s.instrumentRepository.WithTransaction(tx).UpsertChannelMappings(ctx, analyteMapping.ChannelMappings, analyteMapping.ID)
 		if err != nil {
 			_ = tx.Rollback()
@@ -657,7 +738,31 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 			_ = tx.Rollback()
 			return err
 		}
+
+		analyteMappingFound := false
+		for _, oldAnalyteMapping := range oldInstrument.AnalyteMappings {
+			if oldAnalyteMapping.ID == analyteMapping.ID {
+				analyteMappingFound = true
+				break
+			}
+		}
+		if !analyteMappingFound {
+			createdValidatedAnalyteIDs[instrument.AnalyteMappings[i].ID] = append(createdValidatedAnalyteIDs[instrument.AnalyteMappings[i].ID], instrument.AnalyteMappings[i].ValidatedAnalyteIDs...)
+		}
 	}
+
+	// Create added validated analyte links
+	for analyteMappingID, validatedAnalyteIDs := range createdValidatedAnalyteIDs {
+		if len(validatedAnalyteIDs) == 0 {
+			continue
+		}
+		err = s.instrumentRepository.WithTransaction(tx).CreateValidatedAnalyteIDs(ctx, analyteMappingID, validatedAnalyteIDs)
+		if err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+	}
+
 	newRequestMappingAnalytes := make(map[uuid.UUID]any)
 	for _, requestMapping := range instrument.RequestMappings {
 		for _, analyteID := range requestMapping.AnalyteIDs {
@@ -756,11 +861,13 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 		}
 	}
 
+	//r.SetTx(r.CreateTransaction())
 	newInstrument, err := s.GetInstrumentByID(ctx, tx, instrument.ID, true)
 	if err != nil {
 		_ = tx.Rollback()
 		return err
 	}
+	//r.ClearTx()
 
 	instrumentHash := HashInstrument(newInstrument)
 	err = s.cerberusClient.VerifyInstrumentHash(instrumentHash)
@@ -777,6 +884,7 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 	}
 
 	s.instrumentCache.Invalidate()
+
 	return nil
 }
 
@@ -788,6 +896,12 @@ func (s *instrumentService) DeleteInstrument(ctx context.Context, id uuid.UUID) 
 		return err
 	}
 	err = s.instrumentRepository.WithTransaction(tx).DeleteInstrument(ctx, id)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	err = s.instrumentRepository.WithTransaction(tx).DeleteAllValidatedAnalyteIDsByInstrumentID(ctx, id)
 	if err != nil {
 		_ = tx.Rollback()
 		return err
@@ -874,6 +988,7 @@ func (s *instrumentService) UpdateExpectedControlResults(ctx context.Context, in
 
 	expectedControlResultsMapBySampleCode := make(map[string]bool)
 	updatedSampleCodes := make([]string, 0)
+	analyteMappingIds := make([]uuid.UUID, 0)
 
 	for _, expectedControlResult := range expectedControlResults {
 		if _, ok := expectedControlResultsMapBySampleCode[expectedControlResult.SampleCode]; !ok {
@@ -892,6 +1007,7 @@ func (s *instrumentService) UpdateExpectedControlResults(ctx context.Context, in
 		for _, expectedControlResult := range expectedControlResults {
 			if existingExpectedControlResult.ID == expectedControlResult.ID {
 				updateExpectedControlResults = append(updateExpectedControlResults, expectedControlResult)
+				analyteMappingIds = append(analyteMappingIds, expectedControlResult.AnalyteMappingId)
 			}
 		}
 	}
@@ -909,6 +1025,7 @@ func (s *instrumentService) UpdateExpectedControlResults(ctx context.Context, in
 		if !alreadyExists {
 			expectedControlResult.CreatedBy = userId
 			createExpectedControlResults = append(createExpectedControlResults, expectedControlResult)
+			analyteMappingIds = append(analyteMappingIds, expectedControlResult.AnalyteMappingId)
 		}
 	}
 
@@ -947,6 +1064,8 @@ func (s *instrumentService) UpdateExpectedControlResults(ctx context.Context, in
 		_ = tx.Rollback()
 		return db.ErrCommitTransactionFailed
 	}
+
+	s.manager.SendAnalyteMappingsToValidateControlResults(analyteMappingIds)
 
 	return nil
 }

@@ -2,13 +2,14 @@ package skeleton
 
 import (
 	"context"
+	"time"
+
 	config2 "github.com/blutspende/skeleton/config"
 	"github.com/blutspende/skeleton/db"
 	"github.com/blutspende/skeleton/migrator"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"golang.org/x/time/rate"
-	"time"
 )
 
 type SkeletonError error
@@ -97,7 +98,7 @@ type SkeletonAPI interface {
 
 	GetAnalysisResultIdsWithoutControlByReagent(ctx context.Context, controlResult ControlResult, reagent Reagent) ([]uuid.UUID, error)
 	GetAnalysisResultIdsWhereLastestControlIsInvalid(ctx context.Context, controlResult ControlResult, reagent Reagent) ([]uuid.UUID, error)
-	GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMappingId uuid.UUID, instrumentId uuid.UUID) ([]ControlResult, error)
+	GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMapping AnalyteMapping, instrumentId uuid.UUID) ([]ControlResult, error)
 
 	// GetInstrument returns all the settings regarding an instrument
 	// contains AnalyteMappings[] and RequestMappings[]
@@ -133,6 +134,9 @@ type SkeletonAPI interface {
 	// GetDbConnection - Provides access to internal database connection
 	// - returns database connection
 	GetDbConnection() (*sqlx.DB, error)
+
+	// FindAnalyteMapping - Reusable filter method to find analyte mapping by name and type
+	FindAnalyteMapping(instrument Instrument, isControl bool, instrumentAnalyte string) (AnalyteMapping, error)
 }
 
 func New(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, reagentManufacturers []string, protocols []SupportedProtocol, dbSchema string) (SkeletonAPI, error) {
@@ -159,7 +163,7 @@ func New(ctx context.Context, serviceName, displayName string, requestedExtraVal
 	instrumentCache := NewInstrumentCache()
 	analysisRepository := NewAnalysisRepository(dbConn, dbSchema)
 	instrumentRepository := NewInstrumentRepository(dbConn, dbSchema)
-	analysisService := NewAnalysisService(analysisRepository, deaClient, cerberusClient, manager)
+	analysisService := NewAnalysisService(analysisRepository, instrumentRepository, deaClient, cerberusClient, manager)
 	conditionRepository := NewConditionRepository(dbConn, dbSchema)
 	conditionService := NewConditionService(conditionRepository)
 	sortingRuleRepository := NewSortingRuleRepository(dbConn, dbSchema)
