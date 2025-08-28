@@ -206,6 +206,7 @@ type analysisRequestDAO struct {
 	SentToInstrumentCount       int          `db:"sent_to_instrument_count"`
 	CreatedAt                   time.Time    `db:"created_at"`
 	ModifiedAt                  sql.NullTime `db:"modified_at"`
+	DeletedAt                   sql.NullTime `db:"deleted_at"`
 	IsProcessed                 bool         `db:"is_processed"`
 }
 
@@ -406,7 +407,7 @@ type AnalysisRepository interface {
 	CreateAnalysisRequestsBatch(ctx context.Context, analysisRequests []AnalysisRequest) ([]uuid.UUID, error)
 	CreateAnalysisRequestExtraValues(ctx context.Context, extraValuesByAnalysisRequestIDs map[uuid.UUID][]ExtraValue) error
 	GetAnalysisRequestsBySampleCodeAndAnalyteID(ctx context.Context, sampleCodes string, analyteID uuid.UUID) ([]AnalysisRequest, error)
-	GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string, allowResending bool) (map[string][]AnalysisRequest, error)
+	GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string, allowResending, allowDeleted bool) (map[string][]AnalysisRequest, error)
 	GetAnalysisRequestExtraValuesByAnalysisRequestID(ctx context.Context, analysisRequestID uuid.UUID) (map[string]string, error)
 	GetSampleCodesByOrderID(ctx context.Context, orderID uuid.UUID) ([]string, error)
 	//GetAnalysisRequestsForVisualization(ctx context.Context) (map[string][]AnalysisRequest, error)
@@ -589,6 +590,7 @@ func (r *analysisRepository) GetAnalysisRequestsBySampleCodeAndAnalyteID(ctx con
 					FROM %s.sk_analysis_requests sar
 					WHERE sar.sample_code = $1
 					AND sar.analyte_id = $2
+					AND sar.deleted_at IS NULL
 					AND sar.valid_until_time >= timezone('utc',now());`, r.dbSchema)
 
 	rows, err := r.db.QueryxContext(ctx, query, sampleCode, analyteID)
@@ -617,7 +619,7 @@ func (r *analysisRepository) GetAnalysisRequestsBySampleCodeAndAnalyteID(ctx con
 	return analysisRequests, err
 }
 
-func (r *analysisRepository) GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string, allowResending bool) (map[string][]AnalysisRequest, error) {
+func (r *analysisRepository) GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string, allowResending, allowDeleted bool) (map[string][]AnalysisRequest, error) {
 	analysisRequestsBySampleCodes := make(map[string][]AnalysisRequest)
 	if len(sampleCodes) == 0 {
 		return analysisRequestsBySampleCodes, nil
@@ -628,6 +630,9 @@ func (r *analysisRepository) GetAnalysisRequestsBySampleCodes(ctx context.Contex
 					AND valid_until_time >= timezone('utc',now())`, r.dbSchema)
 		if !allowResending {
 			query += " AND reexamination_requested_count >= sent_to_instrument_count"
+		}
+		if !allowDeleted {
+			query += " AND deleted_at IS NULL"
 		}
 		query += ";"
 
@@ -689,7 +694,7 @@ func (r *analysisRepository) GetAnalysisRequestExtraValuesByAnalysisRequestID(ct
 func (r *analysisRepository) GetSampleCodesByOrderID(ctx context.Context, orderID uuid.UUID) ([]string, error) {
 	query := fmt.Sprintf(`SELECT DISTINCT sample_code from %s.sk_analysis_requests sar
 									INNER JOIN %s.sk_analysis_request_extra_values sarev ON sar.id = sarev.analysis_request_id
-										WHERE valid_until_time >= timezone('utc', now()) AND sarev.key = 'OrderID' and sarev.value = $1;`, r.dbSchema, r.dbSchema)
+										WHERE sar.valid_until_time >= timezone('utc', now()) AND sar.deleted_at IS NULL AND sarev.key = 'OrderID' and sarev.value = $1;`, r.dbSchema, r.dbSchema)
 	rows, err := r.db.QueryxContext(ctx, query, orderID)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetSampleCodesByOrderIDFailed)
@@ -748,7 +753,7 @@ func (r *analysisRepository) GetAnalysisRequestsByWorkItemIDs(ctx context.Contex
 		return analysisRequests, nil
 	}
 	err := utils.Partition(len(workItemIds), maxParams, func(low int, high int) error {
-		query := fmt.Sprintf(`SELECT * FROM %s.sk_analysis_requests WHERE work_item_id in (?);`, r.dbSchema)
+		query := fmt.Sprintf(`SELECT * FROM %s.sk_analysis_requests WHERE work_item_id in (?) AND deleted_at IS NULL;`, r.dbSchema)
 		query, args, _ := sqlx.In(query, workItemIds[low:high])
 		query = r.db.Rebind(query)
 
@@ -781,9 +786,7 @@ func (r *analysisRepository) RevokeAnalysisRequests(ctx context.Context, workIte
 		return nil
 	}
 	err := utils.Partition(len(workItemIds), maxParams, func(low int, high int) error {
-		query := fmt.Sprintf(`DELETE FROM %s.sk_analysis_requests WHERE work_item_id IN (?);`, r.dbSchema)
-
-		query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
+		query := fmt.Sprintf(`UPDATE %s.sk_analysis_requests SET deleted_at = timezone('utc', now()) WHERE work_item_id IN (?);`, r.dbSchema)
 		query, args, _ := sqlx.In(query, workItemIds[low:high])
 		query = r.db.Rebind(query)
 		_, err := r.db.ExecContext(ctx, query, args...)
@@ -2326,7 +2329,7 @@ func (r *analysisRepository) DeleteOldCerberusQueueItems(ctx context.Context, cl
 func (r *analysisRepository) DeleteOldAnalysisRequestsWithTx(ctx context.Context, cleanupDays, limit int, tx db.DbConnection) (int64, error) {
 	txR := *r
 	txR.db = tx
-	query := fmt.Sprintf(`SELECT id, sample_code FROM %s.sk_analysis_requests WHERE valid_until_time < (current_date - make_interval(days := $1)) AND is_processed LIMIT $2;`, r.dbSchema)
+	query := fmt.Sprintf(`SELECT id, sample_code FROM %s.sk_analysis_requests WHERE valid_until_time < (current_date - make_interval(days := $1)) AND (is_processed OR deleted_at IS NOT NULL) LIMIT $2;`, r.dbSchema)
 	rows, err := txR.db.QueryxContext(ctx, query, cleanupDays, limit)
 	if err != nil {
 		log.Error().Err(err).Msg(msgDeleteOldAnalysisRequestsFailed)
@@ -2995,7 +2998,7 @@ func (r *analysisRepository) MarkImagesAsSyncedToCerberus(ctx context.Context, i
 func (r *analysisRepository) GetUnprocessedAnalysisRequests(ctx context.Context) ([]AnalysisRequest, error) {
 	query := fmt.Sprintf(`SELECT *
 					FROM %s.sk_analysis_requests sar
-					WHERE sar.is_processed IS FALSE;`, r.dbSchema)
+					WHERE sar.is_processed IS FALSE AND sar.deleted_at IS NULL;`, r.dbSchema)
 
 	rows, err := r.db.QueryxContext(ctx, query)
 	if err != nil {

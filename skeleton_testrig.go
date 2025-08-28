@@ -61,7 +61,7 @@ func (sr *SkeletonTestRig) GetAnalysisRequestExtraValues(ctx context.Context, an
 }
 
 // Overridden for Testing: Returns All ARQS for the samplecode
-func (sr *SkeletonTestRig) GetAnalysisRequestsBySampleCode(ctx context.Context, sampleCode string, allowResending bool) ([]AnalysisRequest, error) {
+func (sr *SkeletonTestRig) GetAnalysisRequestsBySampleCode(ctx context.Context, sampleCode string, allowResending, allowDeleted bool) ([]AnalysisRequest, error) {
 	ar := []AnalysisRequest{}
 	for _, rqs := range sr.AnalysisRequests {
 		if rqs.SampleCode == sampleCode {
@@ -71,10 +71,10 @@ func (sr *SkeletonTestRig) GetAnalysisRequestsBySampleCode(ctx context.Context, 
 	return ar, nil
 }
 
-func (sr *SkeletonTestRig) GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string, allowResending bool) (map[string][]AnalysisRequest, error) {
+func (sr *SkeletonTestRig) GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string, allowResending, allowDeleted bool) (map[string][]AnalysisRequest, error) {
 	analysisRequestsBySampleCodes := make(map[string][]AnalysisRequest)
 	for i := range sampleCodes {
-		requests, _ := sr.GetAnalysisRequestsBySampleCode(ctx, sampleCodes[i], false)
+		requests, _ := sr.GetAnalysisRequestsBySampleCode(ctx, sampleCodes[i], allowResending, allowDeleted)
 		if len(requests) > 0 {
 			analysisRequestsBySampleCodes[sampleCodes[i]] = requests
 		}

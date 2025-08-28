@@ -95,9 +95,12 @@ func (r *messageOutOrderRepository) GetBySampleCodesAndRequestMappingIDs(ctx con
 	}
 	filterCondition += ")"
 
-	query := fmt.Sprintf(`SELECT DISTINCT smoo.* FROM %s.sk_message_out smo
-	INNER JOIN %s.sk_message_out_orders smoo ON smo.id = smoo.message_out_id
-		WHERE smoo.sample_code IN (?) AND smo.instrument_id = ? %s;`, r.dbSchema, r.dbSchema, filterCondition)
+	query := fmt.Sprintf(`SELECT DISTINCT smoo.* FROM <schema_name>.sk_message_out smo
+	INNER JOIN <schema_name>.sk_message_out_orders smoo ON smo.id = smoo.message_out_id
+	INNER JOIN <schema_name>.sk_message_out_order_analysis_requests smooar ON smoo.id = smooar.message_out_order_id
+	INNER JOIN <schema_name>.sk_analysis_requests sar ON sar.id = smooar.analysis_request_id
+		WHERE smoo.sample_code IN (?) AND smo.instrument_id = ? AND sar.deleted_at IS NULL %s;`, filterCondition)
+	query = strings.ReplaceAll(query, "<schema_name>", r.dbSchema)
 	query, args, _ := sqlx.In(query, queryArgs...)
 	query = r.db.Rebind(query)
 	rows, err := r.db.QueryxContext(ctx, query, args...)
@@ -132,8 +135,8 @@ func (r *messageOutOrderRepository) GetTestCodesToRevokeBySampleCodes(ctx contex
 				INNER JOIN %schema_name%.sk_request_mappings srm ON srm.id = smoo.request_mapping_id
 				INNER JOIN %schema_name%.sk_message_out_order_analysis_requests smooar on smoo.id = smooar.message_out_order_id
 					WHERE smo.instrument_id = ? AND smo.status = ? 
-						AND NOT EXISTS (SELECT 1 FROM %schema_name%.sk_message_out_order_analysis_requests smoor LEFT JOIN %schema_name%.sk_analysis_requests sar on sar.id = smoor.analysis_request_id
-											WHERE smoor.message_out_order_id = smoo.id AND sar.id IS NOT NULL)
+						AND NOT EXISTS (SELECT 1 FROM %schema_name%.sk_message_out_order_analysis_requests smoor INNER JOIN %schema_name%.sk_analysis_requests sar on sar.id = smoor.analysis_request_id
+											WHERE smoor.message_out_order_id = smoo.id AND sar.deleted_at IS NULL)
 						AND smooar.analysis_request_id IN (?);`
 	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
 	query, args, _ := sqlx.In(query, instrumentID, messagestatus.Sent, analysisRequestIDs)
