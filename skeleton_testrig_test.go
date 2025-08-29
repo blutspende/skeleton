@@ -52,7 +52,7 @@ func TestCreateAnalysisRequest(t *testing.T) {
 	assert.NotNil(t, arq2)
 
 	// Testing the Simple search
-	queriedRequests, err := rig.GetAnalysisRequestsBySampleCode(context.Background(), samplecode, false)
+	queriedRequests, err := rig.GetAnalysisRequestsBySampleCode(context.Background(), samplecode, false, false)
 	assert.Nil(t, err)
 	assert.Equal(t, 2, len(queriedRequests))
 

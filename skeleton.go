@@ -78,8 +78,8 @@ func (s *skeleton) LogDebug(instrumentID uuid.UUID, msg string) {
 	s.consoleLogService.Debug(instrumentID, "[GENERAL]", msg)
 }
 
-func (s *skeleton) GetAnalysisRequestsBySampleCode(ctx context.Context, sampleCode string, allowResending bool) ([]AnalysisRequest, error) {
-	analysisRequests, err := s.analysisRepository.GetAnalysisRequestsBySampleCodes(ctx, []string{sampleCode}, allowResending)
+func (s *skeleton) GetAnalysisRequestsBySampleCode(ctx context.Context, sampleCode string, allowResending, allowDeleted bool) ([]AnalysisRequest, error) {
+	analysisRequests, err := s.analysisRepository.GetAnalysisRequestsBySampleCodes(ctx, []string{sampleCode}, allowResending, allowDeleted)
 	if err != nil {
 		return []AnalysisRequest{}, err
 	}
@@ -87,8 +87,8 @@ func (s *skeleton) GetAnalysisRequestsBySampleCode(ctx context.Context, sampleCo
 	return analysisRequests[sampleCode], nil
 }
 
-func (s *skeleton) GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string, allowResending bool) (map[string][]AnalysisRequest, error) {
-	analysisRequests, err := s.analysisRepository.GetAnalysisRequestsBySampleCodes(ctx, sampleCodes, allowResending)
+func (s *skeleton) GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string, allowResending, allowDeleted bool) (map[string][]AnalysisRequest, error) {
+	analysisRequests, err := s.analysisRepository.GetAnalysisRequestsBySampleCodes(ctx, sampleCodes, allowResending, allowDeleted)
 	if err != nil {
 		return map[string][]AnalysisRequest{}, err
 	}
@@ -395,7 +395,7 @@ func (s *skeleton) GetSortingTarget(ctx context.Context, instrumentIP string, sa
 		return "", err
 	}
 
-	analysisRequests, err := s.GetAnalysisRequestsBySampleCode(ctx, sampleCode, true)
+	analysisRequests, err := s.GetAnalysisRequestsBySampleCode(ctx, sampleCode, true, false)
 	if len(analysisRequests) == 0 {
 		analysisRequests = []AnalysisRequest{
 			{SampleCode: sampleCode},
@@ -447,7 +447,7 @@ func (s *skeleton) MarkSortingTargetAsApplied(ctx context.Context, instrumentIP,
 	if err != nil {
 		return err
 	}
-	analysisRequestsBySampleCode, err := s.GetAnalysisRequestsBySampleCodes(ctx, []string{sampleCode}, true)
+	analysisRequestsBySampleCode, err := s.GetAnalysisRequestsBySampleCodes(ctx, []string{sampleCode}, true, false)
 	if err != nil {
 		return err
 	}
@@ -483,7 +483,7 @@ func (s *skeleton) FindResultEntities(ctx context.Context, InstrumentID uuid.UUI
 		}
 	}
 
-	allAnalysisRequests, err := s.GetAnalysisRequestsBySampleCode(ctx, sampleCode, true) // if there are none, that shouldnt be an error but an empty array
+	allAnalysisRequests, err := s.GetAnalysisRequestsBySampleCode(ctx, sampleCode, true, false) // if there are none, that shouldnt be an error but an empty array
 	if err != nil {
 		return Instrument{}, []AnalysisRequest{}, AnalyteMapping{}, err
 	}

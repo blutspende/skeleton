@@ -42,12 +42,14 @@ type SkeletonAPI interface {
 	// GetAnalysisRequestsBySampleCode - Return a list of AnalysisRequests that contain the sampleCode
 	// Empty List if nothing is found. Error occurs only on Database-error
 	// if allowResending is true, returns all analysis requests for the sample code, without checking if they were already sent to the instrument
-	GetAnalysisRequestsBySampleCode(ctx context.Context, sampleCode string, allowResending bool) ([]AnalysisRequest, error)
+	// if allowDeleted is true, returns all analysis requests, including revoked ones
+	GetAnalysisRequestsBySampleCode(ctx context.Context, sampleCode string, allowResending, allowDeleted bool) ([]AnalysisRequest, error)
 
 	// GetAnalysisRequestsBySampleCodes - Return a list of AnalysisRequests that contains the sampleCodes
 	// Empty List if nothing is found. Error occurs only on Database-error
 	// if allowResending is true, returns all analysis requests for the sample code, without checking if they were already sent to the instrument
-	GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string, allowResending bool) (map[string][]AnalysisRequest, error)
+	// if allowDeleted is true, returns all analysis requests, including revoked ones
+	GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string, allowResending, allowDeleted bool) (map[string][]AnalysisRequest, error)
 	// GetAnalysisRequestExtraValues - returns a map of the analysis request extra values. Error occurs on database error.
 	GetAnalysisRequestExtraValues(ctx context.Context, analysisRequestID uuid.UUID) (map[string]string, error)
 	// SaveAnalysisRequestsInstrumentTransmissions - persists in the database that an outgoing transmission was sent

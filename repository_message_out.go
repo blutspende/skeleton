@@ -103,8 +103,9 @@ func (r *messageOutRepository) GetFullyRevokedUnsentMessageIDsByAnalysisRequestI
     										INNER JOIN %schema_name%.sk_message_out_orders smoo ON smo.id = smoo.message_out_id
 											INNER JOIN %schema_name%.sk_message_out_order_analysis_requests smooar on smoo.id = smooar.message_out_order_id
 												WHERE smo."type" IN (?, ?) AND smo.status <> ? AND smooar.analysis_request_id IN (?) AND NOT EXISTS 
-													( SELECT 1 FROM %schema_name%.sk_message_out_order_analysis_requests smoor LEFT JOIN %schema_name%.sk_analysis_requests sar on sar.id = smoor.analysis_request_id
-														WHERE smoor.message_out_order_id = smoo.id AND sar.id IS NOT NULL);`, "%schema_name%", r.dbSchema)
+													( SELECT 1 FROM %schema_name%.sk_message_out_order_analysis_requests smoor 
+														INNER JOIN %schema_name%.sk_analysis_requests sar on sar.id = smoor.analysis_request_id
+														WHERE smoor.message_out_order_id = smoo.id AND sar.deleted_at IS NULL);`, "%schema_name%", r.dbSchema)
 		query, args, err := sqlx.In(query, messagetype.Order, messagetype.Reorder, messagestatus.Sent, analysisRequestIDs[low:high])
 		query = r.db.Rebind(query)
 		rows, err := r.db.QueryxContext(ctx, query, args...)

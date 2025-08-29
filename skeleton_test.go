@@ -1299,7 +1299,7 @@ func (m *analysisRepositoryMock) GetAnalysisRequestsBySampleCodeAndAnalyteID(ctx
 	}
 	return nil, nil
 }
-func (m *analysisRepositoryMock) GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string, allowResending bool) (map[string][]AnalysisRequest, error) {
+func (m *analysisRepositoryMock) GetAnalysisRequestsBySampleCodes(ctx context.Context, sampleCodes []string, allowResending, allowDeleted bool) (map[string][]AnalysisRequest, error) {
 	return nil, nil
 }
 func (m *analysisRepositoryMock) CreateSubjectsBatch(ctx context.Context, subjectInfosByAnalysisRequestID map[uuid.UUID]SubjectInfo) (map[uuid.UUID]uuid.UUID, error) {

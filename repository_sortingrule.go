@@ -147,10 +147,11 @@ func (r *sortingRuleRepository) GetSampleSequenceNumber(ctx context.Context, sam
         INNER JOIN %s.sk_analysis_request_extra_values sarev ON sar.id = sarev.analysis_request_id
             WHERE valid_until_time >= timezone('utc', now())
             AND sarev.key = 'OrderID'
+			AND sar.deleted_at IS NULL
             AND sample_code <> $1
             AND sarev.value = (SELECT sarev2.value FROM %s.sk_analysis_requests sar2
                                 INNER JOIN %s.sk_analysis_request_extra_values sarev2 ON sar2.id = sarev2.analysis_request_id
-                                    WHERE sarev2.key = 'OrderID' and sar2.sample_code = $1)
+                                    WHERE sarev2.key = 'OrderID' and sar2.sample_code = $1 AND sar2.deleted_at IS NULL)
     );`, "%s", r.dbSchema)
 
 	rows, err := r.db.QueryxContext(ctx, query, sampleCode)
