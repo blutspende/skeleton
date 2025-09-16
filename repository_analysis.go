@@ -2264,7 +2264,7 @@ func (r *analysisRepository) createWarnings(ctx context.Context, warningDAOs []w
 func (r *analysisRepository) createControlResultWarnings(ctx context.Context, warnings []controlResultWarningDAO) error {
 	err := utils.Partition(len(warnings), warningBatchCount, func(low int, high int) error {
 		query := fmt.Sprintf(`INSERT INTO %s.sk_control_result_warnings(id, control_result_id, warning)
-		VALUES(:id, :analysis_result_id, :warning)`, r.dbSchema)
+		VALUES(:id, :control_result_id, :warning)`, r.dbSchema)
 		_, err := r.db.NamedExecContext(ctx, query, warnings[low:high])
 		if err != nil {
 			log.Error().Err(err).Msg(msgCreateControlResultWarningsFailed)

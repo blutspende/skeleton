@@ -263,6 +263,26 @@ func TestCalculateControlResultIsValidAndExpectedControlResultIdWhereResultNotVa
 	assert.False(t, result.ExpectedControlResultId.Valid)
 }
 
+func TestCalculateControlResultIsValidAndExpectedControlResultIdWhereExpectedControlResultSampleCodeIsWildcard(t *testing.T) {
+	// Arrange
+	expectedControlResult := ExpectedControlResult{
+		ID:            uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
+		SampleCode:    "*",
+		Operator:      Equals,
+		ExpectedValue: "40",
+	}
+	analyteMapping := setupAnalyteMappingForControlValidation()
+	analyteMapping.ExpectedControlResults = []ExpectedControlResult{expectedControlResult}
+	controlResult := setupControlResultForValidation(analyteMapping, uuid.New())
+	// Act
+	result, err := setControlResultIsValidAndExpectedControlResultId(controlResult)
+	// Assert
+	assert.Nil(t, err)
+	assert.True(t, result.IsValid)
+	assert.True(t, result.IsComparedToExpectedResult)
+	assert.True(t, result.ExpectedControlResultId.Valid)
+}
+
 func TestCalculateControlResultIsValidWithOperatorEqualsValid(t *testing.T) {
 	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{

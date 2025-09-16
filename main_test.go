@@ -3,6 +3,9 @@ package skeleton
 import (
 	"context"
 	"fmt"
+	"os"
+	"testing"
+
 	"github.com/blutspende/skeleton/config"
 	"github.com/blutspende/skeleton/db"
 	"github.com/blutspende/skeleton/migrator"
@@ -10,8 +13,6 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	"os"
-	"testing"
 )
 
 func TestMain(m *testing.M) {
