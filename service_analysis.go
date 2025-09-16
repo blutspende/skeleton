@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
+
 	"github.com/blutspende/bloodlab-common/utils"
 	"github.com/blutspende/skeleton/db"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
-	"time"
 )
 
 var (
@@ -513,24 +514,37 @@ func (as *analysisService) SetAnalysisResultStatusBasedOnControlResults(ctx cont
 }
 
 func setControlResultIsValidAndExpectedControlResultId(controlResult ControlResult) (ControlResult, error) {
+	// Setup default return structure
 	controlResult.IsValid = false
 	controlResult.IsComparedToExpectedResult = false
-	for i, expectedControlResult := range controlResult.AnalyteMapping.ExpectedControlResults {
+	// Search for relevant expected control result
+	var expectedControlResultMatch *ExpectedControlResult
+	for _, expectedControlResult := range controlResult.AnalyteMapping.ExpectedControlResults {
 		if expectedControlResult.SampleCode == controlResult.SampleCode {
-			isValid, err := calculateControlResultIsValid(controlResult.Result, controlResult.AnalyteMapping.ExpectedControlResults[i])
-			if err != nil {
-				return controlResult, err
-			}
-			controlResult.IsValid = isValid
-			controlResult.ExpectedControlResultId = uuid.NullUUID{
-				UUID:  controlResult.AnalyteMapping.ExpectedControlResults[i].ID,
-				Valid: true,
-			}
-			controlResult.IsComparedToExpectedResult = true
+			expectedControlResultMatch = &expectedControlResult
 			break
 		}
 	}
-
+	if expectedControlResultMatch == nil {
+		// If not found, search again for wildcard matches (a '*' for sample code it can be applied for any sample code)
+		for _, expectedControlResult := range controlResult.AnalyteMapping.ExpectedControlResults {
+			if expectedControlResult.SampleCode == "*" {
+				expectedControlResultMatch = &expectedControlResult
+				break
+			}
+		}
+	}
+	// If we found any match, we apply the validation
+	if expectedControlResultMatch != nil {
+		isValid, err := calculateControlResultIsValid(controlResult.Result, *expectedControlResultMatch)
+		if err != nil {
+			return controlResult, err
+		}
+		controlResult.IsValid = isValid
+		controlResult.ExpectedControlResultId = utils.UUIDToNullUUID(expectedControlResultMatch.ID)
+		controlResult.IsComparedToExpectedResult = true
+	}
+	// Return the updated or default result
 	return controlResult, nil
 }
 
