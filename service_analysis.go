@@ -879,19 +879,27 @@ func (as *analysisService) ProcessStuckImagesToDEA(ctx context.Context) {
 	}
 
 	_ = utils.Partition(len(stuckImageIDs), stuckImageBatchSize, func(low int, high int) error {
-		images, err := as.analysisRepository.GetImagesForDEAUploadByIDs(ctx, stuckImageIDs[low:high])
+		imageDAOs, err := as.analysisRepository.GetImagesForDEAUploadByIDs(ctx, stuckImageIDs[low:high])
 		if err != nil {
 			return err
 		}
-
-		for _, image := range images {
-			deaImageID, err := as.deaClient.UploadImage(image.ImageBytes, image.Name)
-			if err != nil {
-				_ = as.analysisRepository.IncreaseImageUploadRetryCount(ctx, image.ID, err.Error())
-				continue
+		images := make([]*Image, len(imageDAOs))
+		for i := range imageDAOs {
+			images[i] = &Image{
+				ID: imageDAOs[i].ID,
+				ImageBytes: imageDAOs[i].ImageBytes,
+				Name:       imageDAOs[i].Name,
 			}
+		}
 
-			_ = as.analysisRepository.SaveDEAImageID(ctx, image.ID, deaImageID)
+		deaImageIDs, err := as.deaClient.UploadImages(images)
+		if err != nil {
+			_ = as.analysisRepository.IncreaseImageUploadRetryCount(ctx, stuckImageIDs[low:high], err.Error())
+			return err
+
+		}
+		for i := range deaImageIDs {
+			_ = as.analysisRepository.SaveDEAImageID(ctx, images[i].ID, deaImageIDs[i])
 		}
 
 		return nil
