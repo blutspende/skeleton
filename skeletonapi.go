@@ -178,7 +178,7 @@ func New(ctx context.Context, serviceName, displayName string, requestedExtraVal
 	messageOutOrderRepository := NewMessageOutOrderRepository(dbConn, dbSchema, config.MessageMaxRetries)
 	messageService := NewMessageService(deaClient, cerberusClient, messageInRepository, messageOutRepository, messageOutOrderRepository, serviceName, config.SampleSeenMessageFlushSeconds)
 
-	consoleLogService := NewConsoleLogService(cerberusClient)
+	consoleLogService := NewConsoleLogService(cerberusClient, config.ConsoleLogFlushSeconds)
 
 	longpollClient := NewLongPollClient(longPollingApiRestyClient, serviceName, config.CerberusURL, config.LongPollingAPIClientTimeoutSeconds, config.LongPollingReattemptWaitSeconds, config.LongPollingLoggingEnabled)
 

@@ -77,7 +77,7 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
 	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
 	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
-	consoleLogService := NewConsoleLogService(cerberusClientMock)
+	consoleLogService := NewConsoleLogService(cerberusClientMock, 30)
 	messageInRepository := NewMessageInRepository(dbConn, schemaName, 0, 0)
 	messageOutRepository := NewMessageOutRepository(dbConn, schemaName, 0, 0)
 	messageOutOrderRepository := NewMessageOutOrderRepository(dbConn, schemaName, 0)
@@ -168,7 +168,7 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
 	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
 	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
-	consoleLogService := NewConsoleLogService(cerberusClientMock)
+	consoleLogService := NewConsoleLogService(cerberusClientMock, 30)
 	messageInRepository := NewMessageInRepository(dbConn, schemaName, 0, 0)
 	messageOutRepository := NewMessageOutRepository(dbConn, schemaName, 0, 0)
 	messageOutOrderRepository := NewMessageOutOrderRepository(dbConn, schemaName, 0)
@@ -366,7 +366,7 @@ func TestAnalysisResultsReprocessing(t *testing.T) {
 	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
 	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
 	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
-	consoleLogService := NewConsoleLogService(cerberusClientMock)
+	consoleLogService := NewConsoleLogService(cerberusClientMock, 30)
 	messageInRepository := NewMessageInRepository(dbConn, schemaName, 0, 0)
 	messageOutRepository := NewMessageOutRepository(dbConn, schemaName, 0, 0)
 	messageOutOrderRepository := NewMessageOutOrderRepository(dbConn, schemaName, 0)
@@ -414,7 +414,7 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 	sortingRuleService := NewSortingRuleService(analysisRepositoryMock, conditionService, sortingRuleRepository)
 
 	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, skeletonManagerMock, NewInstrumentCache(), cerberusClientMock)
-	consoleLogService := NewConsoleLogService(cerberusClientMock)
+	consoleLogService := NewConsoleLogService(cerberusClientMock, 30)
 	messageInRepository := NewMessageInRepository(dbConn, schemaName, 0, 0)
 	messageOutRepository := NewMessageOutRepository(dbConn, schemaName, 0, 0)
 	messageOutOrderRepository := NewMessageOutOrderRepository(dbConn, schemaName, 0)
@@ -715,7 +715,7 @@ func TestSubmitAnalysisResultFieldValidations(t *testing.T) {
 	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
 	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
 	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
-	consoleLogService := NewConsoleLogService(cerberusClientMock)
+	consoleLogService := NewConsoleLogService(cerberusClientMock, 30)
 	messageInRepository := NewMessageInRepository(dbConn, schemaName, 0, 0)
 	messageOutRepository := NewMessageOutRepository(dbConn, schemaName, 0, 0)
 	messageOutOrderRepository := NewMessageOutOrderRepository(dbConn, schemaName, 0)
@@ -861,7 +861,7 @@ func TestSubmitControlResultsFieldValidations(t *testing.T) {
 	sortingRuleRepository := NewSortingRuleRepository(dbConn, schemaName)
 	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
 	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
-	consoleLogService := NewConsoleLogService(cerberusClientMock)
+	consoleLogService := NewConsoleLogService(cerberusClientMock, 30)
 	messageInRepository := NewMessageInRepository(dbConn, schemaName, 0, 0)
 	messageOutRepository := NewMessageOutRepository(dbConn, schemaName, 0, 0)
 	messageOutOrderRepository := NewMessageOutOrderRepository(dbConn, schemaName, 0)
@@ -1097,9 +1097,7 @@ func (m *cerberusClientMock) SyncAnalysisRequests(workItemIDs []uuid.UUID, syncT
 	return nil
 }
 
-func (m *cerberusClientMock) SendConsoleLog(instrumentId uuid.UUID, logLevel LogLevel, message string, messageType string) error {
-	return nil
-}
+func (m *cerberusClientMock) SendConsoleLog(consoleLogDTOs []ConsoleLogDTO) {}
 
 func (m *cerberusClientMock) RegisterManufacturerTests(driverName string, tests []supportedManufacturerTestTO) error {
 	return nil

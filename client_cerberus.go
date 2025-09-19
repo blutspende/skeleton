@@ -28,7 +28,7 @@ const (
 	MsgFailedToCallVerifyAPI                    = "Failed to call Cerberus API (/v1/instrument/verify)"
 	MsgFailedToCallExpectedControlResultsAPI    = "Failed to call Cerberus API (/v1/expected-control-results/verify)"
 	MsgFailedToCallSyncAPI                      = "Failed to call Cerberus API (/v1/instrument-drivers/analysis-requests/sync)"
-	MsgFailedToCallLogsAPI                      = "Failed to call Cerberus API (/v1/instruments/{instrumentId}/logs)"
+	MsgFailedToCallLogsAPI                      = "Failed to call Cerberus API (/v1/instruments/logs)"
 	MsgFailedToCallRegisterManufacturerTestsAPI = "Failed to call Cerberus API (/v1/instrument-drivers/manufacturer-tests)"
 	MsgFailedToCallSampleSeenAPI                = "Failed to call Cerberus API (/v1/instruments/sample-seen)"
 )
@@ -48,7 +48,7 @@ type CerberusClient interface {
 	VerifyInstrumentHash(hash string) error
 	VerifyExpectedControlResultsHash(hash string) error
 	SyncAnalysisRequests(workItemIDs []uuid.UUID, syncType string) error
-	SendConsoleLog(instrumentId uuid.UUID, logLevel LogLevel, message, messageType string) error
+	SendConsoleLog(consoleLogDTOs []ConsoleLogDTO)
 	SetInstrumentOnlineStatus(instrumentId uuid.UUID, status InstrumentStatus) error
 }
 
@@ -169,7 +169,7 @@ const (
 	Error LogLevel = "error"
 )
 
-type consoleLogDTO struct {
+type ConsoleLogDTO struct {
 	InstrumentID uuid.UUID `json:"instrumentId" swaggertype:"string" format:"uuid"`   // The instrument ID
 	CreatedAt    time.Time `json:"timestamp" swaggertype:"string" format:"date-time"` // The log timestamp
 	Level        LogLevel  `json:"messageCategory"`                                   // The log level
@@ -437,31 +437,21 @@ func (c *cerberusClient) SyncAnalysisRequests(workItemIDs []uuid.UUID, syncType 
 	return nil
 }
 
-func (c *cerberusClient) SendConsoleLog(instrumentId uuid.UUID, logLevel LogLevel, message, messageType string) error {
+func (c *cerberusClient) SendConsoleLog(consoleLogDTOs []ConsoleLogDTO) {
 	var errResponse clientError
 	resp, err := c.client.R().
 		SetHeader("Content-Type", "application/json").
-		SetBody(consoleLogDTO{
-			InstrumentID: instrumentId,
-			CreatedAt:    time.Now().UTC(),
-			Level:        logLevel,
-			Message:      message,
-			MessageType:  messageType,
-		}).
+		SetBody(consoleLogDTOs).
 		SetError(&errResponse).
-		Post(c.cerberusUrl + "/v1/instruments/" + instrumentId.String() + "/logs")
+		Post(c.cerberusUrl + "/v1/instruments/logs")
 
 	if err != nil {
-		log.Error().Err(err).Str("InstrumentId", instrumentId.String()).Msg(MsgFailedToCallLogsAPI)
-		return err
+		log.Error().Err(err).Msg(MsgFailedToCallLogsAPI)
 	}
 
 	if resp.IsError() {
-		log.Error().Str("Message", errResponse.Message).Str("InstrumentId", instrumentId.String()).Msg(MsgFailedToCallLogsAPI)
-		return errors.New(errResponse.Message)
+		log.Error().Str("Message", errResponse.Message).Msg(MsgFailedToCallLogsAPI)
 	}
-
-	return nil
 }
 
 func (c *cerberusClient) SetInstrumentOnlineStatus(instrumentId uuid.UUID, status InstrumentStatus) error {
