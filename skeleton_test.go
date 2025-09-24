@@ -1042,8 +1042,12 @@ func (m *deaClientMock) UploadInstrumentMessage(message SaveInstrumentMessageTO)
 	return uuid.Nil, nil
 }
 
-func (m *deaClientMock) UploadImage(fileData []byte, name string) (uuid.UUID, error) {
-	return uuid.New(), nil
+func (m *deaClientMock) UploadImages(images []*Image) ([]uuid.UUID, error) {
+	imageIDs := make([]uuid.UUID, len(images))
+	for i := range images {
+		imageIDs[i] = uuid.New()
+	}
+	return imageIDs, nil
 }
 
 type cerberusClientMock struct {
@@ -1407,7 +1411,7 @@ func (m *analysisRepositoryMock) GetImagesForCerberusSyncByIDs(ctx context.Conte
 func (m *analysisRepositoryMock) SaveDEAImageID(ctx context.Context, imageID, deaImageID uuid.UUID) error {
 	return nil
 }
-func (m *analysisRepositoryMock) IncreaseImageUploadRetryCount(ctx context.Context, imageID uuid.UUID, error string) error {
+func (m *analysisRepositoryMock) IncreaseImageUploadRetryCount(ctx context.Context, imageIDs []uuid.UUID, error string) error {
 	return nil
 }
 func (m *analysisRepositoryMock) MarkImagesAsSyncedToCerberus(ctx context.Context, ids []uuid.UUID) error {

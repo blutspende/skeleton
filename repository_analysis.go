@@ -447,7 +447,7 @@ type AnalysisRepository interface {
 	GetImagesForDEAUploadByIDs(ctx context.Context, ids []uuid.UUID) ([]imageDAO, error)
 	GetImagesForCerberusSyncByIDs(ctx context.Context, ids []uuid.UUID) ([]cerberusImageDAO, error)
 	SaveDEAImageID(ctx context.Context, imageID, deaImageID uuid.UUID) error
-	IncreaseImageUploadRetryCount(ctx context.Context, imageID uuid.UUID, error string) error
+	IncreaseImageUploadRetryCount(ctx context.Context, imageIDs []uuid.UUID, error string) error
 	MarkImagesAsSyncedToCerberus(ctx context.Context, ids []uuid.UUID) error
 
 	GetUnprocessedAnalysisRequests(ctx context.Context) ([]AnalysisRequest, error)
@@ -2968,10 +2968,14 @@ func (r *analysisRepository) SaveDEAImageID(ctx context.Context, imageID, deaIma
 	return nil
 }
 
-func (r *analysisRepository) IncreaseImageUploadRetryCount(ctx context.Context, imageID uuid.UUID, error string) error {
-	query := fmt.Sprintf(`UPDATE %s.sk_analysis_result_images SET upload_retry_count = upload_retry_count + 1, upload_error = $2 WHERE id = $1;`, r.dbSchema)
-
-	_, err := r.db.ExecContext(ctx, query, imageID, error)
+func (r *analysisRepository) IncreaseImageUploadRetryCount(ctx context.Context, imageIDs []uuid.UUID, error string) error {
+	if len(imageIDs) == 0 {
+		return nil
+	}
+	query := fmt.Sprintf(`UPDATE %s.sk_analysis_result_images SET upload_retry_count = upload_retry_count + 1, upload_error = ? WHERE id IN (?);`, r.dbSchema)
+	query, args, _ := sqlx.In(query, error, imageIDs)
+	query = r.db.Rebind(query)
+	_, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgIncreaseImageUploadRetryCountFailed)
 		return ErrIncreaseImageUploadRetryCountFailed

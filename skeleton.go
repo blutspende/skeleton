@@ -213,6 +213,9 @@ func (s *skeleton) saveImages(ctx context.Context, resultData *AnalysisResult) e
 	imagePtrs := make([]*Image, 0)
 	imageDaos := make([]imageDAO, 0)
 	for i := range resultData.Images {
+		if !strings.HasSuffix(resultData.Images[i].Name, ".jpg") && !strings.HasSuffix(resultData.Images[i].Name, ".png") {
+			resultData.Images[i].Name += ".jpg"
+		}
 		imageDao := imageDAO{
 			AnalysisResultID: resultData.ID,
 			Name:             resultData.Images[i].Name,
@@ -223,33 +226,12 @@ func (s *skeleton) saveImages(ctx context.Context, resultData *AnalysisResult) e
 				Valid:  true,
 			}
 		}
-		fileName := resultData.Images[i].Name
-		if !strings.HasSuffix(resultData.Images[i].Name, ".jpg") && !strings.HasSuffix(resultData.Images[i].Name, ".png") {
-			fileName += ".jpg"
-		}
-		id, err := s.deaClient.UploadImage(resultData.Images[i].ImageBytes, fileName)
-		if err != nil {
-			imageDao.ImageBytes = resultData.Images[i].ImageBytes
-			imageDao.UploadError = sql.NullString{
-				String: err.Error(),
-				Valid:  true,
-			}
-			log.Error().Err(err).Str("analysisResultID", resultData.ID.String()).Msg("upload image to dea failed")
-		} else {
-			imageDao.DeaImageID = uuid.NullUUID{
-				UUID:  id,
-				Valid: true,
-			}
-			imageDao.UploadedToDeaAt = sql.NullTime{
-				Time:  time.Now().UTC(),
-				Valid: true,
-			}
-		}
 		imagePtrs = append(imagePtrs, &resultData.Images[i])
 		imageDaos = append(imageDaos, imageDao)
 	}
 	for i := range resultData.ChannelResults {
 		for j := range resultData.ChannelResults[i].Images {
+			resultData.ChannelResults[i].Images[j].Name = fmt.Sprintf("%s_chres_%d_%d.jpg", resultData.ID.String(), i, j)
 			imageDao := imageDAO{
 				AnalysisResultID: resultData.ID,
 				ChannelResultID: uuid.NullUUID{
@@ -265,42 +247,47 @@ func (s *skeleton) saveImages(ctx context.Context, resultData *AnalysisResult) e
 				}
 			}
 
-			filename := fmt.Sprintf("%s_chres_%d_%d.jpg", resultData.ID.String(), i, j)
-			id, err := s.deaClient.UploadImage(resultData.ChannelResults[i].Images[j].ImageBytes, filename)
-			if err != nil {
-				imageDao.ImageBytes = resultData.ChannelResults[i].Images[j].ImageBytes
-				imageDao.UploadError = sql.NullString{
-					String: err.Error(),
-					Valid:  true,
-				}
-				log.Error().
-					Err(err).
-					Str("analysisResultID", resultData.ID.String()).
-					Str("channelResultID", resultData.ChannelResults[i].ID.String()).
-					Msg("upload image to dea failed")
-			} else {
-				imageDao.DeaImageID = uuid.NullUUID{
-					UUID:  id,
-					Valid: true,
-				}
-				imageDao.UploadedToDeaAt = sql.NullTime{
-					Time:  time.Now().UTC(),
-					Valid: true,
-				}
-			}
 			imagePtrs = append(imagePtrs, &resultData.ChannelResults[i].Images[j])
 			imageDaos = append(imageDaos, imageDao)
 		}
 	}
-	ids, err := s.analysisRepository.SaveImages(ctx, imageDaos)
-	if err != nil {
-		return err
-	}
-	for i := range ids {
-		imagePtrs[i].ID = ids[i]
-		imagePtrs[i].DeaImageID = imageDaos[i].DeaImageID
-	}
-	return nil
+
+	err := utils.Partition(len(imagePtrs), imageBatchSize, func(low int, high int) error {
+		deaIDs, err := s.deaClient.UploadImages(imagePtrs[low:high])
+		if err != nil {
+			for i := range imageDaos[low:high] {
+				imageDaos[low:high][i].ImageBytes = imagePtrs[low:high][i].ImageBytes
+				imageDaos[low:high][i].UploadError = sql.NullString{
+					String: err.Error(),
+					Valid:  true,
+				}
+			}
+			log.Error().Err(err).Interface("analysisResultID", resultData.ID).Msg("upload images to dea failed")
+		} else {
+			uploadTs := time.Now().UTC()
+			for i := range deaIDs {
+				imageDaos[low:high][i].DeaImageID = uuid.NullUUID{
+					UUID:  deaIDs[i],
+					Valid: true,
+				}
+				imageDaos[low:high][i].UploadedToDeaAt = sql.NullTime{
+					Time:  uploadTs,
+					Valid: true,
+				}
+			}
+		}
+		ids, err := s.analysisRepository.SaveImages(ctx, imageDaos[low:high])
+		if err != nil {
+			return err
+		}
+		for i := range ids {
+			imagePtrs[low:high][i].ID = ids[i]
+			imagePtrs[low:high][i].DeaImageID = imageDaos[low:high][i].DeaImageID
+		}
+		return nil
+	})
+
+	return err
 }
 
 func (s *skeleton) SaveControlResultImages(ctx context.Context, controlResult *ControlResult) error {
@@ -308,8 +295,10 @@ func (s *skeleton) SaveControlResultImages(ctx context.Context, controlResult *C
 		return nil
 	}
 	imageDaos := make([]controlResultImageDAO, 0)
+	imagePtrs := make([]*Image, 0)
 	for i := range controlResult.ChannelResults {
 		for j := range controlResult.ChannelResults[i].Images {
+			controlResult.ChannelResults[i].Images[j].Name = fmt.Sprintf("%s_control_chres_%d_%d.jpg", controlResult.ID.String(), i, j)
 			imageDao := controlResultImageDAO{
 				ControlResultId: controlResult.ID,
 				ChannelResultID: uuid.NullUUID{
@@ -324,38 +313,48 @@ func (s *skeleton) SaveControlResultImages(ctx context.Context, controlResult *C
 					Valid:  true,
 				}
 			}
-
-			filename := fmt.Sprintf("%s_control_chres_%d_%d.jpg", controlResult.ID.String(), i, j)
-			id, err := s.deaClient.UploadImage(controlResult.ChannelResults[i].Images[j].ImageBytes, filename)
-			if err != nil {
-				imageDao.ImageBytes = controlResult.ChannelResults[i].Images[j].ImageBytes
-				imageDao.UploadError = sql.NullString{
+			imageDaos = append(imageDaos, imageDao)
+			imagePtrs = append(imagePtrs, &controlResult.ChannelResults[i].Images[j])
+		}
+	}
+	err := utils.Partition(len(imagePtrs), imageBatchSize, func(low int, high int) error {
+		deaIDs, err := s.deaClient.UploadImages(imagePtrs[low:high])
+		if err != nil {
+			for i := range imageDaos[low:high] {
+				imageDaos[low:high][i].ImageBytes = imagePtrs[low:high][i].ImageBytes
+				imageDaos[low:high][i].UploadError = sql.NullString{
 					String: err.Error(),
 					Valid:  true,
 				}
-				log.Error().
-					Err(err).
-					Str("analysisResultID", controlResult.ID.String()).
-					Str("channelResultID", controlResult.ChannelResults[i].ID.String()).
-					Msg("upload image to dea failed")
-			} else {
-				imageDao.DeaImageID = uuid.NullUUID{
-					UUID:  id,
+			}
+			log.Error().
+				Err(err).
+				Str("controlResultID", controlResult.ID.String()).
+				Msg("upload images to dea failed")
+		} else {
+			uploadTs := time.Now().UTC()
+			for i := range deaIDs {
+				imageDaos[low:high][i].DeaImageID = uuid.NullUUID{
+					UUID:  deaIDs[i],
 					Valid: true,
 				}
-				imageDao.UploadedToDeaAt = sql.NullTime{
-					Time:  time.Now().UTC(),
+				imageDaos[low:high][i].UploadedToDeaAt = sql.NullTime{
+					Time:  uploadTs,
 					Valid: true,
 				}
 			}
-			imageDaos = append(imageDaos, imageDao)
 		}
-	}
-	_, err := s.analysisRepository.SaveControlResultImages(ctx, imageDaos)
-	if err != nil {
-		return err
-	}
-	return nil
+		ids, err := s.analysisRepository.SaveControlResultImages(ctx, imageDaos[low:high])
+		if err != nil {
+			return err
+		}
+		for i := range ids {
+			imagePtrs[low:high][i].ID = ids[i]
+			imagePtrs[low:high][i].DeaImageID = imageDaos[low:high][i].DeaImageID
+		}
+		return nil
+	})
+	return err
 }
 
 func (s *skeleton) GetAnalysisResultIdsWithoutControlByReagent(ctx context.Context, controlResult ControlResult, reagent Reagent) ([]uuid.UUID, error) {

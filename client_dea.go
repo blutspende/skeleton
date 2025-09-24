@@ -19,7 +19,7 @@ var (
 
 type DeaClientV1 interface {
 	RegisterSampleCodes(messageID uuid.UUID, sampleCodes []string) error
-	UploadImage(fileData []byte, name string) (uuid.UUID, error)
+	UploadImages(images []*Image) (imageIDs []uuid.UUID, err error)
 	UploadInstrumentMessage(message SaveInstrumentMessageTO) (uuid.UUID, error)
 }
 
@@ -61,7 +61,7 @@ func (dea *deaClientV1) RegisterSampleCodes(messageID uuid.UUID, sampleCodes []s
 	return nil
 }
 
-func (dea *deaClientV1) UploadImage(fileData []byte, name string) (imageID uuid.UUID, err error) {
+func (dea *deaClientV1) UploadImages(images []*Image) (imageIDs []uuid.UUID, err error) {
 	// TODO - as soon as Resty v3 is released, remove this.
 	// When the service 2 service auth retry mechanism triggers, but OIDC provider is not available (response is nil),
 	// and the request has multi-part form data that is wrapped in an io.Reader that needs to be reset,
@@ -73,27 +73,36 @@ func (dea *deaClientV1) UploadImage(fileData []byte, name string) (imageID uuid.
 			err = panicErr
 		}
 	}()
+
+	multipartFields := make([]*resty.MultipartField, len(images))
+	for i := range images {
+		multipartFields[i] = &resty.MultipartField{
+			Param:    "file",
+			FileName: images[i].Name,
+			Reader:   bytes.NewReader(images[i].ImageBytes),
+		}
+	}
+	var response []fileSavedResponseItem
 	var resp *resty.Response
 	resp, err = dea.client.R().
-		SetFileReader("file", name, bytes.NewReader(fileData)).
-		Post(dea.deaUrl + "/v1/image/upload")
+		SetMultipartFields(multipartFields...).
+		SetResult(&response).
+		Post(dea.deaUrl + "/v1/image/batch")
 	if err != nil {
 		log.Error().Err(err).Msg("Can not call internal dea api")
 		return
 	}
 	if resp == nil {
-		return uuid.Nil, ErrUploadImageToDEAFailed
+		return nil, ErrUploadImageToDEAFailed
 	}
 
-	if resp.StatusCode() != http.StatusOK {
-		log.Error().Int("lenOfFileBytes", len(fileData)).Str("responseBody", string(resp.Body())).Msg("Invalid request to dea")
-		return uuid.Nil, fmt.Errorf("can not upload image. Invalid request data: %s", string(resp.Body()))
+	if resp.StatusCode() != http.StatusCreated {
+		log.Error().Str("responseBody", string(resp.Body())).Msg("Invalid request to dea")
+		return nil, fmt.Errorf("can not upload images. Invalid request data: %s", string(resp.Body()))
 	}
-
-	imageID, err = uuid.Parse(string(resp.Body()))
-	if err != nil {
-		log.Error().Err(err).Str("responseBody", string(resp.Body())).Msg("Can not parse bytes into uuid.")
-		return
+	imageIDs = make([]uuid.UUID, len(response))
+	for i := range response {
+		imageIDs[i] = response[i].ID
 	}
 
 	return
@@ -130,4 +139,9 @@ type SaveInstrumentMessageTO struct {
 	IsIncoming         bool          `json:"isIncoming"`
 	Raw                string        `json:"raw"`
 	ReceivedAt         time.Time     `json:"receivedAt"`
+}
+
+type fileSavedResponseItem struct {
+	ID       uuid.UUID `json:"id"`
+	FileName string    `json:"fileName"`
 }
