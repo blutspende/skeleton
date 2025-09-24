@@ -720,6 +720,7 @@ func (s *skeleton) Start() error {
 	for i := 0; i < s.config.AnalysisRequestWorkerPoolSize; i++ {
 		go s.processAnalysisRequests(s.ctx)
 	}
+	go s.consoleLogService.StartConsoleLogSending(s.ctx)
 	go s.messageService.StartDEAArchiving(s.ctx, s.config.MessageMaxRetries)
 	go s.messageService.StartSampleSeenRegisteringToCerberus(s.ctx)
 	go s.messageService.StartSampleCodeRegisteringToDEA(s.ctx)
