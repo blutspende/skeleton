@@ -18,6 +18,7 @@ type MessageOutOrderRepository interface {
 	AddAnalysisRequestsToMessageOutOrder(ctx context.Context, messageOutOrderID uuid.UUID, analysisRequestIDs []uuid.UUID) error
 	GetBySampleCodesAndRequestMappingIDs(ctx context.Context, sampleCodes []string, instrumentID uuid.UUID, includePending bool) (map[string]map[uuid.UUID][]MessageOutOrder, error)
 	GetTestCodesToRevokeBySampleCodes(ctx context.Context, instrumentID uuid.UUID, analysisRequestIDs []uuid.UUID) (map[string][]string, error)
+	GetTestCodesToCancelBySampleCodes(ctx context.Context, instrumentID uuid.UUID, analysisRequestIDs []uuid.UUID) (map[string][]string, error)
 	CreateTransaction() (db.DbConnection, error)
 
 	WithTransaction(tx db.DbConnection) MessageOutOrderRepository
@@ -165,6 +166,42 @@ func (r *messageOutOrderRepository) GetTestCodesToRevokeBySampleCodes(ctx contex
 	return testCodesBySampleCodes, nil
 }
 
+func (r *messageOutOrderRepository) GetTestCodesToCancelBySampleCodes(ctx context.Context, instrumentID uuid.UUID, analysisRequestIDs []uuid.UUID) (map[string][]string, error) {
+	if len(analysisRequestIDs) == 0 {
+		return nil, nil
+	}
+	query := `SELECT DISTINCT srm.code, smoo.sample_code FROM %schema_name%.sk_message_out smo
+				INNER JOIN %schema_name%.sk_message_out_orders smoo ON smo.id = smoo.message_out_id
+				INNER JOIN %schema_name%.sk_request_mappings srm ON srm.id = smoo.request_mapping_id
+				INNER JOIN %schema_name%.sk_message_out_order_analysis_requests smooar on smoo.id = smooar.message_out_order_id
+					WHERE smo.instrument_id = ? AND smo.status = ? AND smooar.analysis_request_id IN (?);`
+	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
+	query, args, _ := sqlx.In(query, instrumentID, messagestatus.Sent, analysisRequestIDs)
+	query = r.db.Rebind(query)
+	rows, err := r.db.QueryxContext(ctx, query, args...)
+	if err != nil {
+		log.Error().Err(err).Msg(msgGetTestCodesToCancelBySampleCodesFailed)
+		return nil, ErrGetTestCodesToCancelBySampleCodesFailed
+	}
+	defer rows.Close()
+
+	testCodesBySampleCodes := make(map[string][]string)
+	for rows.Next() {
+		var testCode, sampleCode string
+		err = rows.Scan(&testCode, &sampleCode)
+		if err != nil {
+			log.Error().Err(err).Msg(msgGetTestCodesToCancelBySampleCodesFailed)
+			return nil, ErrGetTestCodesToCancelBySampleCodesFailed
+		}
+		if _, ok := testCodesBySampleCodes[sampleCode]; !ok {
+			testCodesBySampleCodes[sampleCode] = make([]string, 0)
+		}
+		testCodesBySampleCodes[sampleCode] = append(testCodesBySampleCodes[sampleCode], testCode)
+	}
+
+	return testCodesBySampleCodes, nil
+}
+
 func (r *messageOutOrderRepository) CreateTransaction() (db.DbConnection, error) {
 	return r.db.CreateTransactionConnector()
 }
@@ -221,6 +258,7 @@ const (
 	msgCreateMessageOutOrderBatchFailed                           = "create message out order failed"
 	msgAddAnalysisRequestsToMessageOutOrderFailed                 = "add analysis requests to message out order failed"
 	msgGetTestCodesToRevokeBySampleCodesFailed                    = "get test codes to revoke by sample codes failed"
+	msgGetTestCodesToCancelBySampleCodesFailed                    = "get test codes to cancel by sample codes failed"
 	msgGetMessageOutOrdersBySampleCodesAndRequestMappingIDsFailed = "get message out orders by sample codes and analyte IDs failed"
 )
 
@@ -228,5 +266,6 @@ var (
 	ErrCreateMessageOutOrderBatchFailed                           = errors.New(msgCreateMessageOutOrderBatchFailed)
 	ErrAddAnalysisRequestsToMessageOutOrderFailed                 = errors.New(msgAddAnalysisRequestsToMessageOutOrderFailed)
 	ErrGetTestCodesToRevokeBySampleCodesFailed                    = errors.New(msgGetTestCodesToRevokeBySampleCodesFailed)
+	ErrGetTestCodesToCancelBySampleCodesFailed                    = errors.New(msgGetTestCodesToCancelBySampleCodesFailed)
 	ErrGetMessageOutOrdersBySampleCodesAndRequestMappingIDsFailed = errors.New(msgGetMessageOutOrdersBySampleCodesAndRequestMappingIDsFailed)
 )

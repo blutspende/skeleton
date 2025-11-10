@@ -608,6 +608,10 @@ func (s *skeleton) GetTestCodesToRevokeBySampleCodes(ctx context.Context, instru
 	return s.messageService.GetTestCodesToRevokeBySampleCodes(ctx, instrumentID, analysisRequestIDs)
 }
 
+func (s *skeleton) GetTestCodesToCancelBySampleCodes(ctx context.Context, instrumentID uuid.UUID, analysisRequestIDs []uuid.UUID) (map[string][]string, error) {
+	return s.messageService.GetTestCodesToCancelBySampleCodes(ctx, instrumentID, analysisRequestIDs)
+}
+
 func (s *skeleton) GetMessageOutOrdersBySampleCodesAndRequestMappingIDs(ctx context.Context, sampleCodes []string, instrumentID uuid.UUID, includePending bool) (map[string]map[uuid.UUID][]MessageOutOrder, error) {
 	return s.messageService.GetMessageOutOrdersBySampleCodesAndRequestMappingIDs(ctx, sampleCodes, instrumentID, includePending)
 }
