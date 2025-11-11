@@ -90,6 +90,9 @@ type SkeletonAPI interface {
 	// GetTestCodesToRevokeBySampleCodes - returns a map where the key is the sample code, and the values are the test codes that need
 	// to be revoked as per the provided analysis request IDs
 	GetTestCodesToRevokeBySampleCodes(ctx context.Context, instrumentID uuid.UUID, analysisRequestIDs []uuid.UUID) (map[string][]string, error)
+	// GetTestCodesToCancelBySampleCodes - returns a map where the key is the sample code, and the values are the test codes that need
+	// to be canceled as per the provided analysis request IDs
+	GetTestCodesToCancelBySampleCodes(ctx context.Context, instrumentID uuid.UUID, analysisRequestIDs []uuid.UUID) (map[string][]string, error)
 	// GetMessageOutOrdersBySampleCodesAndRequestMappingIDs - returns all existing orders belonging to a MessageOut for the provided instrument, organized by sample codes and request mapping IDs.
 	// If the includePending parameter is set to true, orders are included where the message has not been sent out yet
 	GetMessageOutOrdersBySampleCodesAndRequestMappingIDs(ctx context.Context, sampleCodes []string, instrumentID uuid.UUID, includePending bool) (map[string]map[uuid.UUID][]MessageOutOrder, error)

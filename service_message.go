@@ -30,6 +30,7 @@ type MessageService interface {
 	UpdateMessageOut(ctx context.Context, message MessageOut) error
 	GetMessageOutOrdersBySampleCodesAndRequestMappingIDs(ctx context.Context, sampleCodes []string, instrumentID uuid.UUID, includePending bool) (map[string]map[uuid.UUID][]MessageOutOrder, error)
 	GetTestCodesToRevokeBySampleCodes(ctx context.Context, instrumentID uuid.UUID, analysisRequestIDs []uuid.UUID) (map[string][]string, error)
+	GetTestCodesToCancelBySampleCodes(ctx context.Context, instrumentID uuid.UUID, analysisRequestIDs []uuid.UUID) (map[string][]string, error)
 	EnqueueMessageInsForArchiving(messages ...MessageIn)
 	EnqueueMessageOutsForArchiving(messages ...MessageOut)
 	StartDEAArchiving(ctx context.Context, maxRetries int)
@@ -224,6 +225,10 @@ func (s *messageService) GetMessageOutOrdersBySampleCodesAndRequestMappingIDs(ct
 
 func (s *messageService) GetTestCodesToRevokeBySampleCodes(ctx context.Context, instrumentID uuid.UUID, analysisRequestIDs []uuid.UUID) (map[string][]string, error) {
 	return s.messageOutOrderRepository.GetTestCodesToRevokeBySampleCodes(ctx, instrumentID, analysisRequestIDs)
+}
+
+func (s *messageService) GetTestCodesToCancelBySampleCodes(ctx context.Context, instrumentID uuid.UUID, analysisRequestIDs []uuid.UUID) (map[string][]string, error) {
+	return s.messageOutOrderRepository.GetTestCodesToCancelBySampleCodes(ctx, instrumentID, analysisRequestIDs)
 }
 
 func (s *messageService) EnqueueMessageInsForArchiving(messages ...MessageIn) {

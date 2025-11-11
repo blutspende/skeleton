@@ -243,6 +243,10 @@ func (sr *SkeletonTestRig) GetTestCodesToRevokeBySampleCodes(ctx context.Context
 	return nil, nil
 }
 
+func (sr *SkeletonTestRig) GetTestCodesToCancelBySampleCodes(ctx context.Context, instrumentID uuid.UUID, analysisRequestIDs []uuid.UUID) (map[string][]string, error) {
+	return nil, nil
+}
+
 func (sr *SkeletonTestRig) GetMessageOutOrdersBySampleCodesAndRequestMappingIDs(ctx context.Context, sampleCodes []string, instrumentID uuid.UUID, includePending bool) (map[string]map[uuid.UUID][]MessageOutOrder, error) {
 	messageOutOrdersBySampleCodesAndRequestMappingIDs := make(map[string]map[uuid.UUID][]MessageOutOrder)
 	for _, m := range sr.MessageOutOrders {
