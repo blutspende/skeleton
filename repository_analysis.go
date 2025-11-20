@@ -93,7 +93,8 @@ const (
 	msgDeleteAnalysisResultWarningsFailed                            = "Delete analysis result warnings failed"
 	msgDeleteImagesByAnalysisResultIdsFailed                         = "Delete images by analysis result IDs failed"
 	msgDeleteAnalysisResultExtraValuesByAnalysisResultIdsFailed      = "Delete analysis result extra values by analysis result IDs failed"
-	msgDeleteReagentInfosByAnalysisResultIdsFailed                   = "Delete reagent infos by analysis result IDs failed"
+	msgDeleteReagentRelationsByAnalysisResultIdsFailed               = "Delete reagent relations by analysis result IDs failed"
+	msgDeleteControlResultRelationsByAnalysisResultIdsFailed         = "Delete control result relations by analysis result IDs failed"
 	msgGetCerberusQueueItemsFailed                                   = "Get cerberus queue items failed"
 	msgUpdateCerberusQueueItemStatusFailed                           = "Update cerberus queue item status failed"
 	msgUnprocessedAnalysisResultIdsFailed                            = "Get unprocessed analysis result ids failed"
@@ -180,7 +181,8 @@ var (
 	ErrDeleteAnalysisResultWarningsFailed                            = errors.New(msgDeleteAnalysisResultWarningsFailed)
 	ErrDeleteImagesByAnalysisResultIdsFailed                         = errors.New(msgDeleteImagesByAnalysisResultIdsFailed)
 	ErrDeleteAnalysisResultExtraValuesByAnalysisResultIdsFailed      = errors.New(msgDeleteAnalysisResultExtraValuesByAnalysisResultIdsFailed)
-	ErrDeleteReagentInfosByAnalysisResultIdsFailed                   = errors.New(msgDeleteReagentInfosByAnalysisResultIdsFailed)
+	ErrDeleteReagentRelationsByAnalysisResultIdsFailed               = errors.New(msgDeleteReagentRelationsByAnalysisResultIdsFailed)
+	ErrDeleteControlResultRelationsByAnalysisResultIdsFailed         = errors.New(msgDeleteControlResultRelationsByAnalysisResultIdsFailed)
 	ErrGetCerberusQueueItemsFailed                                   = errors.New(msgGetCerberusQueueItemsFailed)
 	ErrUpdateCerberusQueueItemStatusFailed                           = errors.New(msgUpdateCerberusQueueItemStatusFailed)
 	ErrUnprocessedAnalysisResultIdsFailed                            = errors.New(msgUnprocessedAnalysisResultIdsFailed)
@@ -2505,7 +2507,11 @@ func (r *analysisRepository) DeleteOldAnalysisResultsWithTx(ctx context.Context,
 	if err != nil {
 		return 0, err
 	}
-	err = txR.deleteReagentInfosByAnalysisResultIDs(ctx, analysisResultIDs)
+	err = txR.deleteReagentRelationsByAnalysisResultIDs(ctx, analysisResultIDs)
+	if err != nil {
+		return 0, err
+	}
+	err = txR.deleteControlResultRelationsByAnalysisResultIDs(ctx, analysisResultIDs)
 	if err != nil {
 		return 0, err
 	}
@@ -2649,19 +2655,40 @@ func (r *analysisRepository) deleteAnalysisResultExtraValuesByAnalysisResultIDs(
 	return err
 }
 
-func (r *analysisRepository) deleteReagentInfosByAnalysisResultIDs(ctx context.Context, analysisResultIDs []uuid.UUID) error {
+func (r *analysisRepository) deleteReagentRelationsByAnalysisResultIDs(ctx context.Context, analysisResultIDs []uuid.UUID) error {
 	if len(analysisResultIDs) == 0 {
 		return nil
 	}
 
 	err := utils.Partition(len(analysisResultIDs), maxParams, func(low int, high int) error {
-		query := fmt.Sprintf("DELETE FROM %s.sk_analysis_result_reagent_infos WHERE analysis_result_id IN (?);", r.dbSchema)
+		query := fmt.Sprintf("DELETE FROM %s.sk_analysis_result_reagent_relations WHERE analysis_result_id IN (?);", r.dbSchema)
 		query, args, _ := sqlx.In(query, analysisResultIDs[low:high])
 		query = r.db.Rebind(query)
 		_, err := r.db.ExecContext(ctx, query, args...)
 		if err != nil {
-			log.Error().Err(err).Msg(msgDeleteReagentInfosByAnalysisResultIdsFailed)
-			return ErrDeleteReagentInfosByAnalysisResultIdsFailed
+			log.Error().Err(err).Msg(msgDeleteReagentRelationsByAnalysisResultIdsFailed)
+			return ErrDeleteReagentRelationsByAnalysisResultIdsFailed
+		}
+
+		return nil
+	})
+
+	return err
+}
+
+func (r *analysisRepository) deleteControlResultRelationsByAnalysisResultIDs(ctx context.Context, analysisResultIDs []uuid.UUID) error {
+	if len(analysisResultIDs) == 0 {
+		return nil
+	}
+
+	err := utils.Partition(len(analysisResultIDs), maxParams, func(low int, high int) error {
+		query := fmt.Sprintf("DELETE FROM %s.sk_analysis_result_control_result_relations WHERE analysis_result_id IN (?);", r.dbSchema)
+		query, args, _ := sqlx.In(query, analysisResultIDs[low:high])
+		query = r.db.Rebind(query)
+		_, err := r.db.ExecContext(ctx, query, args...)
+		if err != nil {
+			log.Error().Err(err).Msg(msgDeleteControlResultRelationsByAnalysisResultIdsFailed)
+			return ErrDeleteControlResultRelationsByAnalysisResultIdsFailed
 		}
 
 		return nil
