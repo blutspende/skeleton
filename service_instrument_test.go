@@ -284,7 +284,7 @@ func TestUpdateInstrument(t *testing.T) {
 		Status:             "TestStatus",
 		Encoding:           "UTF8",
 		TimeZone:           "Europe/Berlin",
-		Hostname:           "TestHost",
+		Hostname:           "127.0.0.1",
 		ClientPort:         &clientPort,
 	}
 	instrumentID, err := instrumentService.CreateInstrument(ctx, instr)
@@ -317,7 +317,7 @@ func TestUpdateInstrument(t *testing.T) {
 		Status:             "TestStatus",
 		Encoding:           "UTF8",
 		TimeZone:           "Europe/Berlin",
-		Hostname:           "TestHost",
+		Hostname:           "127.0.0.1",
 		ClientPort:         &clientPort,
 		AnalyteMappings: []AnalyteMapping{
 			{
@@ -455,7 +455,7 @@ func TestUpdateInstrument(t *testing.T) {
 		Status:             "TestStatus",
 		Encoding:           "UTF8",
 		TimeZone:           "Europe/Berlin",
-		Hostname:           "TestHost",
+		Hostname:           "127.0.0.1",
 		ClientPort:         &clientPort,
 		AnalyteMappings: []AnalyteMapping{
 			{
@@ -659,7 +659,7 @@ func TestNotVerifiedInstrument(t *testing.T) {
 		Status:             "TestStatus",
 		Encoding:           "UTF8",
 		TimeZone:           "Europe/Berlin",
-		Hostname:           "TestHost",
+		Hostname:           "127.0.0.1",
 		ClientPort:         &clientPort,
 	}
 	_, err = instrumentService.CreateInstrument(ctx, instr)
@@ -1091,7 +1091,7 @@ func TestNotVerifiedExpectedControlResults(t *testing.T) {
 	assert.Empty(t, ecrs)
 }
 
-func TestTrimHostname(t *testing.T) {
+func TestTrimAndValidateHostname(t *testing.T) {
 	dbConn, schemaName, _, _ := setupDbConnectorAndRunMigration("instrument_test")
 
 	cerberusClientMock := &cerberusClientMock{
@@ -1134,15 +1134,20 @@ func TestTrimHostname(t *testing.T) {
 		Status:             "TestStatus",
 		Encoding:           "UTF8",
 		TimeZone:           "Europe/Berlin",
-		Hostname:           "                \t\n   TestHostWithWhiteSpaces    \t\n     ",
+		Hostname:           "                \t\n   NotAValidIPAddress    \t\n     ",
 		ClientPort:         &clientPort,
 	}
 	instrumentID, err := instrumentService.CreateInstrument(ctx, instr)
+	assert.NotNil(t, err)
+	assert.Equal(t, ErrInvalidIPAddress, err)
+
+	instr.Hostname = "                  \t\n    127.0.0.1              \t\n           "
+	instrumentID, err = instrumentService.CreateInstrument(ctx, instr)
 	assert.Nil(t, err)
 
 	instrument, err := instrumentService.GetInstrumentByID(ctx, nil, instrumentID, false)
 	assert.Nil(t, err)
-	assert.Equal(t, "TestHostWithWhiteSpaces", instrument.Hostname)
+	assert.Equal(t, "127.0.0.1", instrument.Hostname)
 
 	instr = Instrument{
 		ID:                 instrumentID,
@@ -1159,15 +1164,19 @@ func TestTrimHostname(t *testing.T) {
 		Status:             "TestStatus",
 		Encoding:           "UTF8",
 		TimeZone:           "Europe/Berlin",
-		Hostname:           "\n\t                 TestHostWithWhiteSpaces2                    \n\t",
+		Hostname:           "\n\t                 InvalidIPAddressAgain                    \n\t",
 		ClientPort:         &clientPort,
 	}
 	err = instrumentService.UpdateInstrument(ctx, instr, uuid.MustParse("9d5fb5e9-65a1-4479-8f82-25b04145bfe1"))
-	assert.Nil(t, err)
+	assert.NotNil(t, err)
+	assert.Equal(t, ErrInvalidIPAddress, err)
 
+	instr.Hostname = "\n\t                 ::1                    \n\t"
+	err = instrumentService.UpdateInstrument(ctx, instr, uuid.MustParse("9d5fb5e9-65a1-4479-8f82-25b04145bfe1"))
+	assert.Nil(t, err)
 	instrument, err = instrumentService.GetInstrumentByID(ctx, nil, instrumentID, false)
 	assert.Nil(t, err)
-	assert.Equal(t, "TestHostWithWhiteSpaces2", instrument.Hostname)
+	assert.Equal(t, "::1", instrument.Hostname)
 }
 
 type instrumentRepositoryMock struct {

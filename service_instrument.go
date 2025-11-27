@@ -2,11 +2,17 @@ package skeleton
 
 import (
 	"context"
+	"errors"
+	"net"
 
 	"github.com/blutspende/skeleton/db"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"strings"
+)
+
+var (
+	ErrInvalidIPAddress = errors.New("invalid IP address")
 )
 
 type InstrumentService interface {
@@ -55,11 +61,15 @@ func NewInstrumentService(
 }
 
 func (s *instrumentService) CreateInstrument(ctx context.Context, instrument Instrument) (uuid.UUID, error) {
+	instrument.Hostname = strings.TrimSpace(instrument.Hostname)
+	ip := net.ParseIP(instrument.Hostname)
+	if ip == nil {
+		return uuid.Nil, ErrInvalidIPAddress
+	}
 	transaction, err := s.instrumentRepository.CreateTransaction()
 	if err != nil {
 		return uuid.Nil, err
 	}
-	instrument.Hostname = strings.TrimSpace(instrument.Hostname)
 	id, err := s.instrumentRepository.WithTransaction(transaction).CreateInstrument(ctx, instrument)
 	if err != nil {
 		_ = transaction.Rollback()
@@ -574,6 +584,11 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 	}
 
 	instrument.Hostname = strings.TrimSpace(instrument.Hostname)
+	ip := net.ParseIP(instrument.Hostname)
+	if ip == nil {
+		_ = tx.Rollback()
+		return ErrInvalidIPAddress
+	}
 	err = s.instrumentRepository.WithTransaction(tx).UpdateInstrument(ctx, instrument)
 	if err != nil {
 		_ = tx.Rollback()
