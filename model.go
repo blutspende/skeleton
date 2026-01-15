@@ -133,7 +133,7 @@ type ConnectionMode string
 const (
 	TCPClientMode ConnectionMode = "TCP_CLIENT_ONLY"
 	TCPServerMode ConnectionMode = "TCP_SERVER_ONLY"
-	FTP           ConnectionMode = "FTP_SFTP"
+	FileServer    ConnectionMode = "FILE_SERVER"
 	HTTP          ConnectionMode = "HTTP"
 	TCPMixed      ConnectionMode = "TCP_MIXED"
 )
@@ -155,7 +155,7 @@ type Instrument struct {
 	TimeZone           timezone.TimeZone
 	Hostname           string
 	ClientPort         *int
-	FTPConfig          *FTPConfig
+	FileServerConfig   *FileServerConfig
 	AnalyteMappings    []AnalyteMapping
 	RequestMappings    []RequestMapping
 	SortingRules       []SortingRule
@@ -165,7 +165,7 @@ type Instrument struct {
 	DeletedAt          *time.Time
 }
 
-type FTPConfig struct {
+type FileServerConfig struct {
 	ID               uuid.UUID
 	InstrumentId     uuid.UUID
 	Username         string
@@ -176,10 +176,18 @@ type FTPConfig struct {
 	ResultPath       string
 	ResultFileMask   string
 	ResultFileSuffix string
-	FtpServerType    string
+	ServerType       FileServerType
 	CreatedAt        time.Time
 	DeletedAt        *time.Time
 }
+
+type FileServerType string
+
+const (
+	FTP    FileServerType = "FTP"
+	SFTP   FileServerType = "SFTP"
+	WebDAV FileServerType = "WEBDAV"
+)
 
 type AnalyteMapping struct {
 	ID                     uuid.UUID

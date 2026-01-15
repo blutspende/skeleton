@@ -3,16 +3,16 @@ package skeleton
 import (
 	"context"
 	"errors"
-	"net"
-
 	"github.com/blutspende/skeleton/db"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
+	"net"
+	"regexp"
 	"strings"
 )
 
 var (
-	ErrInvalidIPAddress = errors.New("invalid IP address")
+	ErrInvalidHostName = errors.New("invalid host name")
 )
 
 type InstrumentService interface {
@@ -60,11 +60,13 @@ func NewInstrumentService(
 	return service
 }
 
+var urlRegex = regexp.MustCompile("[(http(s)?):\\/\\/(www\\.)?a-zA-Z0-9@:%._\\+~#=]{2,256}\\.[a-z]{2,6}\\b([-a-zA-Z0-9@:%_\\+.~#?&//=]*)")
+
 func (s *instrumentService) CreateInstrument(ctx context.Context, instrument Instrument) (uuid.UUID, error) {
 	instrument.Hostname = strings.TrimSpace(instrument.Hostname)
 	ip := net.ParseIP(instrument.Hostname)
-	if ip == nil {
-		return uuid.Nil, ErrInvalidIPAddress
+	if ip == nil && !urlRegex.MatchString(instrument.Hostname) {
+		return uuid.Nil, ErrInvalidHostName
 	}
 	transaction, err := s.instrumentRepository.CreateTransaction()
 	if err != nil {
@@ -76,9 +78,9 @@ func (s *instrumentService) CreateInstrument(ctx context.Context, instrument Ins
 		return uuid.Nil, err
 	}
 
-	if instrument.ConnectionMode == FTP && instrument.FTPConfig != nil {
-		instrument.FTPConfig.InstrumentId = id
-		err = s.instrumentRepository.WithTransaction(transaction).CreateFtpConfig(ctx, *instrument.FTPConfig)
+	if instrument.ConnectionMode == FileServer && instrument.FileServerConfig != nil {
+		instrument.FileServerConfig.InstrumentId = id
+		err = s.instrumentRepository.WithTransaction(transaction).CreateFileServerConfig(ctx, *instrument.FileServerConfig)
 		if err != nil {
 			_ = transaction.Rollback()
 			return uuid.Nil, err
@@ -199,11 +201,11 @@ func (s *instrumentService) GetInstruments(ctx context.Context) ([]Instrument, e
 		}
 		instruments[i].ProtocolName = protocol.Name
 
-		if instruments[i].ConnectionMode == FTP {
-			ftpConfig, err := s.instrumentRepository.GetFtpConfigByInstrumentId(ctx, instruments[i].ID)
+		if instruments[i].ConnectionMode == FileServer {
+			fileServerConfig, err := s.instrumentRepository.GetFileServerConfigByInstrumentId(ctx, instruments[i].ID)
 			if err == nil {
-				instruments[i].FTPConfig = &ftpConfig
-			} else if err != nil && err != ErrFtpConfigNotFound {
+				instruments[i].FileServerConfig = &fileServerConfig
+			} else if err != nil && err != ErrFileServerConfigNotFound {
 				return instruments, err
 			}
 		}
@@ -322,11 +324,11 @@ func (s *instrumentService) GetInstrumentByID(ctx context.Context, tx db.DbConne
 		return instrument, err
 	}
 
-	if instrument.ConnectionMode == FTP {
-		ftpConf, err := s.instrumentRepository.WithTransaction(tx).GetFtpConfigByInstrumentId(ctx, instrument.ID)
+	if instrument.ConnectionMode == FileServer {
+		fileServerConfig, err := s.instrumentRepository.WithTransaction(tx).GetFileServerConfigByInstrumentId(ctx, instrument.ID)
 		if err == nil {
-			instrument.FTPConfig = &ftpConf
-		} else if err != nil && err != ErrFtpConfigNotFound {
+			instrument.FileServerConfig = &fileServerConfig
+		} else if err != nil && err != ErrFileServerConfigNotFound {
 			return instrument, err
 		}
 	}
@@ -441,11 +443,11 @@ func (s *instrumentService) GetInstrumentByIP(ctx context.Context, ip string) (I
 		return instrument, err
 	}
 
-	if instrument.ConnectionMode == FTP {
-		ftpConf, err := s.instrumentRepository.GetFtpConfigByInstrumentId(ctx, instrument.ID)
+	if instrument.ConnectionMode == FileServer {
+		fileServerConfig, err := s.instrumentRepository.GetFileServerConfigByInstrumentId(ctx, instrument.ID)
 		if err == nil {
-			instrument.FTPConfig = &ftpConf
-		} else if err != nil && err != ErrFtpConfigNotFound {
+			instrument.FileServerConfig = &fileServerConfig
+		} else if err != nil && err != ErrFileServerConfigNotFound {
 			return instrument, err
 		}
 	}
@@ -561,22 +563,22 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 		return err
 	}
 
-	if instrument.ConnectionMode == FTP && instrument.FTPConfig != nil {
-		err = s.instrumentRepository.WithTransaction(tx).DeleteFtpConfig(ctx, instrument.ID)
+	if instrument.ConnectionMode == FileServer && instrument.FileServerConfig != nil {
+		err = s.instrumentRepository.WithTransaction(tx).DeleteFileServerConfig(ctx, instrument.ID)
 		if err != nil {
 			_ = tx.Rollback()
 			return err
 		}
 
-		err = s.instrumentRepository.WithTransaction(tx).CreateFtpConfig(ctx, *instrument.FTPConfig)
+		err = s.instrumentRepository.WithTransaction(tx).CreateFileServerConfig(ctx, *instrument.FileServerConfig)
 		if err != nil {
 			_ = tx.Rollback()
 			return err
 		}
 	}
 
-	if oldInstrument.ConnectionMode == FTP && instrument.ConnectionMode != FTP {
-		err = s.instrumentRepository.WithTransaction(tx).DeleteFtpConfig(ctx, instrument.ID)
+	if oldInstrument.ConnectionMode == FileServer && instrument.ConnectionMode != FileServer {
+		err = s.instrumentRepository.WithTransaction(tx).DeleteFileServerConfig(ctx, instrument.ID)
 		if err != nil {
 			_ = tx.Rollback()
 			return err
@@ -585,9 +587,9 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 
 	instrument.Hostname = strings.TrimSpace(instrument.Hostname)
 	ip := net.ParseIP(instrument.Hostname)
-	if ip == nil {
+	if ip == nil && !urlRegex.MatchString(instrument.Hostname) {
 		_ = tx.Rollback()
-		return ErrInvalidIPAddress
+		return ErrInvalidHostName
 	}
 	err = s.instrumentRepository.WithTransaction(tx).UpdateInstrument(ctx, instrument)
 	if err != nil {
@@ -905,7 +907,7 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 
 func (s *instrumentService) DeleteInstrument(ctx context.Context, id uuid.UUID) error {
 	tx, err := s.instrumentRepository.CreateTransaction()
-	err = s.instrumentRepository.WithTransaction(tx).DeleteFtpConfig(ctx, id)
+	err = s.instrumentRepository.WithTransaction(tx).DeleteFileServerConfig(ctx, id)
 	if err != nil {
 		_ = tx.Rollback()
 		return err

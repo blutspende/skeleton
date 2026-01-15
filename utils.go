@@ -45,17 +45,17 @@ func HashInstrument(instrument Instrument) string {
 	}
 	builder.WriteString(fmt.Sprintf("%t", instrument.DeletedAt != nil))
 
-	// Hash nested struct FTPConfig
-	if instrument.FTPConfig != nil {
-		builder.WriteString(instrument.FTPConfig.Username)
-		builder.WriteString(instrument.FTPConfig.Password)
-		builder.WriteString(instrument.FTPConfig.OrderPath)
-		builder.WriteString(instrument.FTPConfig.OrderFileMask)
-		builder.WriteString(instrument.FTPConfig.OrderFileSuffix)
-		builder.WriteString(instrument.FTPConfig.ResultPath)
-		builder.WriteString(instrument.FTPConfig.ResultFileMask)
-		builder.WriteString(instrument.FTPConfig.ResultFileSuffix)
-		builder.WriteString(instrument.FTPConfig.FtpServerType)
+	// Hash nested struct FileServerConfig
+	if instrument.FileServerConfig != nil {
+		builder.WriteString(instrument.FileServerConfig.Username)
+		builder.WriteString(instrument.FileServerConfig.Password)
+		builder.WriteString(instrument.FileServerConfig.OrderPath)
+		builder.WriteString(instrument.FileServerConfig.OrderFileMask)
+		builder.WriteString(instrument.FileServerConfig.OrderFileSuffix)
+		builder.WriteString(instrument.FileServerConfig.ResultPath)
+		builder.WriteString(instrument.FileServerConfig.ResultFileMask)
+		builder.WriteString(instrument.FileServerConfig.ResultFileSuffix)
+		builder.WriteString(string(instrument.FileServerConfig.ServerType))
 	}
 
 	// Hash slices AnalyteMappings, RequestMappings, SortingRules, and Settings
