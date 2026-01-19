@@ -3,42 +3,46 @@ package skeleton
 import (
 	"github.com/blutspende/bloodlab-common/encoding"
 	"github.com/blutspende/bloodlab-common/timezone"
-	"github.com/blutspende/bloodlab-common/utils"
 	"github.com/google/uuid"
+	"strings"
 )
 
 // models
 
 type instrumentTO struct {
-	ID                  uuid.UUID             `json:"id"`
-	Type                InstrumentType        `json:"instrumentType"`
-	Name                string                `json:"name"`
-	ProtocolID          uuid.UUID             `json:"protocolId"`
-	ProtocolName        string                `json:"type"`
-	Enabled             bool                  `json:"enabled"`
-	ConnectionMode      ConnectionMode        `json:"connectionMode"`
-	ResultMode          ResultMode            `json:"runningMode"`
-	CaptureResults      bool                  `json:"captureResults"`
-	CaptureDiagnostics  bool                  `json:"captureDiagnostics"`
-	ReplyToQuery        bool                  `json:"replyToQuery"`
-	Status              string                `json:"status"`
-	Encoding            encoding.Encoding     `json:"fileEncoding"`
-	TimeZone            timezone.TimeZone     `json:"timezone"`
-	Hostname            string                `json:"hostname"`
-	ClientPort          *int                  `json:"clientPort"`
-	FtpUsername         *string               `json:"ftpUserName"`
-	FtpPassword         *string               `json:"ftpPassword"`
-	FtpOrderPath        *string               `json:"ftpOrderPath"`
-	FtpOrderFileMask    *string               `json:"ftpOrderFileMask"`
-	FtpOrderFileSuffix  *string               `json:"ftpOrderFileSuffix"`
-	FtpResultPath       *string               `json:"ftpResultPath"`
-	FtpResultFileMask   *string               `json:"ftpResultFileMask"`
-	FtpResultFileSuffix *string               `json:"ftpResultFileSuffix"`
-	FtpServerType       *string               `json:"ftpServerType"`
-	AnalyteMappings     []analyteMappingTO    `json:"analyteMappings"`
-	RequestMappings     []requestMappingTO    `json:"requestMappings"`
-	Settings            []instrumentSettingTO `json:"instrumentSettings"`
-	SortingRuleGroups   []sortingRuleGroupTO  `json:"sortingRuleGroups"`
+	ID                 uuid.UUID             `json:"id"`
+	Type               InstrumentType        `json:"instrumentType"`
+	Name               string                `json:"name"`
+	ProtocolID         uuid.UUID             `json:"protocolId"`
+	ProtocolName       string                `json:"type"`
+	Enabled            bool                  `json:"enabled"`
+	ConnectionMode     ConnectionMode        `json:"connectionMode"`
+	ResultMode         ResultMode            `json:"runningMode"`
+	CaptureResults     bool                  `json:"captureResults"`
+	CaptureDiagnostics bool                  `json:"captureDiagnostics"`
+	ReplyToQuery       bool                  `json:"replyToQuery"`
+	Status             string                `json:"status"`
+	Encoding           encoding.Encoding     `json:"fileEncoding"`
+	TimeZone           timezone.TimeZone     `json:"timezone"`
+	Hostname           string                `json:"hostname"`
+	ClientPort         *int                  `json:"clientPort"`
+	FileServerConfig   *fileServerConfigTO   `json:"fileServerConfig"`
+	AnalyteMappings    []analyteMappingTO    `json:"analyteMappings"`
+	RequestMappings    []requestMappingTO    `json:"requestMappings"`
+	Settings           []instrumentSettingTO `json:"instrumentSettings"`
+	SortingRuleGroups  []sortingRuleGroupTO  `json:"sortingRuleGroups"`
+}
+
+type fileServerConfigTO struct {
+	Username         string         `json:"userName"`
+	Password         string         `json:"password"`
+	OrderPath        string         `json:"orderPath"`
+	OrderFileMask    string         `json:"orderFileMask"`
+	OrderFileSuffix  string         `json:"orderFileSuffix"`
+	ResultPath       string         `json:"resultPath"`
+	ResultFileMask   string         `json:"resultFileMask"`
+	ResultFileSuffix string         `json:"resultFileSuffix"`
+	ServerType       FileServerType `json:"serverType"`
 }
 
 type analyteMappingTO struct {
@@ -173,18 +177,31 @@ func convertInstrumentTOToInstrument(instrumentTO instrumentTO) Instrument {
 		Settings:           convertInstrumentSettingTOsToInstrumentSettings(instrumentTO.Settings),
 	}
 
-	if instrumentTO.ConnectionMode == FTP {
-		model.FTPConfig = &FTPConfig{
-			InstrumentId:     instrumentTO.ID,
-			Username:         utils.StringPointerToString(instrumentTO.FtpUsername),
-			Password:         utils.StringPointerToString(instrumentTO.FtpPassword),
-			OrderPath:        utils.StringPointerToStringWithDefault(instrumentTO.FtpOrderPath, "/"),
-			OrderFileMask:    utils.StringPointerToString(instrumentTO.FtpOrderFileMask),
-			OrderFileSuffix:  utils.StringPointerToString(instrumentTO.FtpOrderFileSuffix),
-			ResultPath:       utils.StringPointerToStringWithDefault(instrumentTO.FtpResultPath, "/"),
-			ResultFileMask:   utils.StringPointerToString(instrumentTO.FtpResultFileMask),
-			ResultFileSuffix: utils.StringPointerToString(instrumentTO.FtpResultFileSuffix),
-			FtpServerType:    utils.StringPointerToString(instrumentTO.FtpServerType),
+	if instrumentTO.ConnectionMode == FileServer {
+		model.FileServerConfig = &FileServerConfig{
+			InstrumentId: instrumentTO.ID,
+			OrderPath:    "/",
+			ResultPath:   "/",
+		}
+		if instrumentTO.FileServerConfig != nil {
+			model.FileServerConfig = &FileServerConfig{
+				InstrumentId:     instrumentTO.ID,
+				Username:         instrumentTO.FileServerConfig.Username,
+				Password:         instrumentTO.FileServerConfig.Password,
+				OrderPath:        instrumentTO.FileServerConfig.OrderPath,
+				OrderFileMask:    instrumentTO.FileServerConfig.OrderFileMask,
+				OrderFileSuffix:  instrumentTO.FileServerConfig.OrderFileSuffix,
+				ResultPath:       instrumentTO.FileServerConfig.ResultPath,
+				ResultFileMask:   instrumentTO.FileServerConfig.ResultFileMask,
+				ResultFileSuffix: instrumentTO.FileServerConfig.ResultFileSuffix,
+				ServerType:       instrumentTO.FileServerConfig.ServerType,
+			}
+			if !strings.HasPrefix(model.FileServerConfig.OrderPath, "/") {
+				model.FileServerConfig.OrderPath = "/" + model.FileServerConfig.OrderPath
+			}
+			if !strings.HasPrefix(model.FileServerConfig.ResultPath, "/") {
+				model.FileServerConfig.ResultPath = "/" + model.FileServerConfig.ResultPath
+			}
 		}
 	}
 

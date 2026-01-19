@@ -31,10 +31,10 @@ const (
 	msgInstrumentNotFound                            = "instrument not found"
 	msgUpdateInstrumentFailed                        = "update instrument failed"
 	msgDeleteInstrumentFailed                        = "delete instrument failed"
-	msgCreateFtpConfigFailed                         = "create FTP config failed"
-	msgDeleteFtpConfigFailed                         = "delete FTP config failed"
-	msgGetFtpConfigFailed                            = "get ftp config by instrument id failed"
-	msgFtpConfigNotFound                             = "ftp config not found"
+	msgCreateFileServerConfigFailed                  = "create file config failed"
+	msgDeleteFileServerConfigFailed                  = "delete file config failed"
+	msgGetFileServerConfigFailed                     = "get file config by instrument id failed"
+	msgFileServerConfigNotFound                      = "file config not found"
 	msgGetProtocolByIDFailed                         = "get protocol by CerberusID failed"
 	msgUpsertSupportedProtocolFailed                 = "upsert supported protocol failed"
 	msgUpsertManufacturerTestsFailed                 = "upsert manufacturer tests failed"
@@ -86,10 +86,10 @@ var (
 	ErrInstrumentNotFound                            = errors.New(msgInstrumentNotFound)
 	ErrUpdateInstrumentFailed                        = errors.New(msgUpdateInstrumentFailed)
 	ErrDeleteInstrumentFailed                        = errors.New(msgDeleteInstrumentFailed)
-	ErrCreateFtpConfigFailed                         = errors.New(msgCreateFtpConfigFailed)
-	ErrDeleteFtpConfigFailed                         = errors.New(msgDeleteFtpConfigFailed)
-	ErrGetFtpConfigFailed                            = errors.New(msgGetFtpConfigFailed)
-	ErrFtpConfigNotFound                             = errors.New(msgFtpConfigNotFound)
+	ErrCreateFileServerConfigFailed                  = errors.New(msgCreateFileServerConfigFailed)
+	ErrDeleteFileServerConfigFailed                  = errors.New(msgDeleteFileServerConfigFailed)
+	ErrGetFileServerConfigFailed                     = errors.New(msgGetFileServerConfigFailed)
+	ErrFileServerConfigNotFound                      = errors.New(msgFileServerConfigNotFound)
 	ErrGetProtocolByIDFailed                         = errors.New(msgGetProtocolByIDFailed)
 	ErrUpsertSupportedProtocolFailed                 = errors.New(msgUpsertSupportedProtocolFailed)
 	ErrUpsertManufacturerTestsFailed                 = errors.New(msgUpsertManufacturerTestsFailed)
@@ -150,20 +150,20 @@ type instrumentDAO struct {
 	DeletedAt          sql.NullTime      `db:"deleted_at"`
 }
 
-type ftpConfigDAO struct {
-	ID               uuid.UUID    `db:"id"`
-	InstrumentId     uuid.UUID    `db:"instrument_id"`
-	Username         string       `db:"username"`
-	Password         string       `db:"password"`
-	OrderPath        string       `db:"order_path"`
-	OrderFileMask    string       `db:"order_file_mask"`
-	OrderFileSuffix  string       `db:"order_file_suffix"`
-	ResultPath       string       `db:"result_path"`
-	ResultFileMask   string       `db:"result_file_mask"`
-	ResultFileSuffix string       `db:"result_file_suffix"`
-	FtpServerType    string       `db:"ftp_server_type"`
-	CreatedAt        time.Time    `db:"created_at"`
-	DeletedAt        sql.NullTime `db:"deleted_at"`
+type fileServerConfigDAO struct {
+	ID               uuid.UUID      `db:"id"`
+	InstrumentId     uuid.UUID      `db:"instrument_id"`
+	Username         string         `db:"username"`
+	Password         string         `db:"password"`
+	OrderPath        string         `db:"order_path"`
+	OrderFileMask    string         `db:"order_file_mask"`
+	OrderFileSuffix  string         `db:"order_file_suffix"`
+	ResultPath       string         `db:"result_path"`
+	ResultFileMask   string         `db:"result_file_mask"`
+	ResultFileSuffix string         `db:"result_file_suffix"`
+	ServerType       FileServerType `db:"server_type"`
+	CreatedAt        time.Time      `db:"created_at"`
+	DeletedAt        sql.NullTime   `db:"deleted_at"`
 }
 
 type analyteMappingDAO struct {
@@ -304,9 +304,9 @@ type InstrumentRepository interface {
 	GetInstrumentByIP(ctx context.Context, ip string) (Instrument, error)
 	UpdateInstrument(ctx context.Context, instrument Instrument) error
 	DeleteInstrument(ctx context.Context, id uuid.UUID) error
-	CreateFtpConfig(ctx context.Context, ftpConfig FTPConfig) error
-	GetFtpConfigByInstrumentId(ctx context.Context, instrumentId uuid.UUID) (FTPConfig, error)
-	DeleteFtpConfig(ctx context.Context, instrumentId uuid.UUID) error
+	CreateFileServerConfig(ctx context.Context, fileServerConfig FileServerConfig) error
+	GetFileServerConfigByInstrumentId(ctx context.Context, instrumentId uuid.UUID) (FileServerConfig, error)
+	DeleteFileServerConfig(ctx context.Context, instrumentId uuid.UUID) error
 	GetProtocolByID(ctx context.Context, id uuid.UUID) (SupportedProtocol, error)
 	GetSupportedProtocols(ctx context.Context) ([]SupportedProtocol, error)
 	UpsertSupportedProtocol(ctx context.Context, id uuid.UUID, name string, description string) error
@@ -494,47 +494,47 @@ func (r *instrumentRepository) DeleteInstrument(ctx context.Context, id uuid.UUI
 	return nil
 }
 
-func (r *instrumentRepository) CreateFtpConfig(ctx context.Context, ftpConfig FTPConfig) error {
-	query := fmt.Sprintf(`INSERT INTO %s.sk_instrument_ftp_config(id, instrument_id, username, password,
-        order_path, order_file_mask, order_file_suffix, result_path, result_file_mask, result_file_suffix, ftp_server_type)
+func (r *instrumentRepository) CreateFileServerConfig(ctx context.Context, fileServerConfig FileServerConfig) error {
+	query := fmt.Sprintf(`INSERT INTO %s.sk_instrument_file_server_config(id, instrument_id, username, password,
+        order_path, order_file_mask, order_file_suffix, result_path, result_file_mask, result_file_suffix, server_type)
 		VALUES(:id, :instrument_id, :username, :password, :order_path, :order_file_mask, :order_file_suffix, :result_path,
-		:result_file_mask, :result_file_suffix, :ftp_server_type)`, r.dbSchema)
-	ftpConfig.ID = uuid.New()
+		:result_file_mask, :result_file_suffix, :server_type)`, r.dbSchema)
+	fileServerConfig.ID = uuid.New()
 
-	dao := convertFtpConfigToDao(ftpConfig)
+	dao := convertFileServerConfigToDao(fileServerConfig)
 	_, err := r.db.NamedExecContext(ctx, query, dao)
 	if err != nil {
-		log.Error().Err(err).Msg(msgCreateFtpConfigFailed)
-		return ErrCreateFtpConfigFailed
+		log.Error().Err(err).Msg(msgCreateFileServerConfigFailed)
+		return ErrCreateFileServerConfigFailed
 	}
 	return nil
 }
 
-func (r *instrumentRepository) GetFtpConfigByInstrumentId(ctx context.Context, instrumentId uuid.UUID) (FTPConfig, error) {
-	query := fmt.Sprintf(`SELECT * FROM %s.sk_instrument_ftp_config WHERE instrument_id = $1 AND deleted_at is NULL;`, r.dbSchema)
+func (r *instrumentRepository) GetFileServerConfigByInstrumentId(ctx context.Context, instrumentId uuid.UUID) (FileServerConfig, error) {
+	query := fmt.Sprintf(`SELECT * FROM %s.sk_instrument_file_server_config WHERE instrument_id = $1 AND deleted_at is NULL;`, r.dbSchema)
 
-	var ftpConfig FTPConfig
-	var dao ftpConfigDAO
+	var fileServerConfig FileServerConfig
+	var dao fileServerConfigDAO
 	err := r.db.QueryRowxContext(ctx, query, instrumentId).StructScan(&dao)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			log.Warn().Interface("instrumentId", instrumentId).Msg("ftp config queried but not found")
-			return ftpConfig, ErrFtpConfigNotFound
+			log.Warn().Interface("instrumentId", instrumentId).Msg("file config queried but not found")
+			return fileServerConfig, ErrFileServerConfigNotFound
 		}
-		log.Error().Err(err).Msg(msgGetFtpConfigFailed)
-		return ftpConfig, ErrGetFtpConfigFailed
+		log.Error().Err(err).Msg(msgGetFileServerConfigFailed)
+		return fileServerConfig, ErrGetFileServerConfigFailed
 	}
 
-	return convertFtpConfigDaoToFtpConfig(dao), nil
+	return convertFileServerConfigDaoToFileServerConfig(dao), nil
 }
 
-func (r *instrumentRepository) DeleteFtpConfig(ctx context.Context, instrumentId uuid.UUID) error {
-	query := fmt.Sprintf(`UPDATE %s.sk_instrument_ftp_config SET deleted_at = timezone('utc', now()) WHERE instrument_id = $1 AND deleted_at is NULL;`, r.dbSchema)
+func (r *instrumentRepository) DeleteFileServerConfig(ctx context.Context, instrumentId uuid.UUID) error {
+	query := fmt.Sprintf(`UPDATE %s.sk_instrument_file_server_config SET deleted_at = timezone('utc', now()) WHERE instrument_id = $1 AND deleted_at is NULL;`, r.dbSchema)
 
 	_, err := r.db.ExecContext(ctx, query, instrumentId)
 	if err != nil {
-		log.Error().Err(err).Msg(msgDeleteFtpConfigFailed)
-		return ErrDeleteFtpConfigFailed
+		log.Error().Err(err).Msg(msgDeleteFileServerConfigFailed)
+		return ErrDeleteFileServerConfigFailed
 	}
 	return nil
 }
@@ -1522,7 +1522,7 @@ func convertInstrumentToDAO(instrument Instrument) (instrumentDAO, error) {
 		return dao, ErrInvalidInstrumentType
 	}
 	switch instrument.ConnectionMode {
-	case TCPClientMode, TCPServerMode, FTP, HTTP, TCPMixed:
+	case TCPClientMode, TCPServerMode, FileServer, HTTP, TCPMixed:
 		dao.ConnectionMode = string(instrument.ConnectionMode)
 	default:
 		return dao, ErrInvalidConnectionMode
@@ -1568,8 +1568,8 @@ func convertInstrumentDaoToInstrument(dao instrumentDAO) (Instrument, error) {
 		instrument.ConnectionMode = TCPClientMode
 	case "TCP_SERVER_ONLY":
 		instrument.ConnectionMode = TCPServerMode
-	case "FTP_SFTP":
-		instrument.ConnectionMode = FTP
+	case "FILE_SERVER":
+		instrument.ConnectionMode = FileServer
 	case "HTTP":
 		instrument.ConnectionMode = HTTP
 	case "TCP_MIXED":
@@ -1591,25 +1591,25 @@ func convertInstrumentDaoToInstrument(dao instrumentDAO) (Instrument, error) {
 	return instrument, nil
 }
 
-func convertFtpConfigToDao(ftpConfig FTPConfig) ftpConfigDAO {
-	return ftpConfigDAO{
-		ID:               ftpConfig.ID,
-		InstrumentId:     ftpConfig.InstrumentId,
-		Username:         ftpConfig.Username,
-		Password:         ftpConfig.Password,
-		OrderPath:        ftpConfig.OrderPath,
-		OrderFileMask:    ftpConfig.OrderFileMask,
-		OrderFileSuffix:  ftpConfig.OrderFileSuffix,
-		ResultPath:       ftpConfig.ResultPath,
-		ResultFileMask:   ftpConfig.ResultFileMask,
-		ResultFileSuffix: ftpConfig.ResultFileSuffix,
-		FtpServerType:    ftpConfig.FtpServerType,
-		CreatedAt:        ftpConfig.CreatedAt,
+func convertFileServerConfigToDao(fileServerConfig FileServerConfig) fileServerConfigDAO {
+	return fileServerConfigDAO{
+		ID:               fileServerConfig.ID,
+		InstrumentId:     fileServerConfig.InstrumentId,
+		Username:         fileServerConfig.Username,
+		Password:         fileServerConfig.Password,
+		OrderPath:        fileServerConfig.OrderPath,
+		OrderFileMask:    fileServerConfig.OrderFileMask,
+		OrderFileSuffix:  fileServerConfig.OrderFileSuffix,
+		ResultPath:       fileServerConfig.ResultPath,
+		ResultFileMask:   fileServerConfig.ResultFileMask,
+		ResultFileSuffix: fileServerConfig.ResultFileSuffix,
+		ServerType:       fileServerConfig.ServerType,
+		CreatedAt:        fileServerConfig.CreatedAt,
 	}
 }
 
-func convertFtpConfigDaoToFtpConfig(dao ftpConfigDAO) FTPConfig {
-	return FTPConfig{
+func convertFileServerConfigDaoToFileServerConfig(dao fileServerConfigDAO) FileServerConfig {
+	return FileServerConfig{
 		ID:               dao.ID,
 		InstrumentId:     dao.InstrumentId,
 		Username:         dao.Username,
@@ -1620,7 +1620,7 @@ func convertFtpConfigDaoToFtpConfig(dao ftpConfigDAO) FTPConfig {
 		ResultPath:       dao.ResultPath,
 		ResultFileMask:   dao.ResultFileMask,
 		ResultFileSuffix: dao.ResultFileSuffix,
-		FtpServerType:    dao.FtpServerType,
+		ServerType:       dao.ServerType,
 		CreatedAt:        dao.CreatedAt,
 	}
 }

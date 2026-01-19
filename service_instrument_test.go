@@ -35,14 +35,14 @@ func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
 		ProtocolID:     uuid.MustParse("abb539a3-286f-4c15-a7b7-2e9adf6eab91"),
 		ProtocolName:   "Test Protocol",
 		Enabled:        true,
-		ConnectionMode: FTP,
+		ConnectionMode: FileServer,
 		ResultMode:     Production,
 		Status:         "ONLINE",
 		Encoding:       "UTF8",
 		TimeZone:       "Europe/Budapest",
 		Hostname:       "192.168.1.20",
 		ClientPort:     &clientPort,
-		FTPConfig: &FTPConfig{
+		FileServerConfig: &FileServerConfig{
 			Username:         "test",
 			Password:         "test",
 			OrderPath:        "/remote",
@@ -51,7 +51,7 @@ func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
 			ResultPath:       "/result",
 			ResultFileMask:   "*",
 			ResultFileSuffix: ".TPL",
-			FtpServerType:    "ftp",
+			ServerType:       FTP,
 		},
 	}
 
@@ -61,22 +61,22 @@ func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
 	assert.Nil(t, err)
 
 	//instrumentId, _ := uuid.NewUUID()
-	// test that the FTP config created properly
+	// test that the FileServer config created properly
 	instrument, err := instrumentService.GetInstrumentByID(ctx, nil, instrumentId, false)
 	assert.Nil(t, err)
 	assert.Equal(t, "TestInstrument", instrument.Name)
-	assert.Equal(t, FTP, instrument.ConnectionMode)
-	assert.NotNil(t, instrument.FTPConfig)
-	assert.Equal(t, instrumentId, instrument.FTPConfig.InstrumentId)
-	assert.Equal(t, "test", instrument.FTPConfig.Username)
-	assert.Equal(t, "test", instrument.FTPConfig.Password)
-	assert.Equal(t, "/remote", instrument.FTPConfig.OrderPath)
-	assert.Equal(t, "*.EXP", instrument.FTPConfig.OrderFileMask)
-	assert.Equal(t, ".*", instrument.FTPConfig.OrderFileSuffix)
-	assert.Equal(t, "/result", instrument.FTPConfig.ResultPath)
-	assert.Equal(t, "*", instrument.FTPConfig.ResultFileMask)
-	assert.Equal(t, ".TPL", instrument.FTPConfig.ResultFileSuffix)
-	assert.Equal(t, "ftp", instrument.FTPConfig.FtpServerType)
+	assert.Equal(t, FileServer, instrument.ConnectionMode)
+	assert.NotNil(t, instrument.FileServerConfig)
+	assert.Equal(t, instrumentId, instrument.FileServerConfig.InstrumentId)
+	assert.Equal(t, "test", instrument.FileServerConfig.Username)
+	assert.Equal(t, "test", instrument.FileServerConfig.Password)
+	assert.Equal(t, "/remote", instrument.FileServerConfig.OrderPath)
+	assert.Equal(t, "*.EXP", instrument.FileServerConfig.OrderFileMask)
+	assert.Equal(t, ".*", instrument.FileServerConfig.OrderFileSuffix)
+	assert.Equal(t, "/result", instrument.FileServerConfig.ResultPath)
+	assert.Equal(t, "*", instrument.FileServerConfig.ResultFileMask)
+	assert.Equal(t, ".TPL", instrument.FileServerConfig.ResultFileSuffix)
+	assert.Equal(t, FTP, instrument.FileServerConfig.ServerType)
 
 	err = instrumentService.UpdateInstrument(ctx, Instrument{
 		ID:             instrumentId,
@@ -85,14 +85,14 @@ func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
 		ProtocolID:     uuid.MustParse("abb539a3-286f-4c15-a7b7-2e9adf6eab91"),
 		ProtocolName:   "Test Protocol",
 		Enabled:        true,
-		ConnectionMode: FTP,
+		ConnectionMode: FileServer,
 		ResultMode:     Production,
 		Status:         "ONLINE",
 		Encoding:       "UTF8",
 		TimeZone:       "Europe/Budapest",
 		Hostname:       "192.168.1.20",
 		ClientPort:     &clientPort,
-		FTPConfig: &FTPConfig{
+		FileServerConfig: &FileServerConfig{
 			InstrumentId:     instrumentId,
 			Username:         "updatedUsername",
 			Password:         "updatesPass",
@@ -102,32 +102,32 @@ func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
 			ResultPath:       "/result/updated",
 			ResultFileMask:   "*updated*",
 			ResultFileSuffix: ".updated.TPL",
-			FtpServerType:    "sftp",
+			ServerType:       SFTP,
 		},
 	}, uuid.MustParse("9d5fb5e9-65a1-4479-8f82-25b04145bfe1"))
 	assert.Nil(t, err)
 
-	// test that the FTP config updated properly
+	// test that the FileServer config updated properly
 	instrument, err = instrumentService.GetInstrumentByID(ctx, nil, instrumentId, false)
 	assert.Nil(t, err)
-	assert.NotNil(t, instrument.FTPConfig)
-	assert.Equal(t, instrumentId, instrument.FTPConfig.InstrumentId)
-	assert.Equal(t, "updatedUsername", instrument.FTPConfig.Username)
-	assert.Equal(t, "updatesPass", instrument.FTPConfig.Password)
-	assert.Equal(t, "/remote/updated", instrument.FTPConfig.OrderPath)
-	assert.Equal(t, "*.updated.EXP", instrument.FTPConfig.OrderFileMask)
-	assert.Equal(t, "updated.*", instrument.FTPConfig.OrderFileSuffix)
-	assert.Equal(t, "/result/updated", instrument.FTPConfig.ResultPath)
-	assert.Equal(t, "*updated*", instrument.FTPConfig.ResultFileMask)
-	assert.Equal(t, ".updated.TPL", instrument.FTPConfig.ResultFileSuffix)
-	assert.Equal(t, "sftp", instrument.FTPConfig.FtpServerType)
+	assert.NotNil(t, instrument.FileServerConfig)
+	assert.Equal(t, instrumentId, instrument.FileServerConfig.InstrumentId)
+	assert.Equal(t, "updatedUsername", instrument.FileServerConfig.Username)
+	assert.Equal(t, "updatesPass", instrument.FileServerConfig.Password)
+	assert.Equal(t, "/remote/updated", instrument.FileServerConfig.OrderPath)
+	assert.Equal(t, "*.updated.EXP", instrument.FileServerConfig.OrderFileMask)
+	assert.Equal(t, "updated.*", instrument.FileServerConfig.OrderFileSuffix)
+	assert.Equal(t, "/result/updated", instrument.FileServerConfig.ResultPath)
+	assert.Equal(t, "*updated*", instrument.FileServerConfig.ResultFileMask)
+	assert.Equal(t, ".updated.TPL", instrument.FileServerConfig.ResultFileSuffix)
+	assert.Equal(t, SFTP, instrument.FileServerConfig.ServerType)
 
 	err = instrumentService.DeleteInstrument(ctx, instrumentId)
 	assert.Nil(t, err)
 
-	// test that the FTP config deleted when instrument deleted
-	_, err = instrumentRepository.GetFtpConfigByInstrumentId(ctx, instrumentId)
-	assert.Equal(t, err, ErrFtpConfigNotFound)
+	// test that the FileServer config deleted when instrument deleted
+	_, err = instrumentRepository.GetFileServerConfigByInstrumentId(ctx, instrumentId)
+	assert.Equal(t, err, ErrFileServerConfigNotFound)
 }
 
 func TestFtpConfigConnectionModeChange(t *testing.T) {
@@ -166,12 +166,12 @@ func TestFtpConfigConnectionModeChange(t *testing.T) {
 	})
 	assert.Nil(t, err)
 
-	// instrument created, but FTP config not
+	// instrument created, but FileServer config not
 	instrument, err := instrumentService.GetInstrumentByID(ctx, nil, instrumentId, false)
 	assert.Nil(t, err)
 	assert.Equal(t, "TestInstrument", instrument.Name)
 	assert.Equal(t, TCPClientMode, instrument.ConnectionMode)
-	assert.Nil(t, instrument.FTPConfig)
+	assert.Nil(t, instrument.FileServerConfig)
 
 	err = instrumentService.UpdateInstrument(ctx, Instrument{
 		ID:             instrumentId,
@@ -180,14 +180,14 @@ func TestFtpConfigConnectionModeChange(t *testing.T) {
 		ProtocolID:     uuid.MustParse("abb539a3-286f-4c15-a7b7-2e9adf6eab91"),
 		ProtocolName:   "Test Protocol",
 		Enabled:        true,
-		ConnectionMode: FTP,
+		ConnectionMode: FileServer,
 		ResultMode:     Production,
 		Status:         "ONLINE",
 		Encoding:       "UTF8",
 		TimeZone:       "Europe/Budapest",
 		Hostname:       "192.168.1.20",
 		ClientPort:     &clientPort,
-		FTPConfig: &FTPConfig{
+		FileServerConfig: &FileServerConfig{
 			InstrumentId:     instrumentId,
 			Username:         "test",
 			Password:         "test",
@@ -197,26 +197,26 @@ func TestFtpConfigConnectionModeChange(t *testing.T) {
 			ResultPath:       "/result",
 			ResultFileMask:   "",
 			ResultFileSuffix: ".TPL",
-			FtpServerType:    "ftp",
+			ServerType:       FTP,
 		},
 	}, uuid.MustParse("9d5fb5e9-65a1-4479-8f82-25b04145bfe1"))
 	assert.Nil(t, err)
 
-	// test that FTP config created after connection mode updated to FTP and config passed
+	// test that FileServer config created after connection mode updated to FileServer and config passed
 	instrument, err = instrumentService.GetInstrumentByID(ctx, nil, instrumentId, false)
 	assert.Nil(t, err)
-	assert.Equal(t, FTP, instrument.ConnectionMode)
-	assert.NotNil(t, instrument.FTPConfig)
-	assert.Equal(t, instrumentId, instrument.FTPConfig.InstrumentId)
-	assert.Equal(t, "test", instrument.FTPConfig.Username)
-	assert.Equal(t, "test", instrument.FTPConfig.Password)
-	assert.Equal(t, "/remote", instrument.FTPConfig.OrderPath)
-	assert.Equal(t, "*.EXP", instrument.FTPConfig.OrderFileMask)
-	assert.Equal(t, "", instrument.FTPConfig.OrderFileSuffix)
-	assert.Equal(t, "/result", instrument.FTPConfig.ResultPath)
-	assert.Equal(t, "", instrument.FTPConfig.ResultFileMask)
-	assert.Equal(t, ".TPL", instrument.FTPConfig.ResultFileSuffix)
-	assert.Equal(t, "ftp", instrument.FTPConfig.FtpServerType)
+	assert.Equal(t, FileServer, instrument.ConnectionMode)
+	assert.NotNil(t, instrument.FileServerConfig)
+	assert.Equal(t, instrumentId, instrument.FileServerConfig.InstrumentId)
+	assert.Equal(t, "test", instrument.FileServerConfig.Username)
+	assert.Equal(t, "test", instrument.FileServerConfig.Password)
+	assert.Equal(t, "/remote", instrument.FileServerConfig.OrderPath)
+	assert.Equal(t, "*.EXP", instrument.FileServerConfig.OrderFileMask)
+	assert.Equal(t, "", instrument.FileServerConfig.OrderFileSuffix)
+	assert.Equal(t, "/result", instrument.FileServerConfig.ResultPath)
+	assert.Equal(t, "", instrument.FileServerConfig.ResultFileMask)
+	assert.Equal(t, ".TPL", instrument.FileServerConfig.ResultFileSuffix)
+	assert.Equal(t, FTP, instrument.FileServerConfig.ServerType)
 
 	err = instrumentService.UpdateInstrument(ctx, Instrument{
 		ID:             instrumentId,
@@ -235,9 +235,9 @@ func TestFtpConfigConnectionModeChange(t *testing.T) {
 	}, uuid.MustParse("9d5fb5e9-65a1-4479-8f82-25b04145bfe1"))
 	assert.Nil(t, err)
 
-	// test that FTP config deleted after the instrument update
-	_, err = instrumentRepository.GetFtpConfigByInstrumentId(ctx, instrumentId)
-	assert.Equal(t, err, ErrFtpConfigNotFound)
+	// test that FileServer config deleted after the instrument update
+	_, err = instrumentRepository.GetFileServerConfigByInstrumentId(ctx, instrumentId)
+	assert.Equal(t, err, ErrFileServerConfigNotFound)
 }
 
 func TestUpdateInstrument(t *testing.T) {
@@ -1139,7 +1139,7 @@ func TestTrimAndValidateHostname(t *testing.T) {
 	}
 	instrumentID, err := instrumentService.CreateInstrument(ctx, instr)
 	assert.NotNil(t, err)
-	assert.Equal(t, ErrInvalidIPAddress, err)
+	assert.Equal(t, ErrInvalidHostName, err)
 
 	instr.Hostname = "                  \t\n    127.0.0.1              \t\n           "
 	instrumentID, err = instrumentService.CreateInstrument(ctx, instr)
@@ -1169,7 +1169,7 @@ func TestTrimAndValidateHostname(t *testing.T) {
 	}
 	err = instrumentService.UpdateInstrument(ctx, instr, uuid.MustParse("9d5fb5e9-65a1-4479-8f82-25b04145bfe1"))
 	assert.NotNil(t, err)
-	assert.Equal(t, ErrInvalidIPAddress, err)
+	assert.Equal(t, ErrInvalidHostName, err)
 
 	instr.Hostname = "\n\t                 ::1                    \n\t"
 	err = instrumentService.UpdateInstrument(ctx, instr, uuid.MustParse("9d5fb5e9-65a1-4479-8f82-25b04145bfe1"))
@@ -1272,15 +1272,15 @@ func (r *instrumentRepositoryMock) DeleteInstrument(ctx context.Context, id uuid
 	return nil
 }
 
-func (r *instrumentRepositoryMock) CreateFtpConfig(ctx context.Context, ftpConfig FTPConfig) error {
+func (r *instrumentRepositoryMock) CreateFileServerConfig(ctx context.Context, ftpConfig FileServerConfig) error {
 	return nil
 }
 
-func (r *instrumentRepositoryMock) GetFtpConfigByInstrumentId(ctx context.Context, instrumentId uuid.UUID) (FTPConfig, error) {
-	return FTPConfig{}, nil
+func (r *instrumentRepositoryMock) GetFileServerConfigByInstrumentId(ctx context.Context, instrumentId uuid.UUID) (FileServerConfig, error) {
+	return FileServerConfig{}, nil
 }
 
-func (r *instrumentRepositoryMock) DeleteFtpConfig(ctx context.Context, instrumentId uuid.UUID) error {
+func (r *instrumentRepositoryMock) DeleteFileServerConfig(ctx context.Context, instrumentId uuid.UUID) error {
 	return nil
 }
 
