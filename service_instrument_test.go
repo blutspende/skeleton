@@ -1190,6 +1190,10 @@ type instrumentRepositoryMock struct {
 	ExpectedControlResults          []ExpectedControlResult
 }
 
+func (r *instrumentRepositoryMock) DeleteProtocolAbilities(ctx context.Context, protocolID uuid.UUID, protocolAbilities []ProtocolAbility) error {
+	return nil
+}
+
 func (r *instrumentRepositoryMock) UpsertRequestMappings(ctx context.Context, requestMappings []RequestMapping, instrumentID uuid.UUID) error {
 	return nil
 }

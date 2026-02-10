@@ -147,6 +147,7 @@ type Instrument struct {
 	Enabled            bool
 	ConnectionMode     ConnectionMode
 	ResultMode         ResultMode
+	AllowResending     bool
 	CaptureResults     bool
 	CaptureDiagnostics bool
 	ReplyToQuery       bool
@@ -459,6 +460,7 @@ type InstrumentSetting struct {
 type Ability string
 
 const (
+	AllowResendingAbility        Ability = "ALLOW_RESENDING"
 	CanAcceptResultsAbility      Ability = "CAN_ACCEPT_RESULTS"
 	CanReplyToQueryAbility       Ability = "CAN_REPLY_TO_QUERY"
 	CanCaptureDiagnosticsAbility Ability = "CAN_CAPTURE_DIAGNOSTICS"

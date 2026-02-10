@@ -64,6 +64,7 @@ const (
 	msgDeleteValidatedAnalytesFailed                 = "delete validated analytes failed"
 	msgUniqueViolationValidatedAnalytes              = "validated analyte already set to the specific control mapping for this instrument"
 	msgGetEncodingsFailed                            = "get encodings failed"
+	msgDeleteProtocolAbilitiesFailed                 = "delete protocol abilities failed"
 	msgGetProtocolSettingsFailed                     = "get protocol settings failed"
 	msgUpsertProtocolSettingsFailed                  = "upsert protocol settings failed"
 	msgDeleteProtocolMappingFailed                   = "delete protocol settings failed"
@@ -119,6 +120,7 @@ var (
 	ErrDeleteValidatedAnalytesFailed                 = errors.New(msgDeleteValidatedAnalytesFailed)
 	ErrUniqueViolationValidatedAnalytes              = errors.New(msgUniqueViolationValidatedAnalytes)
 	ErrGetEncodingsFailed                            = errors.New(msgGetEncodingsFailed)
+	ErrDeleteProtocolAbilitiesFailed                 = errors.New(msgDeleteProtocolAbilitiesFailed)
 	ErrGetProtocolSettingsFailed                     = errors.New(msgGetProtocolSettingsFailed)
 	ErrUpsertProtocolSettingsFailed                  = errors.New(msgUpsertProtocolSettingsFailed)
 	ErrDeleteProtocolMappingFailed                   = errors.New(msgDeleteProtocolMappingFailed)
@@ -139,6 +141,7 @@ type instrumentDAO struct {
 	Enabled            bool              `db:"enabled"`
 	ConnectionMode     string            `db:"connection_mode"`
 	RunningMode        ResultMode        `db:"running_mode"`
+	AllowResending     bool              `db:"allowresending"`
 	CaptureResults     bool              `db:"captureresults"`
 	CaptureDiagnostics bool              `db:"capturediagnostics"`
 	ReplyToQuery       bool              `db:"replytoquery"`
@@ -312,6 +315,7 @@ type InstrumentRepository interface {
 	UpsertSupportedProtocol(ctx context.Context, id uuid.UUID, name string, description string) error
 	GetProtocolAbilities(ctx context.Context, protocolID uuid.UUID) ([]ProtocolAbility, error)
 	UpsertProtocolAbilities(ctx context.Context, protocolID uuid.UUID, protocolAbilities []ProtocolAbility) error
+	DeleteProtocolAbilities(ctx context.Context, protocolID uuid.UUID, protocolAbilities []ProtocolAbility) error
 	GetProtocolSettings(ctx context.Context, protocolID uuid.UUID) ([]ProtocolSetting, error)
 	UpsertProtocolSetting(ctx context.Context, protocolID uuid.UUID, protocolSetting ProtocolSetting) error
 	DeleteProtocolSettings(ctx context.Context, protocolSettingIDs []uuid.UUID) error
@@ -359,8 +363,8 @@ type InstrumentRepository interface {
 }
 
 func (r *instrumentRepository) CreateInstrument(ctx context.Context, instrument Instrument) (uuid.UUID, error) {
-	query := fmt.Sprintf(`INSERT INTO %s.sk_instruments(id, protocol_id, "type", "name", hostname, client_port, enabled, connection_mode, running_mode, captureresults, capturediagnostics, replytoquery, status, timezone, file_encoding)
-		VALUES(:id, :protocol_id, :type, :name, :hostname, :client_port, :enabled, :connection_mode, :running_mode, :captureresults, :capturediagnostics, :replytoquery, :status, :timezone, :file_encoding);`, r.dbSchema)
+	query := fmt.Sprintf(`INSERT INTO %s.sk_instruments(id, protocol_id, "type", "name", hostname, client_port, enabled, connection_mode, running_mode, captureresults, capturediagnostics, replytoquery, allowresending, status, timezone, file_encoding)
+		VALUES(:id, :protocol_id, :type, :name, :hostname, :client_port, :enabled, :connection_mode, :running_mode, :captureresults, :capturediagnostics, :replytoquery, :allowresending, :status, :timezone, :file_encoding);`, r.dbSchema)
 
 	dao, err := convertInstrumentToDAO(instrument)
 	if err != nil {
@@ -469,8 +473,8 @@ func (r *instrumentRepository) GetInstrumentByIP(ctx context.Context, ip string)
 func (r *instrumentRepository) UpdateInstrument(ctx context.Context, instrument Instrument) error {
 	query := fmt.Sprintf(`UPDATE %s.sk_instruments SET protocol_id = :protocol_id, "name" = :name, hostname = :hostname, 
 		 	client_port = :client_port, enabled = :enabled, connection_mode = :connection_mode, running_mode = :running_mode, 
-		 	captureresults = :captureresults, capturediagnostics = :capturediagnostics, replytoquery = :replytoquery, status = :status,
-            timezone = :timezone, file_encoding = :file_encoding, modified_at = timezone('utc',now()) 
+			captureresults = :captureresults, capturediagnostics = :capturediagnostics, replytoquery = :replytoquery, allowresending = :allowresending,
+			status = :status, timezone = :timezone, file_encoding = :file_encoding, modified_at = timezone('utc',now())
 		 WHERE id = :id`, r.dbSchema)
 	dao, err := convertInstrumentToDAO(instrument)
 	if err != nil {
@@ -626,6 +630,26 @@ func (r *instrumentRepository) UpsertProtocolAbilities(ctx context.Context, prot
 	if err != nil {
 		log.Error().Err(err).Msg(msgUpsertProtocolAbilitiesFailed)
 		return ErrUpsertProtocolAbilitiesFailed
+	}
+
+	return nil
+}
+
+func (r *instrumentRepository) DeleteProtocolAbilities(ctx context.Context, protocolID uuid.UUID, protocolAbilities []ProtocolAbility) error {
+	if len(protocolAbilities) == 0 {
+		return nil
+	}
+	query := fmt.Sprintf(`UPDATE %s.sk_protocol_abilities SET deleted_at = timezone('utc', now()) WHERE protocol_id = ? AND connection_mode IN (?) AND deleted_at IS NULL;`, r.dbSchema)
+	connectionModes := make([]ConnectionMode, len(protocolAbilities))
+	for i := range protocolAbilities {
+		connectionModes[i] = protocolAbilities[i].ConnectionMode
+	}
+	query, args, _ := sqlx.In(query, protocolID, connectionModes)
+	query = r.db.Rebind(query)
+	_, err := r.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		log.Error().Err(err).Msg(msgDeleteProtocolAbilitiesFailed)
+		return ErrDeleteProtocolAbilitiesFailed
 	}
 
 	return nil
@@ -1508,6 +1532,7 @@ func convertInstrumentToDAO(instrument Instrument) (instrumentDAO, error) {
 		HostName:           instrument.Hostname,
 		ClientPort:         sql.NullInt32{},
 		Enabled:            instrument.Enabled,
+		AllowResending:     instrument.AllowResending,
 		CaptureResults:     instrument.CaptureResults,
 		CaptureDiagnostics: instrument.CaptureDiagnostics,
 		ReplyToQuery:       instrument.ReplyToQuery,
