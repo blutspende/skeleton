@@ -689,12 +689,17 @@ func (s *skeleton) Start() error {
 		log.Error().Err(err).Msg("migrate up failed")
 		return err
 	}
-	for _, protocol := range s.protocols {
+	err = s.deleteRemovedProtocolAbilities()
+	if err != nil {
+		log.Error().Err(err).Msg("delete removed protocol abilities failed")
+		return err
+	}
+	for i := range s.protocols {
 		description := ""
-		if protocol.Description != nil {
-			description = *protocol.Description
+		if s.protocols[i].Description != nil {
+			description = *s.protocols[i].Description
 		}
-		err = s.instrumentService.UpsertSupportedProtocol(s.ctx, protocol.ID, protocol.Name, description, protocol.ProtocolAbilities, protocol.ProtocolSettings)
+		err = s.instrumentService.UpsertSupportedProtocol(s.ctx, s.protocols[i].ID, s.protocols[i].Name, description, s.protocols[i].ProtocolAbilities, s.protocols[i].ProtocolSettings)
 		if err != nil {
 			log.Error().Err(err).Msg("register protocols failed")
 			return err
@@ -749,6 +754,47 @@ func (s *skeleton) Start() error {
 	go s.validateAnalysisResultStatusAndSend(s.ctx)
 
 	s.unprocessedHandlingWaitGroup.Wait()
+
+	return nil
+}
+
+func (s *skeleton) deleteRemovedProtocolAbilities() error {
+	existingProtocols, err := s.instrumentService.GetSupportedProtocols(s.ctx)
+	if err != nil {
+		return err
+	}
+	for _, protocol := range existingProtocols {
+		protocolIdx := -1
+		for i := range s.protocols {
+			if s.protocols[i].ID == protocol.ID {
+				protocolIdx = i
+				break
+			}
+		}
+		if protocolIdx == -1 {
+			continue
+		}
+		found := false
+		deletedProtocolAbilities := make([]ProtocolAbility, 0)
+		for i := range protocol.ProtocolAbilities {
+			for _, ability := range s.protocols[protocolIdx].ProtocolAbilities {
+				if protocol.ProtocolAbilities[i].ConnectionMode == ability.ConnectionMode {
+					found = true
+					break
+				}
+			}
+			if !found {
+				deletedProtocolAbilities = append(deletedProtocolAbilities, protocol.ProtocolAbilities[i])
+			}
+		}
+		if len(deletedProtocolAbilities) == 0 {
+			continue
+		}
+		err = s.instrumentService.DeleteProtocolAbilities(s.ctx, protocol.ID, deletedProtocolAbilities)
+		if err != nil {
+			return err
+		}
+	}
 
 	return nil
 }

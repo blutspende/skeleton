@@ -30,6 +30,7 @@ type InstrumentService interface {
 	GetSupportedProtocols(ctx context.Context) ([]SupportedProtocol, error)
 	GetManufacturerTests(ctx context.Context) ([]SupportedManufacturerTests, error)
 	UpsertSupportedProtocol(ctx context.Context, id uuid.UUID, name string, description string, abilities []ProtocolAbility, settings []ProtocolSetting) error
+	DeleteProtocolAbilities(ctx context.Context, protocolID uuid.UUID, protocolAbilities []ProtocolAbility) error
 	UpsertManufacturerTests(ctx context.Context, manufacturerTests []SupportedManufacturerTests) error
 	UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error
 	CheckAnalytesUsage(ctx context.Context, analyteIDs []uuid.UUID) (map[uuid.UUID][]Instrument, error)
@@ -1205,6 +1206,10 @@ func (s *instrumentService) UpsertSupportedProtocol(ctx context.Context, id uuid
 		return ErrUpsertProtocolAbilitiesFailed
 	}
 	return nil
+}
+
+func (s *instrumentService) DeleteProtocolAbilities(ctx context.Context, protocolID uuid.UUID, protocolAbilities []ProtocolAbility) error {
+	return s.instrumentRepository.DeleteProtocolAbilities(ctx, protocolID, protocolAbilities)
 }
 
 func (s *instrumentService) UpsertManufacturerTests(ctx context.Context, manufacturerTests []SupportedManufacturerTests) error {

@@ -18,6 +18,7 @@ type instrumentTO struct {
 	Enabled            bool                  `json:"enabled"`
 	ConnectionMode     ConnectionMode        `json:"connectionMode"`
 	ResultMode         ResultMode            `json:"runningMode"`
+	AllowResending     bool                  `json:"allowResending"`
 	CaptureResults     bool                  `json:"captureResults"`
 	CaptureDiagnostics bool                  `json:"captureDiagnostics"`
 	ReplyToQuery       bool                  `json:"replyToQuery"`
@@ -163,6 +164,7 @@ func convertInstrumentTOToInstrument(instrumentTO instrumentTO) Instrument {
 		Enabled:            instrumentTO.Enabled,
 		ConnectionMode:     instrumentTO.ConnectionMode,
 		ResultMode:         instrumentTO.ResultMode,
+		AllowResending:     instrumentTO.AllowResending,
 		CaptureResults:     instrumentTO.CaptureResults,
 		CaptureDiagnostics: instrumentTO.CaptureDiagnostics,
 		Status:             instrumentTO.Status,
