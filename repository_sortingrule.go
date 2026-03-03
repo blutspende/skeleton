@@ -5,12 +5,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
+	"time"
+
 	"github.com/blutspende/bloodlab-common/db"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/rs/zerolog/log"
-	"strings"
-	"time"
 )
 
 type SortingRuleRepository interface {
@@ -24,7 +25,7 @@ type SortingRuleRepository interface {
 	Update(ctx context.Context, rule SortingRule) error
 	Delete(ctx context.Context, sortingRuleIDs []uuid.UUID) error
 
-	CreateTransaction() (db.DbConnection, error)
+	CreateTransaction(ctx context.Context) (db.DbConnection, error)
 	WithTransaction(tx db.DbConnection) SortingRuleRepository
 }
 
@@ -230,7 +231,7 @@ func (r *sortingRuleRepository) Delete(ctx context.Context, sortingRuleIDs []uui
 	return nil
 }
 
-func (r *sortingRuleRepository) CreateTransaction() (db.DbConnection, error) {
+func (r *sortingRuleRepository) CreateTransaction(ctx context.Context) (db.DbConnection, error) {
 	return r.db.BeginTx(ctx)
 }
 

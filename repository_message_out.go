@@ -37,7 +37,7 @@ type MessageOutRepository interface {
 	RegisterSampleCodes(ctx context.Context, id uuid.UUID, sampleCodes []string) ([]uuid.UUID, error)
 
 	WithTransaction(tx db.DbConnection) MessageOutRepository
-	CreateTransaction() (db.DbConnection, error)
+	CreateTransaction(ctx context.Context) (db.DbConnection, error)
 }
 
 type messageOutRepository struct {
@@ -418,7 +418,7 @@ func (r *messageOutRepository) WithTransaction(tx db.DbConnection) MessageOutRep
 	return &txRepo
 }
 
-func (r *messageOutRepository) CreateTransaction() (db.DbConnection, error) {
+func (r *messageOutRepository) CreateTransaction(ctx context.Context) (db.DbConnection, error) {
 	return r.db.BeginTx(ctx)
 }
 

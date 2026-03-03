@@ -20,7 +20,7 @@ type MessageOutOrderRepository interface {
 	GetBySampleCodesAndRequestMappingIDs(ctx context.Context, sampleCodes []string, instrumentID uuid.UUID, includePending bool) (map[string]map[uuid.UUID][]MessageOutOrder, error)
 	GetTestCodesToRevokeBySampleCodes(ctx context.Context, instrumentID uuid.UUID, analysisRequestIDs []uuid.UUID) (map[string][]string, error)
 	GetTestCodesToCancelBySampleCodes(ctx context.Context, instrumentID uuid.UUID, analysisRequestIDs []uuid.UUID) (map[string][]string, error)
-	CreateTransaction() (db.DbConnection, error)
+	CreateTransaction(ctx context.Context) (db.DbConnection, error)
 
 	WithTransaction(tx db.DbConnection) MessageOutOrderRepository
 }
@@ -203,7 +203,7 @@ func (r *messageOutOrderRepository) GetTestCodesToCancelBySampleCodes(ctx contex
 	return testCodesBySampleCodes, nil
 }
 
-func (r *messageOutOrderRepository) CreateTransaction() (db.DbConnection, error) {
+func (r *messageOutOrderRepository) CreateTransaction(ctx context.Context) (db.DbConnection, error) {
 	return r.db.BeginTx(ctx)
 }
 

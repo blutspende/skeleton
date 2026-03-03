@@ -85,21 +85,21 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 
 	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, []string{}, nil, pg, dbConn, schemaName, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, messageService, skeletonManager, cerberusClientMock, &longPollClientMock{AnalysisRequests: analysisResultsWithoutAnalysisRequestsTest_AnalysisRequests}, deaClientMock, configuration)
 
-	_, _ = dbConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description)
+	_, _ = dbConn.Exec(ctx, fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description)
 		VALUES ('abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
-	_, _ = dbConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_instruments(id, protocol_id, "name", hostname, client_port, enabled, connection_mode, running_mode, captureresults, capturediagnostics, replytoquery, status, timezone, file_encoding)
+	_, _ = dbConn.Exec(ctx, fmt.Sprintf(`INSERT INTO %s.sk_instruments(id, protocol_id, "name", hostname, client_port, enabled, connection_mode, running_mode, captureresults, capturediagnostics, replytoquery, status, timezone, file_encoding)
 		VALUES ('93f36696-5ff0-45a9-87eb-ca5c064c5890', 'abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'TestInstrument', '192.168.1.13', NULL, TRUE, 'TCP_SERVER_ONLY', 'PRODUCTION', TRUE, TRUE, TRUE, 'ONLINE', 'Europe/Budapest', 'UTF8');`, schemaName))
-	_, _ = dbConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_analyte_mappings(id, instrument_id, instrument_analyte, analyte_id, result_type)
+	_, _ = dbConn.Exec(ctx, fmt.Sprintf(`INSERT INTO %s.sk_analyte_mappings(id, instrument_id, instrument_analyte, analyte_id, result_type)
 		VALUES ('8facbaeb-368f-482a-9169-4b128632f9e0', '93f36696-5ff0-45a9-87eb-ca5c064c5890', 'TESTANALYTE', '51bfea41-1b7e-48f7-8b35-46d930216de7', 'pein');`, schemaName))
-	_, _ = dbConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_channel_mappings(id, instrument_channel, channel_id, analyte_mapping_id)
+	_, _ = dbConn.Exec(ctx, fmt.Sprintf(`INSERT INTO %s.sk_channel_mappings(id, instrument_channel, channel_id, analyte_mapping_id)
 		VALUES ('eb780147-a519-4e88-9a5f-961ce531f219', 'TestInstrumentChannel', '9fe9b1f9-e1fd-4669-873b-c2446d5d6b6f', '8facbaeb-368f-482a-9169-4b128632f9e0');`, schemaName))
-	_, _ = dbConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_result_mappings(id, analyte_mapping_id, "key", "value", "index")
+	_, _ = dbConn.Exec(ctx, fmt.Sprintf(`INSERT INTO %s.sk_result_mappings(id, analyte_mapping_id, "key", "value", "index")
 		VALUES ('0e49a9a7-8ef0-4ef3-a1e1-6277398fcc08', :analyte_mapping_id, 'pos', 'pos', 0),
 		       ('329080eb-2dca-4a05-9730-24444cc3b487', :analyte_mapping_id, 'neg', 'neg', 1);`, schemaName))
-	_, err := dbConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_request_mappings(id, code, instrument_id)
+	_, err := dbConn.Exec(ctx, fmt.Sprintf(`INSERT INTO %s.sk_request_mappings(id, code, instrument_id)
 		VALUES ('9e83ad17-40bc-44b2-b6c9-50a9f559387b', 'Test1', '93f36696-5ff0-45a9-87eb-ca5c064c5890');`, schemaName))
-	_, err = dbConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_message_in(id, dea_raw_message_id, instrument_id,protocol_id,type,encoding,raw) VALUES ('2f369489-77d3-464e-87e2-edbeffa62ae7', '2f369489-77d3-464e-87e2-edbeffa62ae7','93f36696-5ff0-45a9-87eb-ca5c064c5890','abb539a3-286f-4c15-a7b7-2e9adf6eab91','RESULT','ASCII','')`, schemaName))
-	_, err = dbConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_message_in(id, dea_raw_message_id, instrument_id,protocol_id,type,encoding,raw) VALUES ('43a7b261-3e1d-4065-935a-ac15841f13e4', '43a7b261-3e1d-4065-935a-ac15841f13e4','93f36696-5ff0-45a9-87eb-ca5c064c5890','abb539a3-286f-4c15-a7b7-2e9adf6eab91','RESULT','ASCII','')`, schemaName))
+	_, err = dbConn.Exec(ctx, fmt.Sprintf(`INSERT INTO %s.sk_message_in(id, dea_raw_message_id, instrument_id,protocol_id,type,encoding,raw) VALUES ('2f369489-77d3-464e-87e2-edbeffa62ae7', '2f369489-77d3-464e-87e2-edbeffa62ae7','93f36696-5ff0-45a9-87eb-ca5c064c5890','abb539a3-286f-4c15-a7b7-2e9adf6eab91','RESULT','ASCII','')`, schemaName))
+	_, err = dbConn.Exec(ctx, fmt.Sprintf(`INSERT INTO %s.sk_message_in(id, dea_raw_message_id, instrument_id,protocol_id,type,encoding,raw) VALUES ('43a7b261-3e1d-4065-935a-ac15841f13e4', '43a7b261-3e1d-4065-935a-ac15841f13e4','93f36696-5ff0-45a9-87eb-ca5c064c5890','abb539a3-286f-4c15-a7b7-2e9adf6eab91','RESULT','ASCII','')`, schemaName))
 	go func() {
 		_ = skeletonInstance.Start()
 	}()
@@ -1433,8 +1433,8 @@ func (m *analysisRepositoryMock) MarkAnalysisRequestsAsProcessed(ctx context.Con
 func (m *analysisRepositoryMock) MarkAnalysisResultsAsProcessed(ctx context.Context, analysisRequestIDs []uuid.UUID) error {
 	return nil
 }
-func (m *analysisRepositoryMock) CreateTransaction() (db.DbConnection, error) {
-	return db.NewEmptyDbConnection(), nil
+func (m *analysisRepositoryMock) CreateTransaction(ctx context.Context) (db.DbConnection, error) {
+	return db.NewFakeDbConnection(), nil
 }
 func (m *analysisRepositoryMock) WithTransaction(tx db.DbConnection) AnalysisRepository {
 	return m

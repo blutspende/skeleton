@@ -358,7 +358,7 @@ type InstrumentRepository interface {
 	UpsertInstrumentSetting(ctx context.Context, instrumentID uuid.UUID, setting InstrumentSetting) error
 	DeleteInstrumentSettings(ctx context.Context, ids []uuid.UUID) error
 	CheckAnalytesUsage(ctx context.Context, analyteIDs []uuid.UUID) (map[uuid.UUID][]Instrument, error)
-	CreateTransaction() (db.DbConnection, error)
+	CreateTransaction(ctx context.Context) (db.DbConnection, error)
 	WithTransaction(tx db.DbConnection) InstrumentRepository
 }
 
@@ -1501,7 +1501,7 @@ func (r *instrumentRepository) CheckAnalytesUsage(ctx context.Context, analyteID
 	return analyteUsageMap, nil
 }
 
-func (r *instrumentRepository) CreateTransaction() (db.DbConnection, error) {
+func (r *instrumentRepository) CreateTransaction(ctx context.Context) (db.DbConnection, error) {
 	return r.db.BeginTx(ctx)
 }
 

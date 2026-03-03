@@ -5,8 +5,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/blutspende/bloodlab-common/db"
 	"time"
+
+	"github.com/blutspende/bloodlab-common/db"
 
 	"github.com/rs/zerolog/log"
 
@@ -26,7 +27,7 @@ type ConditionRepository interface {
 	UpdateCondition(ctx context.Context, condition Condition) error
 	UpdateConditionOperand(ctx context.Context, condition ConditionOperand) error
 
-	CreateTransaction() (db.DbConnection, error)
+	CreateTransaction(ctx context.Context) (db.DbConnection, error)
 	WithTransaction(db db.DbConnection) ConditionRepository
 }
 
@@ -260,7 +261,7 @@ func convertDAOToConditionOperand(dao conditionOperandDAO) ConditionOperand {
 	return conditionOperand
 }
 
-func (r *conditionRepository) CreateTransaction() (db.DbConnection, error) {
+func (r *conditionRepository) CreateTransaction(ctx context.Context) (db.DbConnection, error) {
 	return r.db.BeginTx(ctx)
 }
 

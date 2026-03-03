@@ -477,7 +477,7 @@ type AnalysisRepository interface {
 	MarkReagentControlResultRelationsAsProcessed(ctx context.Context, controlResultID uuid.UUID, reagentIDs []uuid.UUID) error
 	MarkAnalysisResultControlResultRelationsAsProcessed(ctx context.Context, controlResultID uuid.UUID, analysisResultIDs []uuid.UUID) error
 
-	CreateTransaction() (db.DbConnection, error)
+	CreateTransaction(ctx context.Context) (db.DbConnection, error)
 	WithTransaction(tx db.DbConnection) AnalysisRepository
 }
 
@@ -3868,7 +3868,7 @@ func (r *analysisRepository) MarkAnalysisResultControlResultRelationsAsProcessed
 	return err
 }
 
-func (r *analysisRepository) CreateTransaction() (db.DbConnection, error) {
+func (r *analysisRepository) CreateTransaction(ctx context.Context) (db.DbConnection, error) {
 	return r.db.BeginTx(ctx)
 }
 

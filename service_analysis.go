@@ -62,7 +62,7 @@ func (as *analysisService) CreateAnalysisRequests(ctx context.Context, analysisR
 		}
 		analysisRequests[i].CreatedAt = ts
 	}
-	tx, err := as.analysisRepository.CreateTransaction()
+	tx, err := as.analysisRepository.CreateTransaction(ctx)
 	if err != nil {
 		return err
 	}
@@ -118,7 +118,7 @@ func (as *analysisService) ProcessAnalysisRequests(ctx context.Context, analysis
 			}
 		}
 
-		tx, err := as.analysisRepository.CreateTransaction()
+		tx, err := as.analysisRepository.CreateTransaction(ctx)
 		if err != nil {
 			log.Error().Err(err).Msg("failed to create transaction")
 			return err
@@ -190,7 +190,7 @@ func (as *analysisService) ReexamineAnalysisRequestsBatch(ctx context.Context, w
 }
 
 func (as *analysisService) CreateAnalysisResultsBatch(ctx context.Context, analysisResults AnalysisResultSet) ([]AnalysisResult, error) {
-	tx, err := as.analysisRepository.CreateTransaction()
+	tx, err := as.analysisRepository.CreateTransaction(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to create transaction")
 		return nil, err
@@ -607,7 +607,7 @@ func (as *analysisService) createReagentsByAnalysisResultID(ctx context.Context,
 }
 
 func (as *analysisService) CreateControlResultBatch(ctx context.Context, controlResults []StandaloneControlResult) ([]StandaloneControlResult, []uuid.UUID, error) {
-	tx, err := as.analysisRepository.CreateTransaction()
+	tx, err := as.analysisRepository.CreateTransaction(ctx)
 	var analysisResultIds []uuid.UUID
 	if err != nil {
 		return controlResults, analysisResultIds, err
@@ -708,7 +708,7 @@ func (as *analysisService) GetAnalysisResultsByIDsWithRecalculatedStatus(ctx con
 		}
 	}
 
-	tx, err := as.analysisRepository.CreateTransaction()
+	tx, err := as.analysisRepository.CreateTransaction(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to create transaction")
 		return make([]AnalysisResult, 0), err
@@ -745,7 +745,7 @@ func (as *analysisService) ValidateAndUpdatingExistingControlResults(ctx context
 		}
 	}
 
-	tx, err := as.analysisRepository.CreateTransaction()
+	tx, err := as.analysisRepository.CreateTransaction(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to create transaction")
 		return err
@@ -796,7 +796,7 @@ func (as *analysisService) AnalysisResultStatusRecalculationAndSendForProcessing
 }
 
 func (as *analysisService) QueueAnalysisResults(ctx context.Context, results []AnalysisResult) error {
-	tx, err := as.analysisRepository.CreateTransaction()
+	tx, err := as.analysisRepository.CreateTransaction(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to create transaction")
 		return err

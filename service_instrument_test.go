@@ -261,7 +261,7 @@ func TestUpdateInstrument(t *testing.T) {
 	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
 
 	var protocolID uuid.UUID
-	err := dbConn.QueryRowx(`INSERT INTO instrument_test.sk_supported_protocols (name, description) VALUES('TestProtocol', 'Test Protocol Description') RETURNING id;`).Scan(&protocolID)
+	err := dbConn.QueryRowx(ctx, `INSERT INTO instrument_test.sk_supported_protocols (name, description) VALUES('TestProtocol', 'Test Protocol Description') RETURNING id;`).Scan(&protocolID)
 	assert.Nil(t, err)
 
 	clientPort := 1234
@@ -635,7 +635,7 @@ func TestNotVerifiedInstrument(t *testing.T) {
 	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
 
 	var protocolID uuid.UUID
-	err := dbConn.QueryRowx(`INSERT INTO instrument_test.sk_supported_protocols (name, description) VALUES('TestProtocol', 'Test Protocol Description') RETURNING id;`).Scan(&protocolID)
+	err := dbConn.QueryRowx(ctx, `INSERT INTO instrument_test.sk_supported_protocols (name, description) VALUES('TestProtocol', 'Test Protocol Description') RETURNING id;`).Scan(&protocolID)
 	assert.Nil(t, err)
 
 	clientPort := 1234
@@ -1112,7 +1112,7 @@ func TestTrimAndValidateHostname(t *testing.T) {
 	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
 
 	var protocolID uuid.UUID
-	err := dbConn.QueryRowx(`INSERT INTO instrument_test.sk_supported_protocols (name, description) VALUES('TestProtocol', 'Test Protocol Description') RETURNING id;`).Scan(&protocolID)
+	err := dbConn.QueryRowx(ctx, `INSERT INTO instrument_test.sk_supported_protocols (name, description) VALUES('TestProtocol', 'Test Protocol Description') RETURNING id;`).Scan(&protocolID)
 	assert.Nil(t, err)
 	clientPort := 1234
 
@@ -1438,8 +1438,8 @@ func (r *instrumentRepositoryMock) DeleteInstrumentSettings(ctx context.Context,
 func (r *instrumentRepositoryMock) CheckAnalytesUsage(ctx context.Context, analyteIDs []uuid.UUID) (map[uuid.UUID][]Instrument, error) {
 	return make(map[uuid.UUID][]Instrument), nil
 }
-func (r *instrumentRepositoryMock) CreateTransaction() (db.DbConnection, error) {
-	return r.db, nil
+func (r *instrumentRepositoryMock) CreateTransaction(ctx context.Context) (db.DbConnection, error) {
+	return db.NewFakeDbConnection(), nil
 }
 func (r *instrumentRepositoryMock) WithTransaction(tx db.DbConnection) InstrumentRepository {
 	return r

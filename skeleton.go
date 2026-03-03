@@ -101,7 +101,7 @@ func (s *skeleton) GetAnalysisRequestExtraValues(ctx context.Context, analysisRe
 }
 
 func (s *skeleton) SaveAnalysisRequestsInstrumentTransmissions(ctx context.Context, analysisRequestIDs []uuid.UUID, instrumentID uuid.UUID) error {
-	tx, err := s.analysisRepository.CreateTransaction()
+	tx, err := s.analysisRepository.CreateTransaction(ctx)
 	if err != nil {
 		return err
 	}
@@ -662,7 +662,9 @@ func (s *skeleton) migrateUp(ctx context.Context, db *sqlx.DB, schemaName string
 func (s *skeleton) Start() error {
 	s.cutoffTime = time.Now().UTC()
 
-	_, err := s.postgres.Connect(context.TODO())
+	ctx := context.Background()
+
+	_, err := s.postgres.Connect(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to connect to database")
 		return err
@@ -707,7 +709,7 @@ func (s *skeleton) Start() error {
 	}
 
 	// Note: Cache instruments on startup
-	_, _ = s.instrumentService.GetInstruments(context.Background())
+	_, _ = s.instrumentService.GetInstruments(ctx)
 
 	err = s.registerDriverToCerberus(s.ctx)
 	if err != nil {
@@ -715,7 +717,7 @@ func (s *skeleton) Start() error {
 		return err
 	}
 	go func() {
-		s.runCleanupJobs()
+		s.runCleanupJobs() //TODO: give the ctx to it? (some functions use context.Background() internally)
 		for {
 			select {
 			case <-time.After(time.Hour * time.Duration(s.config.CleanupJobRunIntervalHours)):
@@ -1238,7 +1240,7 @@ func (s *skeleton) cleanupAnalysisRequests() {
 			log.Trace().Msg("stopping to cleanup analysis requests")
 			return
 		default:
-			tx, err := s.analysisRepository.CreateTransaction()
+			tx, err := s.analysisRepository.CreateTransaction(context.Background())
 			if err != nil {
 				log.Error().Err(err).Msg("cleanup old analysis requests failed")
 				return
@@ -1269,7 +1271,7 @@ func (s *skeleton) cleanupAnalysisResults() {
 			log.Trace().Msg("stopping to cleanup analysis results")
 			return
 		default:
-			tx, err := s.analysisRepository.CreateTransaction()
+			tx, err := s.analysisRepository.CreateTransaction(context.Background())
 			if err != nil {
 				log.Error().Err(err).Msg("cleanup old analysis results failed")
 				return

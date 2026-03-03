@@ -63,7 +63,7 @@ func (s *messageService) AddAnalysisRequestsToMessageOutOrder(ctx context.Contex
 }
 
 func (s *messageService) DeleteRevokedUnsentOrderMessagesByAnalysisRequestIDs(ctx context.Context, analysisRequestIDs []uuid.UUID) ([]uuid.UUID, error) {
-	tx, err := s.messageOutRepository.CreateTransaction()
+	tx, err := s.messageOutRepository.CreateTransaction(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +158,7 @@ func (s *messageService) SaveMessageOutBatch(ctx context.Context, messages []Mes
 			messages[i].CreatedAt = ts
 		}
 	}
-	tx, err := s.messageOutRepository.CreateTransaction()
+	tx, err := s.messageOutRepository.CreateTransaction(ctx)
 	if err != nil {
 		return nil, err
 	}

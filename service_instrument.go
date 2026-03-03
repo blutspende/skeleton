@@ -70,7 +70,7 @@ func (s *instrumentService) CreateInstrument(ctx context.Context, instrument Ins
 	if ip == nil && !urlRegex.MatchString(instrument.Hostname) {
 		return uuid.Nil, ErrInvalidHostName
 	}
-	transaction, err := s.instrumentRepository.CreateTransaction()
+	transaction, err := s.instrumentRepository.CreateTransaction(ctx)
 	if err != nil {
 		return uuid.Nil, err
 	}
@@ -554,7 +554,7 @@ func (s *instrumentService) GetInstrumentByIP(ctx context.Context, ip string) (I
 }
 
 func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Instrument, userId uuid.UUID) error {
-	tx, err := s.instrumentRepository.CreateTransaction()
+	tx, err := s.instrumentRepository.CreateTransaction(ctx)
 	if err != nil {
 		return db.ErrBeginTransactionFailed
 	}
@@ -908,7 +908,7 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 }
 
 func (s *instrumentService) DeleteInstrument(ctx context.Context, id uuid.UUID) error {
-	tx, err := s.instrumentRepository.CreateTransaction()
+	tx, err := s.instrumentRepository.CreateTransaction(ctx)
 	err = s.instrumentRepository.WithTransaction(tx).DeleteFileServerConfig(ctx, id)
 	if err != nil {
 		_ = tx.Rollback()
@@ -963,7 +963,7 @@ func (s *instrumentService) GetNotSpecifiedExpectedControlResultsByInstrumentId(
 }
 
 func (s *instrumentService) CreateExpectedControlResults(ctx context.Context, expectedControlResults []ExpectedControlResult, userId uuid.UUID) error {
-	tx, err := s.instrumentRepository.CreateTransaction()
+	tx, err := s.instrumentRepository.CreateTransaction(ctx)
 
 	analyteMappingIds := make([]uuid.UUID, 0)
 
@@ -998,7 +998,7 @@ func (s *instrumentService) CreateExpectedControlResults(ctx context.Context, ex
 }
 
 func (s *instrumentService) UpdateExpectedControlResults(ctx context.Context, instrumentId uuid.UUID, expectedControlResults []ExpectedControlResult, userId uuid.UUID) error {
-	tx, err := s.instrumentRepository.CreateTransaction()
+	tx, err := s.instrumentRepository.CreateTransaction(ctx)
 
 	createExpectedControlResults := make([]ExpectedControlResult, 0)
 	updateExpectedControlResults := make([]ExpectedControlResult, 0)
@@ -1090,7 +1090,7 @@ func (s *instrumentService) UpdateExpectedControlResults(ctx context.Context, in
 }
 
 func (s *instrumentService) DeleteExpectedControlResult(ctx context.Context, expectedControlResultId uuid.UUID, userId uuid.UUID) error {
-	tx, err := s.instrumentRepository.CreateTransaction()
+	tx, err := s.instrumentRepository.CreateTransaction(ctx)
 
 	err = s.instrumentRepository.WithTransaction(tx).DeleteExpectedControlResults(ctx, []uuid.UUID{expectedControlResultId}, userId)
 	if err != nil {
@@ -1155,7 +1155,7 @@ func (s *instrumentService) GetManufacturerTests(ctx context.Context) ([]Support
 }
 
 func (s *instrumentService) UpsertSupportedProtocol(ctx context.Context, id uuid.UUID, name string, description string, abilities []ProtocolAbility, settings []ProtocolSetting) error {
-	tx, err := s.instrumentRepository.CreateTransaction()
+	tx, err := s.instrumentRepository.CreateTransaction(ctx)
 	if err != nil {
 		return err
 	}
@@ -1214,7 +1214,7 @@ func (s *instrumentService) DeleteProtocolAbilities(ctx context.Context, protoco
 }
 
 func (s *instrumentService) UpsertManufacturerTests(ctx context.Context, manufacturerTests []SupportedManufacturerTests) error {
-	tx, err := s.instrumentRepository.CreateTransaction()
+	tx, err := s.instrumentRepository.CreateTransaction(ctx)
 	if err != nil {
 		return err
 	}

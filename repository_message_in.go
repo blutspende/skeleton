@@ -37,7 +37,7 @@ type MessageInRepository interface {
 	RegisterSampleCodes(ctx context.Context, id uuid.UUID, sampleCodes []string) ([]uuid.UUID, error)
 
 	WithTransaction(tx db.DbConnection) MessageInRepository
-	CreateTransaction() (db.DbConnection, error)
+	CreateTransaction(ctx context.Context) (db.DbConnection, error)
 }
 
 type messageInRepository struct {
@@ -398,7 +398,7 @@ func (r *messageInRepository) WithTransaction(tx db.DbConnection) MessageInRepos
 	return &txRepo
 }
 
-func (r *messageInRepository) CreateTransaction() (db.DbConnection, error) {
+func (r *messageInRepository) CreateTransaction(ctx context.Context) (db.DbConnection, error) {
 	return r.db.BeginTx(ctx)
 }
 
