@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	commondb "github.com/blutspende/bloodlab-common/db"
 	"github.com/blutspende/bloodlab-common/encoding"
 	"github.com/blutspende/bloodlab-common/timezone"
 	"github.com/blutspende/bloodlab-common/utils"
@@ -1805,7 +1806,7 @@ func convertSupportedProtocolDAOToSupportedProtocol(dao supportedProtocolDAO) Su
 	return SupportedProtocol{
 		ID:          dao.ID,
 		Name:        dao.Name,
-		Description: utils.NullStringToStringPointer(dao.Description),
+		Description: commondb.NullStringToStringPointer(dao.Description),
 	}
 }
 

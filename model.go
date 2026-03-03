@@ -5,10 +5,8 @@ import (
 	"time"
 
 	"github.com/blutspende/bloodlab-common/encoding"
-	"github.com/blutspende/bloodlab-common/messagetype"
+	"github.com/blutspende/bloodlab-common/instrument"
 	"github.com/blutspende/bloodlab-common/timezone"
-
-	"github.com/blutspende/bloodlab-common/messagestatus"
 	"github.com/google/uuid"
 )
 
@@ -585,9 +583,9 @@ type MessageIn struct {
 	ID                 uuid.UUID
 	InstrumentID       uuid.UUID
 	InstrumentModuleID uuid.NullUUID
-	Status             messagestatus.MessageStatus
+	Status             instrument.MessageStatus
 	ProtocolID         uuid.UUID
-	Type               messagetype.MessageType
+	Type               instrument.MessageType
 	Encoding           encoding.Encoding
 	Raw                []byte
 	Error              *string
@@ -601,9 +599,9 @@ type MessageIn struct {
 type MessageOut struct {
 	ID                  uuid.UUID
 	InstrumentID        uuid.UUID
-	Status              messagestatus.MessageStatus
+	Status              instrument.MessageStatus
 	ProtocolID          uuid.UUID
-	Type                messagetype.MessageType
+	Type                instrument.MessageType
 	Encoding            encoding.Encoding
 	Raw                 []byte
 	Error               *string

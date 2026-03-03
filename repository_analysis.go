@@ -4,17 +4,15 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
+	commondb "github.com/blutspende/bloodlab-common/db"
 	"github.com/blutspende/bloodlab-common/utils"
-
-	"errors"
-
 	"github.com/blutspende/skeleton/db"
-
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/rs/zerolog/log"
@@ -3975,7 +3973,7 @@ func convertAnalysisResultDAOToAnalysisResult(analysisResultDAO analysisResultDA
 		Operator:        analysisResultDAO.Operator,
 		InstrumentRunID: analysisResultDAO.InstrumentRunID,
 		Edited:          analysisResultDAO.Edited,
-		EditReason:      utils.NullStringToString(analysisResultDAO.EditReason),
+		EditReason:      commondb.NullStringToString(analysisResultDAO.EditReason),
 		IsInvalid:       analysisResultDAO.IsInvalid,
 		Warnings:        convertAnalysisWarningDAOsToWarnings(analysisResultDAO.Warnings),
 		ChannelResults:  convertChannelResultDAOsToChannelResults(analysisResultDAO.ChannelResults),
@@ -4189,7 +4187,7 @@ func convertCerberusQueueItemToCerberusQueueItemDAO(cerberusQueueItem CerberusQu
 		JsonMessage:         cerberusQueueItem.JsonMessage,
 		LastHTTPStatus:      cerberusQueueItem.LastHTTPStatus,
 		LastError:           cerberusQueueItem.LastError,
-		LastErrorAt:         utils.TimePointerToNullTime(cerberusQueueItem.LastErrorAt),
+		LastErrorAt:         commondb.TimePointerToNullTime(cerberusQueueItem.LastErrorAt),
 		TrialCount:          cerberusQueueItem.TrialCount,
 		RetryNotBefore:      cerberusQueueItem.RetryNotBefore,
 		RawResponse:         cerberusQueueItem.RawResponse,
@@ -4203,7 +4201,7 @@ func convertCerberusQueueItemDAOToCerberusQueueItem(cerberusQueueItemDAO cerberu
 		JsonMessage:         cerberusQueueItemDAO.JsonMessage,
 		LastHTTPStatus:      cerberusQueueItemDAO.LastHTTPStatus,
 		LastError:           cerberusQueueItemDAO.LastError,
-		LastErrorAt:         utils.NullTimeToTimePointer(cerberusQueueItemDAO.LastErrorAt),
+		LastErrorAt:         commondb.NullTimeToTimePointer(cerberusQueueItemDAO.LastErrorAt),
 		TrialCount:          cerberusQueueItemDAO.TrialCount,
 		RetryNotBefore:      cerberusQueueItemDAO.RetryNotBefore,
 		RawResponse:         cerberusQueueItemDAO.RawResponse,
@@ -4357,7 +4355,7 @@ func convertImageDAOsToImages(imageDAOs []imageDAO) []Image {
 		images[i] = Image{
 			ID:          imageDAO.ID,
 			Name:        imageDAO.Name,
-			Description: utils.NullStringToStringPointer(imageDAO.Description),
+			Description: commondb.NullStringToStringPointer(imageDAO.Description),
 			DeaImageID:  imageDAO.DeaImageID,
 		}
 	}
@@ -4370,7 +4368,7 @@ func convertControlResultImageDAOsToImages(imageDAOs []controlResultImageDAO) []
 		images[i] = Image{
 			ID:          imageDAO.ID,
 			Name:        imageDAO.Name,
-			Description: utils.NullStringToStringPointer(imageDAO.Description),
+			Description: commondb.NullStringToStringPointer(imageDAO.Description),
 			DeaImageID:  imageDAO.DeaImageID,
 		}
 	}

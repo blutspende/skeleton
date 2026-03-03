@@ -2,13 +2,13 @@ package skeleton
 
 import (
 	"context"
+	"time"
+
 	"github.com/blutspende/bloodlab-common/encoding"
-	"github.com/blutspende/bloodlab-common/messagestatus"
-	"github.com/blutspende/bloodlab-common/messagetype"
+	"github.com/blutspende/bloodlab-common/instrument"
 	"github.com/blutspende/bloodlab-common/utils"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
-	"time"
 )
 
 type MessageService interface {
@@ -119,10 +119,10 @@ func (s *messageService) SaveMessageIn(ctx context.Context, message MessageIn) (
 	var err error
 	message.CreatedAt = time.Now().UTC()
 	if !isStatusValid(message.Status) {
-		message.Status = messagestatus.Stored
+		message.Status = instrument.MessageStatusStored
 	}
 	if !isTypeValid(message.Type) {
-		message.Type = messagetype.Unidentified
+		message.Type = instrument.MessageTypeUnidentified
 	}
 	message.ID, err = s.messageInRepository.Create(ctx, message)
 	if err != nil {
@@ -149,10 +149,10 @@ func (s *messageService) SaveMessageOutBatch(ctx context.Context, messages []Mes
 	}
 	for i := range messages {
 		if !isStatusValid(messages[i].Status) {
-			messages[i].Status = messagestatus.Stored
+			messages[i].Status = instrument.MessageStatusStored
 		}
 		if !isTypeValid(messages[i].Type) {
-			messages[i].Type = messagetype.Unidentified
+			messages[i].Type = instrument.MessageTypeUnidentified
 		}
 		if messages[i].CreatedAt.IsZero() {
 			messages[i].CreatedAt = ts
@@ -253,7 +253,7 @@ func (s *messageService) StartDEAArchiving(ctx context.Context, maxRetries int) 
 		case messagesToArchive := <-s.messageInArchivingChan:
 			failedMessagesByIDs := make(map[uuid.UUID]MessageIn)
 			for i := range messagesToArchive {
-				raw, err := encoding.ConvertFromEncodingToUtf8(messagesToArchive[i].Raw, messagesToArchive[i].Encoding)
+				raw, err := encoding.ConvertFromEncodingToUTF8(messagesToArchive[i].Raw, messagesToArchive[i].Encoding)
 				if err != nil {
 					log.Error().Err(err).Interface("encoding", messagesToArchive[i].Encoding).Interface("messageID", messagesToArchive[i].ID).Msg("failed to encode instrument message to UTF-8")
 					raw = string(messagesToArchive[i].Raw)
@@ -267,7 +267,7 @@ func (s *messageService) StartDEAArchiving(ctx context.Context, maxRetries int) 
 				})
 				if err != nil {
 					errorMsg := err.Error()
-					messagesToArchive[i].Status = messagestatus.Error
+					messagesToArchive[i].Status = instrument.MessageStatusError
 					messagesToArchive[i].Error = &errorMsg
 					messagesToArchive[i].RetryCount += 1
 					if messagesToArchive[i].RetryCount <= maxRetries {
@@ -295,7 +295,7 @@ func (s *messageService) StartDEAArchiving(ctx context.Context, maxRetries int) 
 		case messagesToArchive := <-s.messageOutArchivingChan:
 			failedMessagesByIDs := make(map[uuid.UUID]MessageOut)
 			for i := range messagesToArchive {
-				raw, err := encoding.ConvertFromEncodingToUtf8(messagesToArchive[i].Raw, messagesToArchive[i].Encoding)
+				raw, err := encoding.ConvertFromEncodingToUTF8(messagesToArchive[i].Raw, messagesToArchive[i].Encoding)
 				if err != nil {
 					log.Error().Err(err).Interface("encoding", messagesToArchive[i].Encoding).Interface("messageID", messagesToArchive[i].ID).Msg("failed to encode instrument message to UTF-8")
 					raw = string(messagesToArchive[i].Raw)
@@ -736,14 +736,14 @@ func NewMessageService(deaClient DeaClientV1, cerberusClient CerberusClient, mes
 	}
 }
 
-func isStatusValid(status messagestatus.MessageStatus) bool {
-	return status == messagestatus.Sent || status == messagestatus.Error || status == messagestatus.Processed || status == messagestatus.Stored
+func isStatusValid(status instrument.MessageStatus) bool {
+	return status == instrument.MessageStatusSent || status == instrument.MessageStatusError || status == instrument.MessageStatusProcessed || status == instrument.MessageStatusStored
 }
 
-func isTypeValid(messageType messagetype.MessageType) bool {
-	return messageType == messagetype.Query || messageType == messagetype.Order || messageType == messagetype.Result ||
-		messageType == messagetype.Acknowledgement || messageType == messagetype.Cancellation || messageType == messagetype.Reorder ||
-		messageType == messagetype.Diagnostics || messageType == messagetype.Unidentified
+func isTypeValid(messageType instrument.MessageType) bool {
+	return messageType == instrument.MessageTypeQuery || messageType == instrument.MessageTypeOrder || messageType == instrument.MessageTypeResult ||
+		messageType == instrument.MessageTypeAcknowledgement || messageType == instrument.MessageTypeCancellation || messageType == instrument.MessageTypeReorder ||
+		messageType == instrument.MessageTypeDiagnostics || messageType == instrument.MessageTypeUnidentified
 }
 
 type sampleCodesWithIDsAndMessageID struct {

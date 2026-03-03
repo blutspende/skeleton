@@ -4,13 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/blutspende/bloodlab-common/messagestatus"
+	"strings"
+
+	"github.com/blutspende/bloodlab-common/instrument"
 	"github.com/blutspende/bloodlab-common/utils"
 	"github.com/blutspende/skeleton/db"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/rs/zerolog/log"
-	"strings"
 )
 
 type MessageOutOrderRepository interface {
@@ -88,7 +89,7 @@ func (r *messageOutOrderRepository) AddAnalysisRequestsToMessageOutOrder(ctx con
 }
 
 func (r *messageOutOrderRepository) GetBySampleCodesAndRequestMappingIDs(ctx context.Context, sampleCodes []string, instrumentID uuid.UUID, includePending bool) (map[string]map[uuid.UUID][]MessageOutOrder, error) {
-	queryArgs := []interface{}{sampleCodes, instrumentID, messagestatus.Sent}
+	queryArgs := []interface{}{sampleCodes, instrumentID, instrument.MessageStatusSent}
 	filterCondition := " AND (smo.status = ?"
 	if includePending {
 		filterCondition += " OR smo.retry_count < ?"
@@ -140,7 +141,7 @@ func (r *messageOutOrderRepository) GetTestCodesToRevokeBySampleCodes(ctx contex
 											WHERE smoor.message_out_order_id = smoo.id AND sar.deleted_at IS NULL)
 						AND smooar.analysis_request_id IN (?);`
 	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
-	query, args, _ := sqlx.In(query, instrumentID, messagestatus.Sent, analysisRequestIDs)
+	query, args, _ := sqlx.In(query, instrumentID, instrument.MessageStatusSent, analysisRequestIDs)
 	query = r.db.Rebind(query)
 	rows, err := r.db.QueryxContext(ctx, query, args...)
 	if err != nil {
@@ -176,7 +177,7 @@ func (r *messageOutOrderRepository) GetTestCodesToCancelBySampleCodes(ctx contex
 				INNER JOIN %schema_name%.sk_message_out_order_analysis_requests smooar on smoo.id = smooar.message_out_order_id
 					WHERE smo.instrument_id = ? AND smo.status = ? AND smooar.analysis_request_id IN (?);`
 	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
-	query, args, _ := sqlx.In(query, instrumentID, messagestatus.Sent, analysisRequestIDs)
+	query, args, _ := sqlx.In(query, instrumentID, instrument.MessageStatusSent, analysisRequestIDs)
 	query = r.db.Rebind(query)
 	rows, err := r.db.QueryxContext(ctx, query, args...)
 	if err != nil {

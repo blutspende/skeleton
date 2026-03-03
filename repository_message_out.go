@@ -5,17 +5,17 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/blutspende/bloodlab-common/encoding"
-	"github.com/blutspende/bloodlab-common/messagestatus"
-	"github.com/blutspende/bloodlab-common/messagetype"
+	"github.com/blutspende/bloodlab-common/instrument"
 	"github.com/blutspende/bloodlab-common/utils"
 	"github.com/blutspende/skeleton/db"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/rs/zerolog/log"
-	"strconv"
-	"strings"
-	"time"
 )
 
 type MessageOutRepository interface {
@@ -106,7 +106,7 @@ func (r *messageOutRepository) GetFullyRevokedUnsentMessageIDsByAnalysisRequestI
 													( SELECT 1 FROM %schema_name%.sk_message_out_order_analysis_requests smoor 
 														INNER JOIN %schema_name%.sk_analysis_requests sar on sar.id = smoor.analysis_request_id
 														WHERE smoor.message_out_order_id = smoo.id AND sar.deleted_at IS NULL);`, "%schema_name%", r.dbSchema)
-		query, args, err := sqlx.In(query, messagetype.Order, messagetype.Reorder, messagestatus.Sent, analysisRequestIDs[low:high])
+		query, args, err := sqlx.In(query, instrument.MessageTypeOrder, instrument.MessageTypeReorder, instrument.MessageStatusSent, analysisRequestIDs[low:high])
 		query = r.db.Rebind(query)
 		rows, err := r.db.QueryxContext(ctx, query, args...)
 		if err != nil {
@@ -146,7 +146,7 @@ func (r *messageOutRepository) GetUnprocessed(ctx context.Context, limit, offset
          								AND created_at >= (current_date - make_interval(days := $4))
          								AND created_at <= $5
          								ORDER BY created_at DESC LIMIT $6 OFFSET $7;`, r.dbSchema)
-	rows, err := r.db.QueryxContext(ctx, query, messagestatus.Stored, messagestatus.Error, r.maxRetries, r.sentDaysBack, cutoffTime, limit, offset)
+	rows, err := r.db.QueryxContext(ctx, query, instrument.MessageStatusStored, instrument.MessageStatusError, r.maxRetries, r.sentDaysBack, cutoffTime, limit, offset)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetUnprocessedMessageOutsFailed)
 		return nil, ErrGetUnprocessedMessageOutsFailed
@@ -171,7 +171,7 @@ func (r *messageOutRepository) GetUnprocessedByInstrumentID(ctx context.Context,
          							WHERE instrument_id = $1 AND status IN ($2, $3) AND retry_count < $4 
          								AND created_at >= (current_date - make_interval(days := $5)) 
          								ORDER BY created_at DESC LIMIT $6 OFFSET $7;`, r.dbSchema)
-	rows, err := r.db.QueryxContext(ctx, query, instrumentID, messagestatus.Stored, messagestatus.Error, r.maxRetries, r.sentDaysBack, limit, offset)
+	rows, err := r.db.QueryxContext(ctx, query, instrumentID, instrument.MessageStatusStored, instrument.MessageStatusError, r.maxRetries, r.sentDaysBack, limit, offset)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetUnprocessedMessageOutsByInstrumentIDsFailed)
 		return nil, ErrGetUnprocessedMessageOutsByInstrumentIDsFailed
@@ -432,20 +432,20 @@ func NewMessageOutRepository(db db.DbConnection, dbSchema string, maxRetries, se
 }
 
 type messageOutDAO struct {
-	ID                  uuid.UUID                   `db:"id"`
-	InstrumentID        uuid.UUID                   `db:"instrument_id"`
-	Status              messagestatus.MessageStatus `db:"status"`
-	DEARawMessageID     uuid.NullUUID               `db:"dea_raw_message_id"`
-	ProtocolID          uuid.UUID                   `db:"protocol_id"`
-	Type                messagetype.MessageType     `db:"type"`
-	Encoding            encoding.Encoding           `db:"encoding"`
-	Raw                 []byte                      `db:"raw"`
-	Error               sql.NullString              `db:"error"`
-	RetryCount          int                         `db:"retry_count"`
-	TriggerMessageInID  uuid.NullUUID               `db:"trigger_message_in_id"`
-	ResponseMessageInID uuid.NullUUID               `db:"response_message_in_id"`
-	CreatedAt           time.Time                   `db:"created_at"`
-	ModifiedAt          sql.NullTime                `db:"modified_at"`
+	ID                  uuid.UUID                `db:"id"`
+	InstrumentID        uuid.UUID                `db:"instrument_id"`
+	Status              instrument.MessageStatus `db:"status"`
+	DEARawMessageID     uuid.NullUUID            `db:"dea_raw_message_id"`
+	ProtocolID          uuid.UUID                `db:"protocol_id"`
+	Type                instrument.MessageType   `db:"type"`
+	Encoding            encoding.Encoding        `db:"encoding"`
+	Raw                 []byte                   `db:"raw"`
+	Error               sql.NullString           `db:"error"`
+	RetryCount          int                      `db:"retry_count"`
+	TriggerMessageInID  uuid.NullUUID            `db:"trigger_message_in_id"`
+	ResponseMessageInID uuid.NullUUID            `db:"response_message_in_id"`
+	CreatedAt           time.Time                `db:"created_at"`
+	ModifiedAt          sql.NullTime             `db:"modified_at"`
 }
 
 func convertMessageOutsToDAOs(messages []MessageOut) []messageOutDAO {
