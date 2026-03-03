@@ -6,27 +6,51 @@ import (
 	"testing"
 
 	"github.com/blutspende/skeleton/migrator"
-	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
+	_ "github.com/jackc/pgx/v4/stdlib"
 	"github.com/jmoiron/sqlx"
-	_ "github.com/proullon/ramsql/driver"
 	"github.com/stretchr/testify/assert"
+	"github.com/testcontainers/testcontainers-go"
+	tcpg "github.com/testcontainers/testcontainers-go/modules/postgres"
 )
 
 func TestSkeletonMigrations(t *testing.T) {
-	postgres := embeddedpostgres.NewDatabase(embeddedpostgres.DefaultConfig().Port(5551))
-	postgres.Start()
-	defer postgres.Stop()
-	dbConn, err := sqlx.Connect("postgres", "host=localhost port=5551 user=postgres password=postgres dbname=postgres sslmode=disable")
+	defer func() {
+		if r := recover(); r != nil {
+			assert.Fail(t, "should not panic")
+		}
+	}()
+
+	ctx := context.Background()
+
+	dbName := "postgres"
+	dbUser := "postgres"
+	dbPass := "postgres"
+	postgresContainer, err := tcpg.Run(ctx,
+		"postgres:16-alpine",
+		tcpg.WithDatabase(dbName),
+		tcpg.WithUsername(dbUser),
+		tcpg.WithPassword(dbPass),
+		tcpg.BasicWaitStrategies(),
+	)
+	assert.Nil(t, err)
+	defer func() {
+		if postgresContainer != nil {
+			err = testcontainers.TerminateContainer(postgresContainer)
+			assert.Nil(t, err)
+		}
+	}()
+
+	dbPort, err := postgresContainer.MappedPort(ctx, "5432")
+	assert.Nil(t, err)
+	conStr := fmt.Sprintf("host=localhost port=%d user=postgres password=postgres dbname=postgres sslmode=disable", dbPort.Int())
+	dbConn, err := sqlx.Connect("pgx", conStr)
+	assert.Nil(t, err)
 
 	schemaName := "test"
-	assert.Nil(t, err)
-
 	_, err = dbConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
 	assert.Nil(t, err)
-
 	_, err = dbConn.Exec(`DROP SCHEMA IF EXISTS test CASCADE;`)
 	assert.Nil(t, err)
-
 	_, err = dbConn.Exec(`CREATE SCHEMA test;`)
 	assert.Nil(t, err)
 

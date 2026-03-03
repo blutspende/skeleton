@@ -12,12 +12,20 @@ import (
 )
 
 func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
-	dbConn, schemaName, _, _ := setupDbConnectorAndRunMigration("instrument_test")
+	defer Recover(t)
+
+	ctx := context.Background()
+
+	dbConn, schemaName, _, _, err := setupDbConnectorAndRunMigration(ctx, "instrument_test")
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
 
 	cerberusClientMock := &cerberusClientMock{}
 	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
 
-	ctx, cancelSkeleton := context.WithCancel(context.Background())
+	ctx, cancelSkeleton := context.WithCancel(ctx)
 	defer cancelSkeleton()
 
 	conditionRepository := NewConditionRepository(dbConn, schemaName)
@@ -131,12 +139,20 @@ func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
 }
 
 func TestFtpConfigConnectionModeChange(t *testing.T) {
-	dbConn, schemaName, _, _ := setupDbConnectorAndRunMigration("instrument_test")
+	defer Recover(t)
+
+	ctx := context.Background()
+
+	dbConn, schemaName, _, _, err := setupDbConnectorAndRunMigration(ctx, "instrument_test")
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
 
 	cerberusClientMock := &cerberusClientMock{}
 	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
 
-	ctx, cancelSkeleton := context.WithCancel(context.Background())
+	ctx, cancelSkeleton := context.WithCancel(ctx)
 	defer cancelSkeleton()
 
 	conditionRepository := NewConditionRepository(dbConn, schemaName)
@@ -241,7 +257,15 @@ func TestFtpConfigConnectionModeChange(t *testing.T) {
 }
 
 func TestUpdateInstrument(t *testing.T) {
-	dbConn, schemaName, _, _ := setupDbConnectorAndRunMigration("instrument_test")
+	defer Recover(t)
+
+	ctx := context.Background()
+
+	dbConn, schemaName, _, _, err := setupDbConnectorAndRunMigration(ctx, "instrument_test")
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
 
 	cerberusClientMock := &cerberusClientMock{
 		verifyInstrumentHashFunc: func(hash string) error {
@@ -261,7 +285,7 @@ func TestUpdateInstrument(t *testing.T) {
 	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
 
 	var protocolID uuid.UUID
-	err := dbConn.QueryRowx(ctx, `INSERT INTO instrument_test.sk_supported_protocols (name, description) VALUES('TestProtocol', 'Test Protocol Description') RETURNING id;`).Scan(&protocolID)
+	err = dbConn.QueryRowx(ctx, `INSERT INTO instrument_test.sk_supported_protocols (name, description) VALUES('TestProtocol', 'Test Protocol Description') RETURNING id;`).Scan(&protocolID)
 	assert.Nil(t, err)
 
 	clientPort := 1234
@@ -615,7 +639,15 @@ func TestUpdateInstrument(t *testing.T) {
 }
 
 func TestNotVerifiedInstrument(t *testing.T) {
-	dbConn, schemaName, _, _ := setupDbConnectorAndRunMigration("instrument_test")
+	defer Recover(t)
+
+	ctx := context.Background()
+
+	dbConn, schemaName, _, _, err := setupDbConnectorAndRunMigration(ctx, "instrument_test")
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
 
 	cerberusClientMock := &cerberusClientMock{
 		verifyInstrumentHashFunc: func(hash string) error {
@@ -635,7 +667,7 @@ func TestNotVerifiedInstrument(t *testing.T) {
 	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
 
 	var protocolID uuid.UUID
-	err := dbConn.QueryRowx(ctx, `INSERT INTO instrument_test.sk_supported_protocols (name, description) VALUES('TestProtocol', 'Test Protocol Description') RETURNING id;`).Scan(&protocolID)
+	err = dbConn.QueryRowx(ctx, `INSERT INTO instrument_test.sk_supported_protocols (name, description) VALUES('TestProtocol', 'Test Protocol Description') RETURNING id;`).Scan(&protocolID)
 	assert.Nil(t, err)
 
 	clientPort := 1234
@@ -670,7 +702,15 @@ func TestNotVerifiedInstrument(t *testing.T) {
 }
 
 func TestUpdateExpectedControlResult(t *testing.T) {
-	dbConn, schemaName, _, _ := setupDbConnectorAndRunMigration("expectedcontrolresult_test")
+	defer Recover(t)
+
+	ctx := context.Background()
+
+	dbConn, schemaName, _, _, err := setupDbConnectorAndRunMigration(ctx, "expectedcontrolresult_test")
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
 
 	cerberusClientMock := &cerberusClientMock{
 		verifyExpectedControlResultHashFunc: func(hash string) error {
@@ -796,7 +836,7 @@ func TestUpdateExpectedControlResult(t *testing.T) {
 		ExpectedValue2:   nil,
 	})
 
-	err := instrumentService.UpdateExpectedControlResults(ctxWithCancel, instrumentId, expectedControlResults, uuid.New())
+	err = instrumentService.UpdateExpectedControlResults(ctxWithCancel, instrumentId, expectedControlResults, uuid.New())
 	assert.Nil(t, err)
 	assert.Contains(t, cerberusClientMock.VerifiedExpectedControlResultHashes, HashExpectedControlResults(expectedControlResults))
 
@@ -820,7 +860,15 @@ func TestUpdateExpectedControlResult(t *testing.T) {
 }
 
 func TestUpdateExpectedControlResult2(t *testing.T) {
-	dbConn, schemaName, _, _ := setupDbConnectorAndRunMigration("expectedcontrolresult_test")
+	defer Recover(t)
+
+	ctx := context.Background()
+
+	dbConn, schemaName, _, _, err := setupDbConnectorAndRunMigration(ctx, "expectedcontrolresult_test")
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
 
 	cerberusClientMock := &cerberusClientMock{
 		verifyExpectedControlResultHashFunc: func(hash string) error {
@@ -993,7 +1041,7 @@ func TestUpdateExpectedControlResult2(t *testing.T) {
 		ExpectedValue2:   nil,
 	})
 
-	err := instrumentService.UpdateExpectedControlResults(ctxWithCancel, instrumentId, expectedControlResults, uuid.New())
+	err = instrumentService.UpdateExpectedControlResults(ctxWithCancel, instrumentId, expectedControlResults, uuid.New())
 	assert.Nil(t, err)
 	assert.Contains(t, cerberusClientMock.VerifiedExpectedControlResultHashes, HashExpectedControlResults(expectedControlResults))
 
@@ -1017,7 +1065,15 @@ func TestUpdateExpectedControlResult2(t *testing.T) {
 }
 
 func TestNotVerifiedExpectedControlResults(t *testing.T) {
-	dbConn, schemaName, _, _ := setupDbConnectorAndRunMigration("expectedcontrolresult_test")
+	defer Recover(t)
+
+	ctx := context.Background()
+
+	dbConn, schemaName, _, _, err := setupDbConnectorAndRunMigration(ctx, "expectedcontrolresult_test")
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
 
 	cerberusClientMock := &cerberusClientMock{
 		verifyExpectedControlResultHashFunc: func(hash string) error {
@@ -1084,7 +1140,7 @@ func TestNotVerifiedExpectedControlResults(t *testing.T) {
 		ExpectedValue2:   nil,
 	})
 
-	err := instrumentService.CreateExpectedControlResults(ctxWithCancel, expectedControlResults, uuid.New())
+	err = instrumentService.CreateExpectedControlResults(ctxWithCancel, expectedControlResults, uuid.New())
 	assert.Nil(t, err)
 
 	ecrs, _ := instrumentService.GetExpectedControlResultsByInstrumentId(ctxWithCancel, instrumentId)
@@ -1092,7 +1148,15 @@ func TestNotVerifiedExpectedControlResults(t *testing.T) {
 }
 
 func TestTrimAndValidateHostname(t *testing.T) {
-	dbConn, schemaName, _, _ := setupDbConnectorAndRunMigration("instrument_test")
+	defer Recover(t)
+
+	ctx := context.Background()
+
+	dbConn, schemaName, _, _, err := setupDbConnectorAndRunMigration(ctx, "instrument_test")
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
 
 	cerberusClientMock := &cerberusClientMock{
 		verifyInstrumentHashFunc: func(hash string) error {
@@ -1112,7 +1176,7 @@ func TestTrimAndValidateHostname(t *testing.T) {
 	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
 
 	var protocolID uuid.UUID
-	err := dbConn.QueryRowx(ctx, `INSERT INTO instrument_test.sk_supported_protocols (name, description) VALUES('TestProtocol', 'Test Protocol Description') RETURNING id;`).Scan(&protocolID)
+	err = dbConn.QueryRowx(ctx, `INSERT INTO instrument_test.sk_supported_protocols (name, description) VALUES('TestProtocol', 'Test Protocol Description') RETURNING id;`).Scan(&protocolID)
 	assert.Nil(t, err)
 	clientPort := 1234
 

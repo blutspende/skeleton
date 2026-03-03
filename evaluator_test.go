@@ -42,6 +42,8 @@ var (
 )
 
 func TestAndOperator(t *testing.T) {
+	defer Recover(t)
+
 	conditionTrueAndTrue := Condition{
 		SubCondition1: trueCondition,
 		Operator:      And,
@@ -64,6 +66,8 @@ func TestAndOperator(t *testing.T) {
 }
 
 func TestOrOperator(t *testing.T) {
+	defer Recover(t)
+
 	conditionFalseOrTrue := Condition{
 		SubCondition1: falseCondition,
 		Operator:      Or,
@@ -95,6 +99,8 @@ func TestOrOperator(t *testing.T) {
 }
 
 func TestContainsOperator(t *testing.T) {
+	defer Recover(t)
+
 	subStr := "ue"
 	conditionContainsTrue := Condition{
 		Operand1: &ConditionOperand{
@@ -133,6 +139,8 @@ func TestContainsOperator(t *testing.T) {
 }
 
 func TestNotContainsOperator(t *testing.T) {
+	defer Recover(t)
+
 	subStr := "ue"
 	conditionNotContainsFalse := Condition{
 		Operand1: &ConditionOperand{
@@ -171,6 +179,8 @@ func TestNotContainsOperator(t *testing.T) {
 }
 
 func TestEqualsOperator(t *testing.T) {
+	defer Recover(t)
+
 	conditionTrueEqualsTrue := Condition{
 		Operand1: &ConditionOperand{
 			Type:          Constant,
@@ -208,6 +218,8 @@ func TestEqualsOperator(t *testing.T) {
 }
 
 func TestNotEqualsOperator(t *testing.T) {
+	defer Recover(t)
+
 	conditionTrueNotEqualsTrue := Condition{
 		Operand1: &ConditionOperand{
 			Type:          Constant,
@@ -245,6 +257,8 @@ func TestNotEqualsOperator(t *testing.T) {
 }
 
 func TestGreaterOperator(t *testing.T) {
+	defer Recover(t)
+
 	value1 := "32"
 	value2 := "42"
 	condition2GT1 := Condition{
@@ -299,6 +313,8 @@ func TestGreaterOperator(t *testing.T) {
 }
 
 func TestGreaterOrEqualOperator(t *testing.T) {
+	defer Recover(t)
+
 	value1 := "32"
 	value2 := "42"
 	condition2GTE1 := Condition{
@@ -354,6 +370,8 @@ func TestGreaterOrEqualOperator(t *testing.T) {
 }
 
 func TestLessOperator(t *testing.T) {
+	defer Recover(t)
+
 	value1 := "32"
 	value2 := "42"
 	condition1LT2 := Condition{
@@ -408,6 +426,8 @@ func TestLessOperator(t *testing.T) {
 }
 
 func TestLessOrEqualOperator(t *testing.T) {
+	defer Recover(t)
+
 	value1 := "32"
 	value2 := "42"
 	condition1LTE2 := Condition{
@@ -462,6 +482,8 @@ func TestLessOrEqualOperator(t *testing.T) {
 }
 
 func TestMatchRegexOperator(t *testing.T) {
+	defer Recover(t)
+
 	value1 := "AASAMPLE1"
 	value2 := "CLSAMPLE1"
 	conditionMatchRegexTrue := Condition{
@@ -501,6 +523,8 @@ func TestMatchRegexOperator(t *testing.T) {
 }
 
 func TestExistsOperator(t *testing.T) {
+	defer Recover(t)
+
 	conditionExists := Condition{
 		Operand1: &ConditionOperand{
 			Type:          AnalysisRequestExtraValue,
@@ -534,6 +558,8 @@ func TestExistsOperator(t *testing.T) {
 }
 
 func TestNotExistsOperator(t *testing.T) {
+	defer Recover(t)
+
 	conditionNotExists := Condition{
 		Operand1: &ConditionOperand{
 			Type:          AnalysisRequestExtraValue,
@@ -566,6 +592,8 @@ func TestNotExistsOperator(t *testing.T) {
 }
 
 func TestMatchAllOperator(t *testing.T) {
+	defer Recover(t)
+
 	conditionMatchAll := Condition{
 		Operand1: &ConditionOperand{
 			Type: Order,
@@ -603,6 +631,8 @@ func TestMatchAllOperator(t *testing.T) {
 }
 
 func TestMatchAnyOperator(t *testing.T) {
+	defer Recover(t)
+
 	conditionMatchAny := Condition{
 		Operand1: &ConditionOperand{
 			Type: Order,
@@ -637,6 +667,8 @@ func TestMatchAnyOperator(t *testing.T) {
 }
 
 func TestTargetAppliedOperator(t *testing.T) {
+	defer Recover(t)
+
 	target1 := "PK7400_MF"
 	conditionApplied := Condition{
 		Operand1: &ConditionOperand{
@@ -663,6 +695,8 @@ func TestTargetAppliedOperator(t *testing.T) {
 }
 
 func TestTargetNotAppliedOperator(t *testing.T) {
+	defer Recover(t)
+
 	target1 := "PK7400_MF"
 	conditionNotApplied := Condition{
 		Operand1: &ConditionOperand{
@@ -689,6 +723,8 @@ func TestTargetNotAppliedOperator(t *testing.T) {
 }
 
 func TestIsNthSampleOperator(t *testing.T) {
+	defer Recover(t)
+
 	twoStr := "2"
 	conditionSecondSample := Condition{
 		Operand1: &ConditionOperand{
@@ -716,6 +752,8 @@ func TestIsNthSampleOperator(t *testing.T) {
 }
 
 func TestProbabilityConditionOperator(t *testing.T) {
+	defer Recover(t)
+
 	chanceStr := "80"
 	condition80PercentChance := Condition{
 		Operand1: &ConditionOperand{
@@ -751,6 +789,8 @@ func TestProbabilityConditionOperator(t *testing.T) {
 }
 
 func TestDefaultOperator(t *testing.T) {
+	defer Recover(t)
+
 	conditionDefault := Condition{
 		Operand1: &ConditionOperand{
 			Type: Sample,

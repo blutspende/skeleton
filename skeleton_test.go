@@ -20,7 +20,15 @@ const serviceName = "testInstrumentDriver"
 const displayName = "testDisplayName"
 
 func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
-	dbConn, schemaName, pg, sqlConn := setupDbConnectorAndRunMigration("testSubmitAnalysisRequestsParallel")
+	defer Recover(t)
+
+	ctx := context.Background()
+
+	dbConn, schemaName, pg, sqlConn, err := setupDbConnectorAndRunMigration(ctx, "testSubmitAnalysisRequestsParallel")
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
 
 	configuration := config.Configuration{
 		APIPort:                          5000,
@@ -96,7 +104,7 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 	_, _ = dbConn.Exec(ctx, fmt.Sprintf(`INSERT INTO %s.sk_result_mappings(id, analyte_mapping_id, "key", "value", "index")
 		VALUES ('0e49a9a7-8ef0-4ef3-a1e1-6277398fcc08', :analyte_mapping_id, 'pos', 'pos', 0),
 		       ('329080eb-2dca-4a05-9730-24444cc3b487', :analyte_mapping_id, 'neg', 'neg', 1);`, schemaName))
-	_, err := dbConn.Exec(ctx, fmt.Sprintf(`INSERT INTO %s.sk_request_mappings(id, code, instrument_id)
+	_, err = dbConn.Exec(ctx, fmt.Sprintf(`INSERT INTO %s.sk_request_mappings(id, code, instrument_id)
 		VALUES ('9e83ad17-40bc-44b2-b6c9-50a9f559387b', 'Test1', '93f36696-5ff0-45a9-87eb-ca5c064c5890');`, schemaName))
 	_, err = dbConn.Exec(ctx, fmt.Sprintf(`INSERT INTO %s.sk_message_in(id, dea_raw_message_id, instrument_id,protocol_id,type,encoding,raw) VALUES ('2f369489-77d3-464e-87e2-edbeffa62ae7', '2f369489-77d3-464e-87e2-edbeffa62ae7','93f36696-5ff0-45a9-87eb-ca5c064c5890','abb539a3-286f-4c15-a7b7-2e9adf6eab91','RESULT','ASCII','')`, schemaName))
 	_, err = dbConn.Exec(ctx, fmt.Sprintf(`INSERT INTO %s.sk_message_in(id, dea_raw_message_id, instrument_id,protocol_id,type,encoding,raw) VALUES ('43a7b261-3e1d-4065-935a-ac15841f13e4', '43a7b261-3e1d-4065-935a-ac15841f13e4','93f36696-5ff0-45a9-87eb-ca5c064c5890','abb539a3-286f-4c15-a7b7-2e9adf6eab91','RESULT','ASCII','')`, schemaName))
@@ -132,7 +140,15 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 
 // Todo - Complete the test
 func TestSubmitAnalysisResultWithRequests(t *testing.T) {
-	dbConn, schemaName, pg, sqlConn := setupDbConnector("testSubmitAnalysisResultsWithRequests")
+	defer Recover(t)
+
+	ctx := context.Background()
+
+	dbConn, schemaName, pg, sqlConn, err := setupDbConnector(ctx, "testSubmitAnalysisResultsWithRequests")
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
 
 	configuration := config.Configuration{
 		APIPort:                          5000,
@@ -182,7 +198,7 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 
 	time.Sleep(1 * time.Second)
 
-	err := skeletonInstance.SubmitAnalysisResultBatch(context.TODO(), AnalysisResultSet{
+	err = skeletonInstance.SubmitAnalysisResultBatch(context.TODO(), AnalysisResultSet{
 		Results: analysisResultsWithoutAnalysisRequestsTest_analysisResults,
 	})
 	assert.Nil(t, err)
@@ -325,7 +341,15 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 }
 
 func TestAnalysisResultsReprocessing(t *testing.T) {
-	dbConn, schemaName, pg, _ := setupDbConnector("testAnalysisResultsReprocessing")
+	defer Recover(t)
+
+	ctx := context.Background()
+
+	dbConn, schemaName, pg, _, err := setupDbConnector(ctx, "testAnalysisResultsReprocessing")
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
 
 	configuration := config.Configuration{
 		APIPort:                          5679,
@@ -380,7 +404,15 @@ func TestAnalysisResultsReprocessing(t *testing.T) {
 }
 
 func TestSubmitControlResultsProcessing(t *testing.T) {
-	dbConn, schemaName, pg, _ := setupDbConnector("testSubmitControlResultsProcessing")
+	defer Recover(t)
+
+	ctx := context.Background()
+
+	dbConn, schemaName, pg, _, err := setupDbConnector(ctx, "testSubmitControlResultsProcessing")
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
 
 	configuration := config.Configuration{
 		APIPort:                          5679,
@@ -601,7 +633,7 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 		ExtraValues:                nil,
 	}
 
-	err := skeletonInstance.SubmitAnalysisResultBatch(context.TODO(), AnalysisResultSet{
+	err = skeletonInstance.SubmitAnalysisResultBatch(context.TODO(), AnalysisResultSet{
 		Results: analysisResults,
 	})
 	assert.Nil(t, err)
@@ -680,7 +712,16 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 }
 
 func TestSubmitAnalysisResultFieldValidations(t *testing.T) {
-	dbConn, schemaName, pg, sqlConn := setupDbConnector("testSubmitAnalysisResultsWithRequests")
+	defer Recover(t)
+
+	ctx := context.Background()
+
+	dbConn, schemaName, pg, sqlConn, err := setupDbConnector(ctx, "testSubmitAnalysisResultsWithRequests")
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
 	configuration := config.Configuration{
 		APIPort:                          5000,
 		Authorization:                    false,
@@ -723,7 +764,7 @@ func TestSubmitAnalysisResultFieldValidations(t *testing.T) {
 	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, []string{}, nil, pg, dbConn, schemaName, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, messageService, skeletonManager, cerberusClientMock, longPollClientMock, deaClientMock, configuration)
 	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('9bec3063-435d-490f-bec0-88a6633ef4c2', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
 	_ = skeletonInstance.Start()
-	err := skeletonInstance.SubmitAnalysisResultBatch(context.TODO(), AnalysisResultSet{
+	err = skeletonInstance.SubmitAnalysisResultBatch(context.TODO(), AnalysisResultSet{
 		Results: []AnalysisResult{
 			{
 				AnalyteMapping: AnalyteMapping{
@@ -826,7 +867,16 @@ func TestSubmitAnalysisResultFieldValidations(t *testing.T) {
 }
 
 func TestSubmitControlResultsFieldValidations(t *testing.T) {
-	dbConn, schemaName, pg, sqlConn := setupDbConnector("testSubmitAnalysisResultsWithRequests")
+	defer Recover(t)
+
+	ctx := context.Background()
+
+	dbConn, schemaName, pg, sqlConn, err := setupDbConnector(ctx, "testSubmitAnalysisResultsWithRequests")
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
+
 	configuration := config.Configuration{
 		APIPort:                          5000,
 		Authorization:                    false,
@@ -869,7 +919,7 @@ func TestSubmitControlResultsFieldValidations(t *testing.T) {
 	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, []string{}, nil, pg, dbConn, schemaName, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, messageService, skeletonManager, cerberusClientMock, longPollClientMock, deaClientMock, configuration)
 	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('9bec3063-435d-490f-bec0-88a6633ef4c2', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
 	_ = skeletonInstance.Start()
-	err := skeletonInstance.SubmitControlResults(ctx, []StandaloneControlResult{
+	err = skeletonInstance.SubmitControlResults(ctx, []StandaloneControlResult{
 		{
 			ControlResult: ControlResult{
 				AnalyteMapping: AnalyteMapping{

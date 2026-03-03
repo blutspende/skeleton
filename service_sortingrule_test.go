@@ -7,6 +7,8 @@ import (
 )
 
 func TestGetSortingTargetProgramme1FirstSecondTimeDonor(t *testing.T) {
+	defer Recover(t)
+
 	var target string
 	var err error
 	for i := range programme1SortingRules {
@@ -28,6 +30,8 @@ func TestGetSortingTargetProgramme1FirstSecondTimeDonor(t *testing.T) {
 }
 
 func TestGetSortingTargetProgramme1MultiTimeDonorChanceBased(t *testing.T) {
+	defer Recover(t)
+
 	var target string
 	var err error
 	cmvCounter := 0
@@ -52,6 +56,8 @@ func TestGetSortingTargetProgramme1MultiTimeDonorChanceBased(t *testing.T) {
 }
 
 func TestGetSortingTargetProgramme1Prefix(t *testing.T) {
+	defer Recover(t)
+
 	var target string
 	var err error
 	aaAnalysis := AnalysisRequest{
@@ -80,6 +86,8 @@ func TestGetSortingTargetProgramme1Prefix(t *testing.T) {
 }
 
 func TestProgramme1FirstSecondSample(t *testing.T) {
+	defer Recover(t)
+
 	var target string
 	var err error
 	aaAnalysis := AnalysisRequest{
@@ -108,6 +116,8 @@ func TestProgramme1FirstSecondSample(t *testing.T) {
 }
 
 func TestSortingTargetPriority(t *testing.T) {
+	defer Recover(t)
+
 	// AA prefix sample, but second time donor
 	// since donation type rules have higher priority than prefix rules, result should be HAM_ESP, not HAM_CMV
 	// here the ordering is static, but in practice the executed sorting rules are ordered by priority
@@ -133,6 +143,8 @@ func TestSortingTargetPriority(t *testing.T) {
 }
 
 func TestGetSortingTargetProgramme2FirstSecondTimeDonor(t *testing.T) {
+	defer Recover(t)
+
 	var target string
 	var err error
 	for i := range programme1SortingRules {
@@ -155,6 +167,8 @@ func TestGetSortingTargetProgramme2FirstSecondTimeDonor(t *testing.T) {
 }
 
 func TestGetSortingTargetProgramme2MultiTimeDonor(t *testing.T) {
+	defer Recover(t)
+
 	var target string
 	var err error
 	for i := range programme1SortingRules {
@@ -168,6 +182,8 @@ func TestGetSortingTargetProgramme2MultiTimeDonor(t *testing.T) {
 }
 
 func TestGetSortingTargetProgramme2AACLPrefix(t *testing.T) {
+	defer Recover(t)
+
 	var target string
 	var err error
 	aaAnalysis := AnalysisRequest{
@@ -196,6 +212,8 @@ func TestGetSortingTargetProgramme2AACLPrefix(t *testing.T) {
 }
 
 func TestGetSortingTargetProgramme2PSuffix(t *testing.T) {
+	defer Recover(t)
+
 	var target string
 	var err error
 	pSuffixAnalysis := AnalysisRequest{
@@ -212,6 +230,8 @@ func TestGetSortingTargetProgramme2PSuffix(t *testing.T) {
 }
 
 func TestGetSortingTargetProgramme2Default(t *testing.T) {
+	defer Recover(t)
+
 	var target string
 	var err error
 	analysis := AnalysisRequest{
@@ -228,6 +248,8 @@ func TestGetSortingTargetProgramme2Default(t *testing.T) {
 }
 
 func TestProgramme3WithoutMalaria(t *testing.T) {
+	defer Recover(t)
+
 	var target string
 	var err error
 	for i := range programme3SortingRules {
@@ -241,6 +263,8 @@ func TestProgramme3WithoutMalaria(t *testing.T) {
 }
 
 func TestProgramme3WithMalaria(t *testing.T) {
+	defer Recover(t)
+
 	var target string
 	var err error
 	analysisRequest := AnalysisRequest{
@@ -258,6 +282,8 @@ func TestProgramme3WithMalaria(t *testing.T) {
 }
 
 func TestProgramme4(t *testing.T) {
+	defer Recover(t)
+
 	var target string
 	var err error
 	analysis1 := AnalysisRequest{

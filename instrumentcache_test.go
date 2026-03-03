@@ -1,12 +1,15 @@
 package skeleton
 
 import (
+	"testing"
+
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 func TestInstrumentCache(t *testing.T) {
+	defer Recover(t)
+
 	instrumentCache := NewInstrumentCache()
 
 	instrument1ID := uuid.New()
