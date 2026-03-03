@@ -11,6 +11,8 @@ github.com/blutspende/bloodlab-common v1.0.2 h1:NAUAU/YRdOid8JIpU9nEhr2RaUsKFq5L
 github.com/blutspende/bloodlab-common v1.0.2/go.mod h1:0KzDqIw3QvL8syKVehqLUcRjEk8HXIOV761puQxoza8=
 github.com/blutspende/bloodlab-common v1.1.2 h1:TPq6OdvM2naStT1E42l8m2vUz9xcnrtkqn4x4raFXU0=
 github.com/blutspende/bloodlab-common v1.1.2/go.mod h1:DA0GmAqntNTmyBnt2jdMOZ0rK9WjpMPiU6JfkTNfGFo=
+github.com/blutspende/bloodlab-common v1.1.3-0.20260303104837-fb7178ae05f8 h1:cTcaP0XTv8Rh1ubkdsvQ5whJ73hM9Bb12iMIIAp206o=
+github.com/blutspende/bloodlab-common v1.1.3-0.20260303104837-fb7178ae05f8/go.mod h1:DA0GmAqntNTmyBnt2jdMOZ0rK9WjpMPiU6JfkTNfGFo=
 github.com/bytedance/gopkg v0.1.3 h1:TPBSwH8RsouGCBcMBktLt1AymVo2TVsBVCY4b6TnZ/M=
 github.com/bytedance/gopkg v0.1.3/go.mod h1:576VvJ+eJgyCzdjS+c4+77QF3p7ubbtiKARP3TxducM=
 github.com/bytedance/sonic v1.13.2 h1:8/H1FempDZqC4VqjptGo14QQlJx8VdZJegxs6wwfqpQ=

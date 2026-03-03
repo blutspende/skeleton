@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/blutspende/bloodlab-common/db"
 	"github.com/blutspende/bloodlab-common/utils"
 	"github.com/blutspende/skeleton/config"
-	"github.com/blutspende/skeleton/db"
 	"github.com/blutspende/skeleton/migrator"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
@@ -22,7 +22,7 @@ import (
 type skeleton struct {
 	ctx                                        context.Context
 	config                                     config.Configuration
-	dbConnector                                db.DbConnector
+	postgres                                   db.Postgres
 	dbConn                                     db.DbConnection
 	dbSchema                                   string
 	migrator                                   migrator.SkeletonMigrator
@@ -662,12 +662,12 @@ func (s *skeleton) migrateUp(ctx context.Context, db *sqlx.DB, schemaName string
 func (s *skeleton) Start() error {
 	s.cutoffTime = time.Now().UTC()
 
-	err := s.dbConnector.Connect()
+	_, err := s.postgres.Connect(context.TODO())
 	if err != nil {
 		log.Error().Err(err).Msg("failed to connect to database")
 		return err
 	}
-	sqlConn, err := s.dbConnector.GetSqlConnection()
+	sqlConn, err := s.postgres.GetSqlConnection()
 	if err != nil {
 		log.Error().Err(err).Msg("failed to get database connection")
 		return err
@@ -676,7 +676,7 @@ func (s *skeleton) Start() error {
 
 	go func() {
 		<-s.ctx.Done()
-		err = s.dbConnector.Close()
+		err = s.postgres.Close()
 		if err != nil {
 			log.Error().Err(err).Msg("failed to close database connection")
 		}
@@ -1701,7 +1701,7 @@ func (s *skeleton) startAnalysisRequestRevocationReexamineJob(ctx context.Contex
 }
 
 func (s *skeleton) GetDbConnection() (*sqlx.DB, error) {
-	dbConn, err := s.dbConnector.GetSqlConnection()
+	dbConn, err := s.postgres.GetSqlConnection()
 	if err != nil {
 		log.Error().Err(err).Msg("failed to get database connection")
 		return nil, err
@@ -1713,7 +1713,7 @@ func (s *skeleton) FindAnalyteMapping(instrument Instrument, isControl bool, ins
 	return FindAnalyteMapping(instrument, isControl, instrumentAnalyte)
 }
 
-func NewSkeleton(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, reagentManufacturers []string, protocols []SupportedProtocol, dbConnector db.DbConnector, dbConn db.DbConnection, dbSchema string, migrator migrator.SkeletonMigrator, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService ConsoleLogService, messageService MessageService, manager Manager, cerberusClient CerberusClient, longPollClient LongPollClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
+func NewSkeleton(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, reagentManufacturers []string, protocols []SupportedProtocol, postgres db.Postgres, dbConn db.DbConnection, dbSchema string, migrator migrator.SkeletonMigrator, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService ConsoleLogService, messageService MessageService, manager Manager, cerberusClient CerberusClient, longPollClient LongPollClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
 	skeleton := &skeleton{
 		ctx:                                    ctx,
 		serviceName:                            serviceName,
@@ -1723,7 +1723,7 @@ func NewSkeleton(ctx context.Context, serviceName, displayName string, requested
 		reagentManufacturers:                   reagentManufacturers,
 		protocols:                              protocols,
 		config:                                 config,
-		dbConnector:                            dbConnector,
+		postgres:                               postgres,
 		dbConn:                                 dbConn,
 		dbSchema:                               dbSchema,
 		migrator:                               migrator,

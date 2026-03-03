@@ -2,7 +2,7 @@ package skeleton
 
 import (
 	"context"
-	"github.com/blutspende/skeleton/db"
+	"github.com/blutspende/bloodlab-common/db"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"github.com/shopspring/decimal"

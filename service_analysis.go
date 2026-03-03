@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/blutspende/bloodlab-common/db"
 	"github.com/blutspende/bloodlab-common/utils"
-	"github.com/blutspende/skeleton/db"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 )
@@ -886,7 +886,7 @@ func (as *analysisService) ProcessStuckImagesToDEA(ctx context.Context) {
 		images := make([]*Image, len(imageDAOs))
 		for i := range imageDAOs {
 			images[i] = &Image{
-				ID: imageDAOs[i].ID,
+				ID:         imageDAOs[i].ID,
 				ImageBytes: imageDAOs[i].ImageBytes,
 				Name:       imageDAOs[i].Name,
 			}

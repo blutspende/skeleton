@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/blutspende/skeleton/db"
+	"github.com/blutspende/bloodlab-common/db"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 )

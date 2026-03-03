@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/blutspende/bloodlab-common/db"
 	"github.com/blutspende/skeleton/config"
-	"github.com/blutspende/skeleton/db"
 	"github.com/blutspende/skeleton/migrator"
 	"github.com/google/uuid"
 	_ "github.com/jackc/pgx/v4/stdlib"
@@ -1434,7 +1434,7 @@ func (m *analysisRepositoryMock) MarkAnalysisResultsAsProcessed(ctx context.Cont
 	return nil
 }
 func (m *analysisRepositoryMock) CreateTransaction() (db.DbConnection, error) {
-	return db.NewDbConnection(), nil
+	return db.NewEmptyDbConnection(), nil
 }
 func (m *analysisRepositoryMock) WithTransaction(tx db.DbConnection) AnalysisRepository {
 	return m

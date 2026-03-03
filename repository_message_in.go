@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/blutspende/bloodlab-common/db"
 	"github.com/blutspende/bloodlab-common/encoding"
 	"github.com/blutspende/bloodlab-common/instrument"
 	"github.com/blutspende/bloodlab-common/utils"
-	"github.com/blutspende/skeleton/db"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/rs/zerolog/log"
@@ -56,7 +56,7 @@ func (r *messageInRepository) Create(ctx context.Context, message MessageIn) (uu
 	}
 	query := fmt.Sprintf(`INSERT INTO %s.sk_message_in (id, instrument_id, instrument_module_id, protocol_id, "type", encoding, raw, status, created_at)
 									VALUES (:id, :instrument_id, :instrument_module_id, :protocol_id, :type, :encoding, :raw, :status, :created_at);`, r.dbSchema)
-	_, err := r.db.NamedExecContext(ctx, query, convertMessageInToDAO(message))
+	_, err := r.db.NamedExec(ctx, query, convertMessageInToDAO(message))
 	if err != nil {
 		log.Error().Err(err).Msg(msgCreateMessageInFailed)
 		return uuid.Nil, ErrCreateMessageInFailed
@@ -74,7 +74,7 @@ func (r *messageInRepository) GetByDEAIDs(ctx context.Context, deaIDs []uuid.UUI
 		query := fmt.Sprintf(`SELECT * FROM %s.sk_message_in WHERE dea_raw_message_id IN (?) ORDER BY created_at DESC;`, r.dbSchema)
 		query, args, _ := sqlx.In(query, deaIDs[low:high])
 		query = r.db.Rebind(query)
-		rows, err := r.db.QueryxContext(ctx, query, args...)
+		rows, err := r.db.Queryx(ctx, query, args...)
 		if err != nil {
 			log.Error().Err(err).Msg(msgGetMessageInsByDEAIDsFailed)
 			return ErrGetMessageInsByDEAIDsFailed
@@ -105,7 +105,7 @@ func (r *messageInRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]
 		query := fmt.Sprintf(`SELECT * FROM %s.sk_message_in WHERE ID IN (?) ORDER BY created_at;`, r.dbSchema)
 		query, args, _ := sqlx.In(query, ids[low:high])
 		query = r.db.Rebind(query)
-		rows, err := r.db.QueryxContext(ctx, query, args...)
+		rows, err := r.db.Queryx(ctx, query, args...)
 		if err != nil {
 			log.Error().Err(err).Msg(msgGetMessageInsByIDsFailed)
 			return ErrGetMessageInsByIDsFailed
@@ -132,7 +132,7 @@ func (r *messageInRepository) GetUnprocessed(ctx context.Context, limit, offset 
 										AND created_at >= (current_date - make_interval(days := $3))
          								AND created_at <= $4
          								ORDER BY created_at DESC LIMIT $5 OFFSET $6;`, r.dbSchema)
-	rows, err := r.db.QueryxContext(ctx, query, instrument.MessageStatusProcessed, r.maxRetries, r.sentDaysBack, cutoffTime, limit, offset)
+	rows, err := r.db.Queryx(ctx, query, instrument.MessageStatusProcessed, r.maxRetries, r.sentDaysBack, cutoffTime, limit, offset)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetUnprocessedMessageInsFailed)
 		return nil, ErrGetUnprocessedMessageInsFailed
@@ -157,7 +157,7 @@ func (r *messageInRepository) GetUnprocessedByInstrumentID(ctx context.Context, 
          							WHERE instrument_id = $1 AND status <> $2 AND retry_count < $3 
          								AND created_at >= (current_date - make_interval(days := $4) 
          								ORDER BY created_at DESC LIMIT $5 OFFSET $6;`, r.dbSchema)
-	rows, err := r.db.QueryxContext(ctx, query, instrumentID, instrument.MessageStatusProcessed, r.maxRetries, r.sentDaysBack, limit, offset)
+	rows, err := r.db.Queryx(ctx, query, instrumentID, instrument.MessageStatusProcessed, r.maxRetries, r.sentDaysBack, limit, offset)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetUnprocessedMessageInsFailed)
 		return nil, ErrGetUnprocessedMessageInsFailed
@@ -182,7 +182,7 @@ func (r *messageInRepository) GetUnsynced(ctx context.Context, limit, offset int
 									AND created_at >= (current_date - make_interval(days := $2))
                                		AND created_at <= $3
                                			ORDER BY created_at DESC LIMIT $4 OFFSET $5;`, r.dbSchema)
-	rows, err := r.db.QueryxContext(ctx, query, r.maxRetries, r.sentDaysBack, cutoffTime, limit, offset)
+	rows, err := r.db.Queryx(ctx, query, r.maxRetries, r.sentDaysBack, cutoffTime, limit, offset)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetUnsyncedMessageInsFailed)
 		return nil, ErrGetUnsyncedMessageInsFailed
@@ -211,7 +211,7 @@ func (r *messageInRepository) Update(ctx context.Context, message MessageIn) err
 		query += ", error = :error"
 	}
 	query += " WHERE id = :id;"
-	_, err := r.db.NamedExecContext(ctx, query, convertMessageInToDAO(message))
+	_, err := r.db.NamedExec(ctx, query, convertMessageInToDAO(message))
 	if err != nil {
 		log.Error().Err(err).Msg(msgUpdateMessageInFailed)
 		return ErrUpdateMessageInFailed
@@ -227,7 +227,7 @@ func (r *messageInRepository) UpdateDEAInfo(ctx context.Context, message Message
 		query += ", error = :error"
 	}
 	query += " WHERE id = :id;"
-	_, err := r.db.NamedExecContext(ctx, query, convertMessageInToDAO(message))
+	_, err := r.db.NamedExec(ctx, query, convertMessageInToDAO(message))
 	if err != nil {
 		log.Error().Err(err).Msg(msgUpdateMessageInDEAInfoFailed)
 		return ErrUpdateMessageInDEAInfoFailed
@@ -241,7 +241,7 @@ func (r *messageInRepository) DeleteMessageInSampleCodesByIDs(ctx context.Contex
 		query := fmt.Sprintf(`DELETE FROM %s.sk_message_in_sample_codes WHERE id in (?)`, r.dbSchema)
 		query, args, _ := sqlx.In(query, ids[low:high])
 		query = r.db.Rebind(query)
-		_, err := r.db.ExecContext(ctx, query, args...)
+		_, err := r.db.Exec(ctx, query, args...)
 		if err != nil {
 			log.Error().Err(err).Msg(msgDeleteMessageInSampleCodesByIDsFailed)
 			return ErrDeleteMessageInSampleCodesByIDsFailed
@@ -254,7 +254,7 @@ func (r *messageInRepository) DeleteMessageInSampleCodesByIDs(ctx context.Contex
 
 func (r *messageInRepository) GetMessageInIDsBySampleCode(ctx context.Context, sampleCode string) ([]uuid.UUID, error) {
 	query := fmt.Sprintf(`SELECT message_in_id FROM %s.sk_message_in_sample_codes WHERE sample_code = $1;`, r.dbSchema)
-	rows, err := r.db.QueryxContext(ctx, query, sampleCode)
+	rows, err := r.db.Queryx(ctx, query, sampleCode)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetMessageInIDsBySampleCodeFailed)
 		return nil, ErrGetMessageInIDsBySampleCodeFailed
@@ -277,7 +277,7 @@ func (r *messageInRepository) GetMessageInIDsBySampleCode(ctx context.Context, s
 
 func (r *messageInRepository) GetMessageInSampleCodeIDsToDelete(ctx context.Context, limit int) ([]uuid.UUID, error) {
 	query := fmt.Sprintf(`SELECT id FROM %s.sk_message_in_sample_codes WHERE uploaded_to_dea_at IS NOT NULL AND created_at < (current_date - make_interval(days := $1)) ORDER BY created_at ASC LIMIT $2;`, r.dbSchema)
-	rows, err := r.db.QueryxContext(ctx, query, r.sentDaysBack, limit)
+	rows, err := r.db.Queryx(ctx, query, r.sentDaysBack, limit)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetMessageInSampleCodeIDsToDeleteFailed)
 		return nil, ErrGetMessageInSampleCodeIDsToDeleteFailed
@@ -301,7 +301,7 @@ func (r *messageInRepository) GetMessageInSampleCodeIDsToDelete(ctx context.Cont
 func (r *messageInRepository) GetUnsentMessageInSampleCodes(ctx context.Context) (map[uuid.UUID]map[uuid.UUID]string, error) {
 	sampleCodesByMessageIDsAndIDs := make(map[uuid.UUID]map[uuid.UUID]string)
 	query := fmt.Sprintf(`SELECT id, message_in_id, sample_code FROM %s.sk_message_in_sample_codes WHERE uploaded_to_dea_at IS NULL;`, r.dbSchema)
-	rows, err := r.db.QueryxContext(ctx, query)
+	rows, err := r.db.Queryx(ctx, query)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetUnsentMessageInSampleCodeIDsFailed)
 		return nil, ErrGetUnsentMessageInSampleCodeIDsFailed
@@ -330,7 +330,7 @@ func (r *messageInRepository) MarkSampleCodesAsUploadedByIDs(ctx context.Context
 		query := fmt.Sprintf(`UPDATE %s.sk_message_in_sample_codes SET uploaded_to_dea_at = timezone('utc', now()) WHERE id IN (?);`, r.dbSchema)
 		query, args, _ := sqlx.In(query, ids[low:high])
 		query = r.db.Rebind(query)
-		_, err := r.db.ExecContext(ctx, query, args...)
+		_, err := r.db.Exec(ctx, query, args...)
 		if err != nil {
 			log.Error().Err(err).Msg(msgMarkMessageInSampleCodesAsUploadedByIDsFailed)
 			return ErrMarkMessageInSampleCodesAsUploadedByIDsFailed
@@ -352,7 +352,7 @@ func (r *messageInRepository) RegisterSampleCodes(ctx context.Context, id uuid.U
 	ids := make([]uuid.UUID, 0)
 	err := utils.Partition(len(preparedValues), maxParams/2, func(low int, high int) error {
 		query := fmt.Sprintf(`INSERT INTO %s.sk_message_in_sample_codes (message_in_id, sample_code) VALUES (:message_in_id, :sample_code) ON CONFLICT (message_in_id, sample_code) DO NOTHING RETURNING id;`, r.dbSchema)
-		rows, err := r.db.NamedQueryContext(ctx, query, preparedValues[low:high])
+		rows, err := r.db.NamedQuery(ctx, query, preparedValues[low:high])
 		if err != nil {
 			log.Error().Err(err).Msg(msgRegisterSampleCodesToMessageInFailed)
 			return ErrRegisterSampleCodesToMessageInFailed
@@ -383,7 +383,7 @@ func (r *messageInRepository) DeleteOldMessageInRecords(ctx context.Context, cle
 											WHERE smi.dea_raw_message_id IS NOT NULL AND smo.ID IS NULL
                                                    AND smi.created_at <= current_date - ($1 ||' DAY')::INTERVAL ORDER BY smi.created_at ASC LIMIT $2);`
 	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
-	result, err := r.db.ExecContext(ctx, query, strconv.Itoa(cleanupDays), limit)
+	result, err := r.db.Exec(ctx, query, strconv.Itoa(cleanupDays), limit)
 	if err != nil {
 		log.Error().Err(err).Msg(msgDeleteOldMessageInRecordsFailed)
 		return 0, ErrDeleteOldMessageInRecordsFailed
@@ -399,7 +399,7 @@ func (r *messageInRepository) WithTransaction(tx db.DbConnection) MessageInRepos
 }
 
 func (r *messageInRepository) CreateTransaction() (db.DbConnection, error) {
-	return r.db.CreateTransactionConnector()
+	return r.db.BeginTx(ctx)
 }
 
 func NewMessageInRepository(db db.DbConnection, dbSchema string, maxRetries, sentDaysBack int) MessageInRepository {

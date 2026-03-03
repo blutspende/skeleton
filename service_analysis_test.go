@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/blutspende/bloodlab-common/db"
 	"github.com/blutspende/bloodlab-common/timezone"
-	"github.com/blutspende/skeleton/db"
 	"github.com/blutspende/skeleton/utils"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"

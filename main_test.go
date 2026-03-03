@@ -6,8 +6,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/blutspende/skeleton/config"
-	"github.com/blutspende/skeleton/db"
+	"github.com/blutspende/bloodlab-common/db"
 	"github.com/blutspende/skeleton/migrator"
 	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
 	"github.com/jmoiron/sqlx"
@@ -41,29 +40,31 @@ func configureLogger() {
 	zerolog.SetGlobalLevel(zerolog.DebugLevel)
 }
 
-func setupDbConnector(schemaName string) (db.DbConnection, string, db.DbConnector, *sqlx.DB) {
-	configuration := config.Configuration{}
-	configuration.PostgresDB.Host = "localhost"
-	configuration.PostgresDB.Port = 5551
-	configuration.PostgresDB.User = "postgres"
-	configuration.PostgresDB.Pass = "postgres"
-	configuration.PostgresDB.Database = "postgres"
-	configuration.PostgresDB.SSLMode = "disable"
-	postgres := db.NewPostgres(context.Background(), &configuration)
-	_ = postgres.Connect()
+func setupDbConnector(schemaName string) (db.DbConnection, string, db.Postgres, *sqlx.DB) {
+	pgConfig := db.PgConfig{
+		ApplicationName: "skeleton_test",
+		Host:            "localhost",
+		Port:            5551,
+		User:            "postgres",
+		Pass:            "postgres",
+		Database:        "postgres",
+		SSLMode:         "disable",
+	}
+	postgres := db.NewPostgres(pgConfig)
+	_, _ = postgres.Connect(context.TODO())
 	sqlConn, _ := postgres.GetSqlConnection()
 
 	_, _ = sqlConn.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp" schema public;`)
 	_, _ = sqlConn.Exec(fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schemaName))
 	_, _ = sqlConn.Exec(fmt.Sprintf(`CREATE SCHEMA %s;`, schemaName))
 
-	dbConn := db.NewDbConnection()
+	dbConn := db.NewEmptyDbConnection()
 	dbConn.SetSqlConnection(sqlConn)
 
 	return dbConn, schemaName, postgres, sqlConn
 }
 
-func setupDbConnectorAndRunMigration(schemaName string) (db.DbConnection, string, db.DbConnector, *sqlx.DB) {
+func setupDbConnectorAndRunMigration(schemaName string) (db.DbConnection, string, db.Postgres, *sqlx.DB) {
 	dbConn, _, postgres, sqlConn := setupDbConnector(schemaName)
 
 	mig := migrator.NewSkeletonMigrator()

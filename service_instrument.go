@@ -3,12 +3,13 @@ package skeleton
 import (
 	"context"
 	"errors"
-	"github.com/blutspende/skeleton/db"
-	"github.com/google/uuid"
-	"github.com/rs/zerolog/log"
 	"net"
 	"regexp"
 	"strings"
+
+	"github.com/blutspende/bloodlab-common/db"
+	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 )
 
 var (

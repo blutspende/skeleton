@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	config2 "github.com/blutspende/skeleton/config"
-	"github.com/blutspende/skeleton/db"
+	"github.com/blutspende/bloodlab-common/db"
+	"github.com/blutspende/skeleton/config"
 	"github.com/blutspende/skeleton/migrator"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
@@ -147,7 +147,7 @@ type SkeletonAPI interface {
 }
 
 func New(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, reagentManufacturers []string, protocols []SupportedProtocol, dbSchema string) (SkeletonAPI, error) {
-	config, err := config2.ReadConfiguration()
+	config, err := config.ReadConfiguration()
 	if err != nil {
 		return nil, err
 	}
@@ -164,8 +164,19 @@ func New(ctx context.Context, serviceName, displayName string, requestedExtraVal
 	if err != nil {
 		return nil, err
 	}
-	dbConnector := db.NewPostgres(ctx, &config)
-	dbConn := db.NewDbConnection()
+
+	pgConfig := db.PgConfig{
+		ApplicationName: "skeleton",
+		Host:            config.PostgresDB.Host,
+		Port:            config.PostgresDB.Port,
+		User:            config.PostgresDB.User,
+		Pass:            config.PostgresDB.Pass,
+		Database:        config.PostgresDB.Database,
+		SSLMode:         config.PostgresDB.SSLMode,
+	}
+	postgres := db.NewPostgres(pgConfig)
+	dbConn := db.NewEmptyDbConnection()
+
 	manager := NewSkeletonManager(ctx)
 	instrumentCache := NewInstrumentCache()
 	analysisRepository := NewAnalysisRepository(dbConn, dbSchema)
@@ -185,5 +196,5 @@ func New(ctx context.Context, serviceName, displayName string, requestedExtraVal
 
 	longpollClient := NewLongPollClient(longPollingApiRestyClient, serviceName, config.CerberusURL, config.LongPollingAPIClientTimeoutSeconds, config.LongPollingReattemptWaitSeconds, config.LongPollingLoggingEnabled)
 
-	return NewSkeleton(ctx, serviceName, displayName, requestedExtraValueKeys, encodings, reagentManufacturers, protocols, dbConnector, dbConn, dbSchema, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, messageService, manager, cerberusClient, longpollClient, deaClient, config)
+	return NewSkeleton(ctx, serviceName, displayName, requestedExtraValueKeys, encodings, reagentManufacturers, protocols, postgres, dbConn, dbSchema, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, messageService, manager, cerberusClient, longpollClient, deaClient, config)
 }
