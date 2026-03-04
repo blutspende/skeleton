@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/blutspende/bloodlab-common/db"
+	instrumentenum "github.com/blutspende/bloodlab-common/instrument"
 	"github.com/blutspende/skeleton/config"
 	"github.com/blutspende/skeleton/migrator"
 	"github.com/google/uuid"
@@ -1157,7 +1158,7 @@ func (m *cerberusClientMock) RegisterManufacturerTests(driverName string, tests 
 	return nil
 }
 
-func (m *cerberusClientMock) SetInstrumentOnlineStatus(instrumentId uuid.UUID, status InstrumentStatus) error {
+func (m *cerberusClientMock) SetInstrumentOnlineStatus(instrumentId uuid.UUID, status instrumentenum.ConnectionStatus) error {
 	return nil
 }
 

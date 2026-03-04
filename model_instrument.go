@@ -1,49 +1,51 @@
 package skeleton
 
 import (
+	"strings"
+
 	"github.com/blutspende/bloodlab-common/encoding"
+	instrumentenum "github.com/blutspende/bloodlab-common/instrument"
 	"github.com/blutspende/bloodlab-common/timezone"
 	"github.com/google/uuid"
-	"strings"
 )
 
 // models
 
 type instrumentTO struct {
-	ID                 uuid.UUID             `json:"id"`
-	Type               InstrumentType        `json:"instrumentType"`
-	Name               string                `json:"name"`
-	ProtocolID         uuid.UUID             `json:"protocolId"`
-	ProtocolName       string                `json:"type"`
-	Enabled            bool                  `json:"enabled"`
-	ConnectionMode     ConnectionMode        `json:"connectionMode"`
-	ResultMode         ResultMode            `json:"runningMode"`
-	AllowResending     bool                  `json:"allowResending"`
-	CaptureResults     bool                  `json:"captureResults"`
-	CaptureDiagnostics bool                  `json:"captureDiagnostics"`
-	ReplyToQuery       bool                  `json:"replyToQuery"`
-	Status             string                `json:"status"`
-	Encoding           encoding.Encoding     `json:"fileEncoding"`
-	TimeZone           timezone.TimeZone     `json:"timezone"`
-	Hostname           string                `json:"hostname"`
-	ClientPort         *int                  `json:"clientPort"`
-	FileServerConfig   *fileServerConfigTO   `json:"fileServerConfig"`
-	AnalyteMappings    []analyteMappingTO    `json:"analyteMappings"`
-	RequestMappings    []requestMappingTO    `json:"requestMappings"`
-	Settings           []instrumentSettingTO `json:"instrumentSettings"`
-	SortingRuleGroups  []sortingRuleGroupTO  `json:"sortingRuleGroups"`
+	ID                 uuid.UUID                     `json:"id"`
+	Type               instrumentenum.Type           `json:"instrumentType"`
+	Name               string                        `json:"name"`
+	ProtocolID         uuid.UUID                     `json:"protocolId"`
+	ProtocolName       string                        `json:"type"`
+	Enabled            bool                          `json:"enabled"`
+	ConnectionMode     instrumentenum.ConnectionMode `json:"connectionMode"`
+	ResultMode         instrumentenum.ResultMode     `json:"runningMode"`
+	AllowResending     bool                          `json:"allowResending"`
+	CaptureResults     bool                          `json:"captureResults"`
+	CaptureDiagnostics bool                          `json:"captureDiagnostics"`
+	ReplyToQuery       bool                          `json:"replyToQuery"`
+	Status             string                        `json:"status"`
+	Encoding           encoding.Encoding             `json:"fileEncoding"`
+	TimeZone           timezone.TimeZone             `json:"timezone"`
+	Hostname           string                        `json:"hostname"`
+	ClientPort         *int                          `json:"clientPort"`
+	FileServerConfig   *fileServerConfigTO           `json:"fileServerConfig"`
+	AnalyteMappings    []analyteMappingTO            `json:"analyteMappings"`
+	RequestMappings    []requestMappingTO            `json:"requestMappings"`
+	Settings           []instrumentSettingTO         `json:"instrumentSettings"`
+	SortingRuleGroups  []sortingRuleGroupTO          `json:"sortingRuleGroups"`
 }
 
 type fileServerConfigTO struct {
-	Username         string         `json:"userName"`
-	Password         string         `json:"password"`
-	OrderPath        string         `json:"orderPath"`
-	OrderFileMask    string         `json:"orderFileMask"`
-	OrderFileSuffix  string         `json:"orderFileSuffix"`
-	ResultPath       string         `json:"resultPath"`
-	ResultFileMask   string         `json:"resultFileMask"`
-	ResultFileSuffix string         `json:"resultFileSuffix"`
-	ServerType       FileServerType `json:"serverType"`
+	Username         string                        `json:"userName"`
+	Password         string                        `json:"password"`
+	OrderPath        string                        `json:"orderPath"`
+	OrderFileMask    string                        `json:"orderFileMask"`
+	OrderFileSuffix  string                        `json:"orderFileSuffix"`
+	ResultPath       string                        `json:"resultPath"`
+	ResultFileMask   string                        `json:"resultFileMask"`
+	ResultFileSuffix string                        `json:"resultFileSuffix"`
+	ServerType       instrumentenum.FileServerType `json:"serverType"`
 }
 
 type analyteMappingTO struct {
@@ -134,16 +136,16 @@ type supportedProtocolTO struct {
 }
 
 type protocolAbilityTO struct {
-	ConnectionMode          ConnectionMode `json:"connectionMode"`
-	Abilities               []Ability      `json:"abilities"`
-	RequestMappingAvailable bool           `json:"requestMappingAvailable"`
+	ConnectionMode          instrumentenum.ConnectionMode `json:"connectionMode"`
+	Abilities               []instrumentenum.Ability      `json:"abilities"`
+	RequestMappingAvailable bool                          `json:"requestMappingAvailable"`
 }
 
 type protocolSettingTO struct {
-	ID          uuid.UUID           `json:"id"`
-	Key         string              `json:"key"`
-	Description *string             `json:"description"`
-	Type        ProtocolSettingType `json:"type"`
+	ID          uuid.UUID                          `json:"id"`
+	Key         string                             `json:"key"`
+	Description *string                            `json:"description"`
+	Type        instrumentenum.ProtocolSettingType `json:"type"`
 }
 
 type supportedManufacturerTestTO struct {
@@ -179,7 +181,7 @@ func convertInstrumentTOToInstrument(instrumentTO instrumentTO) Instrument {
 		Settings:           convertInstrumentSettingTOsToInstrumentSettings(instrumentTO.Settings),
 	}
 
-	if instrumentTO.ConnectionMode == FileServer {
+	if instrumentTO.ConnectionMode == instrumentenum.ConnectionModeFileServer {
 		model.FileServerConfig = &FileServerConfig{
 			InstrumentId: instrumentTO.ID,
 			OrderPath:    "/",
@@ -208,7 +210,7 @@ func convertInstrumentTOToInstrument(instrumentTO instrumentTO) Instrument {
 	}
 
 	if instrumentTO.Status == "" {
-		model.Status = string(InstrumentReady)
+		model.Status = string(instrumentenum.ConnectionStatusReady)
 	}
 
 	for i, analyteMapping := range instrumentTO.AnalyteMappings {

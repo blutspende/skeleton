@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/blutspende/bloodlab-common/encoding"
-	"github.com/blutspende/bloodlab-common/instrument"
+	instrumentenum "github.com/blutspende/bloodlab-common/instrument"
 	"github.com/blutspende/bloodlab-common/timezone"
 	"github.com/google/uuid"
 )
@@ -59,17 +59,6 @@ type SubjectInfo struct {
 	DonationType *string
 	Pseudonym    *string
 }
-
-type ResultMode string
-
-const (
-	// Simulated results will not be transmitted to Cerberus and stay within the driver
-	Simulation ResultMode = "SIMULATION"
-	// Qualification Results are transmitted to cerberus but not returned to any EIA interface
-	Qualification ResultMode = "QUALIFICATION"
-	// Production allows the results to be returned via EIA
-	Production ResultMode = "PRODUCTION"
-)
 
 type ResultStatus string
 
@@ -126,25 +115,15 @@ type ChannelResult struct {
 	Images                []Image
 }
 
-type ConnectionMode string
-
-const (
-	TCPClientMode ConnectionMode = "TCP_CLIENT_ONLY"
-	TCPServerMode ConnectionMode = "TCP_SERVER_ONLY"
-	FileServer    ConnectionMode = "FILE_SERVER"
-	HTTP          ConnectionMode = "HTTP"
-	TCPMixed      ConnectionMode = "TCP_MIXED"
-)
-
 type Instrument struct {
 	ID                 uuid.UUID
-	Type               InstrumentType
+	Type               instrumentenum.Type
 	Name               string
 	ProtocolID         uuid.UUID
 	ProtocolName       string
 	Enabled            bool
-	ConnectionMode     ConnectionMode
-	ResultMode         ResultMode
+	ConnectionMode     instrumentenum.ConnectionMode
+	ResultMode         instrumentenum.ResultMode
 	AllowResending     bool
 	CaptureResults     bool
 	CaptureDiagnostics bool
@@ -175,18 +154,10 @@ type FileServerConfig struct {
 	ResultPath       string
 	ResultFileMask   string
 	ResultFileSuffix string
-	ServerType       FileServerType
+	ServerType       instrumentenum.FileServerType
 	CreatedAt        time.Time
 	DeletedAt        *time.Time
 }
-
-type FileServerType string
-
-const (
-	FTP    FileServerType = "FTP"
-	SFTP   FileServerType = "SFTP"
-	WebDAV FileServerType = "WEBDAV"
-)
 
 type AnalyteMapping struct {
 	ID                     uuid.UUID
@@ -273,7 +244,7 @@ type AnalysisResult struct {
 	SampleCode               string
 	MessageInID              uuid.UUID
 	Result                   string
-	ResultMode               ResultMode
+	ResultMode               instrumentenum.ResultMode
 	Status                   ResultStatus
 	ResultYieldDateTime      *time.Time
 	ValidUntil               time.Time
@@ -437,8 +408,8 @@ type SupportedProtocol struct {
 }
 
 type ProtocolAbility struct {
-	ConnectionMode          ConnectionMode
-	Abilities               []Ability
+	ConnectionMode          instrumentenum.ConnectionMode
+	Abilities               []instrumentenum.Ability
 	RequestMappingAvailable bool
 }
 
@@ -446,7 +417,7 @@ type ProtocolSetting struct {
 	ID          uuid.UUID
 	Key         string
 	Description *string
-	Type        ProtocolSettingType
+	Type        instrumentenum.ProtocolSettingType
 }
 
 type InstrumentSetting struct {
@@ -455,41 +426,8 @@ type InstrumentSetting struct {
 	Value             string
 }
 
-type Ability string
-
 const (
-	AllowResendingAbility        Ability = "ALLOW_RESENDING"
-	CanAcceptResultsAbility      Ability = "CAN_ACCEPT_RESULTS"
-	CanReplyToQueryAbility       Ability = "CAN_REPLY_TO_QUERY"
-	CanCaptureDiagnosticsAbility Ability = "CAN_CAPTURE_DIAGNOSTICS"
-)
-
-func (a Ability) String() string {
-	return string(a)
-}
-
-type InstrumentStatus string
-
-const (
-	InstrumentOffline InstrumentStatus = "OFFLINE"
-	InstrumentReady   InstrumentStatus = "READY"
-	InstrumentOnline  InstrumentStatus = "ONLINE"
-)
-
-type ProtocolSettingType string
-
-const (
-	String   ProtocolSettingType = "string"
-	Int      ProtocolSettingType = "int"
-	Bool     ProtocolSettingType = "bool"
-	Password ProtocolSettingType = "password"
-)
-
-type InstrumentType string
-
-const (
-	Analyzer InstrumentType = "ANALYZER"
-	Sorter   InstrumentType = "SORTER"
+	AllowResendingAbility instrumentenum.Ability = "ALLOW_RESENDING"
 )
 
 type SortingRule struct {
@@ -583,9 +521,9 @@ type MessageIn struct {
 	ID                 uuid.UUID
 	InstrumentID       uuid.UUID
 	InstrumentModuleID uuid.NullUUID
-	Status             instrument.MessageStatus
+	Status             instrumentenum.MessageStatus
 	ProtocolID         uuid.UUID
-	Type               instrument.MessageType
+	Type               instrumentenum.MessageType
 	Encoding           encoding.Encoding
 	Raw                []byte
 	Error              *string
@@ -599,9 +537,9 @@ type MessageIn struct {
 type MessageOut struct {
 	ID                  uuid.UUID
 	InstrumentID        uuid.UUID
-	Status              instrument.MessageStatus
+	Status              instrumentenum.MessageStatus
 	ProtocolID          uuid.UUID
-	Type                instrument.MessageType
+	Type                instrumentenum.MessageType
 	Encoding            encoding.Encoding
 	Raw                 []byte
 	Error               *string

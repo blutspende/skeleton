@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/blutspende/bloodlab-common/db"
+	instrumentenum "github.com/blutspende/bloodlab-common/instrument"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 )
@@ -39,12 +40,12 @@ func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
 	instrumentWithFtp := Instrument{
 		//_ = Instrument{
 		Name:           "TestInstrument",
-		Type:           Analyzer,
+		Type:           instrumentenum.TypeAnalyzer,
 		ProtocolID:     uuid.MustParse("abb539a3-286f-4c15-a7b7-2e9adf6eab91"),
 		ProtocolName:   "Test Protocol",
 		Enabled:        true,
-		ConnectionMode: FileServer,
-		ResultMode:     Production,
+		ConnectionMode: instrumentenum.ConnectionModeFileServer,
+		ResultMode:     instrumentenum.ResultModeProduction,
 		Status:         "ONLINE",
 		Encoding:       "UTF8",
 		TimeZone:       "Europe/Budapest",
@@ -59,7 +60,7 @@ func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
 			ResultPath:       "/result",
 			ResultFileMask:   "*",
 			ResultFileSuffix: ".TPL",
-			ServerType:       FTP,
+			ServerType:       instrumentenum.FileServerTypeFTP,
 		},
 	}
 
@@ -73,7 +74,7 @@ func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
 	instrument, err := instrumentService.GetInstrumentByID(ctx, nil, instrumentId, false)
 	assert.Nil(t, err)
 	assert.Equal(t, "TestInstrument", instrument.Name)
-	assert.Equal(t, FileServer, instrument.ConnectionMode)
+	assert.Equal(t, instrumentenum.ConnectionModeFileServer, instrument.ConnectionMode)
 	assert.NotNil(t, instrument.FileServerConfig)
 	assert.Equal(t, instrumentId, instrument.FileServerConfig.InstrumentId)
 	assert.Equal(t, "test", instrument.FileServerConfig.Username)
@@ -84,17 +85,17 @@ func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
 	assert.Equal(t, "/result", instrument.FileServerConfig.ResultPath)
 	assert.Equal(t, "*", instrument.FileServerConfig.ResultFileMask)
 	assert.Equal(t, ".TPL", instrument.FileServerConfig.ResultFileSuffix)
-	assert.Equal(t, FTP, instrument.FileServerConfig.ServerType)
+	assert.Equal(t, instrumentenum.FileServerTypeFTP, instrument.FileServerConfig.ServerType)
 
 	err = instrumentService.UpdateInstrument(ctx, Instrument{
 		ID:             instrumentId,
 		Name:           "TestInstrument",
-		Type:           Analyzer,
+		Type:           instrumentenum.TypeAnalyzer,
 		ProtocolID:     uuid.MustParse("abb539a3-286f-4c15-a7b7-2e9adf6eab91"),
 		ProtocolName:   "Test Protocol",
 		Enabled:        true,
-		ConnectionMode: FileServer,
-		ResultMode:     Production,
+		ConnectionMode: instrumentenum.ConnectionModeFileServer,
+		ResultMode:     instrumentenum.ResultModeProduction,
 		Status:         "ONLINE",
 		Encoding:       "UTF8",
 		TimeZone:       "Europe/Budapest",
@@ -110,7 +111,7 @@ func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
 			ResultPath:       "/result/updated",
 			ResultFileMask:   "*updated*",
 			ResultFileSuffix: ".updated.TPL",
-			ServerType:       SFTP,
+			ServerType:       instrumentenum.FileServerTypeSFTP,
 		},
 	}, uuid.MustParse("9d5fb5e9-65a1-4479-8f82-25b04145bfe1"))
 	assert.Nil(t, err)
@@ -128,7 +129,7 @@ func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
 	assert.Equal(t, "/result/updated", instrument.FileServerConfig.ResultPath)
 	assert.Equal(t, "*updated*", instrument.FileServerConfig.ResultFileMask)
 	assert.Equal(t, ".updated.TPL", instrument.FileServerConfig.ResultFileSuffix)
-	assert.Equal(t, SFTP, instrument.FileServerConfig.ServerType)
+	assert.Equal(t, instrumentenum.FileServerTypeSFTP, instrument.FileServerConfig.ServerType)
 
 	err = instrumentService.DeleteInstrument(ctx, instrumentId)
 	assert.Nil(t, err)
@@ -168,12 +169,12 @@ func TestFtpConfigConnectionModeChange(t *testing.T) {
 
 	instrumentId, err := instrumentService.CreateInstrument(ctx, Instrument{
 		Name:           "TestInstrument",
-		Type:           Analyzer,
+		Type:           instrumentenum.TypeAnalyzer,
 		ProtocolID:     uuid.MustParse("abb539a3-286f-4c15-a7b7-2e9adf6eab91"),
 		ProtocolName:   "Test Protocol",
 		Enabled:        true,
-		ConnectionMode: TCPClientMode,
-		ResultMode:     Production,
+		ConnectionMode: instrumentenum.ConnectionModeTCPClient,
+		ResultMode:     instrumentenum.ResultModeProduction,
 		Status:         "ONLINE",
 		Encoding:       "UTF8",
 		TimeZone:       "Europe/Budapest",
@@ -186,18 +187,18 @@ func TestFtpConfigConnectionModeChange(t *testing.T) {
 	instrument, err := instrumentService.GetInstrumentByID(ctx, nil, instrumentId, false)
 	assert.Nil(t, err)
 	assert.Equal(t, "TestInstrument", instrument.Name)
-	assert.Equal(t, TCPClientMode, instrument.ConnectionMode)
+	assert.Equal(t, instrumentenum.ConnectionModeTCPClient, instrument.ConnectionMode)
 	assert.Nil(t, instrument.FileServerConfig)
 
 	err = instrumentService.UpdateInstrument(ctx, Instrument{
 		ID:             instrumentId,
 		Name:           "TestInstrument",
-		Type:           Analyzer,
+		Type:           instrumentenum.TypeAnalyzer,
 		ProtocolID:     uuid.MustParse("abb539a3-286f-4c15-a7b7-2e9adf6eab91"),
 		ProtocolName:   "Test Protocol",
 		Enabled:        true,
-		ConnectionMode: FileServer,
-		ResultMode:     Production,
+		ConnectionMode: instrumentenum.ConnectionModeFileServer,
+		ResultMode:     instrumentenum.ResultModeProduction,
 		Status:         "ONLINE",
 		Encoding:       "UTF8",
 		TimeZone:       "Europe/Budapest",
@@ -213,7 +214,7 @@ func TestFtpConfigConnectionModeChange(t *testing.T) {
 			ResultPath:       "/result",
 			ResultFileMask:   "",
 			ResultFileSuffix: ".TPL",
-			ServerType:       FTP,
+			ServerType:       instrumentenum.FileServerTypeFTP,
 		},
 	}, uuid.MustParse("9d5fb5e9-65a1-4479-8f82-25b04145bfe1"))
 	assert.Nil(t, err)
@@ -221,7 +222,7 @@ func TestFtpConfigConnectionModeChange(t *testing.T) {
 	// test that FileServer config created after connection mode updated to FileServer and config passed
 	instrument, err = instrumentService.GetInstrumentByID(ctx, nil, instrumentId, false)
 	assert.Nil(t, err)
-	assert.Equal(t, FileServer, instrument.ConnectionMode)
+	assert.Equal(t, instrumentenum.ConnectionModeFileServer, instrument.ConnectionMode)
 	assert.NotNil(t, instrument.FileServerConfig)
 	assert.Equal(t, instrumentId, instrument.FileServerConfig.InstrumentId)
 	assert.Equal(t, "test", instrument.FileServerConfig.Username)
@@ -232,17 +233,17 @@ func TestFtpConfigConnectionModeChange(t *testing.T) {
 	assert.Equal(t, "/result", instrument.FileServerConfig.ResultPath)
 	assert.Equal(t, "", instrument.FileServerConfig.ResultFileMask)
 	assert.Equal(t, ".TPL", instrument.FileServerConfig.ResultFileSuffix)
-	assert.Equal(t, FTP, instrument.FileServerConfig.ServerType)
+	assert.Equal(t, instrumentenum.FileServerTypeFTP, instrument.FileServerConfig.ServerType)
 
 	err = instrumentService.UpdateInstrument(ctx, Instrument{
 		ID:             instrumentId,
 		Name:           "TestInstrument",
-		Type:           Analyzer,
+		Type:           instrumentenum.TypeAnalyzer,
 		ProtocolID:     uuid.MustParse("abb539a3-286f-4c15-a7b7-2e9adf6eab91"),
 		ProtocolName:   "Test Protocol",
 		Enabled:        true,
-		ConnectionMode: TCPMixed,
-		ResultMode:     Production,
+		ConnectionMode: instrumentenum.ConnectionModeTCPMixed,
+		ResultMode:     instrumentenum.ResultModeProduction,
 		Status:         "ONLINE",
 		Encoding:       "UTF8",
 		TimeZone:       "Europe/Budapest",
@@ -296,12 +297,12 @@ func TestUpdateInstrument(t *testing.T) {
 	instr := Instrument{
 		ID:                 uuid.New(),
 		Name:               "TestInstrument",
-		Type:               Analyzer,
+		Type:               instrumentenum.TypeAnalyzer,
 		ProtocolID:         protocolID,
 		ProtocolName:       "TestProtocol",
 		Enabled:            true,
-		ConnectionMode:     TCPMixed,
-		ResultMode:         Simulation,
+		ConnectionMode:     instrumentenum.ConnectionModeTCPMixed,
+		ResultMode:         instrumentenum.ResultModeSimulation,
 		CaptureResults:     true,
 		CaptureDiagnostics: false,
 		ReplyToQuery:       false,
@@ -329,12 +330,12 @@ func TestUpdateInstrument(t *testing.T) {
 	instr = Instrument{
 		ID:                 instrumentID,
 		Name:               "TestInstrumentUpdated",
-		Type:               Analyzer,
+		Type:               instrumentenum.TypeAnalyzer,
 		ProtocolID:         protocolID,
 		ProtocolName:       "TestProtocol",
 		Enabled:            true,
-		ConnectionMode:     TCPMixed,
-		ResultMode:         Simulation,
+		ConnectionMode:     instrumentenum.ConnectionModeTCPMixed,
+		ResultMode:         instrumentenum.ResultModeSimulation,
 		CaptureResults:     true,
 		CaptureDiagnostics: false,
 		ReplyToQuery:       false,
@@ -467,12 +468,12 @@ func TestUpdateInstrument(t *testing.T) {
 	instr = Instrument{
 		ID:                 instrumentID,
 		Name:               "TestInstrumentUpdated2",
-		Type:               Analyzer,
+		Type:               instrumentenum.TypeAnalyzer,
 		ProtocolID:         protocolID,
 		ProtocolName:       "TestProtocol",
 		Enabled:            true,
-		ConnectionMode:     TCPMixed,
-		ResultMode:         Simulation,
+		ConnectionMode:     instrumentenum.ConnectionModeTCPMixed,
+		ResultMode:         instrumentenum.ResultModeSimulation,
 		CaptureResults:     true,
 		CaptureDiagnostics: false,
 		ReplyToQuery:       false,
@@ -679,12 +680,12 @@ func TestNotVerifiedInstrument(t *testing.T) {
 	instr := Instrument{
 		ID:                 instrId,
 		Name:               "TestInstrument",
-		Type:               Analyzer,
+		Type:               instrumentenum.TypeAnalyzer,
 		ProtocolID:         protocolID,
 		ProtocolName:       "TestProtocol",
 		Enabled:            true,
-		ConnectionMode:     TCPMixed,
-		ResultMode:         Simulation,
+		ConnectionMode:     instrumentenum.ConnectionModeTCPMixed,
+		ResultMode:         instrumentenum.ResultModeSimulation,
 		CaptureResults:     true,
 		CaptureDiagnostics: false,
 		ReplyToQuery:       false,
@@ -1186,12 +1187,12 @@ func TestTrimAndValidateHostname(t *testing.T) {
 	instr := Instrument{
 		ID:                 uuid.New(),
 		Name:               "TestInstrument",
-		Type:               Analyzer,
+		Type:               instrumentenum.TypeAnalyzer,
 		ProtocolID:         protocolID,
 		ProtocolName:       "TestProtocol",
 		Enabled:            true,
-		ConnectionMode:     TCPMixed,
-		ResultMode:         Simulation,
+		ConnectionMode:     instrumentenum.ConnectionModeTCPMixed,
+		ResultMode:         instrumentenum.ResultModeSimulation,
 		CaptureResults:     true,
 		CaptureDiagnostics: false,
 		ReplyToQuery:       false,
@@ -1216,12 +1217,12 @@ func TestTrimAndValidateHostname(t *testing.T) {
 	instr = Instrument{
 		ID:                 instrumentID,
 		Name:               "TestInstrumentUpdated",
-		Type:               Analyzer,
+		Type:               instrumentenum.TypeAnalyzer,
 		ProtocolID:         protocolID,
 		ProtocolName:       "TestProtocol",
 		Enabled:            true,
-		ConnectionMode:     TCPMixed,
-		ResultMode:         Simulation,
+		ConnectionMode:     instrumentenum.ConnectionModeTCPMixed,
+		ResultMode:         instrumentenum.ResultModeSimulation,
 		CaptureResults:     true,
 		CaptureDiagnostics: false,
 		ReplyToQuery:       false,
@@ -1372,12 +1373,12 @@ func (r *instrumentRepositoryMock) GetProtocolSettings(ctx context.Context, prot
 		{
 			ID:   uuid.MustParse("1f663361-3f2d-4c43-8cf6-65cec3fc88ab"),
 			Key:  "Some setting",
-			Type: String,
+			Type: instrumentenum.ProtocolSettingTypeString,
 		},
 		{
 			ID:   uuid.MustParse("c81c77cf-f17a-402d-a44b-a0194eb00a29"),
 			Key:  "Password",
-			Type: Password,
+			Type: instrumentenum.ProtocolSettingTypePassword,
 		},
 	}, nil
 }
@@ -1387,7 +1388,7 @@ func (r *instrumentRepositoryMock) UpsertProtocolSetting(ctx context.Context, pr
 func (r *instrumentRepositoryMock) DeleteProtocolSettings(ctx context.Context, protocolSettingIDs []uuid.UUID) error {
 	return nil
 }
-func (r *instrumentRepositoryMock) UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error {
+func (r *instrumentRepositoryMock) UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status instrumentenum.ConnectionStatus) error {
 	return nil
 }
 func (r *instrumentRepositoryMock) UpsertAnalyteMappings(ctx context.Context, analyteMappings []AnalyteMapping, instrumentID uuid.UUID) ([]uuid.UUID, error) {

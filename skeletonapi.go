@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/blutspende/bloodlab-common/db"
+	instrumentenum "github.com/blutspende/bloodlab-common/instrument"
 	"github.com/blutspende/skeleton/config"
 	"github.com/blutspende/skeleton/migrator"
 	"github.com/google/uuid"
@@ -129,7 +130,7 @@ type SkeletonAPI interface {
 	// - ONLINE - instrument is actively connected
 	// - READY - instrument is not actively connected, but ready to connect
 	// - OFFLINE - instrument is offline
-	SetOnlineStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error
+	SetOnlineStatus(ctx context.Context, id uuid.UUID, status instrumentenum.ConnectionStatus) error
 
 	// Start - MUST BE CALLED ON STARTUP
 	// - connects to database

@@ -3,17 +3,16 @@ package skeleton
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/blutspende/bloodlab-common/db"
 	"github.com/blutspende/bloodlab-common/encoding"
+	instrumentenum "github.com/blutspende/bloodlab-common/instrument"
 	"github.com/blutspende/bloodlab-common/timezone"
 	"github.com/blutspende/bloodlab-common/utils"
-
-	"errors"
-
-	"github.com/blutspende/bloodlab-common/db"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/rs/zerolog/log"
@@ -132,41 +131,41 @@ var (
 )
 
 type instrumentDAO struct {
-	ID                 uuid.UUID         `db:"id"`
-	Type               InstrumentType    `db:"type"`
-	ProtocolID         uuid.UUID         `db:"protocol_id"`
-	Name               string            `db:"name"`
-	HostName           string            `db:"hostname"`
-	ClientPort         sql.NullInt32     `db:"client_port"`
-	Enabled            bool              `db:"enabled"`
-	ConnectionMode     string            `db:"connection_mode"`
-	RunningMode        ResultMode        `db:"running_mode"`
-	AllowResending     bool              `db:"allowresending"`
-	CaptureResults     bool              `db:"captureresults"`
-	CaptureDiagnostics bool              `db:"capturediagnostics"`
-	ReplyToQuery       bool              `db:"replytoquery"`
-	Status             string            `db:"status"`
-	TimeZone           timezone.TimeZone `db:"timezone"`
-	Encoding           encoding.Encoding `db:"file_encoding"`
-	CreatedAt          time.Time         `db:"created_at"`
-	ModifiedAt         sql.NullTime      `db:"modified_at"`
-	DeletedAt          sql.NullTime      `db:"deleted_at"`
+	ID                 uuid.UUID                 `db:"id"`
+	Type               instrumentenum.Type       `db:"type"`
+	ProtocolID         uuid.UUID                 `db:"protocol_id"`
+	Name               string                    `db:"name"`
+	HostName           string                    `db:"hostname"`
+	ClientPort         sql.NullInt32             `db:"client_port"`
+	Enabled            bool                      `db:"enabled"`
+	ConnectionMode     string                    `db:"connection_mode"`
+	RunningMode        instrumentenum.ResultMode `db:"running_mode"`
+	AllowResending     bool                      `db:"allowresending"`
+	CaptureResults     bool                      `db:"captureresults"`
+	CaptureDiagnostics bool                      `db:"capturediagnostics"`
+	ReplyToQuery       bool                      `db:"replytoquery"`
+	Status             string                    `db:"status"`
+	TimeZone           timezone.TimeZone         `db:"timezone"`
+	Encoding           encoding.Encoding         `db:"file_encoding"`
+	CreatedAt          time.Time                 `db:"created_at"`
+	ModifiedAt         sql.NullTime              `db:"modified_at"`
+	DeletedAt          sql.NullTime              `db:"deleted_at"`
 }
 
 type fileServerConfigDAO struct {
-	ID               uuid.UUID      `db:"id"`
-	InstrumentId     uuid.UUID      `db:"instrument_id"`
-	Username         string         `db:"username"`
-	Password         string         `db:"password"`
-	OrderPath        string         `db:"order_path"`
-	OrderFileMask    string         `db:"order_file_mask"`
-	OrderFileSuffix  string         `db:"order_file_suffix"`
-	ResultPath       string         `db:"result_path"`
-	ResultFileMask   string         `db:"result_file_mask"`
-	ResultFileSuffix string         `db:"result_file_suffix"`
-	ServerType       FileServerType `db:"server_type"`
-	CreatedAt        time.Time      `db:"created_at"`
-	DeletedAt        sql.NullTime   `db:"deleted_at"`
+	ID               uuid.UUID                     `db:"id"`
+	InstrumentId     uuid.UUID                     `db:"instrument_id"`
+	Username         string                        `db:"username"`
+	Password         string                        `db:"password"`
+	OrderPath        string                        `db:"order_path"`
+	OrderFileMask    string                        `db:"order_file_mask"`
+	OrderFileSuffix  string                        `db:"order_file_suffix"`
+	ResultPath       string                        `db:"result_path"`
+	ResultFileMask   string                        `db:"result_file_mask"`
+	ResultFileSuffix string                        `db:"result_file_suffix"`
+	ServerType       instrumentenum.FileServerType `db:"server_type"`
+	CreatedAt        time.Time                     `db:"created_at"`
+	DeletedAt        sql.NullTime                  `db:"deleted_at"`
 }
 
 type analyteMappingDAO struct {
@@ -284,14 +283,14 @@ type protocolAbilityDAO struct {
 }
 
 type protocolSettingDAO struct {
-	ID          uuid.UUID           `db:"id"`
-	ProtocolID  uuid.UUID           `db:"protocol_id"`
-	Key         string              `db:"key"`
-	Type        ProtocolSettingType `db:"type"`
-	Description sql.NullString      `db:"description"`
-	CreatedAt   time.Time           `db:"created_at"`
-	ModifiedAt  sql.NullTime        `db:"modified_at"`
-	DeletedAt   sql.NullTime        `db:"deleted_at"`
+	ID          uuid.UUID                          `db:"id"`
+	ProtocolID  uuid.UUID                          `db:"protocol_id"`
+	Key         string                             `db:"key"`
+	Type        instrumentenum.ProtocolSettingType `db:"type"`
+	Description sql.NullString                     `db:"description"`
+	CreatedAt   time.Time                          `db:"created_at"`
+	ModifiedAt  sql.NullTime                       `db:"modified_at"`
+	DeletedAt   sql.NullTime                       `db:"deleted_at"`
 }
 
 type instrumentRepository struct {
@@ -321,7 +320,7 @@ type InstrumentRepository interface {
 	DeleteProtocolSettings(ctx context.Context, protocolSettingIDs []uuid.UUID) error
 	UpsertManufacturerTests(ctx context.Context, manufacturerTests []SupportedManufacturerTests) error
 	GetManufacturerTests(ctx context.Context) ([]SupportedManufacturerTests, error)
-	UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error
+	UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status instrumentenum.ConnectionStatus) error
 	UpsertAnalyteMappings(ctx context.Context, analyteMappings []AnalyteMapping, instrumentID uuid.UUID) ([]uuid.UUID, error)
 	GetAnalyteMappings(ctx context.Context, instrumentIDs []uuid.UUID) (map[uuid.UUID][]AnalyteMapping, error)
 	GetExpectedControlResultsForControlValidation(ctx context.Context, instrumentID uuid.UUID, analyteID uuid.UUID) ([]ExpectedControlResult, error)
@@ -640,7 +639,7 @@ func (r *instrumentRepository) DeleteProtocolAbilities(ctx context.Context, prot
 		return nil
 	}
 	query := fmt.Sprintf(`UPDATE %s.sk_protocol_abilities SET deleted_at = timezone('utc', now()) WHERE protocol_id = ? AND connection_mode IN (?) AND deleted_at IS NULL;`, r.dbSchema)
-	connectionModes := make([]ConnectionMode, len(protocolAbilities))
+	connectionModes := make([]instrumentenum.ConnectionMode, len(protocolAbilities))
 	for i := range protocolAbilities {
 		connectionModes[i] = protocolAbilities[i].ConnectionMode
 	}
@@ -763,7 +762,7 @@ func (r *instrumentRepository) GetManufacturerTests(ctx context.Context) ([]Supp
 	return manufacturerTests, nil
 }
 
-func (r *instrumentRepository) UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error {
+func (r *instrumentRepository) UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status instrumentenum.ConnectionStatus) error {
 	query := fmt.Sprintf(`UPDATE %s.sk_instruments SET status = $2 WHERE id = $1;`, r.dbSchema)
 	_, err := r.db.Exec(ctx, query, id, status)
 	if err != nil {
@@ -1541,19 +1540,19 @@ func convertInstrumentToDAO(instrument Instrument) (instrumentDAO, error) {
 		Encoding:           instrument.Encoding,
 	}
 	switch instrument.Type {
-	case Analyzer, Sorter:
+	case instrumentenum.TypeAnalyzer, instrumentenum.TypeSorter:
 		dao.Type = instrument.Type
 	default:
 		return dao, ErrInvalidInstrumentType
 	}
 	switch instrument.ConnectionMode {
-	case TCPClientMode, TCPServerMode, FileServer, HTTP, TCPMixed:
+	case instrumentenum.ConnectionModeTCPClient, instrumentenum.ConnectionModeTCPServer, instrumentenum.ConnectionModeFileServer, instrumentenum.ConnectionModeHTTP, instrumentenum.ConnectionModeTCPMixed:
 		dao.ConnectionMode = string(instrument.ConnectionMode)
 	default:
 		return dao, ErrInvalidConnectionMode
 	}
 	switch instrument.ResultMode {
-	case Simulation, Qualification, Production:
+	case instrumentenum.ResultModeSimulation, instrumentenum.ResultModeQualification, instrumentenum.ResultModeProduction:
 		dao.RunningMode = instrument.ResultMode
 	default:
 		return dao, ErrInvalidResultMode
@@ -1583,27 +1582,27 @@ func convertInstrumentDaoToInstrument(dao instrumentDAO) (Instrument, error) {
 		CreatedAt:          dao.CreatedAt,
 	}
 	switch dao.Type {
-	case Analyzer, Sorter:
+	case instrumentenum.TypeAnalyzer, instrumentenum.TypeSorter:
 		instrument.Type = dao.Type
 	default:
 		return instrument, ErrInvalidInstrumentType
 	}
 	switch dao.ConnectionMode {
 	case "TCP_CLIENT_ONLY":
-		instrument.ConnectionMode = TCPClientMode
+		instrument.ConnectionMode = instrumentenum.ConnectionModeTCPClient
 	case "TCP_SERVER_ONLY":
-		instrument.ConnectionMode = TCPServerMode
+		instrument.ConnectionMode = instrumentenum.ConnectionModeTCPServer
 	case "FILE_SERVER":
-		instrument.ConnectionMode = FileServer
+		instrument.ConnectionMode = instrumentenum.ConnectionModeFileServer
 	case "HTTP":
-		instrument.ConnectionMode = HTTP
+		instrument.ConnectionMode = instrumentenum.ConnectionModeHTTP
 	case "TCP_MIXED":
-		instrument.ConnectionMode = TCPMixed
+		instrument.ConnectionMode = instrumentenum.ConnectionModeTCPMixed
 	default:
 		return instrument, ErrInvalidConnectionMode
 	}
 	switch dao.RunningMode {
-	case Simulation, Qualification, Production:
+	case instrumentenum.ResultModeSimulation, instrumentenum.ResultModeQualification, instrumentenum.ResultModeProduction:
 		instrument.ResultMode = dao.RunningMode
 	default:
 		return instrument, ErrInvalidResultMode
@@ -1852,7 +1851,7 @@ func convertDAOToSupportedManufacturerTest(dao supportedManufacturerTestsDAO) Su
 
 func convertProtocolAbilityDAOToProtocolAbility(dao protocolAbilityDAO) ProtocolAbility {
 	return ProtocolAbility{
-		ConnectionMode:          ConnectionMode(dao.ConnectionMode),
+		ConnectionMode:          instrumentenum.ConnectionMode(dao.ConnectionMode),
 		Abilities:               splitStringToEnumArray(dao.Abilities, ","),
 		RequestMappingAvailable: dao.RequestMappingAvailable,
 	}
@@ -1865,11 +1864,11 @@ func NewInstrumentRepository(db db.DbConnection, dbSchema string) InstrumentRepo
 	}
 }
 
-func splitStringToEnumArray(value string, separator string) []Ability {
+func splitStringToEnumArray(value string, separator string) []instrumentenum.Ability {
 	stringItems := strings.Split(value, separator)
-	items := make([]Ability, len(stringItems))
+	items := make([]instrumentenum.Ability, len(stringItems))
 	for i := range stringItems {
-		items[i] = Ability(stringItems[i])
+		items[i] = instrumentenum.Ability(stringItems[i])
 	}
 	return items
 }

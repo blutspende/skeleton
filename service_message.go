@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/blutspende/bloodlab-common/encoding"
-	"github.com/blutspende/bloodlab-common/instrument"
+	instrumentenum "github.com/blutspende/bloodlab-common/instrument"
 	"github.com/blutspende/bloodlab-common/utils"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
@@ -119,10 +119,10 @@ func (s *messageService) SaveMessageIn(ctx context.Context, message MessageIn) (
 	var err error
 	message.CreatedAt = time.Now().UTC()
 	if !isStatusValid(message.Status) {
-		message.Status = instrument.MessageStatusStored
+		message.Status = instrumentenum.MessageStatusStored
 	}
 	if !isTypeValid(message.Type) {
-		message.Type = instrument.MessageTypeUnidentified
+		message.Type = instrumentenum.MessageTypeUnidentified
 	}
 	message.ID, err = s.messageInRepository.Create(ctx, message)
 	if err != nil {
@@ -149,10 +149,10 @@ func (s *messageService) SaveMessageOutBatch(ctx context.Context, messages []Mes
 	}
 	for i := range messages {
 		if !isStatusValid(messages[i].Status) {
-			messages[i].Status = instrument.MessageStatusStored
+			messages[i].Status = instrumentenum.MessageStatusStored
 		}
 		if !isTypeValid(messages[i].Type) {
-			messages[i].Type = instrument.MessageTypeUnidentified
+			messages[i].Type = instrumentenum.MessageTypeUnidentified
 		}
 		if messages[i].CreatedAt.IsZero() {
 			messages[i].CreatedAt = ts
@@ -267,7 +267,7 @@ func (s *messageService) StartDEAArchiving(ctx context.Context, maxRetries int) 
 				})
 				if err != nil {
 					errorMsg := err.Error()
-					messagesToArchive[i].Status = instrument.MessageStatusError
+					messagesToArchive[i].Status = instrumentenum.MessageStatusError
 					messagesToArchive[i].Error = &errorMsg
 					messagesToArchive[i].RetryCount += 1
 					if messagesToArchive[i].RetryCount <= maxRetries {
@@ -736,14 +736,14 @@ func NewMessageService(deaClient DeaClientV1, cerberusClient CerberusClient, mes
 	}
 }
 
-func isStatusValid(status instrument.MessageStatus) bool {
-	return status == instrument.MessageStatusSent || status == instrument.MessageStatusError || status == instrument.MessageStatusProcessed || status == instrument.MessageStatusStored
+func isStatusValid(status instrumentenum.MessageStatus) bool {
+	return status == instrumentenum.MessageStatusSent || status == instrumentenum.MessageStatusError || status == instrumentenum.MessageStatusProcessed || status == instrumentenum.MessageStatusStored
 }
 
-func isTypeValid(messageType instrument.MessageType) bool {
-	return messageType == instrument.MessageTypeQuery || messageType == instrument.MessageTypeOrder || messageType == instrument.MessageTypeResult ||
-		messageType == instrument.MessageTypeAcknowledgement || messageType == instrument.MessageTypeCancellation || messageType == instrument.MessageTypeReorder ||
-		messageType == instrument.MessageTypeDiagnostics || messageType == instrument.MessageTypeUnidentified
+func isTypeValid(messageType instrumentenum.MessageType) bool {
+	return messageType == instrumentenum.MessageTypeQuery || messageType == instrumentenum.MessageTypeOrder || messageType == instrumentenum.MessageTypeResult ||
+		messageType == instrumentenum.MessageTypeAcknowledgement || messageType == instrumentenum.MessageTypeCancellation || messageType == instrumentenum.MessageTypeReorder ||
+		messageType == instrumentenum.MessageTypeDiagnostics || messageType == instrumentenum.MessageTypeUnidentified
 }
 
 type sampleCodesWithIDsAndMessageID struct {

@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/blutspende/bloodlab-common/db"
-
+	instrumentenum "github.com/blutspende/bloodlab-common/instrument"
 	"github.com/blutspende/bloodlab-common/utils"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
@@ -224,24 +224,24 @@ type subjectInfoDAO struct {
 }
 
 type analysisResultDAO struct {
-	ID                       uuid.UUID         `db:"id"`
-	AnalyteMappingID         uuid.UUID         `db:"analyte_mapping_id"`
-	InstrumentID             uuid.UUID         `db:"instrument_id"`
-	InstrumentRunID          uuid.UUID         `db:"instrument_run_id"`
-	SampleCode               string            `db:"sample_code"`
-	DEARawMessageID          uuid.NullUUID     `db:"dea_raw_message_id"`
-	MessageInID              uuid.UUID         `db:"message_in_id"`
-	Result                   string            `db:"result"`
-	Status                   ResultStatus      `db:"status"`
-	ResultMode               ResultMode        `db:"result_mode"`
-	YieldedAt                sql.NullTime      `db:"yielded_at"`
-	ValidUntil               time.Time         `db:"valid_until"`
-	Operator                 string            `db:"operator"`
-	TechnicalReleaseDateTime sql.NullTime      `db:"technical_release_datetime"`
-	Edited                   bool              `db:"edited"`
-	EditReason               sql.NullString    `db:"edit_reason"`
-	IsInvalid                bool              `db:"is_invalid"`
-	AnalyteMapping           analyteMappingDAO `db:"analyte_mapping"`
+	ID                       uuid.UUID                 `db:"id"`
+	AnalyteMappingID         uuid.UUID                 `db:"analyte_mapping_id"`
+	InstrumentID             uuid.UUID                 `db:"instrument_id"`
+	InstrumentRunID          uuid.UUID                 `db:"instrument_run_id"`
+	SampleCode               string                    `db:"sample_code"`
+	DEARawMessageID          uuid.NullUUID             `db:"dea_raw_message_id"`
+	MessageInID              uuid.UUID                 `db:"message_in_id"`
+	Result                   string                    `db:"result"`
+	Status                   ResultStatus              `db:"status"`
+	ResultMode               instrumentenum.ResultMode `db:"result_mode"`
+	YieldedAt                sql.NullTime              `db:"yielded_at"`
+	ValidUntil               time.Time                 `db:"valid_until"`
+	Operator                 string                    `db:"operator"`
+	TechnicalReleaseDateTime sql.NullTime              `db:"technical_release_datetime"`
+	Edited                   bool                      `db:"edited"`
+	EditReason               sql.NullString            `db:"edit_reason"`
+	IsInvalid                bool                      `db:"is_invalid"`
+	AnalyteMapping           analyteMappingDAO         `db:"analyte_mapping"`
 	ChannelResults           []channelResultDAO
 	ExtraValues              []resultExtraValueDAO
 	Reagents                 []reagentDAO

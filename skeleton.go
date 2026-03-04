@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/blutspende/bloodlab-common/db"
+	instrumentenum "github.com/blutspende/bloodlab-common/instrument"
 	"github.com/blutspende/bloodlab-common/utils"
 	"github.com/blutspende/skeleton/config"
 	"github.com/blutspende/skeleton/migrator"
@@ -513,7 +514,7 @@ func (s *skeleton) RegisterManufacturerTests(ctx context.Context, manufacturerTe
 	return nil
 }
 
-func (s *skeleton) SetOnlineStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error {
+func (s *skeleton) SetOnlineStatus(ctx context.Context, id uuid.UUID, status instrumentenum.ConnectionStatus) error {
 	err := s.instrumentService.UpdateInstrumentStatus(ctx, id, status)
 	if err != nil {
 		return err
