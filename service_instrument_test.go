@@ -16,7 +16,7 @@ func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
 
 	ctx := context.Background()
 
-	dbConn, schemaName, _, _, err := setupDbConnectorAndRunMigration(ctx, "instrument_test")
+	dbConn, schemaName, _, _, err := setupDbConnectionAndRunMigrations(ctx, "instrument_test")
 	if err != nil {
 		assert.Fail(t, err.Error())
 		return
@@ -143,7 +143,7 @@ func TestFtpConfigConnectionModeChange(t *testing.T) {
 
 	ctx := context.Background()
 
-	dbConn, schemaName, _, _, err := setupDbConnectorAndRunMigration(ctx, "instrument_test")
+	dbConn, schemaName, _, _, err := setupDbConnectionAndRunMigrations(ctx, "instrument_test")
 	if err != nil {
 		assert.Fail(t, err.Error())
 		return
@@ -261,7 +261,7 @@ func TestUpdateInstrument(t *testing.T) {
 
 	ctx := context.Background()
 
-	dbConn, schemaName, _, _, err := setupDbConnectorAndRunMigration(ctx, "instrument_test")
+	dbConn, schemaName, _, _, err := setupDbConnectionAndRunMigrations(ctx, "instrument_test")
 	if err != nil {
 		assert.Fail(t, err.Error())
 		return
@@ -643,7 +643,7 @@ func TestNotVerifiedInstrument(t *testing.T) {
 
 	ctx := context.Background()
 
-	dbConn, schemaName, _, _, err := setupDbConnectorAndRunMigration(ctx, "instrument_test")
+	dbConn, schemaName, _, _, err := setupDbConnectionAndRunMigrations(ctx, "instrument_test")
 	if err != nil {
 		assert.Fail(t, err.Error())
 		return
@@ -706,7 +706,7 @@ func TestUpdateExpectedControlResult(t *testing.T) {
 
 	ctx := context.Background()
 
-	dbConn, schemaName, _, _, err := setupDbConnectorAndRunMigration(ctx, "expectedcontrolresult_test")
+	dbConn, schemaName, _, _, err := setupDbConnectionAndRunMigrations(ctx, "expectedcontrolresult_test")
 	if err != nil {
 		assert.Fail(t, err.Error())
 		return
@@ -864,7 +864,7 @@ func TestUpdateExpectedControlResult2(t *testing.T) {
 
 	ctx := context.Background()
 
-	dbConn, schemaName, _, _, err := setupDbConnectorAndRunMigration(ctx, "expectedcontrolresult_test")
+	dbConn, schemaName, _, _, err := setupDbConnectionAndRunMigrations(ctx, "expectedcontrolresult_test")
 	if err != nil {
 		assert.Fail(t, err.Error())
 		return
@@ -1069,7 +1069,7 @@ func TestNotVerifiedExpectedControlResults(t *testing.T) {
 
 	ctx := context.Background()
 
-	dbConn, schemaName, _, _, err := setupDbConnectorAndRunMigration(ctx, "expectedcontrolresult_test")
+	dbConn, schemaName, _, _, err := setupDbConnectionAndRunMigrations(ctx, "expectedcontrolresult_test")
 	if err != nil {
 		assert.Fail(t, err.Error())
 		return
@@ -1152,7 +1152,7 @@ func TestTrimAndValidateHostname(t *testing.T) {
 
 	ctx := context.Background()
 
-	dbConn, schemaName, _, _, err := setupDbConnectorAndRunMigration(ctx, "instrument_test")
+	dbConn, schemaName, _, _, err := setupDbConnectionAndRunMigrations(ctx, "instrument_test")
 	if err != nil {
 		assert.Fail(t, err.Error())
 		return

@@ -24,7 +24,7 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 
 	ctx := context.Background()
 
-	dbConn, schemaName, pg, sqlConn, err := setupDbConnectorAndRunMigration(ctx, "testSubmitAnalysisRequestsParallel")
+	dbConn, schemaName, pg, sqlConn, err := setupDbConnectionAndRunMigrations(ctx, "testSubmitAnalysisRequestsParallel")
 	if err != nil {
 		assert.Fail(t, err.Error())
 		return
@@ -144,7 +144,7 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 
 	ctx := context.Background()
 
-	dbConn, schemaName, pg, sqlConn, err := setupDbConnector(ctx, "testSubmitAnalysisResultsWithRequests")
+	dbConn, schemaName, pg, sqlConn, err := setupDbConnection(ctx, "testSubmitAnalysisResultsWithRequests")
 	if err != nil {
 		assert.Fail(t, err.Error())
 		return
@@ -345,7 +345,7 @@ func TestAnalysisResultsReprocessing(t *testing.T) {
 
 	ctx := context.Background()
 
-	dbConn, schemaName, pg, _, err := setupDbConnector(ctx, "testAnalysisResultsReprocessing")
+	dbConn, schemaName, pg, _, err := setupDbConnection(ctx, "testAnalysisResultsReprocessing")
 	if err != nil {
 		assert.Fail(t, err.Error())
 		return
@@ -408,7 +408,7 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 
 	ctx := context.Background()
 
-	dbConn, schemaName, pg, _, err := setupDbConnector(ctx, "testSubmitControlResultsProcessing")
+	dbConn, schemaName, pg, _, err := setupDbConnection(ctx, "testSubmitControlResultsProcessing")
 	if err != nil {
 		assert.Fail(t, err.Error())
 		return
@@ -716,7 +716,7 @@ func TestSubmitAnalysisResultFieldValidations(t *testing.T) {
 
 	ctx := context.Background()
 
-	dbConn, schemaName, pg, sqlConn, err := setupDbConnector(ctx, "testSubmitAnalysisResultsWithRequests")
+	dbConn, schemaName, pg, sqlConn, err := setupDbConnection(ctx, "testSubmitAnalysisResultsWithRequests")
 	if err != nil {
 		assert.Fail(t, err.Error())
 		return
@@ -871,7 +871,7 @@ func TestSubmitControlResultsFieldValidations(t *testing.T) {
 
 	ctx := context.Background()
 
-	dbConn, schemaName, pg, sqlConn, err := setupDbConnector(ctx, "testSubmitAnalysisResultsWithRequests")
+	dbConn, schemaName, pg, sqlConn, err := setupDbConnection(ctx, "testSubmitAnalysisResultsWithRequests")
 	if err != nil {
 		assert.Fail(t, err.Error())
 		return

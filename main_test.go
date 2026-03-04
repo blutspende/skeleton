@@ -74,7 +74,7 @@ func teardownTestContainers() (err error) {
 }
 
 // Common methods
-func setupDbConnector(ctx context.Context, schemaName string) (db.DbConnection, string, db.Postgres, *sqlx.DB, error) {
+func setupDbConnection(ctx context.Context, schemaName string) (db.DbConnection, string, db.Postgres, *sqlx.DB, error) {
 	dbPort, err := postgresContainer.MappedPort(ctx, "5432")
 	if err != nil {
 		return nil, "", nil, nil, err
@@ -113,8 +113,8 @@ func setupDbConnector(ctx context.Context, schemaName string) (db.DbConnection, 
 	return dbConn, schemaName, postgres, sqlConn, nil
 }
 
-func setupDbConnectorAndRunMigration(ctx context.Context, schemaName string) (db.DbConnection, string, db.Postgres, *sqlx.DB, error) {
-	dbConn, _, postgres, sqlConn, err := setupDbConnector(ctx, schemaName)
+func setupDbConnectionAndRunMigrations(ctx context.Context, schemaName string) (db.DbConnection, string, db.Postgres, *sqlx.DB, error) {
+	dbConn, _, postgres, sqlConn, err := setupDbConnection(ctx, schemaName)
 	if err != nil {
 		return nil, "", nil, nil, err
 	}
@@ -139,7 +139,7 @@ func setupDbConnectorAndRunMigration(ctx context.Context, schemaName string) (db
 //
 //ctx := context.Background()
 //
-//dbConn, schemaName, postgres, sqlConn, err := setupDbConnector(ctx, schemaName)
+//dbConn, schemaName, postgres, sqlConn, err := setupDbConnection(ctx, schemaName)
 //if err != nil {
 //    assert.Fail(t, err.Error())
 //    return
