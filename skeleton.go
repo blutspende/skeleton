@@ -952,14 +952,15 @@ func (s *skeleton) processAnalysisRequests(ctx context.Context) {
 
 			err := s.GetCallbackHandler().HandleAnalysisRequests(requests)
 			if err != nil {
-				log.Error().Err(err).Msg("Received veto from analysis result handler, aborting result transmission for the whole batch")
-				break
+				log.Error().Err(err).Msg("Handle analysis requests failed")
+				if !errors.Is(err, ErrSkipAnalysisRequests) {
+					continue
+				}
 			}
 			log.Debug().Msgf("Processing %d analysis requests in batch", len(requests))
 			err = s.analysisService.ProcessAnalysisRequests(ctx, requests)
 			if err != nil {
 				log.Error().Err(err).Msg("Failed to process analysis requests")
-				break
 			}
 		}
 	}
