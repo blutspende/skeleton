@@ -12,12 +12,11 @@ import (
 const (
 	ForeignKeyViolationErrorCode = pq.ErrorCode("23503")
 	UniqueViolationErrorCode     = pq.ErrorCode("23505")
-	MsgFailedToAudit             = "failed to audit"
 )
 
-var (
-	ErrFailedToAudit = errors.New(MsgFailedToAudit)
-)
+// ErrSkipAnalysisRequests is to be used by instrument drivers in the HandleAnalysisRequests callback when the
+// analysis request batch cannot be processed due to some internal logic or rule set.
+var ErrSkipAnalysisRequests = errors.New("skip analysis requests")
 
 type ParameterizedError struct {
 	error
@@ -34,26 +33,6 @@ func (pe ParameterizedError) Error() string {
 	buff.WriteString("\n")
 
 	return strings.TrimSpace(buff.String())
-}
-
-type ParameterizedErrors []ParameterizedError
-
-func (e ParameterizedErrors) Error() string {
-
-	buff := bytes.NewBufferString("")
-
-	for i := range e {
-		buff.WriteString(e[i].Error() + "\n")
-	}
-
-	return strings.TrimSpace(buff.String())
-}
-
-func NewParameterizedError(err error, params map[string]string) ParameterizedError {
-	return ParameterizedError{
-		error:  err,
-		Params: params,
-	}
 }
 
 func IsErrorCode(err error, errCode pq.ErrorCode) bool {
