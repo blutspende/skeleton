@@ -718,7 +718,7 @@ func (s *skeleton) Start() error {
 		return err
 	}
 	go func() {
-		s.runCleanupJobs() //TODO: give the ctx to it? (some functions use context.Background() internally)
+		s.runCleanupJobs()
 		for {
 			select {
 			case <-time.After(time.Hour * time.Duration(s.config.CleanupJobRunIntervalHours)):
@@ -1241,7 +1241,7 @@ func (s *skeleton) cleanupAnalysisRequests() {
 			log.Trace().Msg("stopping to cleanup analysis requests")
 			return
 		default:
-			tx, err := s.analysisRepository.CreateTransaction(context.Background())
+			tx, err := s.analysisRepository.CreateTransaction(s.ctx)
 			if err != nil {
 				log.Error().Err(err).Msg("cleanup old analysis requests failed")
 				return
@@ -1272,7 +1272,7 @@ func (s *skeleton) cleanupAnalysisResults() {
 			log.Trace().Msg("stopping to cleanup analysis results")
 			return
 		default:
-			tx, err := s.analysisRepository.CreateTransaction(context.Background())
+			tx, err := s.analysisRepository.CreateTransaction(s.ctx)
 			if err != nil {
 				log.Error().Err(err).Msg("cleanup old analysis results failed")
 				return

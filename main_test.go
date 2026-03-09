@@ -132,15 +132,3 @@ func setupDbConnectionAndRunMigrations(ctx context.Context, schemaName string) (
 
 	return dbConn, schemaName, postgres, sqlConn, nil
 }
-
-// Reusable code for tests
-
-//defer Recover(t)
-//
-//ctx := context.Background()
-//
-//dbConn, schemaName, postgres, sqlConn, err := setupDbConnection(ctx, schemaName)
-//if err != nil {
-//    assert.Fail(t, err.Error())
-//    return
-//}

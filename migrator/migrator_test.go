@@ -42,8 +42,8 @@ func TestSkeletonMigrations(t *testing.T) {
 
 	dbPort, err := postgresContainer.MappedPort(ctx, "5432")
 	assert.Nil(t, err)
-	conStr := fmt.Sprintf("host=localhost port=%d user=postgres password=postgres dbname=postgres sslmode=disable", dbPort.Int())
-	dbConn, err := sqlx.Connect("pgx", conStr)
+	connStr := fmt.Sprintf("host=localhost port=%d user=postgres password=postgres dbname=postgres sslmode=disable", dbPort.Int())
+	dbConn, err := sqlx.Connect("pgx", connStr)
 	assert.Nil(t, err)
 
 	schemaName := "test"
