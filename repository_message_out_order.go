@@ -4,13 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/blutspende/bloodlab-common/messagestatus"
+	"strings"
+
+	"github.com/blutspende/bloodlab-common/db"
+	"github.com/blutspende/bloodlab-common/instrumentenum"
 	"github.com/blutspende/bloodlab-common/utils"
-	"github.com/blutspende/skeleton/db"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/rs/zerolog/log"
-	"strings"
 )
 
 type MessageOutOrderRepository interface {
@@ -19,7 +20,7 @@ type MessageOutOrderRepository interface {
 	GetBySampleCodesAndRequestMappingIDs(ctx context.Context, sampleCodes []string, instrumentID uuid.UUID, includePending bool) (map[string]map[uuid.UUID][]MessageOutOrder, error)
 	GetTestCodesToRevokeBySampleCodes(ctx context.Context, instrumentID uuid.UUID, analysisRequestIDs []uuid.UUID) (map[string][]string, error)
 	GetTestCodesToCancelBySampleCodes(ctx context.Context, instrumentID uuid.UUID, analysisRequestIDs []uuid.UUID) (map[string][]string, error)
-	CreateTransaction() (db.DbConnection, error)
+	CreateTransaction(ctx context.Context) (db.DbConnection, error)
 
 	WithTransaction(tx db.DbConnection) MessageOutOrderRepository
 }
@@ -45,7 +46,7 @@ func (r *messageOutOrderRepository) CreateBatch(ctx context.Context, messageOutO
 	err := utils.Partition(len(messageOutOrders), maxParams/4, func(low int, high int) error {
 		query := fmt.Sprintf(`INSERT INTO %s.sk_message_out_orders (id, message_out_id, sample_code, request_mapping_id)
 										VALUES (:id, :message_out_id, :sample_code, :request_mapping_id);`, r.dbSchema)
-		_, err := r.db.NamedExecContext(ctx, query, convertMessageOutOrdersToDAOs(messageOutOrders[low:high]))
+		_, err := r.db.NamedExec(ctx, query, convertMessageOutOrdersToDAOs(messageOutOrders[low:high]))
 		if err != nil {
 			log.Error().Err(err).Msg(msgCreateMessageOutOrderBatchFailed)
 			return ErrCreateMessageOutOrderBatchFailed
@@ -75,7 +76,7 @@ func (r *messageOutOrderRepository) AddAnalysisRequestsToMessageOutOrder(ctx con
 	err := utils.Partition(len(preparedValues), maxParams/2, func(low int, high int) error {
 		query := fmt.Sprintf(`INSERT INTO %s.sk_message_out_order_analysis_requests (message_out_order_id, analysis_request_id)
 					VALUES (:message_out_order_id, :analysis_request_id) ON CONFLICT (message_out_order_id, analysis_request_id) DO NOTHING;`, r.dbSchema)
-		_, err := r.db.NamedExecContext(ctx, query, preparedValues[low:high])
+		_, err := r.db.NamedExec(ctx, query, preparedValues[low:high])
 		if err != nil {
 			log.Error().Err(err).Msg(msgAddAnalysisRequestsToMessageOutOrderFailed)
 			return ErrAddAnalysisRequestsToMessageOutOrderFailed
@@ -88,7 +89,7 @@ func (r *messageOutOrderRepository) AddAnalysisRequestsToMessageOutOrder(ctx con
 }
 
 func (r *messageOutOrderRepository) GetBySampleCodesAndRequestMappingIDs(ctx context.Context, sampleCodes []string, instrumentID uuid.UUID, includePending bool) (map[string]map[uuid.UUID][]MessageOutOrder, error) {
-	queryArgs := []interface{}{sampleCodes, instrumentID, messagestatus.Sent}
+	queryArgs := []interface{}{sampleCodes, instrumentID, instrumentenum.MessageStatusSent}
 	filterCondition := " AND (smo.status = ?"
 	if includePending {
 		filterCondition += " OR smo.retry_count < ?"
@@ -104,7 +105,7 @@ func (r *messageOutOrderRepository) GetBySampleCodesAndRequestMappingIDs(ctx con
 	query = strings.ReplaceAll(query, "<schema_name>", r.dbSchema)
 	query, args, _ := sqlx.In(query, queryArgs...)
 	query = r.db.Rebind(query)
-	rows, err := r.db.QueryxContext(ctx, query, args...)
+	rows, err := r.db.Queryx(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetMessageOutOrdersBySampleCodesAndRequestMappingIDsFailed)
 		return nil, ErrGetMessageOutOrdersBySampleCodesAndRequestMappingIDsFailed
@@ -140,9 +141,9 @@ func (r *messageOutOrderRepository) GetTestCodesToRevokeBySampleCodes(ctx contex
 											WHERE smoor.message_out_order_id = smoo.id AND sar.deleted_at IS NULL)
 						AND smooar.analysis_request_id IN (?);`
 	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
-	query, args, _ := sqlx.In(query, instrumentID, messagestatus.Sent, analysisRequestIDs)
+	query, args, _ := sqlx.In(query, instrumentID, instrumentenum.MessageStatusSent, analysisRequestIDs)
 	query = r.db.Rebind(query)
-	rows, err := r.db.QueryxContext(ctx, query, args...)
+	rows, err := r.db.Queryx(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetTestCodesToRevokeBySampleCodesFailed)
 		return nil, ErrGetTestCodesToRevokeBySampleCodesFailed
@@ -176,9 +177,9 @@ func (r *messageOutOrderRepository) GetTestCodesToCancelBySampleCodes(ctx contex
 				INNER JOIN %schema_name%.sk_message_out_order_analysis_requests smooar on smoo.id = smooar.message_out_order_id
 					WHERE smo.instrument_id = ? AND smo.status = ? AND smooar.analysis_request_id IN (?);`
 	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
-	query, args, _ := sqlx.In(query, instrumentID, messagestatus.Sent, analysisRequestIDs)
+	query, args, _ := sqlx.In(query, instrumentID, instrumentenum.MessageStatusSent, analysisRequestIDs)
 	query = r.db.Rebind(query)
-	rows, err := r.db.QueryxContext(ctx, query, args...)
+	rows, err := r.db.Queryx(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetTestCodesToCancelBySampleCodesFailed)
 		return nil, ErrGetTestCodesToCancelBySampleCodesFailed
@@ -202,8 +203,8 @@ func (r *messageOutOrderRepository) GetTestCodesToCancelBySampleCodes(ctx contex
 	return testCodesBySampleCodes, nil
 }
 
-func (r *messageOutOrderRepository) CreateTransaction() (db.DbConnection, error) {
-	return r.db.CreateTransactionConnector()
+func (r *messageOutOrderRepository) CreateTransaction(ctx context.Context) (db.DbConnection, error) {
+	return r.db.BeginTx(ctx)
 }
 
 func (r *messageOutOrderRepository) WithTransaction(tx db.DbConnection) MessageOutOrderRepository {

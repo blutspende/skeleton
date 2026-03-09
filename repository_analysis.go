@@ -4,17 +4,15 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/blutspende/bloodlab-common/db"
+	"github.com/blutspende/bloodlab-common/instrumentenum"
 	"github.com/blutspende/bloodlab-common/utils"
-
-	"errors"
-
-	"github.com/blutspende/skeleton/db"
-
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/rs/zerolog/log"
@@ -226,24 +224,24 @@ type subjectInfoDAO struct {
 }
 
 type analysisResultDAO struct {
-	ID                       uuid.UUID         `db:"id"`
-	AnalyteMappingID         uuid.UUID         `db:"analyte_mapping_id"`
-	InstrumentID             uuid.UUID         `db:"instrument_id"`
-	InstrumentRunID          uuid.UUID         `db:"instrument_run_id"`
-	SampleCode               string            `db:"sample_code"`
-	DEARawMessageID          uuid.NullUUID     `db:"dea_raw_message_id"`
-	MessageInID              uuid.UUID         `db:"message_in_id"`
-	Result                   string            `db:"result"`
-	Status                   ResultStatus      `db:"status"`
-	ResultMode               ResultMode        `db:"result_mode"`
-	YieldedAt                sql.NullTime      `db:"yielded_at"`
-	ValidUntil               time.Time         `db:"valid_until"`
-	Operator                 string            `db:"operator"`
-	TechnicalReleaseDateTime sql.NullTime      `db:"technical_release_datetime"`
-	Edited                   bool              `db:"edited"`
-	EditReason               sql.NullString    `db:"edit_reason"`
-	IsInvalid                bool              `db:"is_invalid"`
-	AnalyteMapping           analyteMappingDAO `db:"analyte_mapping"`
+	ID                       uuid.UUID                 `db:"id"`
+	AnalyteMappingID         uuid.UUID                 `db:"analyte_mapping_id"`
+	InstrumentID             uuid.UUID                 `db:"instrument_id"`
+	InstrumentRunID          uuid.UUID                 `db:"instrument_run_id"`
+	SampleCode               string                    `db:"sample_code"`
+	DEARawMessageID          uuid.NullUUID             `db:"dea_raw_message_id"`
+	MessageInID              uuid.UUID                 `db:"message_in_id"`
+	Result                   string                    `db:"result"`
+	Status                   ResultStatus              `db:"status"`
+	ResultMode               instrumentenum.ResultMode `db:"result_mode"`
+	YieldedAt                sql.NullTime              `db:"yielded_at"`
+	ValidUntil               time.Time                 `db:"valid_until"`
+	Operator                 string                    `db:"operator"`
+	TechnicalReleaseDateTime sql.NullTime              `db:"technical_release_datetime"`
+	Edited                   bool                      `db:"edited"`
+	EditReason               sql.NullString            `db:"edit_reason"`
+	IsInvalid                bool                      `db:"is_invalid"`
+	AnalyteMapping           analyteMappingDAO         `db:"analyte_mapping"`
 	ChannelResults           []channelResultDAO
 	ExtraValues              []resultExtraValueDAO
 	Reagents                 []reagentDAO
@@ -283,14 +281,14 @@ type requestExtraValueDAO struct {
 }
 
 type reagentDAO struct {
-	ID             uuid.UUID    `db:"id"`
-	Manufacturer   string       `db:"manufacturer"`
-	SerialNumber   string       `db:"serial"`
-	LotNo          string       `db:"lot_no"`
-	Name           string       `db:"name"`
-	Type           ReagentType  `db:"type"`
-	ExpirationDate sql.NullTime `db:"expiration_date"`
-	CreatedAt      time.Time    `db:"created_at"`
+	ID             uuid.UUID                  `db:"id"`
+	Manufacturer   string                     `db:"manufacturer"`
+	SerialNumber   string                     `db:"serial"`
+	LotNo          string                     `db:"lot_no"`
+	Name           string                     `db:"name"`
+	Type           instrumentenum.ReagentType `db:"type"`
+	ExpirationDate sql.NullTime               `db:"expiration_date"`
+	CreatedAt      time.Time                  `db:"created_at"`
 }
 
 type controlResultDAO struct {
@@ -479,7 +477,7 @@ type AnalysisRepository interface {
 	MarkReagentControlResultRelationsAsProcessed(ctx context.Context, controlResultID uuid.UUID, reagentIDs []uuid.UUID) error
 	MarkAnalysisResultControlResultRelationsAsProcessed(ctx context.Context, controlResultID uuid.UUID, analysisResultIDs []uuid.UUID) error
 
-	CreateTransaction() (db.DbConnection, error)
+	CreateTransaction(ctx context.Context) (db.DbConnection, error)
 	WithTransaction(tx db.DbConnection) AnalysisRepository
 }
 
@@ -524,7 +522,7 @@ func (r *analysisRepository) createAnalysisRequestsBatch(ctx context.Context, an
 		query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_requests(id, work_item_id, analyte_id, sample_code, material_id, laboratory_id, valid_until_time, created_at)
 				VALUES(:id, :work_item_id, :analyte_id, :sample_code, :material_id, :laboratory_id, :valid_until_time, :created_at)
 				ON CONFLICT (work_item_id) DO NOTHING RETURNING id;`, r.dbSchema)
-		rows, err := r.db.NamedQueryContext(ctx, query, convertAnalysisRequestsToDAOs(analysisRequests[low:high]))
+		rows, err := r.db.NamedQuery(ctx, query, convertAnalysisRequestsToDAOs(analysisRequests[low:high]))
 		if err != nil {
 			log.Error().Err(err).Msg(msgCreateAnalysisRequestsBatchFailed)
 			return ErrCreateAnalysisRequestsBatchFailed
@@ -579,7 +577,7 @@ func (r *analysisRepository) createSubjects(ctx context.Context, subjectDAOs []s
 	query := fmt.Sprintf(`INSERT INTO %s.sk_subject_infos(id, analysis_request_id,"type",date_of_birth,first_name,last_name,donor_id,donation_id,donation_type,pseudonym)
 		VALUES(id, :analysis_request_id,:type,:date_of_birth,:first_name,:last_name,:donor_id,:donation_id,:donation_type,:pseudonym);`, r.dbSchema)
 
-	_, err := r.db.NamedExecContext(ctx, query, subjectDAOs)
+	_, err := r.db.NamedExec(ctx, query, subjectDAOs)
 	if err != nil {
 		log.Error().Err(err).Msg(msgCreateSubjectsFailed)
 		return ErrCreateSubjectsFailed
@@ -595,7 +593,7 @@ func (r *analysisRepository) GetAnalysisRequestsBySampleCodeAndAnalyteID(ctx con
 					AND sar.deleted_at IS NULL
 					AND sar.valid_until_time >= timezone('utc',now());`, r.dbSchema)
 
-	rows, err := r.db.QueryxContext(ctx, query, sampleCode, analyteID)
+	rows, err := r.db.Queryx(ctx, query, sampleCode, analyteID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			log.Trace().Msg("No analysis requests")
@@ -641,7 +639,7 @@ func (r *analysisRepository) GetAnalysisRequestsBySampleCodes(ctx context.Contex
 		query, args, _ := sqlx.In(query, sampleCodes[low:high])
 		query = r.db.Rebind(query)
 
-		rows, err := r.db.QueryxContext(ctx, query, args...)
+		rows, err := r.db.Queryx(ctx, query, args...)
 		if err != nil {
 			log.Error().Err(err).Msg(msgGetAnalysisRequestsFailed)
 			return ErrGetAnalysisRequestsFailed
@@ -671,7 +669,7 @@ func (r *analysisRepository) GetAnalysisRequestsBySampleCodes(ctx context.Contex
 func (r *analysisRepository) GetAnalysisRequestExtraValuesByAnalysisRequestID(ctx context.Context, analysisRequestID uuid.UUID) (map[string]string, error) {
 	query := fmt.Sprintf(`SELECT * FROM %s.sk_analysis_request_extra_values
 					WHERE analysis_request_id = $1;`, r.dbSchema)
-	rows, err := r.db.QueryxContext(ctx, query, analysisRequestID)
+	rows, err := r.db.Queryx(ctx, query, analysisRequestID)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetAnalysisRequestExtraValuesFailed)
 		return nil, ErrGetAnalysisRequestExtraValuesFailed
@@ -697,7 +695,7 @@ func (r *analysisRepository) GetSampleCodesByOrderID(ctx context.Context, orderI
 	query := fmt.Sprintf(`SELECT DISTINCT sample_code from %s.sk_analysis_requests sar
 									INNER JOIN %s.sk_analysis_request_extra_values sarev ON sar.id = sarev.analysis_request_id
 										WHERE sar.valid_until_time >= timezone('utc', now()) AND sar.deleted_at IS NULL AND sarev.key = 'OrderID' and sarev.value = $1;`, r.dbSchema, r.dbSchema)
-	rows, err := r.db.QueryxContext(ctx, query, orderID)
+	rows, err := r.db.Queryx(ctx, query, orderID)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetSampleCodesByOrderIDFailed)
 		return nil, ErrGetSampleCodesByOrderIDFailed
@@ -728,7 +726,7 @@ func (r *analysisRepository) GetSubjectsByAnalysisRequestIDs(ctx context.Context
 		query := fmt.Sprintf(`SELECT * FROM %s.sk_subject_infos WHERE analysis_request_id IN (?);`, r.dbSchema)
 		query, args, _ := sqlx.In(query, analysisRequestIDs[low:high])
 		query = r.db.Rebind(query)
-		rows, err := r.db.QueryxContext(ctx, query, args...)
+		rows, err := r.db.Queryx(ctx, query, args...)
 		if err != nil {
 			log.Error().Err(err).Msg(msgGetSubjectInfosFailed)
 			return ErrGetSubjectInfosFailed
@@ -759,7 +757,7 @@ func (r *analysisRepository) GetAnalysisRequestsByWorkItemIDs(ctx context.Contex
 		query, args, _ := sqlx.In(query, workItemIds[low:high])
 		query = r.db.Rebind(query)
 
-		rows, err := r.db.QueryxContext(ctx, query, args...)
+		rows, err := r.db.Queryx(ctx, query, args...)
 		if err != nil {
 			log.Error().Err(err).Msg(msgGetAnalysisRequestsFailed)
 			return ErrGetAnalysisRequestsFailed
@@ -791,7 +789,7 @@ func (r *analysisRepository) RevokeAnalysisRequests(ctx context.Context, workIte
 		query := fmt.Sprintf(`UPDATE %s.sk_analysis_requests SET deleted_at = timezone('utc', now()) WHERE work_item_id IN (?);`, r.dbSchema)
 		query, args, _ := sqlx.In(query, workItemIds[low:high])
 		query = r.db.Rebind(query)
-		_, err := r.db.ExecContext(ctx, query, args...)
+		_, err := r.db.Exec(ctx, query, args...)
 		return err
 	})
 	if err != nil {
@@ -812,7 +810,7 @@ func (r *analysisRepository) DeleteAnalysisRequestExtraValues(ctx context.Contex
 
 		query, args, _ := sqlx.In(query, workItemIDs[low:high])
 		query = r.db.Rebind(query)
-		_, err := r.db.ExecContext(ctx, query, args...)
+		_, err := r.db.Exec(ctx, query, args...)
 		return err
 	})
 	if err != nil {
@@ -834,7 +832,7 @@ func (r *analysisRepository) IncreaseReexaminationRequestedCount(ctx context.Con
 		query, args, _ := sqlx.In(query, workItemIDs[low:high])
 		query = r.db.Rebind(query)
 
-		_, err := r.db.ExecContext(ctx, query, args...)
+		_, err := r.db.Exec(ctx, query, args...)
 		return err
 	})
 	if err != nil {
@@ -856,7 +854,7 @@ func (r *analysisRepository) IncreaseSentToInstrumentCounter(ctx context.Context
 		query, args, _ := sqlx.In(query, analysisRequestIDs[low:high])
 		query = r.db.Rebind(query)
 
-		_, err := r.db.ExecContext(ctx, query, args...)
+		_, err := r.db.Exec(ctx, query, args...)
 		return err
 	})
 	if err != nil {
@@ -876,7 +874,7 @@ func (r *analysisRepository) SaveAnalysisRequestsInstrumentTransmissions(ctx con
 		}
 	}
 	query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_request_instrument_transmissions(analysis_request_id, instrument_id) VALUES (:analysis_request_id, :instrument_id);`, r.dbSchema)
-	_, err := r.db.NamedExecContext(ctx, query, args)
+	_, err := r.db.NamedExec(ctx, query, args)
 	if err != nil {
 		log.Error().Err(err).Msg(msgSaveAnalysisRequestsInstrumentTransmissions)
 		return ErrSaveAnalysisRequestsInstrumentTransmissions
@@ -908,7 +906,7 @@ func (r *analysisRepository) createAnalysisResultsBatch(ctx context.Context, ana
 	err := utils.Partition(len(analysisResults), analysisResultBatchSize, func(low int, high int) error {
 		query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_results(id, analyte_mapping_id, instrument_id, sample_code, instrument_run_id, dea_raw_message_id, message_in_id, "result", status, result_mode, yielded_at, valid_until, operator, technical_release_datetime, edited, edit_reason, is_invalid)
 			VALUES(:id, :analyte_mapping_id, :instrument_id, :sample_code, :instrument_run_id, :dea_raw_message_id, :message_in_id, :result, :status, :result_mode, :yielded_at, :valid_until, :operator, :technical_release_datetime, :edited, :edit_reason, :is_invalid);`, r.dbSchema)
-		_, err := r.db.NamedExecContext(ctx, query, convertAnalysisResultsToDAOs(analysisResults[low:high]))
+		_, err := r.db.NamedExec(ctx, query, convertAnalysisResultsToDAOs(analysisResults[low:high]))
 		if err != nil {
 			log.Error().Err(err).Msg(msgCreateAnalysisResultBatchFailed)
 			return ErrCreateAnalysisResultBatchFailed
@@ -939,7 +937,7 @@ func (r *analysisRepository) UpdateStatusAnalysisResultsBatch(ctx context.Contex
 			query := fmt.Sprintf(`UPDATE %s.sk_analysis_results SET status = ? WHERE id in (?);`, r.dbSchema)
 			query, ars, _ := sqlx.In(query, status, statusMap[status][low:high])
 			query = r.db.Rebind(query)
-			_, dbError := r.db.ExecContext(ctx, query, ars...)
+			_, dbError := r.db.Exec(ctx, query, ars...)
 			if dbError != nil {
 				log.Error().Err(dbError).Msg(msgUpdateAnalysisResultStatusBatchFailed)
 				return ErrUpdateAnalysisResultStatusBatchFailed
@@ -961,7 +959,7 @@ func (r *analysisRepository) CreateAnalysisResultReagentRelations(ctx context.Co
 		query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_result_reagent_relations(analysis_result_id, reagent_id)
 		VALUES(:analysis_result_id, :reagent_id) ON CONFLICT DO NOTHING`, r.dbSchema)
 
-		_, err := r.db.NamedExecContext(ctx, query, relationDAOs[low:high])
+		_, err := r.db.NamedExec(ctx, query, relationDAOs[low:high])
 
 		if err != nil {
 			log.Error().Err(err).Msg(msgCreateAnalysisResultReagentRelationsFailed)
@@ -985,7 +983,7 @@ func (r *analysisRepository) CreateReagentControlResultRelations(ctx context.Con
 		query := fmt.Sprintf(`INSERT INTO %s.sk_reagent_control_result_relations(reagent_id, control_result_id, is_processed)
 		VALUES(:reagent_id, :control_result_id, :is_processed) ON CONFLICT DO NOTHING`, r.dbSchema)
 
-		_, err := r.db.NamedExecContext(ctx, query, relationDAOs[low:high])
+		_, err := r.db.NamedExec(ctx, query, relationDAOs[low:high])
 
 		if err != nil {
 			log.Error().Err(err).Msg(msgCreateReagentControlResultRelationsFailed)
@@ -1010,7 +1008,7 @@ func (r *analysisRepository) CreateAnalysisResultControlResultRelations(ctx cont
 		query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_result_control_result_relations(analysis_result_id, control_result_id, is_processed)
 		VALUES(:analysis_result_id, :control_result_id, :is_processed) ON CONFLICT DO NOTHING`, r.dbSchema)
 
-		_, err := r.db.NamedExecContext(ctx, query, relationDAOs[low:high])
+		_, err := r.db.NamedExec(ctx, query, relationDAOs[low:high])
 
 		if err != nil {
 			log.Error().Err(err).Msg(msgCreateAnalysisResultControlResultRelationsFailed)
@@ -1040,7 +1038,7 @@ func (r *analysisRepository) GetAnalysisResultsBySampleCodeAndAnalyteID(ctx cont
 
 	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
 
-	rows, err := r.db.QueryxContext(ctx, query, sampleCode, analyteID)
+	rows, err := r.db.Queryx(ctx, query, sampleCode, analyteID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			log.Trace().Msg("No analysis results")
@@ -1081,7 +1079,7 @@ func (r *analysisRepository) GetAnalysisResultByCerberusID(ctx context.Context, 
 
 	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
 
-	row := r.db.QueryRowxContext(ctx, query, id)
+	row := r.db.QueryRowx(ctx, query, id)
 	result := analysisResultDAO{}
 	err := row.StructScan(&result)
 	if err != nil {
@@ -1126,7 +1124,7 @@ func (r *analysisRepository) GetAnalysisResultsByIDs(ctx context.Context, ids []
 	query, args, _ := sqlx.In(query, ids)
 	query = r.db.Rebind(query)
 
-	rows, err := r.db.QueryxContext(ctx, query, args...)
+	rows, err := r.db.Queryx(ctx, query, args...)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			log.Trace().Msg("No analysis requests")
@@ -1344,9 +1342,9 @@ func (r *analysisRepository) GetAnalysisResultIdsForStatusRecalculationByControl
 		var args []interface{}
 		query, args, _ = sqlx.In(query, controlResultIds)
 		query = r.db.Rebind(query)
-		rows, err = r.db.QueryxContext(ctx, query, args...)
+		rows, err = r.db.Queryx(ctx, query, args...)
 	} else {
-		rows, err = r.db.QueryxContext(ctx, query)
+		rows, err = r.db.Queryx(ctx, query)
 	}
 
 	if err != nil {
@@ -1372,7 +1370,7 @@ func (r *analysisRepository) getChannelMappings(ctx context.Context, analyteMapp
 		query := fmt.Sprintf(`SELECT * FROM %s.sk_channel_mappings WHERE analyte_mapping_id IN (?) AND deleted_at IS NULL;`, r.dbSchema)
 		query, args, _ := sqlx.In(query, analyteMappingIDs[low:high])
 		query = r.db.Rebind(query)
-		rows, err := r.db.QueryxContext(ctx, query, args...)
+		rows, err := r.db.Queryx(ctx, query, args...)
 		if err != nil {
 			log.Error().Err(err).Msg(msgGetChannelMappingsFailed)
 			return ErrGetChannelMappingsFailed
@@ -1399,7 +1397,7 @@ func (r *analysisRepository) getResultMappings(ctx context.Context, analyteMappi
 		query := fmt.Sprintf(`SELECT * FROM %s.sk_result_mappings WHERE analyte_mapping_id IN (?) AND deleted_at IS NULL;`, r.dbSchema)
 		query, args, _ := sqlx.In(query, analyteMappingIDs[low:high])
 		query = r.db.Rebind(query)
-		rows, err := r.db.QueryxContext(ctx, query, args...)
+		rows, err := r.db.Queryx(ctx, query, args...)
 		if err != nil {
 			log.Error().Err(err).Msg(msgGetResultMappingsFailed)
 			return ErrGetResultMappingsFailed
@@ -1429,7 +1427,7 @@ func (r *analysisRepository) getAnalysisResultExtraValues(ctx context.Context, a
 		FROM %s.sk_analysis_result_extravalues sare WHERE sare.analysis_result_id IN (?);`, r.dbSchema)
 		query, args, _ := sqlx.In(query, analysisResultIDs[low:high])
 		query = r.db.Rebind(query)
-		rows, err := r.db.QueryxContext(ctx, query, args...)
+		rows, err := r.db.Queryx(ctx, query, args...)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				log.Trace().Msg("No extra value")
@@ -1504,7 +1502,7 @@ func (r *analysisRepository) createAnalysisResultExtraValues(ctx context.Context
 	err := utils.Partition(len(extraValues), extraValueBatchSize, func(low int, high int) error {
 		query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_result_extravalues(id, analysis_result_id, "key", "value")
 		VALUES(:id, :analysis_result_id, :key, :value)`, r.dbSchema)
-		_, err := r.db.NamedExecContext(ctx, query, extraValues[low:high])
+		_, err := r.db.NamedExec(ctx, query, extraValues[low:high])
 		if err != nil {
 			log.Error().Err(err).Msg(msgCreateAnalysisResultExtraValuesFailed)
 			return ErrCreateAnalysisResultExtraValuesFailed
@@ -1521,7 +1519,7 @@ func (r *analysisRepository) createAnalysisRequestExtraValues(ctx context.Contex
 	err := utils.Partition(len(extraValues), extraValueBatchSize, func(low int, high int) error {
 		query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_request_extra_values(id, analysis_request_id, "key", "value")
 		VALUES(:id, :analysis_request_id, :key, :value)`, r.dbSchema)
-		_, err := r.db.NamedExecContext(ctx, query, extraValues[low:high])
+		_, err := r.db.NamedExec(ctx, query, extraValues[low:high])
 		if err != nil {
 			log.Error().Err(err).Msg(msgCreateAnalysisRequestExtraValuesFailed)
 			return ErrCreateAnalysisRequestExtraValuesFailed
@@ -1538,7 +1536,7 @@ func (r *analysisRepository) createControlResultExtraValues(ctx context.Context,
 	err := utils.Partition(len(extraValues), extraValueBatchSize, func(low int, high int) error {
 		query := fmt.Sprintf(`INSERT INTO %s.sk_control_result_extravalues(id, control_result_id, "key", "value")
 		VALUES(:id, :control_result_id, :key, :value)`, r.dbSchema)
-		_, err := r.db.NamedExecContext(ctx, query, extraValues[low:high])
+		_, err := r.db.NamedExec(ctx, query, extraValues[low:high])
 		if err != nil {
 			log.Error().Err(err).Msg(msgCreateControlResultExtraValuesFailed)
 			return ErrCreateControlResultExtraValuesFailed
@@ -1558,7 +1556,7 @@ func (r *analysisRepository) getChannelResults(ctx context.Context, analysisResu
 		FROM %s.sk_channel_results scr WHERE scr.analysis_result_id IN (?);`, r.dbSchema)
 		query, args, _ := sqlx.In(query, analysisResultIDs[low:high])
 		query = r.db.Rebind(query)
-		rows, err := r.db.QueryxContext(ctx, query, args...)
+		rows, err := r.db.Queryx(ctx, query, args...)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				log.Trace().Msg("No channel result")
@@ -1614,7 +1612,7 @@ func (r *analysisRepository) createChannelResults(ctx context.Context, channelRe
 	err := utils.Partition(len(channelResults), channelResultBatchSize, func(low int, high int) error {
 		query := fmt.Sprintf(`INSERT INTO %s.sk_channel_results(id, analysis_result_id, channel_id, qualitative_result, qualitative_result_edited)
 		VALUES(:id, :analysis_result_id, :channel_id, :qualitative_result, :qualitative_result_edited);`, r.dbSchema)
-		_, err := r.db.NamedExecContext(ctx, query, convertChannelResultsToDAOs(channelResults[low:high], analysisResultID))
+		_, err := r.db.NamedExec(ctx, query, convertChannelResultsToDAOs(channelResults[low:high], analysisResultID))
 		if err != nil {
 			log.Error().Err(err).Msg(msgCreateChannelResultBatchFailed)
 			return ErrCreateChannelResultBatchFailed
@@ -1643,7 +1641,7 @@ func (r *analysisRepository) createControlResultChannelResults(ctx context.Conte
 	err := utils.Partition(len(channelResults), channelResultBatchSize, func(low int, high int) error {
 		query := fmt.Sprintf(`INSERT INTO %s.sk_control_result_channel_results(id, control_result_id, channel_id, qualitative_result, qualitative_result_edited)
 		VALUES(:id, :control_result_id, :channel_id, :qualitative_result, :qualitative_result_edited);`, r.dbSchema)
-		_, err := r.db.NamedExecContext(ctx, query, convertChannelResultsToControlResultChannelResultDAOs(channelResults[low:high], controlResultID))
+		_, err := r.db.NamedExec(ctx, query, convertChannelResultsToControlResultChannelResultDAOs(channelResults[low:high], controlResultID))
 		if err != nil {
 			log.Error().Err(err).Msg(msgCreateControlResultChannelResultBatchFailed)
 			return ErrCreateControlResultChannelResultBatchFailed
@@ -1665,7 +1663,7 @@ func (r *analysisRepository) getChannelResultQuantitativeValues(ctx context.Cont
 		query, args, _ := sqlx.In(query, channelResultIDs[low:high])
 		query = r.db.Rebind(query)
 
-		rows, err := r.db.QueryxContext(ctx, query, args...)
+		rows, err := r.db.Queryx(ctx, query, args...)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				log.Trace().Msg("No quantitative channel result")
@@ -1719,7 +1717,7 @@ func (r *analysisRepository) createChannelResultQuantitativeValues(ctx context.C
 	err := utils.Partition(len(quantitativeChannelResults), channelResultQVBatchSize, func(low int, high int) error {
 		query := fmt.Sprintf(`INSERT INTO %s.sk_channel_result_quantitative_values(id, channel_result_id, metric, "value")
 		VALUES(:id, :channel_result_id, :metric, :value);`, r.dbSchema)
-		_, err := r.db.NamedExecContext(ctx, query, quantitativeChannelResults[low:high])
+		_, err := r.db.NamedExec(ctx, query, quantitativeChannelResults[low:high])
 		if err != nil {
 			log.Error().Err(err).Msg(msgCreateControlResultQuantitativeValuesBatchFailed)
 			return ErrCreateControlResultQuantitativeValuesBatchFailed
@@ -1757,7 +1755,7 @@ func (r *analysisRepository) createControlResultChannelResultQuantitativeValues(
 	err := utils.Partition(len(quantitativeChannelResults), channelResultQVBatchSize, func(low int, high int) error {
 		query := fmt.Sprintf(`INSERT INTO %s.sk_control_result_channel_result_quantitative_values(id, channel_result_id, metric, "value")
 		VALUES(:id, :channel_result_id, :metric, :value);`, r.dbSchema)
-		_, err := r.db.NamedExecContext(ctx, query, quantitativeChannelResults[low:high])
+		_, err := r.db.NamedExec(ctx, query, quantitativeChannelResults[low:high])
 		if err != nil {
 			log.Error().Err(err).Msg(msgCreateControlResultChannelResultQuantitativeValuesBatchFailed)
 			return ErrCreateControlResultChannelResultQuantitativeValuesBatchFailed
@@ -1777,7 +1775,7 @@ func (r *analysisRepository) getAnalysisResultReagentRelations(ctx context.Conte
 		query := fmt.Sprintf(`SELECT analysis_result_id, reagent_id FROM %s.sk_analysis_result_reagent_relations sarrr WHERE sarrr.analysis_result_id IN (?);`, r.dbSchema)
 		query, args, _ := sqlx.In(query, analysisResultIDs[low:high])
 		query = r.db.Rebind(query)
-		rows, err := r.db.QueryxContext(ctx, query, args...)
+		rows, err := r.db.Queryx(ctx, query, args...)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				log.Trace().Msg("No analysis result reagent relations")
@@ -1810,7 +1808,7 @@ func (r *analysisRepository) getReagentControlResultRelations(ctx context.Contex
 		query := fmt.Sprintf(`SELECT reagent_id, control_result_id FROM %s.sk_reagent_control_result_relations srcrr WHERE srcrr.reagent_id IN (?);`, r.dbSchema)
 		query, args, _ := sqlx.In(query, reagentIDs[low:high])
 		query = r.db.Rebind(query)
-		rows, err := r.db.QueryxContext(ctx, query, args...)
+		rows, err := r.db.Queryx(ctx, query, args...)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				log.Trace().Msg("No reagent control result relations")
@@ -1843,7 +1841,7 @@ func (r *analysisRepository) getAnalysisResultControlResultRelations(ctx context
 		query := fmt.Sprintf(`SELECT analysis_result_id, control_result_id FROM %s.sk_analysis_result_control_result_relations sarcrr WHERE sarcrr.analysis_result_id IN (?);`, r.dbSchema)
 		query, args, _ := sqlx.In(query, analysisResultIDs[low:high])
 		query = r.db.Rebind(query)
-		rows, err := r.db.QueryxContext(ctx, query, args...)
+		rows, err := r.db.Queryx(ctx, query, args...)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				log.Trace().Msg("No analysis result control result relations")
@@ -1917,7 +1915,7 @@ func (r *analysisRepository) createReagents(ctx context.Context, reagentDAOs []r
 		VALUES(:id, :manufacturer, :serial, :lot_no, :type, :name)
 		ON CONFLICT (manufacturer, serial, lot_no, name) DO UPDATE SET manufacturer = excluded.manufacturer RETURNING id;`, r.dbSchema)
 
-		rows, err := r.db.NamedQueryContext(ctx, query, reagentsToSave[low:high])
+		rows, err := r.db.NamedQuery(ctx, query, reagentsToSave[low:high])
 		if err != nil {
 			log.Error().Err(err).Msg(msgCreateReagentFailed)
 			return ErrCreateReagentFailed
@@ -2014,7 +2012,7 @@ func (r *analysisRepository) createControlResults(ctx context.Context, controlRe
 		query := fmt.Sprintf(`INSERT INTO %s.sk_control_results(id, sample_code, analyte_mapping_id, instrument_id, expected_control_result_id, is_valid, is_compared_to_expected_result, result, examined_at)
 		VALUES(:id, :sample_code, :analyte_mapping_id, :instrument_id, :expected_control_result_id, :is_valid, :is_compared_to_expected_result, :result, :examined_at)`, r.dbSchema)
 
-		_, err := r.db.NamedExecContext(ctx, query, convertControlResultsToDAO(controlResults[low:high]))
+		_, err := r.db.NamedExec(ctx, query, convertControlResultsToDAO(controlResults[low:high]))
 		if err != nil {
 			log.Error().Err(err).Msg(msgCreateControlResultFailed)
 			if IsErrorCode(err, ForeignKeyViolationErrorCode) {
@@ -2087,7 +2085,7 @@ func (r *analysisRepository) getImages(ctx context.Context, analysisResultIDs []
 		query := fmt.Sprintf(`SELECT sari.id, sari.analysis_result_id, sari.channel_result_id, sari.name, sari.description, sari.dea_image_id FROM %s.sk_analysis_result_images sari WHERE sari.analysis_result_id IN (?);`, r.dbSchema)
 		query, args, _ := sqlx.In(query, analysisResultIDs[low:high])
 		query = r.db.Rebind(query)
-		rows, err := r.db.QueryxContext(ctx, query, args...)
+		rows, err := r.db.Queryx(ctx, query, args...)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				log.Trace().Msg("No images")
@@ -2145,7 +2143,7 @@ func (r *analysisRepository) saveImages(ctx context.Context, images []imageDAO) 
 
 	query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_result_images(id, analysis_result_id, channel_result_id, "name", description, image_bytes, dea_image_id, uploaded_to_dea_at)
 		VALUES(:id, :analysis_result_id, :channel_result_id, :name, :description, :image_bytes, :dea_image_id, :uploaded_to_dea_at);`, r.dbSchema)
-	_, err := r.db.NamedExecContext(ctx, query, images)
+	_, err := r.db.NamedExec(ctx, query, images)
 	if err != nil {
 		log.Error().Err(err).Msg(msgCreateAnalysisResultImagesFailed)
 		return nil, ErrCreateAnalysisResultImagesFailed
@@ -2175,7 +2173,7 @@ func (r *analysisRepository) saveControlResultImages(ctx context.Context, contro
 	err := utils.Partition(len(controlResultImages), imageBatchSize, func(low int, high int) error {
 		query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_result_images(id, analysis_result_id, channel_result_id, "name", description, image_bytes, dea_image_id, uploaded_to_dea_at)
 		VALUES(:id, :analysis_result_id, :channel_result_id, :name, :description, :image_bytes, :dea_image_id, :uploaded_to_dea_at);`, r.dbSchema)
-		_, err := r.db.NamedExecContext(ctx, query, controlResultImages[low:high])
+		_, err := r.db.NamedExec(ctx, query, controlResultImages[low:high])
 		if err != nil {
 			log.Error().Err(err).Msg(msgCreateControlResultImagesFailed)
 			return ErrCreateControlResultImagesFailed
@@ -2195,7 +2193,7 @@ func (r *analysisRepository) getWarnings(ctx context.Context, analysisResultIDs 
 		query := fmt.Sprintf(`SELECT sarw.id, sarw.analysis_result_id, sarw.warning FROM %s.sk_analysis_result_warnings sarw WHERE sarw.analysis_result_id IN (?);`, r.dbSchema)
 		query, args, _ := sqlx.In(query, analysisResultIDs[low:high])
 		query = r.db.Rebind(query)
-		rows, err := r.db.QueryxContext(ctx, query, args...)
+		rows, err := r.db.Queryx(ctx, query, args...)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				log.Trace().Msg("No analysis result warnings")
@@ -2250,7 +2248,7 @@ func (r *analysisRepository) createWarnings(ctx context.Context, warningDAOs []w
 	err := utils.Partition(len(warningDAOs), warningBatchCount, func(low int, high int) error {
 		query := fmt.Sprintf(`INSERT INTO %s.sk_analysis_result_warnings(id, analysis_result_id, warning)
 		VALUES(:id, :analysis_result_id, :warning)`, r.dbSchema)
-		_, err := r.db.NamedExecContext(ctx, query, warningDAOs[low:high])
+		_, err := r.db.NamedExec(ctx, query, warningDAOs[low:high])
 		if err != nil {
 			log.Error().Err(err).Msg(msgCreateWarningsFailed)
 			return ErrCreateWarningsFailed
@@ -2267,7 +2265,7 @@ func (r *analysisRepository) createControlResultWarnings(ctx context.Context, wa
 	err := utils.Partition(len(warnings), warningBatchCount, func(low int, high int) error {
 		query := fmt.Sprintf(`INSERT INTO %s.sk_control_result_warnings(id, control_result_id, warning)
 		VALUES(:id, :control_result_id, :warning)`, r.dbSchema)
-		_, err := r.db.NamedExecContext(ctx, query, warnings[low:high])
+		_, err := r.db.NamedExec(ctx, query, warnings[low:high])
 		if err != nil {
 			log.Error().Err(err).Msg(msgCreateControlResultWarningsFailed)
 			return ErrCreateControlResultWarningsFailed
@@ -2304,7 +2302,7 @@ func (r *analysisRepository) CreateAnalysisResultQueueItem(ctx context.Context, 
 		JsonMessage: string(jsonData),
 	}
 	query := fmt.Sprintf(`INSERT INTO %s.sk_cerberus_queue_items(queue_item_id, json_message) VALUES (:queue_item_id, :json_message);`, r.dbSchema)
-	_, err = r.db.NamedExecContext(ctx, query, cerberusQueueItem)
+	_, err = r.db.NamedExec(ctx, query, cerberusQueueItem)
 	if err != nil {
 		log.Error().Err(err).Msg(msgCreateCerberusQueueItemFailed)
 		return uuid.Nil, ErrCreateCerberusQueueItemFailed
@@ -2319,7 +2317,7 @@ func (r *analysisRepository) DeleteOldCerberusQueueItems(ctx context.Context, cl
 					WHERE last_http_status >= 200
 						AND last_http_status <= 299
 						AND created_at <= current_date - ($1 ||' DAY')::INTERVAL LIMIT $2);`, r.dbSchema, r.dbSchema)
-	result, err := r.db.ExecContext(ctx, query, strconv.Itoa(cleanupDays), limit)
+	result, err := r.db.Exec(ctx, query, strconv.Itoa(cleanupDays), limit)
 	if err != nil {
 		log.Error().Err(err).Msg(msgDeleteOldCerberusQueueItemsFailed)
 		return 0, ErrDeleteOldCerberusQueueItemsFailed
@@ -2332,7 +2330,7 @@ func (r *analysisRepository) DeleteOldAnalysisRequestsWithTx(ctx context.Context
 	txR := *r
 	txR.db = tx
 	query := fmt.Sprintf(`SELECT id, sample_code FROM %s.sk_analysis_requests WHERE valid_until_time < (current_date - make_interval(days := $1)) AND (is_processed OR deleted_at IS NOT NULL) LIMIT $2;`, r.dbSchema)
-	rows, err := txR.db.QueryxContext(ctx, query, cleanupDays, limit)
+	rows, err := txR.db.Queryx(ctx, query, cleanupDays, limit)
 	if err != nil {
 		log.Error().Err(err).Msg(msgDeleteOldAnalysisRequestsFailed)
 		return 0, ErrDeleteOldAnalysisRequestsFailed
@@ -2376,7 +2374,7 @@ func (r *analysisRepository) DeleteOldAnalysisRequestsWithTx(ctx context.Context
 	query = fmt.Sprintf("DELETE FROM %s.sk_analysis_requests WHERE id IN (?);", r.dbSchema)
 	query, args, _ := sqlx.In(query, analysisRequestIDs)
 	query = txR.db.Rebind(query)
-	result, err := txR.db.ExecContext(ctx, query, args...)
+	result, err := txR.db.Exec(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgDeleteOldAnalysisRequestsFailed)
 		return 0, ErrDeleteOldAnalysisRequestsFailed
@@ -2393,7 +2391,7 @@ func (r *analysisRepository) deleteAnalysisRequestExtraValuesByAnalysisRequestID
 		query := fmt.Sprintf("DELETE FROM %s.sk_analysis_request_extra_values WHERE analysis_request_id IN (?);", r.dbSchema)
 		query, args, _ := sqlx.In(query, analysisRequestIDs[low:high])
 		query = r.db.Rebind(query)
-		_, err := r.db.ExecContext(ctx, query, args...)
+		_, err := r.db.Exec(ctx, query, args...)
 		if err != nil {
 			log.Error().Err(err).Msg(msgDeleteAnalysisRequestExtraValuesByAnalysisRequestIdFailed)
 			return ErrDeleteAnalysisRequestExtraValuesByAnalysisRequestIdFailed
@@ -2413,7 +2411,7 @@ func (r *analysisRepository) deleteSubjectInfosByAnalysisRequestIDs(ctx context.
 		query := fmt.Sprintf("DELETE FROM %s.sk_subject_infos WHERE analysis_request_id IN (?);", r.dbSchema)
 		query, args, _ := sqlx.In(query, analysisRequestIDs[low:high])
 		query = r.db.Rebind(query)
-		_, err := r.db.ExecContext(ctx, query, args...)
+		_, err := r.db.Exec(ctx, query, args...)
 		if err != nil {
 			log.Error().Err(err).Msg(msgDeleteSubjectInfosByAnalysisRequestIdFailed)
 			return ErrDeleteSubjectInfosByAnalysisRequestIdFailed
@@ -2433,7 +2431,7 @@ func (r *analysisRepository) deleteAnalysisRequestInstrumentTransmissionsByAnaly
 		query := fmt.Sprintf("DELETE FROM %s.sk_analysis_request_instrument_transmissions WHERE analysis_request_id IN (?);", r.dbSchema)
 		query, args, _ := sqlx.In(query, analysisRequestIDs[low:high])
 		query = r.db.Rebind(query)
-		_, err := r.db.ExecContext(ctx, query, args...)
+		_, err := r.db.Exec(ctx, query, args...)
 		if err != nil {
 			log.Error().Err(err).Msg(msgDeleteAnalysisRequestInstrumentTransmissionsFailed)
 			return ErrDeleteAnalysisRequestInstrumentTransmissionsFailed
@@ -2453,7 +2451,7 @@ func (r *analysisRepository) deleteAppliedSortingRuleTargetsBySampleCodes(ctx co
 		query := fmt.Sprintf("DELETE FROM %s.sk_applied_sorting_rule_targets WHERE sample_code IN (?);", r.dbSchema)
 		query, args, _ := sqlx.In(query, sampleCodes[low:high])
 		query = r.db.Rebind(query)
-		_, err := r.db.ExecContext(ctx, query, args...)
+		_, err := r.db.Exec(ctx, query, args...)
 		if err != nil {
 			log.Error().Err(err).Msg(msgDeleteAppliedSortingRuleTargetsBySampleCodesFailed)
 			return ErrDeleteAppliedSortingRuleTargetsBySampleCodesFailed
@@ -2470,7 +2468,7 @@ func (r *analysisRepository) DeleteOldAnalysisResultsWithTx(ctx context.Context,
 	txR.db = tx
 
 	query := fmt.Sprintf(`SELECT id FROM %s.sk_analysis_results WHERE GREATEST(valid_until, created_at + INTERVAL '14 DAYS') < (current_date - make_interval(days := $1))  AND is_processed LIMIT $2;`, r.dbSchema)
-	rows, err := txR.db.QueryxContext(ctx, query, cleanupDays, limit)
+	rows, err := txR.db.Queryx(ctx, query, cleanupDays, limit)
 	if err != nil {
 		log.Error().Err(err).Msg(msgDeleteOldAnalysisResultsFailed)
 		return 0, ErrDeleteOldAnalysisResultsFailed
@@ -2518,7 +2516,7 @@ func (r *analysisRepository) DeleteOldAnalysisResultsWithTx(ctx context.Context,
 	query = fmt.Sprintf(`DELETE FROM %s.sk_analysis_results WHERE id IN (?);`, r.dbSchema)
 	query, args, _ := sqlx.In(query, analysisResultIDs)
 	query = txR.db.Rebind(query)
-	result, err := txR.db.ExecContext(ctx, query, args...)
+	result, err := txR.db.Exec(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgDeleteOldAnalysisResultsFailed)
 		return 0, ErrDeleteOldAnalysisResultsFailed
@@ -2538,7 +2536,7 @@ func (r *analysisRepository) deleteChannelResultsByAnalysisResultIDs(ctx context
 		query, args, _ := sqlx.In(query, analysisResultIDs[low:high])
 		query = r.db.Rebind(query)
 
-		rows, err := r.db.QueryxContext(ctx, query, args...)
+		rows, err := r.db.Queryx(ctx, query, args...)
 		if err != nil {
 			log.Error().Err(err).Msg(msgDeleteChannelResultsByAnalysisResultIdsFailed)
 			return ErrDeleteChannelResultsByAnalysisResultIdsFailed
@@ -2565,7 +2563,7 @@ func (r *analysisRepository) deleteChannelResultsByAnalysisResultIDs(ctx context
 		query := fmt.Sprintf(`DELETE FROM %s.sk_channel_result_quantitative_values WHERE channel_result_id IN (?);`, r.dbSchema)
 		query, args, _ := sqlx.In(query, channelResultIDs[low:high])
 		query = r.db.Rebind(query)
-		_, err := r.db.ExecContext(ctx, query, args...)
+		_, err := r.db.Exec(ctx, query, args...)
 		if err != nil {
 			log.Error().Err(err).Msg(msgDeleteChannelResultsByAnalysisResultIdsFailed)
 			return ErrDeleteChannelResultsByAnalysisResultIdsFailed
@@ -2581,7 +2579,7 @@ func (r *analysisRepository) deleteChannelResultsByAnalysisResultIDs(ctx context
 		query := fmt.Sprintf(`DELETE FROM %s.sk_channel_results WHERE id IN (?);`, r.dbSchema)
 		query, args, _ := sqlx.In(query, channelResultIDs[low:high])
 		query = r.db.Rebind(query)
-		_, err := r.db.ExecContext(ctx, query, args...)
+		_, err := r.db.Exec(ctx, query, args...)
 		if err != nil {
 			log.Error().Err(err).Msg(msgDeleteChannelResultsByAnalysisResultIdsFailed)
 			return ErrDeleteChannelResultsByAnalysisResultIdsFailed
@@ -2602,7 +2600,7 @@ func (r *analysisRepository) deleteAnalysisResultWarningsByAnalysisResultIDs(ctx
 		query := fmt.Sprintf("DELETE FROM %s.sk_analysis_result_warnings WHERE analysis_result_id IN (?);", r.dbSchema)
 		query, args, _ := sqlx.In(query, analysisResultIDs[low:high])
 		query = r.db.Rebind(query)
-		_, err := r.db.ExecContext(ctx, query, args...)
+		_, err := r.db.Exec(ctx, query, args...)
 		if err != nil {
 			log.Error().Err(err).Msg(msgDeleteAnalysisResultWarningsFailed)
 			return ErrDeleteAnalysisResultWarningsFailed
@@ -2623,7 +2621,7 @@ func (r *analysisRepository) deleteImagesByAnalysisResultIDs(ctx context.Context
 		query := fmt.Sprintf("DELETE FROM %s.sk_analysis_result_images WHERE analysis_result_id IN (?);", r.dbSchema)
 		query, args, _ := sqlx.In(query, analysisResultIDs[low:high])
 		query = r.db.Rebind(query)
-		_, err := r.db.ExecContext(ctx, query, args...)
+		_, err := r.db.Exec(ctx, query, args...)
 		if err != nil {
 			log.Error().Err(err).Msg(msgDeleteImagesByAnalysisResultIdsFailed)
 			return ErrDeleteImagesByAnalysisResultIdsFailed
@@ -2644,7 +2642,7 @@ func (r *analysisRepository) deleteAnalysisResultExtraValuesByAnalysisResultIDs(
 		query := fmt.Sprintf("DELETE FROM %s.sk_analysis_result_extravalues WHERE analysis_result_id IN (?);", r.dbSchema)
 		query, args, _ := sqlx.In(query, analysisResultIDs[low:high])
 		query = r.db.Rebind(query)
-		_, err := r.db.ExecContext(ctx, query, args...)
+		_, err := r.db.Exec(ctx, query, args...)
 		if err != nil {
 			log.Error().Err(err).Msg(msgDeleteAnalysisResultExtraValuesByAnalysisResultIdsFailed)
 			return ErrDeleteAnalysisResultExtraValuesByAnalysisResultIdsFailed
@@ -2664,7 +2662,7 @@ func (r *analysisRepository) deleteReagentRelationsByAnalysisResultIDs(ctx conte
 		query := fmt.Sprintf("DELETE FROM %s.sk_analysis_result_reagent_relations WHERE analysis_result_id IN (?);", r.dbSchema)
 		query, args, _ := sqlx.In(query, analysisResultIDs[low:high])
 		query = r.db.Rebind(query)
-		_, err := r.db.ExecContext(ctx, query, args...)
+		_, err := r.db.Exec(ctx, query, args...)
 		if err != nil {
 			log.Error().Err(err).Msg(msgDeleteReagentRelationsByAnalysisResultIdsFailed)
 			return ErrDeleteReagentRelationsByAnalysisResultIdsFailed
@@ -2685,7 +2683,7 @@ func (r *analysisRepository) deleteControlResultRelationsByAnalysisResultIDs(ctx
 		query := fmt.Sprintf("DELETE FROM %s.sk_analysis_result_control_result_relations WHERE analysis_result_id IN (?);", r.dbSchema)
 		query, args, _ := sqlx.In(query, analysisResultIDs[low:high])
 		query = r.db.Rebind(query)
-		_, err := r.db.ExecContext(ctx, query, args...)
+		_, err := r.db.Exec(ctx, query, args...)
 		if err != nil {
 			log.Error().Err(err).Msg(msgDeleteControlResultRelationsByAnalysisResultIdsFailed)
 			return ErrDeleteControlResultRelationsByAnalysisResultIdsFailed
@@ -2815,7 +2813,7 @@ func (r *analysisRepository) GetAnalysisResultQueueItems(ctx context.Context) ([
 			WHERE trial_count < 5760 /* 4 days á 2 minutes */ AND last_http_status NOT BETWEEN 200 AND 299 AND created_at > timezone('utc', now()-interval '14 days') AND retry_not_before < timezone('utc', now())
 			ORDER BY created_at LIMIT 10;`, r.dbSchema)
 
-	rows, err := r.db.QueryxContext(ctx, query)
+	rows, err := r.db.Queryx(ctx, query)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			log.Trace().Msg("No analysis results")
@@ -2845,7 +2843,7 @@ func (r *analysisRepository) UpdateCerberusQueueItemStatus(ctx context.Context, 
 	query := fmt.Sprintf(`UPDATE %s.sk_cerberus_queue_items
 			SET last_http_status = :last_http_status, last_error = :last_error, last_error_at = :last_error_at, trial_count = trial_count + 1, retry_not_before = :retry_not_before, raw_response = :raw_response, response_json_message = :response_json_message
 			WHERE queue_item_id = :queue_item_id;`, r.dbSchema)
-	_, err := r.db.NamedExecContext(ctx, query, convertCerberusQueueItemToCerberusQueueItemDAO(queueItem))
+	_, err := r.db.NamedExec(ctx, query, convertCerberusQueueItemToCerberusQueueItemDAO(queueItem))
 	if err != nil {
 		log.Error().Err(err).Msg(msgUpdateCerberusQueueItemStatusFailed)
 		return ErrUpdateCerberusQueueItemStatusFailed
@@ -2858,7 +2856,7 @@ func (r *analysisRepository) GetStuckImageIDsForDEA(ctx context.Context) ([]uuid
 
 	imageIDs := make([]uuid.UUID, 0)
 
-	rows, err := r.db.QueryxContext(ctx, query)
+	rows, err := r.db.Queryx(ctx, query)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetStuckImagesFailed)
 		return imageIDs, ErrGetStuckImagesFailed
@@ -2884,7 +2882,7 @@ func (r *analysisRepository) GetStuckImageIDsForCerberus(ctx context.Context) ([
 
 	imageIDs := make([]uuid.UUID, 0)
 
-	rows, err := r.db.QueryxContext(ctx, query)
+	rows, err := r.db.Queryx(ctx, query)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetStuckImagesFailed)
 		return imageIDs, ErrGetStuckImagesFailed
@@ -2915,7 +2913,7 @@ func (r *analysisRepository) GetImagesForDEAUploadByIDs(ctx context.Context, ids
 	query, args, _ := sqlx.In(query, ids)
 	query = r.db.Rebind(query)
 
-	rows, err := r.db.QueryxContext(ctx, query, args...)
+	rows, err := r.db.Queryx(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetStuckImagesFailed)
 		return []imageDAO{}, ErrGetStuckImagesFailed
@@ -2955,7 +2953,7 @@ func (r *analysisRepository) GetImagesForCerberusSyncByIDs(ctx context.Context, 
 	query, args, _ := sqlx.In(query, ids)
 	query = r.db.Rebind(query)
 
-	rows, err := r.db.QueryxContext(ctx, query, args...)
+	rows, err := r.db.Queryx(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetStuckImagesFailed)
 		return []cerberusImageDAO{}, ErrGetStuckImagesFailed
@@ -2986,7 +2984,7 @@ func (r *analysisRepository) SaveDEAImageID(ctx context.Context, imageID, deaIma
 		    sync_to_cerberus_needed = true 
 		WHERE id = $1;`, r.dbSchema)
 
-	_, err := r.db.ExecContext(ctx, query, imageID, deaImageID)
+	_, err := r.db.Exec(ctx, query, imageID, deaImageID)
 	if err != nil {
 		log.Error().Err(err).Msg(msgSaveDEAImageIDFailed)
 		return ErrSaveDEAImageIDFailed
@@ -3002,7 +3000,7 @@ func (r *analysisRepository) IncreaseImageUploadRetryCount(ctx context.Context, 
 	query := fmt.Sprintf(`UPDATE %s.sk_analysis_result_images SET upload_retry_count = upload_retry_count + 1, upload_error = ? WHERE id IN (?);`, r.dbSchema)
 	query, args, _ := sqlx.In(query, error, imageIDs)
 	query = r.db.Rebind(query)
-	_, err := r.db.ExecContext(ctx, query, args...)
+	_, err := r.db.Exec(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgIncreaseImageUploadRetryCountFailed)
 		return ErrIncreaseImageUploadRetryCountFailed
@@ -3017,7 +3015,7 @@ func (r *analysisRepository) MarkImagesAsSyncedToCerberus(ctx context.Context, i
 	query, args, _ := sqlx.In(query, ids)
 	query = r.db.Rebind(query)
 
-	_, err := r.db.ExecContext(ctx, query, args...)
+	_, err := r.db.Exec(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgMarkImagesAsSyncedToCerberusFailed)
 		return ErrMarkImagesAsSyncedToCerberusFailed
@@ -3031,7 +3029,7 @@ func (r *analysisRepository) GetUnprocessedAnalysisRequests(ctx context.Context)
 					FROM %s.sk_analysis_requests sar
 					WHERE sar.is_processed IS FALSE AND sar.deleted_at IS NULL;`, r.dbSchema)
 
-	rows, err := r.db.QueryxContext(ctx, query)
+	rows, err := r.db.Queryx(ctx, query)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			log.Trace().Msg("No analysis requests")
@@ -3060,7 +3058,7 @@ func (r *analysisRepository) GetUnprocessedAnalysisRequests(ctx context.Context)
 func (r *analysisRepository) GetUnprocessedAnalysisResultIDs(ctx context.Context) ([]uuid.UUID, error) {
 	query := fmt.Sprintf(`SELECT sar.id FROM %s.sk_analysis_results sar WHERE sar.is_processed IS FALSE;`, r.dbSchema)
 
-	rows, err := r.db.QueryxContext(ctx, query)
+	rows, err := r.db.Queryx(ctx, query)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			log.Trace().Msg("Unprocessed analysis results not found")
@@ -3093,7 +3091,7 @@ func (r *analysisRepository) MarkAnalysisRequestsAsProcessed(ctx context.Context
 		query, args, _ := sqlx.In(query, analysisRequestIDs[low:high])
 		query = r.db.Rebind(query)
 
-		_, err := r.db.ExecContext(ctx, query, args...)
+		_, err := r.db.Exec(ctx, query, args...)
 		if err != nil {
 			log.Error().Err(err).Msg(msgMarkAnalysisRequestsAsProcessedFailed)
 			return ErrMarkAnalysisRequestsAsProcessedFailed
@@ -3112,7 +3110,7 @@ func (r *analysisRepository) MarkAnalysisResultsAsProcessed(ctx context.Context,
 		query, args, _ := sqlx.In(query, analysisRequestIDs[low:high])
 		query = r.db.Rebind(query)
 
-		_, err := r.db.ExecContext(ctx, query, args...)
+		_, err := r.db.Exec(ctx, query, args...)
 		if err != nil {
 			log.Error().Err(err).Msg(msgMarkAnalysisResultsAsProcessedFailed)
 			return ErrMarkAnalysisResultsAsProcessedFailed
@@ -3156,7 +3154,7 @@ func (r *analysisRepository) GetReagentsByIDs(ctx context.Context, reagentIDs []
 	query, args, _ := sqlx.In(query, reagentIDs)
 	query = r.db.Rebind(query)
 
-	rows, err := r.db.QueryxContext(ctx, query, args...)
+	rows, err := r.db.Queryx(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetReagentsByIDsFailed)
 		return reagents, ErrGetReagentsByIDsFailed
@@ -3180,7 +3178,7 @@ func (r *analysisRepository) GetReagentsByIDs(ctx context.Context, reagentIDs []
 
 func (r *analysisRepository) UpdateAnalysisResultDEARawMessageID(ctx context.Context, analysisResultID uuid.UUID, deaRawMessageID uuid.NullUUID) error {
 	query := fmt.Sprintf(`UPDATE %s.sk_analysis_results SET dea_raw_message_id = $1 WHERE id = $2;`, r.dbSchema)
-	_, err := r.db.ExecContext(ctx, query, deaRawMessageID, analysisResultID)
+	_, err := r.db.Exec(ctx, query, deaRawMessageID, analysisResultID)
 	if err != nil {
 		log.Error().Err(err).Msg(msgUpdateAnalysisResultDEARawMessageIDFailed)
 		return ErrUpdateAnalysisResultDEARawMessageIDFailed
@@ -3220,7 +3218,7 @@ func (r *analysisRepository) UpdateControlResultBatch(ctx context.Context, contr
 	controlResultDAOs := convertControlResultsToDAO(controlResults)
 	query := fmt.Sprintf(`UPDATE %s.sk_control_results SET expected_control_result_id = :expected_control_result_id, is_valid = :is_valid, is_compared_to_expected_result = :is_compared_to_expected_result WHERE id = :id;`, r.dbSchema)
 	for i := range controlResultDAOs {
-		_, err := r.db.NamedExecContext(ctx, query, controlResultDAOs[i])
+		_, err := r.db.NamedExec(ctx, query, controlResultDAOs[i])
 		if err != nil {
 			log.Error().Err(err).Msg(msgUpdateControlResultFailed)
 			if IsErrorCode(err, ForeignKeyViolationErrorCode) {
@@ -3249,7 +3247,7 @@ func (r *analysisRepository) GetControlResultsByIDs(ctx context.Context, control
 	query, args, _ := sqlx.In(query, controlResultIDs)
 	query = r.db.Rebind(query)
 
-	rows, err := r.db.QueryxContext(ctx, query, args...)
+	rows, err := r.db.Queryx(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetControlResultsByIDsFailed)
 		return map[uuid.UUID]ControlResult{}, ErrGetControlResultsByIDsFailed
@@ -3372,7 +3370,7 @@ func (r *analysisRepository) getControlResultExtraValues(ctx context.Context, co
 		FROM %s.sk_control_result_extravalues scre WHERE scre.control_result_id IN (?);`, r.dbSchema)
 		query, args, _ := sqlx.In(query, controlResultIDs[low:high])
 		query = r.db.Rebind(query)
-		rows, err := r.db.QueryxContext(ctx, query, args...)
+		rows, err := r.db.Queryx(ctx, query, args...)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				log.Trace().Msg("No control result extra value")
@@ -3405,7 +3403,7 @@ func (r *analysisRepository) getControlResultWarnings(ctx context.Context, contr
 		query := fmt.Sprintf(`SELECT scrw.id, scrw.control_result_id, scrw.warning FROM %s.sk_control_result_warnings scrw WHERE scrw.control_result_id IN (?);`, r.dbSchema)
 		query, args, _ := sqlx.In(query, controlResultIDs[low:high])
 		query = r.db.Rebind(query)
-		rows, err := r.db.QueryxContext(ctx, query, args...)
+		rows, err := r.db.Queryx(ctx, query, args...)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				log.Trace().Msg("No control result warnings")
@@ -3439,7 +3437,7 @@ func (r *analysisRepository) getControlResultChannelResults(ctx context.Context,
 		FROM %s.sk_control_result_channel_results scrcr WHERE scrcr.control_result_id IN (?);`, r.dbSchema)
 		query, args, _ := sqlx.In(query, controlResultIDs[low:high])
 		query = r.db.Rebind(query)
-		rows, err := r.db.QueryxContext(ctx, query, args...)
+		rows, err := r.db.Queryx(ctx, query, args...)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				log.Trace().Msg("No control result channel result")
@@ -3475,7 +3473,7 @@ func (r *analysisRepository) getControlResultChannelResultQuantitativeValues(ctx
 		query, args, _ := sqlx.In(query, channelResultIDs[low:high])
 		query = r.db.Rebind(query)
 
-		rows, err := r.db.QueryxContext(ctx, query, args...)
+		rows, err := r.db.Queryx(ctx, query, args...)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				log.Trace().Msg("No control result quantitative channel result")
@@ -3508,7 +3506,7 @@ func (r *analysisRepository) getControlResultImages(ctx context.Context, control
 		query := fmt.Sprintf(`SELECT scri.id, scri.control_result_id, scri.channel_result_id, scri.name, scri.description, scri.dea_image_id FROM %s.sk_control_result_images scri WHERE scri.control_result_id IN (?);`, r.dbSchema)
 		query, args, _ := sqlx.In(query, controlResultIDs[low:high])
 		query = r.db.Rebind(query)
-		rows, err := r.db.QueryxContext(ctx, query, args...)
+		rows, err := r.db.Queryx(ctx, query, args...)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				log.Trace().Msg("No control result images")
@@ -3544,7 +3542,7 @@ func (r *analysisRepository) getExpectedControlResultsByAnalyteMappingIds(ctx co
 	query := fmt.Sprintf(`SELECT secr.* FROM %s.sk_expected_control_result secr WHERE secr.analyte_mapping_id in (?) AND secr.deleted_at IS NULL;`, r.dbSchema)
 	query, args, _ := sqlx.In(query, analyteMappingIds)
 	query = r.db.Rebind(query)
-	rows, err := r.db.QueryxContext(ctx, query, args...)
+	rows, err := r.db.Queryx(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetExpectedControlResultsFailed)
 		return nil, ErrGetExpectedControlResultsFailed
@@ -3620,7 +3618,7 @@ func convertControlResultsToTOs(controlResults []ControlResult) []ControlResultT
 func (r *analysisRepository) SaveCerberusIDForAnalysisResult(ctx context.Context, analysisResultID uuid.UUID, cerberusID uuid.UUID) error {
 	query := fmt.Sprintf(`UPDATE %s.sk_analysis_results SET cerberus_id = $2 WHERE id = $1;`, r.dbSchema)
 
-	_, err := r.db.ExecContext(ctx, query, analysisResultID, cerberusID)
+	_, err := r.db.Exec(ctx, query, analysisResultID, cerberusID)
 	if err != nil {
 		log.Error().Err(err).Msg(msgSaveCerberusIdForAnalysisResultFailed)
 		return ErrSaveCerberusIdForAnalysisResultFailed
@@ -3655,7 +3653,7 @@ func (r *analysisRepository) GetAnalysisResultIdsWithoutControlByReagent(ctx con
 	WHERE skr.manufacturer = :manufacturer AND skr.serial = :serial AND skr.lot_no = :lot_no AND skr.name = :name AND skar.instrument_id = :instrument_id
 		AND sarcrr.control_result_id IS NULL AND skar.yielded_at >= (current_date - make_interval(days := :analysis_result_without_control_search_days));`
 	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
-	rows, err := r.db.NamedQueryContext(ctx, query, preparedValues)
+	rows, err := r.db.NamedQuery(ctx, query, preparedValues)
 	if err != nil {
 		log.Error().Err(err).Msg(msgLoadAnalysisResultIdsWithoutControlByReagentFailed)
 		return analysisResultIds, ErrLoadAnalysisResultIdsWithoutControlByReagentFailed
@@ -3703,7 +3701,7 @@ func (r *analysisRepository) GetAnalysisResultIdsWhereLastestControlIsInvalid(ct
 		INNER JOIN %schema_name% .sk_analysis_results skar ON skar.id = sarcrr.analysis_result_id
 	WHERE (latestControl.is_compared_to_expected_result = false OR latestControl.is_valid = false) AND skar.yielded_at >= (current_date - make_interval(days := :analysis_result_with_invalid_control_search_days));`
 	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
-	rows, err := r.db.NamedQueryContext(ctx, query, preparedValues)
+	rows, err := r.db.NamedQuery(ctx, query, preparedValues)
 	if err != nil {
 		log.Error().Err(err).Msg(msgLoadAnalysisResultIdsWhereLatestControlResultIsInValidFailed)
 		return analysisResultIds, ErrLoadAnalysisResultIdsWhereLatestControlResultIsInValidFailed
@@ -3753,7 +3751,7 @@ func (r *analysisRepository) GetLatestControlResultsByReagent(ctx context.Contex
 	}
 	query += ` ORDER BY skcr.sample_code, skcr.analyte_mapping_id, skcr. examined_at desc, skcr.created_at desc;`
 	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
-	rows, err := r.db.NamedQueryContext(ctx, query, preparedValues)
+	rows, err := r.db.NamedQuery(ctx, query, preparedValues)
 	if err != nil {
 		log.Error().Err(err).Msg(msgLoadLatestControlResultIdFailed)
 		return controlResults, ErrLoadLatestControlResultIdFailed
@@ -3795,9 +3793,9 @@ func (r *analysisRepository) GetControlResultsToValidate(ctx context.Context, an
 		var args []interface{}
 		query, args, _ = sqlx.In(query, analyteMappingIds)
 		query = r.db.Rebind(query)
-		rows, err = r.db.QueryxContext(ctx, query, args...)
+		rows, err = r.db.Queryx(ctx, query, args...)
 	} else {
-		rows, err = r.db.QueryxContext(ctx, query)
+		rows, err = r.db.Queryx(ctx, query)
 	}
 
 	if err != nil {
@@ -3841,7 +3839,7 @@ func (r *analysisRepository) MarkReagentControlResultRelationsAsProcessed(ctx co
 		query, args, _ := sqlx.In(query, controlResultID, reagentIDs[low:high])
 		query = r.db.Rebind(query)
 
-		_, err := r.db.ExecContext(ctx, query, args...)
+		_, err := r.db.Exec(ctx, query, args...)
 		if err != nil {
 			log.Error().Err(err).Msg(msgMarkAnalysisResultControlResultRelationAsProcessedFailed)
 			return ErrMarkAnalysisResultControlResultRelationAsProcessedFailed
@@ -3859,7 +3857,7 @@ func (r *analysisRepository) MarkAnalysisResultControlResultRelationsAsProcessed
 		query, args, _ := sqlx.In(query, controlResultID, analysisResultIDs[low:high])
 		query = r.db.Rebind(query)
 
-		_, err := r.db.ExecContext(ctx, query, args...)
+		_, err := r.db.Exec(ctx, query, args...)
 		if err != nil {
 			log.Error().Err(err).Msg(msgMarkAnalysisResultControlResultRelationAsProcessedFailed)
 			return ErrMarkAnalysisResultControlResultRelationAsProcessedFailed
@@ -3870,8 +3868,8 @@ func (r *analysisRepository) MarkAnalysisResultControlResultRelationsAsProcessed
 	return err
 }
 
-func (r *analysisRepository) CreateTransaction() (db.DbConnection, error) {
-	return r.db.CreateTransactionConnector()
+func (r *analysisRepository) CreateTransaction(ctx context.Context) (db.DbConnection, error) {
+	return r.db.BeginTx(ctx)
 }
 
 func (r *analysisRepository) WithTransaction(tx db.DbConnection) AnalysisRepository {
@@ -3975,7 +3973,7 @@ func convertAnalysisResultDAOToAnalysisResult(analysisResultDAO analysisResultDA
 		Operator:        analysisResultDAO.Operator,
 		InstrumentRunID: analysisResultDAO.InstrumentRunID,
 		Edited:          analysisResultDAO.Edited,
-		EditReason:      utils.NullStringToString(analysisResultDAO.EditReason),
+		EditReason:      db.NullStringToString(analysisResultDAO.EditReason),
 		IsInvalid:       analysisResultDAO.IsInvalid,
 		Warnings:        convertAnalysisWarningDAOsToWarnings(analysisResultDAO.Warnings),
 		ChannelResults:  convertChannelResultDAOsToChannelResults(analysisResultDAO.ChannelResults),
@@ -4189,7 +4187,7 @@ func convertCerberusQueueItemToCerberusQueueItemDAO(cerberusQueueItem CerberusQu
 		JsonMessage:         cerberusQueueItem.JsonMessage,
 		LastHTTPStatus:      cerberusQueueItem.LastHTTPStatus,
 		LastError:           cerberusQueueItem.LastError,
-		LastErrorAt:         utils.TimePointerToNullTime(cerberusQueueItem.LastErrorAt),
+		LastErrorAt:         db.TimePointerToNullTime(cerberusQueueItem.LastErrorAt),
 		TrialCount:          cerberusQueueItem.TrialCount,
 		RetryNotBefore:      cerberusQueueItem.RetryNotBefore,
 		RawResponse:         cerberusQueueItem.RawResponse,
@@ -4203,7 +4201,7 @@ func convertCerberusQueueItemDAOToCerberusQueueItem(cerberusQueueItemDAO cerberu
 		JsonMessage:         cerberusQueueItemDAO.JsonMessage,
 		LastHTTPStatus:      cerberusQueueItemDAO.LastHTTPStatus,
 		LastError:           cerberusQueueItemDAO.LastError,
-		LastErrorAt:         utils.NullTimeToTimePointer(cerberusQueueItemDAO.LastErrorAt),
+		LastErrorAt:         db.NullTimeToTimePointer(cerberusQueueItemDAO.LastErrorAt),
 		TrialCount:          cerberusQueueItemDAO.TrialCount,
 		RetryNotBefore:      cerberusQueueItemDAO.RetryNotBefore,
 		RawResponse:         cerberusQueueItemDAO.RawResponse,
@@ -4357,7 +4355,7 @@ func convertImageDAOsToImages(imageDAOs []imageDAO) []Image {
 		images[i] = Image{
 			ID:          imageDAO.ID,
 			Name:        imageDAO.Name,
-			Description: utils.NullStringToStringPointer(imageDAO.Description),
+			Description: db.NullStringToStringPointer(imageDAO.Description),
 			DeaImageID:  imageDAO.DeaImageID,
 		}
 	}
@@ -4370,7 +4368,7 @@ func convertControlResultImageDAOsToImages(imageDAOs []controlResultImageDAO) []
 		images[i] = Image{
 			ID:          imageDAO.ID,
 			Name:        imageDAO.Name,
-			Description: utils.NullStringToStringPointer(imageDAO.Description),
+			Description: db.NullStringToStringPointer(imageDAO.Description),
 			DeaImageID:  imageDAO.DeaImageID,
 		}
 	}

@@ -6,18 +6,27 @@ import (
 	"testing"
 	"time"
 
-	"github.com/blutspende/skeleton/db"
+	"github.com/blutspende/bloodlab-common/db"
+	"github.com/blutspende/bloodlab-common/instrumentenum"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
-	dbConn, schemaName, _, _ := setupDbConnectorAndRunMigration("instrument_test")
+	defer Recover(t)
+
+	ctx := context.Background()
+
+	dbConn, schemaName, _, _, err := setupDbConnectionAndRunMigrations(ctx, "instrument_test")
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
 
 	cerberusClientMock := &cerberusClientMock{}
 	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
 
-	ctx, cancelSkeleton := context.WithCancel(context.Background())
+	ctx, cancelSkeleton := context.WithCancel(ctx)
 	defer cancelSkeleton()
 
 	conditionRepository := NewConditionRepository(dbConn, schemaName)
@@ -31,12 +40,12 @@ func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
 	instrumentWithFtp := Instrument{
 		//_ = Instrument{
 		Name:           "TestInstrument",
-		Type:           Analyzer,
+		Type:           instrumentenum.TypeAnalyzer,
 		ProtocolID:     uuid.MustParse("abb539a3-286f-4c15-a7b7-2e9adf6eab91"),
 		ProtocolName:   "Test Protocol",
 		Enabled:        true,
-		ConnectionMode: FileServer,
-		ResultMode:     Production,
+		ConnectionMode: instrumentenum.ConnectionModeFileServer,
+		ResultMode:     instrumentenum.ResultModeProduction,
 		Status:         "ONLINE",
 		Encoding:       "UTF8",
 		TimeZone:       "Europe/Budapest",
@@ -51,7 +60,7 @@ func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
 			ResultPath:       "/result",
 			ResultFileMask:   "*",
 			ResultFileSuffix: ".TPL",
-			ServerType:       FTP,
+			ServerType:       instrumentenum.FileServerTypeFTP,
 		},
 	}
 
@@ -65,7 +74,7 @@ func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
 	instrument, err := instrumentService.GetInstrumentByID(ctx, nil, instrumentId, false)
 	assert.Nil(t, err)
 	assert.Equal(t, "TestInstrument", instrument.Name)
-	assert.Equal(t, FileServer, instrument.ConnectionMode)
+	assert.Equal(t, instrumentenum.ConnectionModeFileServer, instrument.ConnectionMode)
 	assert.NotNil(t, instrument.FileServerConfig)
 	assert.Equal(t, instrumentId, instrument.FileServerConfig.InstrumentId)
 	assert.Equal(t, "test", instrument.FileServerConfig.Username)
@@ -76,17 +85,17 @@ func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
 	assert.Equal(t, "/result", instrument.FileServerConfig.ResultPath)
 	assert.Equal(t, "*", instrument.FileServerConfig.ResultFileMask)
 	assert.Equal(t, ".TPL", instrument.FileServerConfig.ResultFileSuffix)
-	assert.Equal(t, FTP, instrument.FileServerConfig.ServerType)
+	assert.Equal(t, instrumentenum.FileServerTypeFTP, instrument.FileServerConfig.ServerType)
 
 	err = instrumentService.UpdateInstrument(ctx, Instrument{
 		ID:             instrumentId,
 		Name:           "TestInstrument",
-		Type:           Analyzer,
+		Type:           instrumentenum.TypeAnalyzer,
 		ProtocolID:     uuid.MustParse("abb539a3-286f-4c15-a7b7-2e9adf6eab91"),
 		ProtocolName:   "Test Protocol",
 		Enabled:        true,
-		ConnectionMode: FileServer,
-		ResultMode:     Production,
+		ConnectionMode: instrumentenum.ConnectionModeFileServer,
+		ResultMode:     instrumentenum.ResultModeProduction,
 		Status:         "ONLINE",
 		Encoding:       "UTF8",
 		TimeZone:       "Europe/Budapest",
@@ -102,7 +111,7 @@ func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
 			ResultPath:       "/result/updated",
 			ResultFileMask:   "*updated*",
 			ResultFileSuffix: ".updated.TPL",
-			ServerType:       SFTP,
+			ServerType:       instrumentenum.FileServerTypeSFTP,
 		},
 	}, uuid.MustParse("9d5fb5e9-65a1-4479-8f82-25b04145bfe1"))
 	assert.Nil(t, err)
@@ -120,7 +129,7 @@ func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
 	assert.Equal(t, "/result/updated", instrument.FileServerConfig.ResultPath)
 	assert.Equal(t, "*updated*", instrument.FileServerConfig.ResultFileMask)
 	assert.Equal(t, ".updated.TPL", instrument.FileServerConfig.ResultFileSuffix)
-	assert.Equal(t, SFTP, instrument.FileServerConfig.ServerType)
+	assert.Equal(t, instrumentenum.FileServerTypeSFTP, instrument.FileServerConfig.ServerType)
 
 	err = instrumentService.DeleteInstrument(ctx, instrumentId)
 	assert.Nil(t, err)
@@ -131,12 +140,20 @@ func TestCreateUpdateDeleteFtpConfig(t *testing.T) {
 }
 
 func TestFtpConfigConnectionModeChange(t *testing.T) {
-	dbConn, schemaName, _, _ := setupDbConnectorAndRunMigration("instrument_test")
+	defer Recover(t)
+
+	ctx := context.Background()
+
+	dbConn, schemaName, _, _, err := setupDbConnectionAndRunMigrations(ctx, "instrument_test")
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
 
 	cerberusClientMock := &cerberusClientMock{}
 	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
 
-	ctx, cancelSkeleton := context.WithCancel(context.Background())
+	ctx, cancelSkeleton := context.WithCancel(ctx)
 	defer cancelSkeleton()
 
 	conditionRepository := NewConditionRepository(dbConn, schemaName)
@@ -152,12 +169,12 @@ func TestFtpConfigConnectionModeChange(t *testing.T) {
 
 	instrumentId, err := instrumentService.CreateInstrument(ctx, Instrument{
 		Name:           "TestInstrument",
-		Type:           Analyzer,
+		Type:           instrumentenum.TypeAnalyzer,
 		ProtocolID:     uuid.MustParse("abb539a3-286f-4c15-a7b7-2e9adf6eab91"),
 		ProtocolName:   "Test Protocol",
 		Enabled:        true,
-		ConnectionMode: TCPClientMode,
-		ResultMode:     Production,
+		ConnectionMode: instrumentenum.ConnectionModeTCPClient,
+		ResultMode:     instrumentenum.ResultModeProduction,
 		Status:         "ONLINE",
 		Encoding:       "UTF8",
 		TimeZone:       "Europe/Budapest",
@@ -170,18 +187,18 @@ func TestFtpConfigConnectionModeChange(t *testing.T) {
 	instrument, err := instrumentService.GetInstrumentByID(ctx, nil, instrumentId, false)
 	assert.Nil(t, err)
 	assert.Equal(t, "TestInstrument", instrument.Name)
-	assert.Equal(t, TCPClientMode, instrument.ConnectionMode)
+	assert.Equal(t, instrumentenum.ConnectionModeTCPClient, instrument.ConnectionMode)
 	assert.Nil(t, instrument.FileServerConfig)
 
 	err = instrumentService.UpdateInstrument(ctx, Instrument{
 		ID:             instrumentId,
 		Name:           "TestInstrument",
-		Type:           Analyzer,
+		Type:           instrumentenum.TypeAnalyzer,
 		ProtocolID:     uuid.MustParse("abb539a3-286f-4c15-a7b7-2e9adf6eab91"),
 		ProtocolName:   "Test Protocol",
 		Enabled:        true,
-		ConnectionMode: FileServer,
-		ResultMode:     Production,
+		ConnectionMode: instrumentenum.ConnectionModeFileServer,
+		ResultMode:     instrumentenum.ResultModeProduction,
 		Status:         "ONLINE",
 		Encoding:       "UTF8",
 		TimeZone:       "Europe/Budapest",
@@ -197,7 +214,7 @@ func TestFtpConfigConnectionModeChange(t *testing.T) {
 			ResultPath:       "/result",
 			ResultFileMask:   "",
 			ResultFileSuffix: ".TPL",
-			ServerType:       FTP,
+			ServerType:       instrumentenum.FileServerTypeFTP,
 		},
 	}, uuid.MustParse("9d5fb5e9-65a1-4479-8f82-25b04145bfe1"))
 	assert.Nil(t, err)
@@ -205,7 +222,7 @@ func TestFtpConfigConnectionModeChange(t *testing.T) {
 	// test that FileServer config created after connection mode updated to FileServer and config passed
 	instrument, err = instrumentService.GetInstrumentByID(ctx, nil, instrumentId, false)
 	assert.Nil(t, err)
-	assert.Equal(t, FileServer, instrument.ConnectionMode)
+	assert.Equal(t, instrumentenum.ConnectionModeFileServer, instrument.ConnectionMode)
 	assert.NotNil(t, instrument.FileServerConfig)
 	assert.Equal(t, instrumentId, instrument.FileServerConfig.InstrumentId)
 	assert.Equal(t, "test", instrument.FileServerConfig.Username)
@@ -216,17 +233,17 @@ func TestFtpConfigConnectionModeChange(t *testing.T) {
 	assert.Equal(t, "/result", instrument.FileServerConfig.ResultPath)
 	assert.Equal(t, "", instrument.FileServerConfig.ResultFileMask)
 	assert.Equal(t, ".TPL", instrument.FileServerConfig.ResultFileSuffix)
-	assert.Equal(t, FTP, instrument.FileServerConfig.ServerType)
+	assert.Equal(t, instrumentenum.FileServerTypeFTP, instrument.FileServerConfig.ServerType)
 
 	err = instrumentService.UpdateInstrument(ctx, Instrument{
 		ID:             instrumentId,
 		Name:           "TestInstrument",
-		Type:           Analyzer,
+		Type:           instrumentenum.TypeAnalyzer,
 		ProtocolID:     uuid.MustParse("abb539a3-286f-4c15-a7b7-2e9adf6eab91"),
 		ProtocolName:   "Test Protocol",
 		Enabled:        true,
-		ConnectionMode: TCPMixed,
-		ResultMode:     Production,
+		ConnectionMode: instrumentenum.ConnectionModeTCPMixed,
+		ResultMode:     instrumentenum.ResultModeProduction,
 		Status:         "ONLINE",
 		Encoding:       "UTF8",
 		TimeZone:       "Europe/Budapest",
@@ -241,7 +258,15 @@ func TestFtpConfigConnectionModeChange(t *testing.T) {
 }
 
 func TestUpdateInstrument(t *testing.T) {
-	dbConn, schemaName, _, _ := setupDbConnectorAndRunMigration("instrument_test")
+	defer Recover(t)
+
+	ctx := context.Background()
+
+	dbConn, schemaName, _, _, err := setupDbConnectionAndRunMigrations(ctx, "instrument_test")
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
 
 	cerberusClientMock := &cerberusClientMock{
 		verifyInstrumentHashFunc: func(hash string) error {
@@ -261,7 +286,7 @@ func TestUpdateInstrument(t *testing.T) {
 	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
 
 	var protocolID uuid.UUID
-	err := dbConn.QueryRowx(`INSERT INTO instrument_test.sk_supported_protocols (name, description) VALUES('TestProtocol', 'Test Protocol Description') RETURNING id;`).Scan(&protocolID)
+	err = dbConn.QueryRowx(ctx, `INSERT INTO instrument_test.sk_supported_protocols (name, description) VALUES('TestProtocol', 'Test Protocol Description') RETURNING id;`).Scan(&protocolID)
 	assert.Nil(t, err)
 
 	clientPort := 1234
@@ -272,12 +297,12 @@ func TestUpdateInstrument(t *testing.T) {
 	instr := Instrument{
 		ID:                 uuid.New(),
 		Name:               "TestInstrument",
-		Type:               Analyzer,
+		Type:               instrumentenum.TypeAnalyzer,
 		ProtocolID:         protocolID,
 		ProtocolName:       "TestProtocol",
 		Enabled:            true,
-		ConnectionMode:     TCPMixed,
-		ResultMode:         Simulation,
+		ConnectionMode:     instrumentenum.ConnectionModeTCPMixed,
+		ResultMode:         instrumentenum.ResultModeSimulation,
 		CaptureResults:     true,
 		CaptureDiagnostics: false,
 		ReplyToQuery:       false,
@@ -305,12 +330,12 @@ func TestUpdateInstrument(t *testing.T) {
 	instr = Instrument{
 		ID:                 instrumentID,
 		Name:               "TestInstrumentUpdated",
-		Type:               Analyzer,
+		Type:               instrumentenum.TypeAnalyzer,
 		ProtocolID:         protocolID,
 		ProtocolName:       "TestProtocol",
 		Enabled:            true,
-		ConnectionMode:     TCPMixed,
-		ResultMode:         Simulation,
+		ConnectionMode:     instrumentenum.ConnectionModeTCPMixed,
+		ResultMode:         instrumentenum.ResultModeSimulation,
 		CaptureResults:     true,
 		CaptureDiagnostics: false,
 		ReplyToQuery:       false,
@@ -443,12 +468,12 @@ func TestUpdateInstrument(t *testing.T) {
 	instr = Instrument{
 		ID:                 instrumentID,
 		Name:               "TestInstrumentUpdated2",
-		Type:               Analyzer,
+		Type:               instrumentenum.TypeAnalyzer,
 		ProtocolID:         protocolID,
 		ProtocolName:       "TestProtocol",
 		Enabled:            true,
-		ConnectionMode:     TCPMixed,
-		ResultMode:         Simulation,
+		ConnectionMode:     instrumentenum.ConnectionModeTCPMixed,
+		ResultMode:         instrumentenum.ResultModeSimulation,
 		CaptureResults:     true,
 		CaptureDiagnostics: false,
 		ReplyToQuery:       false,
@@ -615,7 +640,15 @@ func TestUpdateInstrument(t *testing.T) {
 }
 
 func TestNotVerifiedInstrument(t *testing.T) {
-	dbConn, schemaName, _, _ := setupDbConnectorAndRunMigration("instrument_test")
+	defer Recover(t)
+
+	ctx := context.Background()
+
+	dbConn, schemaName, _, _, err := setupDbConnectionAndRunMigrations(ctx, "instrument_test")
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
 
 	cerberusClientMock := &cerberusClientMock{
 		verifyInstrumentHashFunc: func(hash string) error {
@@ -635,7 +668,7 @@ func TestNotVerifiedInstrument(t *testing.T) {
 	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
 
 	var protocolID uuid.UUID
-	err := dbConn.QueryRowx(`INSERT INTO instrument_test.sk_supported_protocols (name, description) VALUES('TestProtocol', 'Test Protocol Description') RETURNING id;`).Scan(&protocolID)
+	err = dbConn.QueryRowx(ctx, `INSERT INTO instrument_test.sk_supported_protocols (name, description) VALUES('TestProtocol', 'Test Protocol Description') RETURNING id;`).Scan(&protocolID)
 	assert.Nil(t, err)
 
 	clientPort := 1234
@@ -647,12 +680,12 @@ func TestNotVerifiedInstrument(t *testing.T) {
 	instr := Instrument{
 		ID:                 instrId,
 		Name:               "TestInstrument",
-		Type:               Analyzer,
+		Type:               instrumentenum.TypeAnalyzer,
 		ProtocolID:         protocolID,
 		ProtocolName:       "TestProtocol",
 		Enabled:            true,
-		ConnectionMode:     TCPMixed,
-		ResultMode:         Simulation,
+		ConnectionMode:     instrumentenum.ConnectionModeTCPMixed,
+		ResultMode:         instrumentenum.ResultModeSimulation,
 		CaptureResults:     true,
 		CaptureDiagnostics: false,
 		ReplyToQuery:       false,
@@ -670,7 +703,15 @@ func TestNotVerifiedInstrument(t *testing.T) {
 }
 
 func TestUpdateExpectedControlResult(t *testing.T) {
-	dbConn, schemaName, _, _ := setupDbConnectorAndRunMigration("expectedcontrolresult_test")
+	defer Recover(t)
+
+	ctx := context.Background()
+
+	dbConn, schemaName, _, _, err := setupDbConnectionAndRunMigrations(ctx, "expectedcontrolresult_test")
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
 
 	cerberusClientMock := &cerberusClientMock{
 		verifyExpectedControlResultHashFunc: func(hash string) error {
@@ -796,7 +837,7 @@ func TestUpdateExpectedControlResult(t *testing.T) {
 		ExpectedValue2:   nil,
 	})
 
-	err := instrumentService.UpdateExpectedControlResults(ctxWithCancel, instrumentId, expectedControlResults, uuid.New())
+	err = instrumentService.UpdateExpectedControlResults(ctxWithCancel, instrumentId, expectedControlResults, uuid.New())
 	assert.Nil(t, err)
 	assert.Contains(t, cerberusClientMock.VerifiedExpectedControlResultHashes, HashExpectedControlResults(expectedControlResults))
 
@@ -820,7 +861,15 @@ func TestUpdateExpectedControlResult(t *testing.T) {
 }
 
 func TestUpdateExpectedControlResult2(t *testing.T) {
-	dbConn, schemaName, _, _ := setupDbConnectorAndRunMigration("expectedcontrolresult_test")
+	defer Recover(t)
+
+	ctx := context.Background()
+
+	dbConn, schemaName, _, _, err := setupDbConnectionAndRunMigrations(ctx, "expectedcontrolresult_test")
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
 
 	cerberusClientMock := &cerberusClientMock{
 		verifyExpectedControlResultHashFunc: func(hash string) error {
@@ -993,7 +1042,7 @@ func TestUpdateExpectedControlResult2(t *testing.T) {
 		ExpectedValue2:   nil,
 	})
 
-	err := instrumentService.UpdateExpectedControlResults(ctxWithCancel, instrumentId, expectedControlResults, uuid.New())
+	err = instrumentService.UpdateExpectedControlResults(ctxWithCancel, instrumentId, expectedControlResults, uuid.New())
 	assert.Nil(t, err)
 	assert.Contains(t, cerberusClientMock.VerifiedExpectedControlResultHashes, HashExpectedControlResults(expectedControlResults))
 
@@ -1017,7 +1066,15 @@ func TestUpdateExpectedControlResult2(t *testing.T) {
 }
 
 func TestNotVerifiedExpectedControlResults(t *testing.T) {
-	dbConn, schemaName, _, _ := setupDbConnectorAndRunMigration("expectedcontrolresult_test")
+	defer Recover(t)
+
+	ctx := context.Background()
+
+	dbConn, schemaName, _, _, err := setupDbConnectionAndRunMigrations(ctx, "expectedcontrolresult_test")
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
 
 	cerberusClientMock := &cerberusClientMock{
 		verifyExpectedControlResultHashFunc: func(hash string) error {
@@ -1084,7 +1141,7 @@ func TestNotVerifiedExpectedControlResults(t *testing.T) {
 		ExpectedValue2:   nil,
 	})
 
-	err := instrumentService.CreateExpectedControlResults(ctxWithCancel, expectedControlResults, uuid.New())
+	err = instrumentService.CreateExpectedControlResults(ctxWithCancel, expectedControlResults, uuid.New())
 	assert.Nil(t, err)
 
 	ecrs, _ := instrumentService.GetExpectedControlResultsByInstrumentId(ctxWithCancel, instrumentId)
@@ -1092,7 +1149,15 @@ func TestNotVerifiedExpectedControlResults(t *testing.T) {
 }
 
 func TestTrimAndValidateHostname(t *testing.T) {
-	dbConn, schemaName, _, _ := setupDbConnectorAndRunMigration("instrument_test")
+	defer Recover(t)
+
+	ctx := context.Background()
+
+	dbConn, schemaName, _, _, err := setupDbConnectionAndRunMigrations(ctx, "instrument_test")
+	if err != nil {
+		assert.Fail(t, err.Error())
+		return
+	}
 
 	cerberusClientMock := &cerberusClientMock{
 		verifyInstrumentHashFunc: func(hash string) error {
@@ -1112,7 +1177,7 @@ func TestTrimAndValidateHostname(t *testing.T) {
 	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, NewSkeletonManager(ctx), NewInstrumentCache(), cerberusClientMock)
 
 	var protocolID uuid.UUID
-	err := dbConn.QueryRowx(`INSERT INTO instrument_test.sk_supported_protocols (name, description) VALUES('TestProtocol', 'Test Protocol Description') RETURNING id;`).Scan(&protocolID)
+	err = dbConn.QueryRowx(ctx, `INSERT INTO instrument_test.sk_supported_protocols (name, description) VALUES('TestProtocol', 'Test Protocol Description') RETURNING id;`).Scan(&protocolID)
 	assert.Nil(t, err)
 	clientPort := 1234
 
@@ -1122,12 +1187,12 @@ func TestTrimAndValidateHostname(t *testing.T) {
 	instr := Instrument{
 		ID:                 uuid.New(),
 		Name:               "TestInstrument",
-		Type:               Analyzer,
+		Type:               instrumentenum.TypeAnalyzer,
 		ProtocolID:         protocolID,
 		ProtocolName:       "TestProtocol",
 		Enabled:            true,
-		ConnectionMode:     TCPMixed,
-		ResultMode:         Simulation,
+		ConnectionMode:     instrumentenum.ConnectionModeTCPMixed,
+		ResultMode:         instrumentenum.ResultModeSimulation,
 		CaptureResults:     true,
 		CaptureDiagnostics: false,
 		ReplyToQuery:       false,
@@ -1152,12 +1217,12 @@ func TestTrimAndValidateHostname(t *testing.T) {
 	instr = Instrument{
 		ID:                 instrumentID,
 		Name:               "TestInstrumentUpdated",
-		Type:               Analyzer,
+		Type:               instrumentenum.TypeAnalyzer,
 		ProtocolID:         protocolID,
 		ProtocolName:       "TestProtocol",
 		Enabled:            true,
-		ConnectionMode:     TCPMixed,
-		ResultMode:         Simulation,
+		ConnectionMode:     instrumentenum.ConnectionModeTCPMixed,
+		ResultMode:         instrumentenum.ResultModeSimulation,
 		CaptureResults:     true,
 		CaptureDiagnostics: false,
 		ReplyToQuery:       false,
@@ -1308,12 +1373,12 @@ func (r *instrumentRepositoryMock) GetProtocolSettings(ctx context.Context, prot
 		{
 			ID:   uuid.MustParse("1f663361-3f2d-4c43-8cf6-65cec3fc88ab"),
 			Key:  "Some setting",
-			Type: String,
+			Type: instrumentenum.ProtocolSettingTypeString,
 		},
 		{
 			ID:   uuid.MustParse("c81c77cf-f17a-402d-a44b-a0194eb00a29"),
 			Key:  "Password",
-			Type: Password,
+			Type: instrumentenum.ProtocolSettingTypePassword,
 		},
 	}, nil
 }
@@ -1323,7 +1388,7 @@ func (r *instrumentRepositoryMock) UpsertProtocolSetting(ctx context.Context, pr
 func (r *instrumentRepositoryMock) DeleteProtocolSettings(ctx context.Context, protocolSettingIDs []uuid.UUID) error {
 	return nil
 }
-func (r *instrumentRepositoryMock) UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error {
+func (r *instrumentRepositoryMock) UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status instrumentenum.ConnectionStatus) error {
 	return nil
 }
 func (r *instrumentRepositoryMock) UpsertAnalyteMappings(ctx context.Context, analyteMappings []AnalyteMapping, instrumentID uuid.UUID) ([]uuid.UUID, error) {
@@ -1438,8 +1503,8 @@ func (r *instrumentRepositoryMock) DeleteInstrumentSettings(ctx context.Context,
 func (r *instrumentRepositoryMock) CheckAnalytesUsage(ctx context.Context, analyteIDs []uuid.UUID) (map[uuid.UUID][]Instrument, error) {
 	return make(map[uuid.UUID][]Instrument), nil
 }
-func (r *instrumentRepositoryMock) CreateTransaction() (db.DbConnection, error) {
-	return r.db, nil
+func (r *instrumentRepositoryMock) CreateTransaction(ctx context.Context) (db.DbConnection, error) {
+	return db.NewFakeDbConnection(), nil
 }
 func (r *instrumentRepositoryMock) WithTransaction(tx db.DbConnection) InstrumentRepository {
 	return r

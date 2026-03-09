@@ -3,12 +3,14 @@ package skeleton
 import (
 	"context"
 	"errors"
-	"github.com/blutspende/skeleton/db"
-	"github.com/google/uuid"
-	"github.com/rs/zerolog/log"
 	"net"
 	"regexp"
 	"strings"
+
+	"github.com/blutspende/bloodlab-common/db"
+	"github.com/blutspende/bloodlab-common/instrumentenum"
+	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 )
 
 var (
@@ -32,7 +34,7 @@ type InstrumentService interface {
 	UpsertSupportedProtocol(ctx context.Context, id uuid.UUID, name string, description string, abilities []ProtocolAbility, settings []ProtocolSetting) error
 	DeleteProtocolAbilities(ctx context.Context, protocolID uuid.UUID, protocolAbilities []ProtocolAbility) error
 	UpsertManufacturerTests(ctx context.Context, manufacturerTests []SupportedManufacturerTests) error
-	UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error
+	UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status instrumentenum.ConnectionStatus) error
 	CheckAnalytesUsage(ctx context.Context, analyteIDs []uuid.UUID) (map[uuid.UUID][]Instrument, error)
 }
 
@@ -69,7 +71,7 @@ func (s *instrumentService) CreateInstrument(ctx context.Context, instrument Ins
 	if ip == nil && !urlRegex.MatchString(instrument.Hostname) {
 		return uuid.Nil, ErrInvalidHostName
 	}
-	transaction, err := s.instrumentRepository.CreateTransaction()
+	transaction, err := s.instrumentRepository.CreateTransaction(ctx)
 	if err != nil {
 		return uuid.Nil, err
 	}
@@ -79,7 +81,7 @@ func (s *instrumentService) CreateInstrument(ctx context.Context, instrument Ins
 		return uuid.Nil, err
 	}
 
-	if instrument.ConnectionMode == FileServer && instrument.FileServerConfig != nil {
+	if instrument.ConnectionMode == instrumentenum.ConnectionModeFileServer && instrument.FileServerConfig != nil {
 		instrument.FileServerConfig.InstrumentId = id
 		err = s.instrumentRepository.WithTransaction(transaction).CreateFileServerConfig(ctx, *instrument.FileServerConfig)
 		if err != nil {
@@ -138,7 +140,7 @@ func (s *instrumentService) CreateInstrument(ctx context.Context, instrument Ins
 			if instrument.Settings[i].ProtocolSettingID != protocolSetting.ID {
 				continue
 			}
-			if protocolSetting.Type != Password {
+			if protocolSetting.Type != instrumentenum.ProtocolSettingTypePassword {
 				break
 			}
 
@@ -202,7 +204,7 @@ func (s *instrumentService) GetInstruments(ctx context.Context) ([]Instrument, e
 		}
 		instruments[i].ProtocolName = protocol.Name
 
-		if instruments[i].ConnectionMode == FileServer {
+		if instruments[i].ConnectionMode == instrumentenum.ConnectionModeFileServer {
 			fileServerConfig, err := s.instrumentRepository.GetFileServerConfigByInstrumentId(ctx, instruments[i].ID)
 			if err == nil {
 				instruments[i].FileServerConfig = &fileServerConfig
@@ -325,7 +327,7 @@ func (s *instrumentService) GetInstrumentByID(ctx context.Context, tx db.DbConne
 		return instrument, err
 	}
 
-	if instrument.ConnectionMode == FileServer {
+	if instrument.ConnectionMode == instrumentenum.ConnectionModeFileServer {
 		fileServerConfig, err := s.instrumentRepository.WithTransaction(tx).GetFileServerConfigByInstrumentId(ctx, instrument.ID)
 		if err == nil {
 			instrument.FileServerConfig = &fileServerConfig
@@ -444,7 +446,7 @@ func (s *instrumentService) GetInstrumentByIP(ctx context.Context, ip string) (I
 		return instrument, err
 	}
 
-	if instrument.ConnectionMode == FileServer {
+	if instrument.ConnectionMode == instrumentenum.ConnectionModeFileServer {
 		fileServerConfig, err := s.instrumentRepository.GetFileServerConfigByInstrumentId(ctx, instrument.ID)
 		if err == nil {
 			instrument.FileServerConfig = &fileServerConfig
@@ -553,7 +555,7 @@ func (s *instrumentService) GetInstrumentByIP(ctx context.Context, ip string) (I
 }
 
 func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Instrument, userId uuid.UUID) error {
-	tx, err := s.instrumentRepository.CreateTransaction()
+	tx, err := s.instrumentRepository.CreateTransaction(ctx)
 	if err != nil {
 		return db.ErrBeginTransactionFailed
 	}
@@ -564,7 +566,7 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 		return err
 	}
 
-	if instrument.ConnectionMode == FileServer && instrument.FileServerConfig != nil {
+	if instrument.ConnectionMode == instrumentenum.ConnectionModeFileServer && instrument.FileServerConfig != nil {
 		err = s.instrumentRepository.WithTransaction(tx).DeleteFileServerConfig(ctx, instrument.ID)
 		if err != nil {
 			_ = tx.Rollback()
@@ -578,7 +580,7 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 		}
 	}
 
-	if oldInstrument.ConnectionMode == FileServer && instrument.ConnectionMode != FileServer {
+	if oldInstrument.ConnectionMode == instrumentenum.ConnectionModeFileServer && instrument.ConnectionMode != instrumentenum.ConnectionModeFileServer {
 		err = s.instrumentRepository.WithTransaction(tx).DeleteFileServerConfig(ctx, instrument.ID)
 		if err != nil {
 			_ = tx.Rollback()
@@ -828,7 +830,7 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 			if instrument.Settings[i].ProtocolSettingID != protocolSetting.ID {
 				continue
 			}
-			if protocolSetting.Type != Password {
+			if protocolSetting.Type != instrumentenum.ProtocolSettingTypePassword {
 				break
 			}
 
@@ -907,7 +909,7 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 }
 
 func (s *instrumentService) DeleteInstrument(ctx context.Context, id uuid.UUID) error {
-	tx, err := s.instrumentRepository.CreateTransaction()
+	tx, err := s.instrumentRepository.CreateTransaction(ctx)
 	err = s.instrumentRepository.WithTransaction(tx).DeleteFileServerConfig(ctx, id)
 	if err != nil {
 		_ = tx.Rollback()
@@ -962,7 +964,7 @@ func (s *instrumentService) GetNotSpecifiedExpectedControlResultsByInstrumentId(
 }
 
 func (s *instrumentService) CreateExpectedControlResults(ctx context.Context, expectedControlResults []ExpectedControlResult, userId uuid.UUID) error {
-	tx, err := s.instrumentRepository.CreateTransaction()
+	tx, err := s.instrumentRepository.CreateTransaction(ctx)
 
 	analyteMappingIds := make([]uuid.UUID, 0)
 
@@ -997,7 +999,7 @@ func (s *instrumentService) CreateExpectedControlResults(ctx context.Context, ex
 }
 
 func (s *instrumentService) UpdateExpectedControlResults(ctx context.Context, instrumentId uuid.UUID, expectedControlResults []ExpectedControlResult, userId uuid.UUID) error {
-	tx, err := s.instrumentRepository.CreateTransaction()
+	tx, err := s.instrumentRepository.CreateTransaction(ctx)
 
 	createExpectedControlResults := make([]ExpectedControlResult, 0)
 	updateExpectedControlResults := make([]ExpectedControlResult, 0)
@@ -1089,7 +1091,7 @@ func (s *instrumentService) UpdateExpectedControlResults(ctx context.Context, in
 }
 
 func (s *instrumentService) DeleteExpectedControlResult(ctx context.Context, expectedControlResultId uuid.UUID, userId uuid.UUID) error {
-	tx, err := s.instrumentRepository.CreateTransaction()
+	tx, err := s.instrumentRepository.CreateTransaction(ctx)
 
 	err = s.instrumentRepository.WithTransaction(tx).DeleteExpectedControlResults(ctx, []uuid.UUID{expectedControlResultId}, userId)
 	if err != nil {
@@ -1154,7 +1156,7 @@ func (s *instrumentService) GetManufacturerTests(ctx context.Context) ([]Support
 }
 
 func (s *instrumentService) UpsertSupportedProtocol(ctx context.Context, id uuid.UUID, name string, description string, abilities []ProtocolAbility, settings []ProtocolSetting) error {
-	tx, err := s.instrumentRepository.CreateTransaction()
+	tx, err := s.instrumentRepository.CreateTransaction(ctx)
 	if err != nil {
 		return err
 	}
@@ -1213,7 +1215,7 @@ func (s *instrumentService) DeleteProtocolAbilities(ctx context.Context, protoco
 }
 
 func (s *instrumentService) UpsertManufacturerTests(ctx context.Context, manufacturerTests []SupportedManufacturerTests) error {
-	tx, err := s.instrumentRepository.CreateTransaction()
+	tx, err := s.instrumentRepository.CreateTransaction(ctx)
 	if err != nil {
 		return err
 	}
@@ -1233,7 +1235,7 @@ func (s *instrumentService) UpsertManufacturerTests(ctx context.Context, manufac
 	return nil
 }
 
-func (s *instrumentService) UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error {
+func (s *instrumentService) UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status instrumentenum.ConnectionStatus) error {
 	err := s.instrumentRepository.UpdateInstrumentStatus(ctx, id, status)
 	if err != nil {
 		return err

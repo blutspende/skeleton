@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/blutspende/bloodlab-common/utils"
-	"github.com/blutspende/skeleton/middleware"
 	"net/http"
 	"time"
 
+	"github.com/blutspende/bloodlab-common/instrumentenum"
+	"github.com/blutspende/bloodlab-common/utils"
+	"github.com/blutspende/skeleton/middleware"
 	"github.com/go-resty/resty/v2"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
@@ -49,7 +50,7 @@ type CerberusClient interface {
 	VerifyExpectedControlResultsHash(hash string) error
 	SyncAnalysisRequests(workItemIDs []uuid.UUID, syncType string) error
 	SendConsoleLog(consoleLogDTOs []ConsoleLogDTO)
-	SetInstrumentOnlineStatus(instrumentId uuid.UUID, status InstrumentStatus) error
+	SetInstrumentOnlineStatus(instrumentId uuid.UUID, status instrumentenum.ConnectionStatus) error
 }
 
 type cerberusClient struct {
@@ -125,13 +126,13 @@ type ImageTO struct {
 }
 
 type ReagentTO struct {
-	ID             uuid.UUID         `json:"id"`
-	Manufacturer   string            `json:"manufacturer"`
-	Name           string            `json:"name"`
-	SerialNo       string            `json:"serialNo"`
-	LotNo          string            `json:"lotNo"`
-	Type           ReagentType       `json:"type"`
-	ControlResults []ControlResultTO `json:"controlResults"`
+	ID             uuid.UUID                  `json:"id"`
+	Manufacturer   string                     `json:"manufacturer"`
+	Name           string                     `json:"name"`
+	SerialNo       string                     `json:"serialNo"`
+	LotNo          string                     `json:"lotNo"`
+	Type           instrumentenum.ReagentType `json:"type"`
+	ControlResults []ControlResultTO          `json:"controlResults"`
 }
 
 type ControlResultTO struct {
@@ -182,7 +183,7 @@ type VerifyInstrumentTO struct {
 }
 
 type instrumentStatusTO struct {
-	Status InstrumentStatus `json:"status"`
+	Status instrumentenum.ConnectionStatus `json:"status"`
 }
 
 type sampleSeenMessageTO struct {
@@ -454,7 +455,7 @@ func (c *cerberusClient) SendConsoleLog(consoleLogDTOs []ConsoleLogDTO) {
 	}
 }
 
-func (c *cerberusClient) SetInstrumentOnlineStatus(instrumentId uuid.UUID, status InstrumentStatus) error {
+func (c *cerberusClient) SetInstrumentOnlineStatus(instrumentId uuid.UUID, status instrumentenum.ConnectionStatus) error {
 	var errResponse clientError
 	resp, err := c.client.R().
 		SetHeader("Content-Type", "application/json").

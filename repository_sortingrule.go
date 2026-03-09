@@ -5,12 +5,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/blutspende/skeleton/db"
+	"strings"
+	"time"
+
+	"github.com/blutspende/bloodlab-common/db"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/rs/zerolog/log"
-	"strings"
-	"time"
 )
 
 type SortingRuleRepository interface {
@@ -24,7 +25,7 @@ type SortingRuleRepository interface {
 	Update(ctx context.Context, rule SortingRule) error
 	Delete(ctx context.Context, sortingRuleIDs []uuid.UUID) error
 
-	CreateTransaction() (db.DbConnection, error)
+	CreateTransaction(ctx context.Context) (db.DbConnection, error)
 	WithTransaction(tx db.DbConnection) SortingRuleRepository
 }
 
@@ -42,7 +43,7 @@ func (r *sortingRuleRepository) Upsert(ctx context.Context, sortingRule SortingR
 		VALUES (:id, :instrument_id, :priority, :target, :condition_id, :programme)
 		ON CONFLICT (id) DO UPDATE SET instrument_id = EXCLUDED.instrument_id, priority = EXCLUDED.priority,
 		target = EXCLUDED.target, condition_id = EXCLUDED.condition_id, programme = EXCLUDED.programme;`, r.dbSchema)
-	_, err := r.db.NamedExecContext(ctx, query, convertSortingRuleToDAO(sortingRule))
+	_, err := r.db.NamedExec(ctx, query, convertSortingRuleToDAO(sortingRule))
 	if err != nil {
 		log.Error().Err(err).Msg(msgCreateSortingRuleFailed)
 		return uuid.Nil, ErrCreateSortingRuleFailed
@@ -54,7 +55,7 @@ func (r *sortingRuleRepository) Upsert(ctx context.Context, sortingRule SortingR
 func (r *sortingRuleRepository) GetById(ctx context.Context, id uuid.UUID) (*SortingRule, error) {
 	query := fmt.Sprintf(`SELECT * FROM %s.sk_sorting_rules WHERE id = $1 AND deleted_at IS NULL;`, r.dbSchema)
 	var dao sortingRuleDAO
-	err := r.db.QueryRowxContext(ctx, query, id).StructScan(&dao)
+	err := r.db.QueryRowx(ctx, query, id).StructScan(&dao)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
@@ -71,7 +72,7 @@ func (r *sortingRuleRepository) GetByInstrumentIDs(ctx context.Context, instrume
 	query := fmt.Sprintf("SELECT * FROM %s.sk_sorting_rules WHERE deleted_at IS NULL AND instrument_id IN (?) ORDER BY priority ASC;", r.dbSchema)
 	query, args, err := sqlx.In(query, instrumentIDs)
 	query = r.db.Rebind(query)
-	rows, err := r.db.QueryxContext(ctx, query, args...)
+	rows, err := r.db.Queryx(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetSortingRuleByInstrumentIDFailed)
 		return nil, ErrGetSortingRuleByInstrumentIDFailed
@@ -97,7 +98,7 @@ func (r *sortingRuleRepository) GetByInstrumentIDs(ctx context.Context, instrume
 
 func (r *sortingRuleRepository) GetByInstrumentIDAndProgramme(ctx context.Context, instrumentID uuid.UUID, programme string) ([]SortingRule, error) {
 	query := fmt.Sprintf("SELECT * FROM %s.sk_sorting_rules WHERE deleted_at IS NULL AND instrument_id = $1 AND programme = $2 ORDER BY priority ASC;", r.dbSchema)
-	rows, err := r.db.QueryxContext(ctx, query, instrumentID, programme)
+	rows, err := r.db.Queryx(ctx, query, instrumentID, programme)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetSortingRuleByInstrumentIDFailed)
 		return nil, ErrGetSortingRuleByInstrumentIDFailed
@@ -130,7 +131,7 @@ func (r *sortingRuleRepository) ApplySortingRuleTarget(ctx context.Context, inst
 	query := fmt.Sprintf(`INSERT INTO %s.sk_applied_sorting_rule_targets (
 									instrument_id, sample_code, target, programme, valid_until) 
 									VALUES (:instrument_id, :sample_code, :target, :programme, :valid_until)`, r.dbSchema)
-	_, err := r.db.NamedExecContext(ctx, query, preparedValues)
+	_, err := r.db.NamedExec(ctx, query, preparedValues)
 	if err != nil {
 		log.Error().Err(err).Msg(msgApplySortingRuleTargetFailed)
 		return ErrApplySortingRuleTargetFailed
@@ -154,7 +155,7 @@ func (r *sortingRuleRepository) GetSampleSequenceNumber(ctx context.Context, sam
                                     WHERE sarev2.key = 'OrderID' and sar2.sample_code = $1 AND sar2.deleted_at IS NULL)
     );`, "%s", r.dbSchema)
 
-	rows, err := r.db.QueryxContext(ctx, query, sampleCode)
+	rows, err := r.db.Queryx(ctx, query, sampleCode)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetSampleSequenceNumberFailed)
 		return 0, ErrGetSampleSequenceNumberFailed
@@ -180,7 +181,7 @@ func (r *sortingRuleRepository) GetAppliedSortingRuleTargets(ctx context.Context
 				WHERE instrument_id = ? AND sample_code IN (?) AND valid_until >= timezone('utc', NOW()) AND programme = ?`, r.dbSchema)
 	query, args, _ := sqlx.In(query, instrumentID, sampleCodes, programme)
 	query = r.db.Rebind(query)
-	rows, err := r.db.QueryxContext(ctx, query, args...)
+	rows, err := r.db.Queryx(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetAppliedSortingRuleTargetsFailed)
 		return nil, ErrGetAppliedSortingRuleTargetsFailed
@@ -204,7 +205,7 @@ func (r *sortingRuleRepository) GetAppliedSortingRuleTargets(ctx context.Context
 func (r *sortingRuleRepository) Update(ctx context.Context, rule SortingRule) error {
 	query := fmt.Sprintf("UPDATE %s.sk_sorting_rules "+
 		"SET condition_id = :condition_id, target = :target, programme = :programme, priority = :priority, modified_at = timezone('utc', now()) WHERE id = :id", r.dbSchema)
-	_, err := r.db.NamedExecContext(ctx, query, convertSortingRuleToDAO(rule))
+	_, err := r.db.NamedExec(ctx, query, convertSortingRuleToDAO(rule))
 	if err != nil {
 		log.Error().Err(err).Msg(msgUpdateSortingRuleFailed)
 		return ErrUpdateSortingRuleFailed
@@ -221,7 +222,7 @@ func (r *sortingRuleRepository) Delete(ctx context.Context, sortingRuleIDs []uui
 	query := fmt.Sprintf("UPDATE %s.sk_sorting_rules SET deleted_at = timezone('utc', now()) WHERE id IN (?);", r.dbSchema)
 	query, args, _ := sqlx.In(query, sortingRuleIDs)
 	query = r.db.Rebind(query)
-	_, err := r.db.ExecContext(ctx, query, args...)
+	_, err := r.db.Exec(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgDeleteSortingRulesFailed)
 		return ErrDeleteSortingRulesFailed
@@ -230,8 +231,8 @@ func (r *sortingRuleRepository) Delete(ctx context.Context, sortingRuleIDs []uui
 	return nil
 }
 
-func (r *sortingRuleRepository) CreateTransaction() (db.DbConnection, error) {
-	return r.db.CreateTransactionConnector()
+func (r *sortingRuleRepository) CreateTransaction(ctx context.Context) (db.DbConnection, error) {
+	return r.db.BeginTx(ctx)
 }
 
 func (r *sortingRuleRepository) WithTransaction(tx db.DbConnection) SortingRuleRepository {

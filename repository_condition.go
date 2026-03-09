@@ -5,8 +5,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/blutspende/skeleton/db"
 	"time"
+
+	"github.com/blutspende/bloodlab-common/db"
 
 	"github.com/rs/zerolog/log"
 
@@ -26,7 +27,7 @@ type ConditionRepository interface {
 	UpdateCondition(ctx context.Context, condition Condition) error
 	UpdateConditionOperand(ctx context.Context, condition ConditionOperand) error
 
-	CreateTransaction() (db.DbConnection, error)
+	CreateTransaction(ctx context.Context) (db.DbConnection, error)
 	WithTransaction(db db.DbConnection) ConditionRepository
 }
 
@@ -45,7 +46,7 @@ func (r *conditionRepository) UpsertCondition(ctx context.Context, condition Con
 				ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, operator = EXCLUDED.operator, subcondition_1_id = EXCLUDED.subcondition_1_id, subcondition_2_id = EXCLUDED.subcondition_2_id,
 				negate_subcondition_1 = EXCLUDED.negate_subcondition_1, negate_subcondition_2 = EXCLUDED.negate_subcondition_2, operand_1_id = EXCLUDED.operand_1_id,
 				operand_2_id = EXCLUDED.operand_2_id, modified_at = timezone('utc', now());`, r.dbSchema)
-	_, err := r.db.NamedExecContext(ctx, query, convertConditionToDAO(condition))
+	_, err := r.db.NamedExec(ctx, query, convertConditionToDAO(condition))
 	if err != nil {
 		log.Error().Err(err).Msg(msgCreateConditionFailed)
 		return uuid.Nil, ErrCreateConditionFailed
@@ -55,7 +56,7 @@ func (r *conditionRepository) UpsertCondition(ctx context.Context, condition Con
 
 func (r *conditionRepository) GetConditionByID(ctx context.Context, id uuid.UUID) (Condition, error) {
 	query := fmt.Sprintf(`SELECT * FROM %s.sk_conditions where id = $1 AND deleted_at IS NULL;`, r.dbSchema)
-	rows, err := r.db.QueryxContext(ctx, query, id)
+	rows, err := r.db.Queryx(ctx, query, id)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetConditionFailed)
 		return Condition{}, ErrGetConditionFailed
@@ -76,7 +77,7 @@ func (r *conditionRepository) GetConditionByID(ctx context.Context, id uuid.UUID
 func (r *conditionRepository) GetNamedConditions(ctx context.Context) ([]Condition, error) {
 	query := fmt.Sprintf(`SELECT * FROM %s.sk_conditions where name IS NOT NULL AND deleted_at IS NULL ORDER BY name;`, r.dbSchema)
 	conditions := make([]Condition, 0)
-	rows, err := r.db.QueryxContext(ctx, query)
+	rows, err := r.db.Queryx(ctx, query)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetNamedConditionsFailed)
 		return nil, ErrGetNamedConditionsFailed
@@ -102,7 +103,7 @@ func (r *conditionRepository) UpdateCondition(ctx context.Context, condition Con
 				operand_1_id = :operand_1_id, operand_2_id = :operand_2_id,  
 				modified_at = timezone('utc', now()) 
 				WHERE id = :id;`, r.dbSchema)
-	_, err := r.db.NamedExecContext(ctx, query, convertConditionToDAO(condition))
+	_, err := r.db.NamedExec(ctx, query, convertConditionToDAO(condition))
 	if err != nil {
 		log.Error().Err(err).Msg(msgUpdateConditionFailed)
 		return ErrUpdateConditionFailed
@@ -112,7 +113,7 @@ func (r *conditionRepository) UpdateCondition(ctx context.Context, condition Con
 
 func (r *conditionRepository) DeleteCondition(ctx context.Context, id uuid.UUID) error {
 	query := fmt.Sprintf(`UPDATE %s.sk_conditions SET deleted_at = timezone('utc', now()) WHERE id = $1;`, r.dbSchema)
-	_, err := r.db.ExecContext(ctx, query, id)
+	_, err := r.db.Exec(ctx, query, id)
 	if err != nil {
 		log.Error().Err(err).Msg(msgDeleteConditionFailed)
 		return ErrDeleteConditionFailed
@@ -122,7 +123,7 @@ func (r *conditionRepository) DeleteCondition(ctx context.Context, id uuid.UUID)
 
 func (r *conditionRepository) IsConditionReferenced(ctx context.Context, id uuid.UUID) (bool, error) {
 	query := fmt.Sprintf(`SELECT id FROM %s.sk_conditions where subcondition_1_id = $1 OR subcondition_2_id = $1 AND deleted_at IS NULL LIMIT 1;`, r.dbSchema)
-	rows, err := r.db.QueryxContext(ctx, query, id)
+	rows, err := r.db.Queryx(ctx, query, id)
 	if err != nil {
 		log.Error().Err(err).Msg(msgIsConditionReferencedFailed)
 		return false, ErrIsConditionReferencedFailed
@@ -138,7 +139,7 @@ func (r *conditionRepository) UpsertConditionOperand(ctx context.Context, condit
 	query := fmt.Sprintf(`INSERT INTO %s.sk_condition_operands(id, name, type, constant_value, extra_value_key)
 			VALUES (:id, :name, :type, :constant_value, :extra_value_key)
 			ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, type = EXCLUDED.type, constant_value = EXCLUDED.constant_value, extra_value_key = EXCLUDED.extra_value_key, modified_at = timezone('utc', now());`, r.dbSchema)
-	_, err := r.db.NamedExecContext(ctx, query, convertConditionOperandToDAO(conditionOperand))
+	_, err := r.db.NamedExec(ctx, query, convertConditionOperandToDAO(conditionOperand))
 	if err != nil {
 		log.Error().Err(err).Msg(msgCreateConditionOperandFailed)
 		return uuid.Nil, ErrCreateConditionOperandFailed
@@ -148,7 +149,7 @@ func (r *conditionRepository) UpsertConditionOperand(ctx context.Context, condit
 
 func (r *conditionRepository) GetConditionOperandByID(ctx context.Context, id uuid.UUID) (ConditionOperand, error) {
 	query := fmt.Sprintf(`SELECT * FROM %s.sk_condition_operands where id = $1 AND deleted_at IS NULL;`, r.dbSchema)
-	rows, err := r.db.QueryxContext(ctx, query, id)
+	rows, err := r.db.Queryx(ctx, query, id)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetConditionOperandFailed)
 		return ConditionOperand{}, ErrGetConditionOperandFailed
@@ -171,7 +172,7 @@ func (r *conditionRepository) GetConditionOperandByID(ctx context.Context, id uu
 func (r *conditionRepository) UpdateConditionOperand(ctx context.Context, conditionOperand ConditionOperand) error {
 	query := fmt.Sprintf(`UPDATE %s.sk_condition_operands SET
 				name = :name, type = :type, constant_value =:constant_value, extra_value_key = :extra_value_key, modified_at = timezone('utc', now()) WHERE id = :id;`, r.dbSchema)
-	_, err := r.db.NamedExecContext(ctx, query, convertConditionOperandToDAO(conditionOperand))
+	_, err := r.db.NamedExec(ctx, query, convertConditionOperandToDAO(conditionOperand))
 	if err != nil {
 		log.Error().Err(err).Msg(msgUpdateConditionOperandFailed)
 		return ErrUpdateConditionOperandFailed
@@ -181,7 +182,7 @@ func (r *conditionRepository) UpdateConditionOperand(ctx context.Context, condit
 
 func (r *conditionRepository) DeleteConditionOperand(ctx context.Context, id uuid.UUID) error {
 	query := fmt.Sprintf(`UPDATE %s.sk_condition_operands SET deleted_at = timezone('utc', now()) WHERE id = $1;`, r.dbSchema)
-	_, err := r.db.ExecContext(ctx, query, id)
+	_, err := r.db.Exec(ctx, query, id)
 	if err != nil {
 		log.Error().Err(err).Msg(msgDeleteConditionOperandFailed)
 		return ErrDeleteConditionOperandFailed
@@ -191,7 +192,7 @@ func (r *conditionRepository) DeleteConditionOperand(ctx context.Context, id uui
 
 func (r *conditionRepository) IsConditionOperandReferenced(ctx context.Context, id uuid.UUID) (bool, error) {
 	query := fmt.Sprintf(`SELECT id FROM %s.sk_conditions where operand_1_id = $1 OR operand_2_id = $1 AND deleted_at IS NULL LIMIT 1;`, r.dbSchema)
-	rows, err := r.db.QueryxContext(ctx, query, id)
+	rows, err := r.db.Queryx(ctx, query, id)
 	if err != nil {
 		log.Error().Err(err).Msg(msgIsConditionOperandReferencedFailed)
 		return false, ErrIsConditionOperandReferencedFailed
@@ -260,8 +261,8 @@ func convertDAOToConditionOperand(dao conditionOperandDAO) ConditionOperand {
 	return conditionOperand
 }
 
-func (r *conditionRepository) CreateTransaction() (db.DbConnection, error) {
-	return r.db.CreateTransactionConnector()
+func (r *conditionRepository) CreateTransaction(ctx context.Context) (db.DbConnection, error) {
+	return r.db.BeginTx(ctx)
 }
 
 func (r *conditionRepository) WithTransaction(tx db.DbConnection) ConditionRepository {

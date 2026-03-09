@@ -9,6 +9,7 @@ import (
 )
 
 func TestContractOfTestRigWithSkeletonAPI(t *testing.T) {
+	defer Recover(t)
 
 	rig := NewTestRig()
 
@@ -19,6 +20,8 @@ func TestContractOfTestRigWithSkeletonAPI(t *testing.T) {
 
 // Feature: Can submit to Testrig and access the transmitted Results
 func TestSubmitResultCanBeQueried(t *testing.T) {
+	defer Recover(t)
+
 	rig := NewTestRig()
 
 	ar := AnalysisResult{
@@ -39,6 +42,7 @@ func TestSubmitResultCanBeQueried(t *testing.T) {
 }
 
 func TestCreateAnalysisRequest(t *testing.T) {
+	defer Recover(t)
 
 	rig := NewTestRig()
 
@@ -59,6 +63,8 @@ func TestCreateAnalysisRequest(t *testing.T) {
 }
 
 func TestAddAnalysisRequestExtraValue(t *testing.T) {
+	defer Recover(t)
+
 	rig := NewTestRig()
 	rig.AddAnalysisRequestExtraValue("DonationType", "M")
 	rig.AddAnalysisRequestExtraValue("DonorNumber", "123456")
@@ -75,6 +81,8 @@ func TestAddAnalysisRequestExtraValue(t *testing.T) {
 }
 
 func TestAddInstrument(t *testing.T) {
+	defer Recover(t)
+
 	rig := NewTestRig()
 	instrumentID1 := uuid.MustParse("ecf98614-fde8-44f1-942a-ca20672bfd6c")
 	instrumentID2 := uuid.MustParse("7470ef36-03e3-49d4-83e9-0a9704579617")

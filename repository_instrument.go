@@ -3,17 +3,16 @@ package skeleton
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/blutspende/bloodlab-common/db"
 	"github.com/blutspende/bloodlab-common/encoding"
+	"github.com/blutspende/bloodlab-common/instrumentenum"
 	"github.com/blutspende/bloodlab-common/timezone"
 	"github.com/blutspende/bloodlab-common/utils"
-
-	"errors"
-
-	"github.com/blutspende/skeleton/db"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/rs/zerolog/log"
@@ -132,54 +131,54 @@ var (
 )
 
 type instrumentDAO struct {
-	ID                 uuid.UUID         `db:"id"`
-	Type               InstrumentType    `db:"type"`
-	ProtocolID         uuid.UUID         `db:"protocol_id"`
-	Name               string            `db:"name"`
-	HostName           string            `db:"hostname"`
-	ClientPort         sql.NullInt32     `db:"client_port"`
-	Enabled            bool              `db:"enabled"`
-	ConnectionMode     string            `db:"connection_mode"`
-	RunningMode        ResultMode        `db:"running_mode"`
-	AllowResending     bool              `db:"allowresending"`
-	CaptureResults     bool              `db:"captureresults"`
-	CaptureDiagnostics bool              `db:"capturediagnostics"`
-	ReplyToQuery       bool              `db:"replytoquery"`
-	Status             string            `db:"status"`
-	TimeZone           timezone.TimeZone `db:"timezone"`
-	Encoding           encoding.Encoding `db:"file_encoding"`
-	CreatedAt          time.Time         `db:"created_at"`
-	ModifiedAt         sql.NullTime      `db:"modified_at"`
-	DeletedAt          sql.NullTime      `db:"deleted_at"`
+	ID                 uuid.UUID                 `db:"id"`
+	Type               instrumentenum.Type       `db:"type"`
+	ProtocolID         uuid.UUID                 `db:"protocol_id"`
+	Name               string                    `db:"name"`
+	HostName           string                    `db:"hostname"`
+	ClientPort         sql.NullInt32             `db:"client_port"`
+	Enabled            bool                      `db:"enabled"`
+	ConnectionMode     string                    `db:"connection_mode"`
+	RunningMode        instrumentenum.ResultMode `db:"running_mode"`
+	AllowResending     bool                      `db:"allowresending"`
+	CaptureResults     bool                      `db:"captureresults"`
+	CaptureDiagnostics bool                      `db:"capturediagnostics"`
+	ReplyToQuery       bool                      `db:"replytoquery"`
+	Status             string                    `db:"status"`
+	TimeZone           timezone.TimeZone         `db:"timezone"`
+	Encoding           encoding.Encoding         `db:"file_encoding"`
+	CreatedAt          time.Time                 `db:"created_at"`
+	ModifiedAt         sql.NullTime              `db:"modified_at"`
+	DeletedAt          sql.NullTime              `db:"deleted_at"`
 }
 
 type fileServerConfigDAO struct {
-	ID               uuid.UUID      `db:"id"`
-	InstrumentId     uuid.UUID      `db:"instrument_id"`
-	Username         string         `db:"username"`
-	Password         string         `db:"password"`
-	OrderPath        string         `db:"order_path"`
-	OrderFileMask    string         `db:"order_file_mask"`
-	OrderFileSuffix  string         `db:"order_file_suffix"`
-	ResultPath       string         `db:"result_path"`
-	ResultFileMask   string         `db:"result_file_mask"`
-	ResultFileSuffix string         `db:"result_file_suffix"`
-	ServerType       FileServerType `db:"server_type"`
-	CreatedAt        time.Time      `db:"created_at"`
-	DeletedAt        sql.NullTime   `db:"deleted_at"`
+	ID               uuid.UUID                     `db:"id"`
+	InstrumentId     uuid.UUID                     `db:"instrument_id"`
+	Username         string                        `db:"username"`
+	Password         string                        `db:"password"`
+	OrderPath        string                        `db:"order_path"`
+	OrderFileMask    string                        `db:"order_file_mask"`
+	OrderFileSuffix  string                        `db:"order_file_suffix"`
+	ResultPath       string                        `db:"result_path"`
+	ResultFileMask   string                        `db:"result_file_mask"`
+	ResultFileSuffix string                        `db:"result_file_suffix"`
+	ServerType       instrumentenum.FileServerType `db:"server_type"`
+	CreatedAt        time.Time                     `db:"created_at"`
+	DeletedAt        sql.NullTime                  `db:"deleted_at"`
 }
 
 type analyteMappingDAO struct {
-	ID                    uuid.UUID    `db:"id"`
-	InstrumentID          uuid.UUID    `db:"instrument_id"`
-	InstrumentAnalyte     string       `db:"instrument_analyte"`
-	AnalyteID             uuid.UUID    `db:"analyte_id"`
-	ResultType            ResultType   `db:"result_type"`
-	ControlResultRequired bool         `db:"control_result_required"`
-	IsControl             bool         `db:"is_control"`
-	CreatedAt             time.Time    `db:"created_at"`
-	ModifiedAt            sql.NullTime `db:"modified_at"`
-	DeletedAt             sql.NullTime `db:"deleted_at"`
+	ID                    uuid.UUID                 `db:"id"`
+	InstrumentID          uuid.UUID                 `db:"instrument_id"`
+	InstrumentAnalyte     string                    `db:"instrument_analyte"`
+	AnalyteID             uuid.UUID                 `db:"analyte_id"`
+	ResultType            instrumentenum.ResultType `db:"result_type"`
+	ControlResultRequired bool                      `db:"control_result_required"`
+	IsControl             bool                      `db:"is_control"`
+	CreatedAt             time.Time                 `db:"created_at"`
+	ModifiedAt            sql.NullTime              `db:"modified_at"`
+	DeletedAt             sql.NullTime              `db:"deleted_at"`
 	ChannelMapping        []channelMappingDAO
 	ResultMapping         []resultMappingDAO
 	ValidatedAnalyteIDs   []uuid.UUID
@@ -284,14 +283,14 @@ type protocolAbilityDAO struct {
 }
 
 type protocolSettingDAO struct {
-	ID          uuid.UUID           `db:"id"`
-	ProtocolID  uuid.UUID           `db:"protocol_id"`
-	Key         string              `db:"key"`
-	Type        ProtocolSettingType `db:"type"`
-	Description sql.NullString      `db:"description"`
-	CreatedAt   time.Time           `db:"created_at"`
-	ModifiedAt  sql.NullTime        `db:"modified_at"`
-	DeletedAt   sql.NullTime        `db:"deleted_at"`
+	ID          uuid.UUID                          `db:"id"`
+	ProtocolID  uuid.UUID                          `db:"protocol_id"`
+	Key         string                             `db:"key"`
+	Type        instrumentenum.ProtocolSettingType `db:"type"`
+	Description sql.NullString                     `db:"description"`
+	CreatedAt   time.Time                          `db:"created_at"`
+	ModifiedAt  sql.NullTime                       `db:"modified_at"`
+	DeletedAt   sql.NullTime                       `db:"deleted_at"`
 }
 
 type instrumentRepository struct {
@@ -321,7 +320,7 @@ type InstrumentRepository interface {
 	DeleteProtocolSettings(ctx context.Context, protocolSettingIDs []uuid.UUID) error
 	UpsertManufacturerTests(ctx context.Context, manufacturerTests []SupportedManufacturerTests) error
 	GetManufacturerTests(ctx context.Context) ([]SupportedManufacturerTests, error)
-	UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error
+	UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status instrumentenum.ConnectionStatus) error
 	UpsertAnalyteMappings(ctx context.Context, analyteMappings []AnalyteMapping, instrumentID uuid.UUID) ([]uuid.UUID, error)
 	GetAnalyteMappings(ctx context.Context, instrumentIDs []uuid.UUID) (map[uuid.UUID][]AnalyteMapping, error)
 	GetExpectedControlResultsForControlValidation(ctx context.Context, instrumentID uuid.UUID, analyteID uuid.UUID) ([]ExpectedControlResult, error)
@@ -358,7 +357,7 @@ type InstrumentRepository interface {
 	UpsertInstrumentSetting(ctx context.Context, instrumentID uuid.UUID, setting InstrumentSetting) error
 	DeleteInstrumentSettings(ctx context.Context, ids []uuid.UUID) error
 	CheckAnalytesUsage(ctx context.Context, analyteIDs []uuid.UUID) (map[uuid.UUID][]Instrument, error)
-	CreateTransaction() (db.DbConnection, error)
+	CreateTransaction(ctx context.Context) (db.DbConnection, error)
 	WithTransaction(tx db.DbConnection) InstrumentRepository
 }
 
@@ -370,7 +369,7 @@ func (r *instrumentRepository) CreateInstrument(ctx context.Context, instrument 
 	if err != nil {
 		return uuid.Nil, err
 	}
-	_, err = r.db.NamedExecContext(ctx, query, dao)
+	_, err = r.db.NamedExec(ctx, query, dao)
 	if err != nil {
 		log.Error().Err(err).Msg(msgCreateInstrumentFailed)
 		return uuid.Nil, ErrCreateInstrumentFailed
@@ -380,7 +379,7 @@ func (r *instrumentRepository) CreateInstrument(ctx context.Context, instrument 
 
 func (r *instrumentRepository) GetInstruments(ctx context.Context) ([]Instrument, error) {
 	query := fmt.Sprintf(`SELECT * FROM %s.sk_instruments WHERE deleted_at IS NULL ORDER BY name;`, r.dbSchema)
-	rows, err := r.db.QueryxContext(ctx, query)
+	rows, err := r.db.Queryx(ctx, query)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetInstrumentsFailed)
 		return nil, ErrGetInstrumentsFailed
@@ -406,7 +405,7 @@ func (r *instrumentRepository) GetInstruments(ctx context.Context) ([]Instrument
 
 func (r *instrumentRepository) GetInstrumentChanges(ctx context.Context, timeFrom time.Time) ([]Instrument, error) {
 	query := fmt.Sprintf(`SELECT * FROM %s.sk_instruments WHERE deleted_at >= $1 OR modified_at >= $1 ORDER BY name;`, r.dbSchema)
-	rows, err := r.db.QueryxContext(ctx, query, timeFrom)
+	rows, err := r.db.Queryx(ctx, query, timeFrom)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetInstrumentChangesFailed)
 		return nil, ErrGetInstrumentChangesFailed
@@ -434,7 +433,7 @@ func (r *instrumentRepository) GetInstrumentByID(ctx context.Context, id uuid.UU
 	query := fmt.Sprintf(`SELECT * FROM %s.sk_instruments WHERE id = $1 AND deleted_at IS NULL;`, r.dbSchema)
 	var instrument Instrument
 	var dao instrumentDAO
-	err := r.db.QueryRowxContext(ctx, query, id).StructScan(&dao)
+	err := r.db.QueryRowx(ctx, query, id).StructScan(&dao)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return instrument, ErrInstrumentNotFound
@@ -454,7 +453,7 @@ func (r *instrumentRepository) GetInstrumentByIP(ctx context.Context, ip string)
 	query := fmt.Sprintf(`SELECT * FROM %s.sk_instruments WHERE hostname = $1 AND deleted_at IS NULL;`, r.dbSchema)
 	var instrument Instrument
 	var dao instrumentDAO
-	err := r.db.QueryRowxContext(ctx, query, ip).StructScan(&dao)
+	err := r.db.QueryRowx(ctx, query, ip).StructScan(&dao)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return instrument, ErrInstrumentNotFound
@@ -480,7 +479,7 @@ func (r *instrumentRepository) UpdateInstrument(ctx context.Context, instrument 
 	if err != nil {
 		return err
 	}
-	_, err = r.db.NamedExecContext(ctx, query, dao)
+	_, err = r.db.NamedExec(ctx, query, dao)
 	if err != nil {
 		log.Error().Err(err).Msg(msgUpdateInstrumentFailed)
 		return ErrUpdateInstrumentFailed
@@ -490,7 +489,7 @@ func (r *instrumentRepository) UpdateInstrument(ctx context.Context, instrument 
 
 func (r *instrumentRepository) DeleteInstrument(ctx context.Context, id uuid.UUID) error {
 	query := fmt.Sprintf(`UPDATE %s.sk_instruments SET deleted_at = timezone('utc', now()) WHERE id = $1;`, r.dbSchema)
-	_, err := r.db.ExecContext(ctx, query, id)
+	_, err := r.db.Exec(ctx, query, id)
 	if err != nil {
 		log.Error().Err(err).Msg(msgDeleteInstrumentFailed)
 		return ErrDeleteInstrumentFailed
@@ -506,7 +505,7 @@ func (r *instrumentRepository) CreateFileServerConfig(ctx context.Context, fileS
 	fileServerConfig.ID = uuid.New()
 
 	dao := convertFileServerConfigToDao(fileServerConfig)
-	_, err := r.db.NamedExecContext(ctx, query, dao)
+	_, err := r.db.NamedExec(ctx, query, dao)
 	if err != nil {
 		log.Error().Err(err).Msg(msgCreateFileServerConfigFailed)
 		return ErrCreateFileServerConfigFailed
@@ -519,7 +518,7 @@ func (r *instrumentRepository) GetFileServerConfigByInstrumentId(ctx context.Con
 
 	var fileServerConfig FileServerConfig
 	var dao fileServerConfigDAO
-	err := r.db.QueryRowxContext(ctx, query, instrumentId).StructScan(&dao)
+	err := r.db.QueryRowx(ctx, query, instrumentId).StructScan(&dao)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			log.Warn().Interface("instrumentId", instrumentId).Msg("file config queried but not found")
@@ -535,7 +534,7 @@ func (r *instrumentRepository) GetFileServerConfigByInstrumentId(ctx context.Con
 func (r *instrumentRepository) DeleteFileServerConfig(ctx context.Context, instrumentId uuid.UUID) error {
 	query := fmt.Sprintf(`UPDATE %s.sk_instrument_file_server_config SET deleted_at = timezone('utc', now()) WHERE instrument_id = $1 AND deleted_at is NULL;`, r.dbSchema)
 
-	_, err := r.db.ExecContext(ctx, query, instrumentId)
+	_, err := r.db.Exec(ctx, query, instrumentId)
 	if err != nil {
 		log.Error().Err(err).Msg(msgDeleteFileServerConfigFailed)
 		return ErrDeleteFileServerConfigFailed
@@ -545,7 +544,7 @@ func (r *instrumentRepository) DeleteFileServerConfig(ctx context.Context, instr
 
 func (r *instrumentRepository) GetProtocolByID(ctx context.Context, id uuid.UUID) (SupportedProtocol, error) {
 	query := fmt.Sprintf(`SELECT * FROM %s.sk_supported_protocols WHERE id = $1;`, r.dbSchema)
-	row := r.db.QueryRowxContext(ctx, query, id)
+	row := r.db.QueryRowx(ctx, query, id)
 	var dao supportedProtocolDAO
 	err := row.StructScan(&dao)
 	if err != nil {
@@ -557,7 +556,7 @@ func (r *instrumentRepository) GetProtocolByID(ctx context.Context, id uuid.UUID
 
 func (r *instrumentRepository) GetSupportedProtocols(ctx context.Context) ([]SupportedProtocol, error) {
 	query := fmt.Sprintf(`SELECT * FROM %s.sk_supported_protocols ORDER BY name;`, r.dbSchema)
-	rows, err := r.db.QueryxContext(ctx, query)
+	rows, err := r.db.Queryx(ctx, query)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetInstrumentsFailed)
 		return nil, ErrGetInstrumentsFailed
@@ -583,7 +582,7 @@ func (r *instrumentRepository) GetSupportedProtocols(ctx context.Context) ([]Sup
 
 func (r *instrumentRepository) UpsertSupportedProtocol(ctx context.Context, id uuid.UUID, name string, description string) error {
 	query := fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols(id, "name", description) VALUES($1, $2, $3) ON CONFLICT (id) DO UPDATE SET name = $2, description = $3;`, r.dbSchema)
-	_, err := r.db.ExecContext(ctx, query, id, name, sql.NullString{
+	_, err := r.db.Exec(ctx, query, id, name, sql.NullString{
 		String: description,
 		Valid:  len(description) > 0,
 	})
@@ -596,7 +595,7 @@ func (r *instrumentRepository) UpsertSupportedProtocol(ctx context.Context, id u
 
 func (r *instrumentRepository) GetProtocolAbilities(ctx context.Context, protocolID uuid.UUID) ([]ProtocolAbility, error) {
 	query := fmt.Sprintf(`SELECT * FROM %s.sk_protocol_abilities WHERE protocol_id = $1 AND deleted_at IS NULL;`, r.dbSchema)
-	rows, err := r.db.QueryxContext(ctx, query, protocolID)
+	rows, err := r.db.Queryx(ctx, query, protocolID)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetInstrumentsFailed)
 		return nil, ErrGetInstrumentsFailed
@@ -626,7 +625,7 @@ func (r *instrumentRepository) UpsertProtocolAbilities(ctx context.Context, prot
 		ON CONFLICT (protocol_id, connection_mode) WHERE deleted_at IS NULL
 		DO UPDATE SET abilities = excluded.abilities, request_mapping_available = excluded.request_mapping_available, modified_at = timezone('utc', now());`, r.dbSchema)
 	protocolAbilityDAOs := convertProtocolAbilitiesToDAOs(protocolAbilities, protocolID)
-	_, err := r.db.NamedExecContext(ctx, query, protocolAbilityDAOs)
+	_, err := r.db.NamedExec(ctx, query, protocolAbilityDAOs)
 	if err != nil {
 		log.Error().Err(err).Msg(msgUpsertProtocolAbilitiesFailed)
 		return ErrUpsertProtocolAbilitiesFailed
@@ -640,13 +639,13 @@ func (r *instrumentRepository) DeleteProtocolAbilities(ctx context.Context, prot
 		return nil
 	}
 	query := fmt.Sprintf(`UPDATE %s.sk_protocol_abilities SET deleted_at = timezone('utc', now()) WHERE protocol_id = ? AND connection_mode IN (?) AND deleted_at IS NULL;`, r.dbSchema)
-	connectionModes := make([]ConnectionMode, len(protocolAbilities))
+	connectionModes := make([]instrumentenum.ConnectionMode, len(protocolAbilities))
 	for i := range protocolAbilities {
 		connectionModes[i] = protocolAbilities[i].ConnectionMode
 	}
 	query, args, _ := sqlx.In(query, protocolID, connectionModes)
 	query = r.db.Rebind(query)
-	_, err := r.db.ExecContext(ctx, query, args...)
+	_, err := r.db.Exec(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgDeleteProtocolAbilitiesFailed)
 		return ErrDeleteProtocolAbilitiesFailed
@@ -657,7 +656,7 @@ func (r *instrumentRepository) DeleteProtocolAbilities(ctx context.Context, prot
 
 func (r *instrumentRepository) GetProtocolSettings(ctx context.Context, protocolID uuid.UUID) ([]ProtocolSetting, error) {
 	query := fmt.Sprintf(`SELECT * FROM %s.sk_protocol_settings WHERE protocol_id = $1 AND deleted_at IS NULL;`, r.dbSchema)
-	rows, err := r.db.QueryxContext(ctx, query, protocolID)
+	rows, err := r.db.Queryx(ctx, query, protocolID)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetProtocolSettingsFailed)
 		return nil, ErrGetProtocolSettingsFailed
@@ -701,7 +700,7 @@ func (r *instrumentRepository) UpsertProtocolSetting(ctx context.Context, protoc
 	query := fmt.Sprintf(`INSERT INTO %s.sk_protocol_settings(id, protocol_id, "key", description, "type") VALUES(:id, :protocol_id, :key, :description, :type)
 	ON CONFLICT (id) DO UPDATE SET "key" = :key, description = :description, "type" = :type, modified_at = now();`, r.dbSchema)
 
-	_, err := r.db.NamedExecContext(ctx, query, psDao)
+	_, err := r.db.NamedExec(ctx, query, psDao)
 	if err != nil {
 		log.Error().Err(err).Msg(msgUpsertProtocolSettingsFailed)
 		return ErrUpsertProtocolSettingsFailed
@@ -716,7 +715,7 @@ func (r *instrumentRepository) DeleteProtocolSettings(ctx context.Context, proto
 	query := fmt.Sprintf(`UPDATE %s.sk_protocol_settings SET deleted_at = now() WHERE id IN (?);`, r.dbSchema)
 	query, args, _ := sqlx.In(query, protocolSettingIDs)
 	query = r.db.Rebind(query)
-	_, err := r.db.ExecContext(ctx, query, args...)
+	_, err := r.db.Exec(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgDeleteProtocolMappingFailed)
 		return ErrDeleteProtocolMappingFailed
@@ -730,7 +729,7 @@ func (r *instrumentRepository) UpsertManufacturerTests(ctx context.Context, manu
 		ON CONFLICT (test_name) WHERE deleted_at IS NULL
 		DO UPDATE SET channels = excluded.channels, valid_result_values = excluded.valid_result_values, modified_at = timezone('utc', now());`, r.dbSchema)
 	manufacturerTestsDAOs := convertSupportedManufacturerTestsToDAOs(manufacturerTests)
-	_, err := r.db.NamedExecContext(ctx, query, manufacturerTestsDAOs)
+	_, err := r.db.NamedExec(ctx, query, manufacturerTestsDAOs)
 	if err != nil {
 		log.Error().Err(err).Msg(msgUpsertManufacturerTestsFailed)
 		return ErrUpsertManufacturerTestsFailed
@@ -740,7 +739,7 @@ func (r *instrumentRepository) UpsertManufacturerTests(ctx context.Context, manu
 
 func (r *instrumentRepository) GetManufacturerTests(ctx context.Context) ([]SupportedManufacturerTests, error) {
 	query := fmt.Sprintf(`SELECT * FROM %s.sk_manufacturer_tests WHERE deleted_at IS NULL;`, r.dbSchema)
-	rows, err := r.db.QueryxContext(ctx, query)
+	rows, err := r.db.Queryx(ctx, query)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetManufacturerTestsFailed)
 		return nil, ErrGetManufacturerTestsFailed
@@ -763,9 +762,9 @@ func (r *instrumentRepository) GetManufacturerTests(ctx context.Context) ([]Supp
 	return manufacturerTests, nil
 }
 
-func (r *instrumentRepository) UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error {
+func (r *instrumentRepository) UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status instrumentenum.ConnectionStatus) error {
 	query := fmt.Sprintf(`UPDATE %s.sk_instruments SET status = $2 WHERE id = $1;`, r.dbSchema)
-	_, err := r.db.ExecContext(ctx, query, id, status)
+	_, err := r.db.Exec(ctx, query, id, status)
 	if err != nil {
 		log.Error().Err(err).Msg(msgUpdateInstrumentStatusFailed)
 		return ErrUpdateInstrumentStatusFailed
@@ -785,7 +784,7 @@ func (r *instrumentRepository) UpsertAnalyteMappings(ctx context.Context, analyt
 		VALUES(:id, :instrument_id, :instrument_analyte, :analyte_id, :result_type, :control_result_required, :is_control)
 		ON CONFLICT (id) WHERE deleted_at IS NULL DO UPDATE SET instrument_analyte = excluded.instrument_analyte, analyte_id = excluded.analyte_id,
 		    result_type = excluded.result_type, control_result_required = excluded.control_result_required, is_control = excluded.is_control, modified_at = timezone('utc', now());`, r.dbSchema)
-	_, err := r.db.NamedExecContext(ctx, query, convertAnalyteMappingsToDAOs(analyteMappings, instrumentID))
+	_, err := r.db.NamedExec(ctx, query, convertAnalyteMappingsToDAOs(analyteMappings, instrumentID))
 	if err != nil {
 		log.Error().Err(err).Msg(msgUpsertAnalyteMappingsFailed)
 		if IsErrorCode(err, UniqueViolationErrorCode) {
@@ -804,7 +803,7 @@ func (r *instrumentRepository) GetAnalyteMappings(ctx context.Context, instrumen
 	query := fmt.Sprintf(`SELECT * FROM %s.sk_analyte_mappings WHERE instrument_id IN (?) AND deleted_at IS NULL;`, r.dbSchema)
 	query, args, _ := sqlx.In(query, instrumentIDs)
 	query = r.db.Rebind(query)
-	rows, err := r.db.QueryxContext(ctx, query, args...)
+	rows, err := r.db.Queryx(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetAnalyteMappingsFailed)
 		return nil, ErrGetAnalyteMappingsFailed
@@ -835,7 +834,7 @@ func (r *instrumentRepository) GetExpectedControlResultsForControlValidation(ctx
 			INNER JOIN %schema_name%.sk_expected_control_result secr ON sam.id = secr.analyte_mapping_id
 		WHERE sva.validated_analyte_id = :analyte_id AND sam.instrument_id = :instrument_id AND sam.deleted_at IS NULL AND sva.deleted_at IS NULL;`
 	query = strings.ReplaceAll(query, "%schema_name%", r.dbSchema)
-	rows, err := r.db.NamedQueryContext(ctx, query, preparedValues)
+	rows, err := r.db.NamedQuery(ctx, query, preparedValues)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetExpectedControlResultsForControlValidation)
 		return nil, ErrGetExpectedControlResultsForControlValidation
@@ -865,7 +864,7 @@ func (r *instrumentRepository) DeleteAnalyteMappings(ctx context.Context, ids []
 		return ErrDeleteAnalyteMappingFailed
 	}
 	log.Trace().Str("query", query).Interface("arguments", args).Msg("Assembled query")
-	_, err = r.db.ExecContext(ctx, query, args...)
+	_, err = r.db.Exec(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgDeleteAnalyteMappingFailed)
 		return ErrDeleteAnalyteMappingFailed
@@ -887,7 +886,7 @@ func (r *instrumentRepository) UpsertChannelMappings(ctx context.Context, channe
 	query := fmt.Sprintf(`INSERT INTO %s.sk_channel_mappings(id, instrument_channel, channel_id, analyte_mapping_id) 
 		VALUES(:id, :instrument_channel, :channel_id, :analyte_mapping_id) ON CONFLICT (id)
 		    DO UPDATE SET instrument_channel=excluded.instrument_channel, channel_id=excluded.channel_id, analyte_mapping_id=excluded.analyte_mapping_id, modified_at = timezone('utc', now());`, r.dbSchema)
-	_, err := r.db.NamedExecContext(ctx, query, convertChannelMappingsToDAOs(channelMappings, analyteMappingID))
+	_, err := r.db.NamedExec(ctx, query, convertChannelMappingsToDAOs(channelMappings, analyteMappingID))
 	if err != nil {
 		log.Error().Err(err).Msg(msgCreateChannelMappingsFailed)
 		return ids, ErrCreateChannelMappingsFailed
@@ -903,7 +902,7 @@ func (r *instrumentRepository) GetChannelMappings(ctx context.Context, analyteMa
 	query := fmt.Sprintf(`SELECT * FROM %s.sk_channel_mappings WHERE analyte_mapping_id IN (?) AND deleted_at IS NULL;`, r.dbSchema)
 	query, args, _ := sqlx.In(query, analyteMappingIDs)
 	query = r.db.Rebind(query)
-	rows, err := r.db.QueryxContext(ctx, query, args...)
+	rows, err := r.db.Queryx(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetChannelMappingsFailed)
 		return nil, ErrGetChannelMappingsFailed
@@ -928,7 +927,7 @@ func (r *instrumentRepository) DeleteChannelMappings(ctx context.Context, ids []
 	query := fmt.Sprintf(`UPDATE %s.sk_channel_mappings SET deleted_at = timezone('utc', now()) WHERE id IN (?);`, r.dbSchema)
 	query, args, _ := sqlx.In(query, ids)
 	query = r.db.Rebind(query)
-	_, err := r.db.ExecContext(ctx, query, args...)
+	_, err := r.db.Exec(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgDeleteChannelMappingFailed)
 		return ErrDeleteChannelMappingFailed
@@ -950,7 +949,7 @@ func (r *instrumentRepository) UpsertResultMappings(ctx context.Context, resultM
 	query := fmt.Sprintf(`INSERT INTO %s.sk_result_mappings(id, analyte_mapping_id, "key", "value", "index") 
 		VALUES(:id, :analyte_mapping_id, :key, :value, :index)
 		ON CONFLICT(id) DO UPDATE SET analyte_mapping_id=excluded.analyte_mapping_id,key=excluded.key,value=excluded.value,index=excluded.index,modified_at=timezone('utc', now());`, r.dbSchema)
-	_, err := r.db.NamedExecContext(ctx, query, convertResultMappingsToDAOs(resultMappings, analyteMappingID))
+	_, err := r.db.NamedExec(ctx, query, convertResultMappingsToDAOs(resultMappings, analyteMappingID))
 	if err != nil {
 		log.Error().Err(err).Msg(msgCreateChannelMappingsFailed)
 		return ids, ErrCreateChannelMappingsFailed
@@ -966,7 +965,7 @@ func (r *instrumentRepository) GetResultMappings(ctx context.Context, analyteMap
 	query := fmt.Sprintf(`SELECT * FROM %s.sk_result_mappings WHERE analyte_mapping_id IN (?) AND deleted_at IS NULL;`, r.dbSchema)
 	query, args, _ := sqlx.In(query, analyteMappingIDs)
 	query = r.db.Rebind(query)
-	rows, err := r.db.QueryxContext(ctx, query, args...)
+	rows, err := r.db.Queryx(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetResultMappingsFailed)
 		return nil, ErrGetResultMappingsFailed
@@ -991,7 +990,7 @@ func (r *instrumentRepository) DeleteResultMappings(ctx context.Context, ids []u
 	query := fmt.Sprintf(`UPDATE %s.sk_result_mappings SET deleted_at = timezone('utc', now()) WHERE id IN (?);`, r.dbSchema)
 	query, args, _ := sqlx.In(query, ids)
 	query = r.db.Rebind(query)
-	_, err := r.db.ExecContext(ctx, query, args...)
+	_, err := r.db.Exec(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgDeleteResultMappingFailed)
 		return ErrDeleteResultMappingFailed
@@ -1013,7 +1012,7 @@ func (r *instrumentRepository) CreateExpectedControlResults(ctx context.Context,
 
 	query := fmt.Sprintf(`INSERT INTO %s.sk_expected_control_result(id, analyte_mapping_id, sample_code, operator, expected_value, expected_value2, created_at, deleted_at, created_by, deleted_by) 
 		VALUES(:id, :analyte_mapping_id, :sample_code, :operator, :expected_value, :expected_value2, timezone('utc', now()), :deleted_at, :created_by, :deleted_by);`, r.dbSchema)
-	_, err := r.db.NamedExecContext(ctx, query, convertExpectedControlResultsToDAOs(expectedControlResults))
+	_, err := r.db.NamedExec(ctx, query, convertExpectedControlResultsToDAOs(expectedControlResults))
 	if err != nil {
 		log.Error().Err(err).Msg(msgCreateExpectedControlResultsFailed)
 		if IsErrorCode(err, ForeignKeyViolationErrorCode) {
@@ -1031,7 +1030,7 @@ func (r *instrumentRepository) UpdateExpectedControlResults(ctx context.Context,
 	expectedControlResultDAOs := convertExpectedControlResultsToDAOs(expectedControlResults)
 	query := fmt.Sprintf(`UPDATE %s.sk_expected_control_result SET operator = :operator, expected_value = :expected_value, expected_value2 = :expected_value2 WHERE id = :id;`, r.dbSchema)
 	for i := range expectedControlResultDAOs {
-		_, err := r.db.NamedExecContext(ctx, query, expectedControlResultDAOs[i])
+		_, err := r.db.NamedExec(ctx, query, expectedControlResultDAOs[i])
 		if err != nil {
 			log.Error().Err(err).Msg(msgCreateExpectedControlResultsFailed)
 			if IsErrorCode(err, ForeignKeyViolationErrorCode) {
@@ -1050,7 +1049,7 @@ func (r *instrumentRepository) DeleteExpectedControlResults(ctx context.Context,
 	query := fmt.Sprintf(`UPDATE %s.sk_expected_control_result SET deleted_at = timezone('utc', now()), deleted_by = ? WHERE id IN (?);`, r.dbSchema)
 	query, args, _ := sqlx.In(query, deletedByUserId, ids)
 	query = r.db.Rebind(query)
-	_, err := r.db.ExecContext(ctx, query, args...)
+	_, err := r.db.Exec(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgDeleteExpectedControlResultFailed)
 		return ErrDeleteExpectedControlResultFailed
@@ -1065,7 +1064,7 @@ func (r *instrumentRepository) DeleteExpectedControlResultsByAnalyteMappingIDs(c
 	query := fmt.Sprintf(`UPDATE %s.sk_expected_control_result SET deleted_at = timezone('utc', now()), deleted_by = ? WHERE analyte_mapping_id IN (?);`, r.dbSchema)
 	query, args, _ := sqlx.In(query, deletedByUserId, analyteMappingIDs)
 	query = r.db.Rebind(query)
-	_, err := r.db.ExecContext(ctx, query, args...)
+	_, err := r.db.Exec(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgDeleteExpectedControlResultFailed)
 		return ErrDeleteExpectedControlResultFailed
@@ -1087,7 +1086,7 @@ func (r *instrumentRepository) GetExpectedControlResultsByInstrumentId(ctx conte
 		FROM %s.sk_expected_control_result secr
 			INNER JOIN groupping ON secr.sample_code = groupping.sample_code
 			INNER JOIN %s.sk_analyte_mappings sam ON secr.analyte_mapping_id = sam.id WHERE sam.instrument_id = $1 AND secr.deleted_at IS NULL ORDER BY groupping.minCreatedAt desc, secr.sample_code, sam.instrument_analyte;`, r.dbSchema, r.dbSchema, r.dbSchema, r.dbSchema)
-	rows, err := r.db.QueryxContext(ctx, query, instrumentId)
+	rows, err := r.db.Queryx(ctx, query, instrumentId)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetExpectedControlResultsFailed)
 		return nil, ErrGetExpectedControlResultsFailed
@@ -1116,7 +1115,7 @@ func (r *instrumentRepository) GetNotSpecifiedExpectedControlResultsByInstrument
     	LEFT JOIN %s.sk_expected_control_result secr ON sam.id = secr.analyte_mapping_id AND scr.sample_code = secr.sample_code
 	WHERE scr.instrument_id = $1 and secr.id is null
 	GROUP BY scr.sample_code, scr.analyte_mapping_id;`, r.dbSchema, r.dbSchema, r.dbSchema)
-	rows, err := r.db.QueryxContext(ctx, query, instrumentId)
+	rows, err := r.db.Queryx(ctx, query, instrumentId)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetNotSpecifiedExpectedControlResultsFailed)
 		return nil, ErrGetNotSpecifiedExpectedControlResultsFailed
@@ -1147,7 +1146,7 @@ func (r *instrumentRepository) GetExpectedControlResultsByInstrumentIdAndSampleC
          INNER JOIN %s.sk_analyte_mappings sam ON secr.analyte_mapping_id = sam.id WHERE sam.instrument_id = ? AND secr.sample_code IN (?) AND secr.deleted_at IS NULL ORDER BY secr.sample_code;`, r.dbSchema, r.dbSchema)
 	query, args, _ := sqlx.In(query, instrumentId, sampleCodes)
 	query = r.db.Rebind(query)
-	rows, err := r.db.QueryxContext(ctx, query, args...)
+	rows, err := r.db.Queryx(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetExpectedControlResultsFailed)
 		return nil, ErrGetExpectedControlResultsFailed
@@ -1173,7 +1172,7 @@ func (r *instrumentRepository) GetExpectedControlResultsByAnalyteMappingIds(ctx 
 	query := fmt.Sprintf(`SELECT secr.* FROM %s.sk_expected_control_result secr WHERE secr.analyte_mapping_id in (?) AND secr.deleted_at IS NULL;`, r.dbSchema)
 	query, args, _ := sqlx.In(query, analyteMappingIds)
 	query = r.db.Rebind(query)
-	rows, err := r.db.QueryxContext(ctx, query, args...)
+	rows, err := r.db.Queryx(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetExpectedControlResultsFailed)
 		return nil, ErrGetExpectedControlResultsFailed
@@ -1213,7 +1212,7 @@ func (r *instrumentRepository) UpsertRequestMappingAnalytes(ctx context.Context,
 	}
 	query := fmt.Sprintf(`INSERT INTO %s.sk_request_mapping_analytes(id, analyte_id, request_mapping_id) 
 		VALUES(:id, :analyte_id, :request_mapping_id) ON CONFLICT ON CONSTRAINT sk_unique_request_mapping_analytes DO NOTHING;`, r.dbSchema)
-	_, err := r.db.NamedExecContext(ctx, query, requestMappingAnalyteDAOs)
+	_, err := r.db.NamedExec(ctx, query, requestMappingAnalyteDAOs)
 	if err != nil {
 		log.Error().Err(err).Msg(msgUpsertAnalyteMappingsFailed)
 		return ErrUpsertAnalyteMappingsFailed
@@ -1232,7 +1231,7 @@ func (r *instrumentRepository) UpsertRequestMappings(ctx context.Context, reques
 	for i := range requestMappings {
 		daos[i] = convertRequestMappingToDAO(requestMappings[i], instrumentID)
 	}
-	_, err := r.db.NamedExecContext(ctx, query, daos)
+	_, err := r.db.NamedExec(ctx, query, daos)
 	if err != nil {
 		log.Error().Err(err).Msg(msgUpdateRequestMappingFailed)
 		return ErrUpdateRequestMappingFailed
@@ -1248,7 +1247,7 @@ func (r *instrumentRepository) GetRequestMappings(ctx context.Context, instrumen
 	query := fmt.Sprintf(`SELECT * FROM %s.sk_request_mappings WHERE instrument_id IN (?) AND deleted_at IS NULL;`, r.dbSchema)
 	query, args, _ := sqlx.In(query, instrumentIDs)
 	query = r.db.Rebind(query)
-	rows, err := r.db.QueryxContext(ctx, query, args...)
+	rows, err := r.db.Queryx(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetRequestMappingsFailed)
 		return nil, ErrGetRequestMappingsFailed
@@ -1270,7 +1269,7 @@ func (r *instrumentRepository) GetRequestMappingAnalytes(ctx context.Context, re
 	query := fmt.Sprintf(`SELECT request_mapping_id, analyte_id FROM %s.sk_request_mapping_analytes WHERE request_mapping_id IN (?) AND deleted_at IS NULL;`, r.dbSchema)
 	query, args, _ := sqlx.In(query, requestMappingIDs)
 	query = r.db.Rebind(query)
-	rows, err := r.db.QueryxContext(ctx, query, args...)
+	rows, err := r.db.Queryx(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetRequestMappingAnalytesFailed)
 		return nil, ErrGetRequestMappingAnalytesFailed
@@ -1293,7 +1292,7 @@ func (r *instrumentRepository) DeleteRequestMappings(ctx context.Context, reques
 	query := fmt.Sprintf(`UPDATE %s.sk_request_mappings SET deleted_at = timezone('utc', now()) WHERE id IN (?);`, r.dbSchema)
 	query, args, _ := sqlx.In(query, requestMappingIDs)
 	query = r.db.Rebind(query)
-	_, err := r.db.ExecContext(ctx, query, args...)
+	_, err := r.db.Exec(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgDeleteRequestMappingsFailed)
 		return ErrDeleteRequestMappingsFailed
@@ -1305,7 +1304,7 @@ func (r *instrumentRepository) DeleteRequestMappingAnalytes(ctx context.Context,
 	query := fmt.Sprintf(`UPDATE %s.sk_request_mapping_analytes SET deleted_at = timezone('utc', now()) WHERE request_mapping_id = ? AND analyte_id IN (?);`, r.dbSchema)
 	query, args, _ := sqlx.In(query, requestMappingID, analyteIDs)
 	query = r.db.Rebind(query)
-	_, err := r.db.ExecContext(ctx, query, args...)
+	_, err := r.db.Exec(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgDeleteRequestMappingAnalytesFailed)
 		return ErrDeleteRequestMappingAnalytesFailed
@@ -1333,7 +1332,7 @@ func (r *instrumentRepository) CreateValidatedAnalyteIDs(ctx context.Context, an
 
 	query := fmt.Sprintf(`INSERT INTO %s.sk_validated_analytes(id, analyte_mapping_id, validated_analyte_id)
 		VALUES(:id, :analyte_mapping_id, :validated_analyte_id);`, r.dbSchema)
-	_, err := r.db.NamedExecContext(ctx, query, validatedAnalyteDAOs)
+	_, err := r.db.NamedExec(ctx, query, validatedAnalyteDAOs)
 
 	if err != nil {
 		log.Error().Err(err).Msg(msgCreateValidatedAnalytesFailed)
@@ -1349,7 +1348,7 @@ func (r *instrumentRepository) GetValidatedAnalyteIDsByAnalyteMappingID(ctx cont
 	query := fmt.Sprintf(`SELECT analyte_mapping_id, validated_analyte_id FROM %s.sk_validated_analytes WHERE analyte_mapping_id IN (?) AND deleted_at IS NULL;`, r.dbSchema)
 	query, args, _ := sqlx.In(query, analyteMappingIDs)
 	query = r.db.Rebind(query)
-	rows, err := r.db.QueryxContext(ctx, query, args...)
+	rows, err := r.db.Queryx(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetValidatedAnalytesFailed)
 		return nil, ErrGetValidatedAnalytesFailed
@@ -1378,7 +1377,7 @@ func (r *instrumentRepository) DeleteValidatedAnalyteIDsByAnalyteMappingID(ctx c
 	query, args, _ := sqlx.In(query, analyteMappingID, validatedAnalyteIDs)
 	query = r.db.Rebind(query)
 
-	_, err := r.db.ExecContext(ctx, query, args...)
+	_, err := r.db.Exec(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgDeleteValidatedAnalytesFailed)
 		return ErrDeleteValidatedAnalytesFailed
@@ -1388,7 +1387,7 @@ func (r *instrumentRepository) DeleteValidatedAnalyteIDsByAnalyteMappingID(ctx c
 
 func (r *instrumentRepository) DeleteAllValidatedAnalyteIDsByInstrumentID(ctx context.Context, instrumentID uuid.UUID) error {
 	query := fmt.Sprintf(`UPDATE %s.sk_validated_analytes SET deleted_at = timezone('utc', now()) FROM %s.sk_analyte_mappings am WHERE analyte_mapping_id = am.id AND am.instrument_id = $1;`, r.dbSchema, r.dbSchema)
-	_, err := r.db.ExecContext(ctx, query, instrumentID)
+	_, err := r.db.Exec(ctx, query, instrumentID)
 	if err != nil {
 		log.Error().Err(err).Msg(msgDeleteValidatedAnalytesFailed)
 		return ErrDeleteValidatedAnalytesFailed
@@ -1398,7 +1397,7 @@ func (r *instrumentRepository) DeleteAllValidatedAnalyteIDsByInstrumentID(ctx co
 
 func (r *instrumentRepository) GetEncodings(ctx context.Context) ([]string, error) {
 	query := fmt.Sprintf(`SELECT * FROM %s.sk_encodings ORDER BY encoding;`, r.dbSchema)
-	rows, err := r.db.QueryxContext(ctx, query)
+	rows, err := r.db.Queryx(ctx, query)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetEncodingsFailed)
 		return nil, ErrGetEncodingsFailed
@@ -1421,7 +1420,7 @@ func (r *instrumentRepository) GetInstrumentsSettings(ctx context.Context, instr
 	query := fmt.Sprintf(`SELECT * FROM %s.sk_instrument_settings WHERE instrument_id IN (?) AND deleted_at IS NULL;`, r.dbSchema)
 	query, args, _ := sqlx.In(query, instrumentIDs)
 	query = r.db.Rebind(query)
-	rows, err := r.db.QueryxContext(ctx, query, args...)
+	rows, err := r.db.Queryx(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetInstrumentsSettingsFailed)
 		return nil, ErrGetInstrumentsSettingsFailed
@@ -1456,7 +1455,7 @@ func (r *instrumentRepository) UpsertInstrumentSetting(ctx context.Context, inst
 	}
 	query := fmt.Sprintf(`INSERT INTO %s.sk_instrument_settings(id, instrument_id, protocol_setting_id, "value") VALUES(:id, :instrument_id, :protocol_setting_id, :value)
 	ON CONFLICT (id) DO UPDATE SET "value" = :value, modified_at = now();`, r.dbSchema)
-	_, err := r.db.NamedExecContext(ctx, query, settingDao)
+	_, err := r.db.NamedExec(ctx, query, settingDao)
 	if err != nil {
 		log.Error().Err(err).Msg(msgUpsertInstrumentSettingsFailed)
 		return ErrUpsertInstrumentSettingsFailed
@@ -1468,7 +1467,7 @@ func (r *instrumentRepository) DeleteInstrumentSettings(ctx context.Context, ids
 	query := fmt.Sprintf(`UPDATE %s.sk_instrument_settings SET deleted_at = now() WHERE id IN (?);`, r.dbSchema)
 	query, args, _ := sqlx.In(query, ids)
 	query = r.db.Rebind(query)
-	_, err := r.db.ExecContext(ctx, query, args...)
+	_, err := r.db.Exec(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgDeleteInstrumentSettingsFailed)
 		return ErrDeleteInstrumentSettingsFailed
@@ -1481,7 +1480,7 @@ func (r *instrumentRepository) CheckAnalytesUsage(ctx context.Context, analyteID
 	  WHERE am.analyte_id IN (?) AND am.deleted_at IS NULL AND i.deleted_at IS NULL;`, r.dbSchema, r.dbSchema)
 	query, args, _ := sqlx.In(query, analyteIDs)
 	query = r.db.Rebind(query)
-	rows, err := r.db.QueryxContext(ctx, query, args...)
+	rows, err := r.db.Queryx(ctx, query, args...)
 	if err != nil {
 		log.Error().Err(err).Msg(msgCheckAnalyteUsageFailed)
 		return nil, ErrCheckAnalyteUsageFailed
@@ -1501,8 +1500,8 @@ func (r *instrumentRepository) CheckAnalytesUsage(ctx context.Context, analyteID
 	return analyteUsageMap, nil
 }
 
-func (r *instrumentRepository) CreateTransaction() (db.DbConnection, error) {
-	return r.db.CreateTransactionConnector()
+func (r *instrumentRepository) CreateTransaction(ctx context.Context) (db.DbConnection, error) {
+	return r.db.BeginTx(ctx)
 }
 
 func (r *instrumentRepository) WithTransaction(tx db.DbConnection) InstrumentRepository {
@@ -1541,19 +1540,19 @@ func convertInstrumentToDAO(instrument Instrument) (instrumentDAO, error) {
 		Encoding:           instrument.Encoding,
 	}
 	switch instrument.Type {
-	case Analyzer, Sorter:
+	case instrumentenum.TypeAnalyzer, instrumentenum.TypeSorter:
 		dao.Type = instrument.Type
 	default:
 		return dao, ErrInvalidInstrumentType
 	}
 	switch instrument.ConnectionMode {
-	case TCPClientMode, TCPServerMode, FileServer, HTTP, TCPMixed:
+	case instrumentenum.ConnectionModeTCPClient, instrumentenum.ConnectionModeTCPServer, instrumentenum.ConnectionModeFileServer, instrumentenum.ConnectionModeHTTP, instrumentenum.ConnectionModeTCPMixed:
 		dao.ConnectionMode = string(instrument.ConnectionMode)
 	default:
 		return dao, ErrInvalidConnectionMode
 	}
 	switch instrument.ResultMode {
-	case Simulation, Qualification, Production:
+	case instrumentenum.ResultModeSimulation, instrumentenum.ResultModeQualification, instrumentenum.ResultModeProduction:
 		dao.RunningMode = instrument.ResultMode
 	default:
 		return dao, ErrInvalidResultMode
@@ -1583,27 +1582,27 @@ func convertInstrumentDaoToInstrument(dao instrumentDAO) (Instrument, error) {
 		CreatedAt:          dao.CreatedAt,
 	}
 	switch dao.Type {
-	case Analyzer, Sorter:
+	case instrumentenum.TypeAnalyzer, instrumentenum.TypeSorter:
 		instrument.Type = dao.Type
 	default:
 		return instrument, ErrInvalidInstrumentType
 	}
 	switch dao.ConnectionMode {
 	case "TCP_CLIENT_ONLY":
-		instrument.ConnectionMode = TCPClientMode
+		instrument.ConnectionMode = instrumentenum.ConnectionModeTCPClient
 	case "TCP_SERVER_ONLY":
-		instrument.ConnectionMode = TCPServerMode
+		instrument.ConnectionMode = instrumentenum.ConnectionModeTCPServer
 	case "FILE_SERVER":
-		instrument.ConnectionMode = FileServer
+		instrument.ConnectionMode = instrumentenum.ConnectionModeFileServer
 	case "HTTP":
-		instrument.ConnectionMode = HTTP
+		instrument.ConnectionMode = instrumentenum.ConnectionModeHTTP
 	case "TCP_MIXED":
-		instrument.ConnectionMode = TCPMixed
+		instrument.ConnectionMode = instrumentenum.ConnectionModeTCPMixed
 	default:
 		return instrument, ErrInvalidConnectionMode
 	}
 	switch dao.RunningMode {
-	case Simulation, Qualification, Production:
+	case instrumentenum.ResultModeSimulation, instrumentenum.ResultModeQualification, instrumentenum.ResultModeProduction:
 		instrument.ResultMode = dao.RunningMode
 	default:
 		return instrument, ErrInvalidResultMode
@@ -1805,7 +1804,7 @@ func convertSupportedProtocolDAOToSupportedProtocol(dao supportedProtocolDAO) Su
 	return SupportedProtocol{
 		ID:          dao.ID,
 		Name:        dao.Name,
-		Description: utils.NullStringToStringPointer(dao.Description),
+		Description: db.NullStringToStringPointer(dao.Description),
 	}
 }
 
@@ -1852,7 +1851,7 @@ func convertDAOToSupportedManufacturerTest(dao supportedManufacturerTestsDAO) Su
 
 func convertProtocolAbilityDAOToProtocolAbility(dao protocolAbilityDAO) ProtocolAbility {
 	return ProtocolAbility{
-		ConnectionMode:          ConnectionMode(dao.ConnectionMode),
+		ConnectionMode:          instrumentenum.ConnectionMode(dao.ConnectionMode),
 		Abilities:               splitStringToEnumArray(dao.Abilities, ","),
 		RequestMappingAvailable: dao.RequestMappingAvailable,
 	}
@@ -1865,11 +1864,11 @@ func NewInstrumentRepository(db db.DbConnection, dbSchema string) InstrumentRepo
 	}
 }
 
-func splitStringToEnumArray(value string, separator string) []Ability {
+func splitStringToEnumArray(value string, separator string) []instrumentenum.Ability {
 	stringItems := strings.Split(value, separator)
-	items := make([]Ability, len(stringItems))
+	items := make([]instrumentenum.Ability, len(stringItems))
 	for i := range stringItems {
-		items[i] = Ability(stringItems[i])
+		items[i] = instrumentenum.Ability(stringItems[i])
 	}
 	return items
 }

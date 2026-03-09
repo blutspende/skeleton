@@ -5,17 +5,17 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/blutspende/bloodlab-common/encoding"
-	"github.com/blutspende/bloodlab-common/messagestatus"
-	"github.com/blutspende/bloodlab-common/messagetype"
-	"github.com/blutspende/bloodlab-common/utils"
-	"github.com/blutspende/skeleton/db"
-	"github.com/google/uuid"
-	"github.com/jmoiron/sqlx"
-	"github.com/rs/zerolog/log"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/blutspende/bloodlab-common/db"
+	"github.com/blutspende/bloodlab-common/encoding"
+	"github.com/blutspende/bloodlab-common/instrumentenum"
+	"github.com/blutspende/bloodlab-common/utils"
+	"github.com/google/uuid"
+	"github.com/jmoiron/sqlx"
+	"github.com/rs/zerolog/log"
 )
 
 type MessageOutRepository interface {
@@ -37,7 +37,7 @@ type MessageOutRepository interface {
 	RegisterSampleCodes(ctx context.Context, id uuid.UUID, sampleCodes []string) ([]uuid.UUID, error)
 
 	WithTransaction(tx db.DbConnection) MessageOutRepository
-	CreateTransaction() (db.DbConnection, error)
+	CreateTransaction(ctx context.Context) (db.DbConnection, error)
 }
 
 type messageOutRepository struct {
@@ -64,7 +64,7 @@ func (r *messageOutRepository) CreateBatch(ctx context.Context, messages []Messa
 	err := utils.Partition(len(messages), maxParams/8, func(low int, high int) error {
 		query := fmt.Sprintf(`INSERT INTO %s.sk_message_out (id, instrument_id, status, protocol_id, "type", encoding, raw, trigger_message_in_id, response_message_in_id, created_at)
 									VALUES (:id, :instrument_id, :status, :protocol_id, :type, :encoding, :raw, :trigger_message_in_id, :response_message_in_id, :created_at);`, r.dbSchema)
-		_, err := r.db.NamedExecContext(ctx, query, convertMessageOutsToDAOs(messages[low:high]))
+		_, err := r.db.NamedExec(ctx, query, convertMessageOutsToDAOs(messages[low:high]))
 		if err != nil {
 			log.Error().Err(err).Msg(msgCreateMessageOutBatchFailed)
 			return ErrCreateMessageOutBatchFailed
@@ -84,7 +84,7 @@ func (r *messageOutRepository) DeleteByIDs(ctx context.Context, ids []uuid.UUID)
 		query := fmt.Sprintf(`DELETE FROM %s.sk_message_out WHERE id IN (?);`, r.dbSchema)
 		query, args, _ := sqlx.In(query, ids[low:high])
 		query = r.db.Rebind(query)
-		_, err := r.db.ExecContext(ctx, query, args...)
+		_, err := r.db.Exec(ctx, query, args...)
 		if err != nil {
 			log.Error().Err(err).Msg(msgDeleteMessageOutsByIDsFailed)
 			return ErrDeleteMessageOutsByIDsFailed
@@ -106,9 +106,9 @@ func (r *messageOutRepository) GetFullyRevokedUnsentMessageIDsByAnalysisRequestI
 													( SELECT 1 FROM %schema_name%.sk_message_out_order_analysis_requests smoor 
 														INNER JOIN %schema_name%.sk_analysis_requests sar on sar.id = smoor.analysis_request_id
 														WHERE smoor.message_out_order_id = smoo.id AND sar.deleted_at IS NULL);`, "%schema_name%", r.dbSchema)
-		query, args, err := sqlx.In(query, messagetype.Order, messagetype.Reorder, messagestatus.Sent, analysisRequestIDs[low:high])
+		query, args, err := sqlx.In(query, instrumentenum.MessageTypeOrder, instrumentenum.MessageTypeReorder, instrumentenum.MessageStatusSent, analysisRequestIDs[low:high])
 		query = r.db.Rebind(query)
-		rows, err := r.db.QueryxContext(ctx, query, args...)
+		rows, err := r.db.Queryx(ctx, query, args...)
 		if err != nil {
 			log.Error().Err(err).Msg(msgGetFullyRevokedUnsentMessageOutIDsByAnalysisRequestIDsFailed)
 			return ErrGetFullyRevokedUnsentMessageOutIDsByAnalysisRequestIDsFailed
@@ -146,7 +146,7 @@ func (r *messageOutRepository) GetUnprocessed(ctx context.Context, limit, offset
          								AND created_at >= (current_date - make_interval(days := $4))
          								AND created_at <= $5
          								ORDER BY created_at DESC LIMIT $6 OFFSET $7;`, r.dbSchema)
-	rows, err := r.db.QueryxContext(ctx, query, messagestatus.Stored, messagestatus.Error, r.maxRetries, r.sentDaysBack, cutoffTime, limit, offset)
+	rows, err := r.db.Queryx(ctx, query, instrumentenum.MessageStatusStored, instrumentenum.MessageStatusError, r.maxRetries, r.sentDaysBack, cutoffTime, limit, offset)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetUnprocessedMessageOutsFailed)
 		return nil, ErrGetUnprocessedMessageOutsFailed
@@ -171,7 +171,7 @@ func (r *messageOutRepository) GetUnprocessedByInstrumentID(ctx context.Context,
          							WHERE instrument_id = $1 AND status IN ($2, $3) AND retry_count < $4 
          								AND created_at >= (current_date - make_interval(days := $5)) 
          								ORDER BY created_at DESC LIMIT $6 OFFSET $7;`, r.dbSchema)
-	rows, err := r.db.QueryxContext(ctx, query, instrumentID, messagestatus.Stored, messagestatus.Error, r.maxRetries, r.sentDaysBack, limit, offset)
+	rows, err := r.db.Queryx(ctx, query, instrumentID, instrumentenum.MessageStatusStored, instrumentenum.MessageStatusError, r.maxRetries, r.sentDaysBack, limit, offset)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetUnprocessedMessageOutsByInstrumentIDsFailed)
 		return nil, ErrGetUnprocessedMessageOutsByInstrumentIDsFailed
@@ -196,7 +196,7 @@ func (r *messageOutRepository) GetUnsynced(ctx context.Context, limit, offset in
 									AND created_at >= (current_date - make_interval(days := $2))
                                 	AND created_at <= $3
                                			ORDER BY created_at DESC LIMIT $4 OFFSET $5;`, r.dbSchema)
-	rows, err := r.db.QueryxContext(ctx, query, r.maxRetries, r.sentDaysBack, cutoffTime, limit, offset)
+	rows, err := r.db.Queryx(ctx, query, r.maxRetries, r.sentDaysBack, cutoffTime, limit, offset)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetUnsyncedMessageOutsFailed)
 		return nil, ErrGetUnsyncedMessageOutsFailed
@@ -223,7 +223,7 @@ func (r *messageOutRepository) DeleteMessageOutSampleCodesByIDs(ctx context.Cont
 		query := fmt.Sprintf(`DELETE FROM %s.sk_message_out_sample_codes WHERE id in (?)`, r.dbSchema)
 		query, args, _ := sqlx.In(query, ids[low:high])
 		query = r.db.Rebind(query)
-		_, err := r.db.ExecContext(ctx, query, args...)
+		_, err := r.db.Exec(ctx, query, args...)
 		if err != nil {
 			log.Error().Err(err).Msg(msgDeleteMessageOutSampleCodesByIDsFailed)
 			return ErrDeleteMessageOutSampleCodesByIDsFailed
@@ -243,7 +243,7 @@ func (r *messageOutRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([
 		query := fmt.Sprintf(`SELECT * FROM %s.sk_message_out WHERE id IN (?);`, r.dbSchema)
 		query, args, _ := sqlx.In(query, ids[low:high])
 		query = r.db.Rebind(query)
-		rows, err := r.db.QueryxContext(ctx, query, args...)
+		rows, err := r.db.Queryx(ctx, query, args...)
 		if err != nil {
 			log.Error().Err(err).Msg(msgGetMessageOutsByIDsFailed)
 			return ErrGetMessageOutsByIDsFailed
@@ -268,7 +268,7 @@ func (r *messageOutRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([
 
 func (r *messageOutRepository) GetMessageOutSampleCodeIDsToDelete(ctx context.Context, limit int) ([]uuid.UUID, error) {
 	query := fmt.Sprintf(`SELECT id FROM %s.sk_message_out_sample_codes WHERE uploaded_to_dea_at IS NOT NULL AND created_at < (current_date - make_interval(days := $1)) ORDER BY created_at ASC LIMIT $2;`, r.dbSchema)
-	rows, err := r.db.QueryxContext(ctx, query, r.sentDaysBack, limit)
+	rows, err := r.db.Queryx(ctx, query, r.sentDaysBack, limit)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetMessageOutSampleCodeIDsToDeleteFailed)
 		return nil, ErrGetMessageOutSampleCodeIDsToDeleteFailed
@@ -292,7 +292,7 @@ func (r *messageOutRepository) GetMessageOutSampleCodeIDsToDelete(ctx context.Co
 func (r *messageOutRepository) GetUnsentMessageOutSampleCodes(ctx context.Context) (map[uuid.UUID]map[uuid.UUID]string, error) {
 	sampleCodesByMessageIDsAndIDs := make(map[uuid.UUID]map[uuid.UUID]string)
 	query := fmt.Sprintf(`SELECT id, message_out_id, sample_code FROM %s.sk_message_out_sample_codes WHERE uploaded_to_dea_at IS NULL;`, r.dbSchema)
-	rows, err := r.db.QueryxContext(ctx, query)
+	rows, err := r.db.Queryx(ctx, query)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetUnsentMessageOutSampleCodesFailed)
 		return nil, ErrGetUnsentMessageOutSampleCodesFailed
@@ -321,7 +321,7 @@ func (r *messageOutRepository) MarkSampleCodesAsUploadedByIDs(ctx context.Contex
 		query := fmt.Sprintf(`UPDATE %s.sk_message_out_sample_codes SET uploaded_to_dea_at = timezone('utc', now()) WHERE id IN (?);`, r.dbSchema)
 		query, args, _ := sqlx.In(query, ids[low:high])
 		query = r.db.Rebind(query)
-		_, err := r.db.ExecContext(ctx, query, args...)
+		_, err := r.db.Exec(ctx, query, args...)
 		if err != nil {
 			log.Error().Err(err).Msg(msgMarkMessageOutSampleCodesAsUploadedByIDsFailed)
 			return ErrMarkMessageOutSampleCodesAsUploadedByIDsFailed
@@ -343,7 +343,7 @@ func (r *messageOutRepository) RegisterSampleCodes(ctx context.Context, id uuid.
 	ids := make([]uuid.UUID, 0)
 	err := utils.Partition(len(preparedValues), maxParams/2, func(low int, high int) error {
 		query := fmt.Sprintf(`INSERT INTO %s.sk_message_out_sample_codes (message_out_id, sample_code) VALUES (:message_out_id, :sample_code) ON CONFLICT (message_out_id, sample_code) DO NOTHING RETURNING id;`, r.dbSchema)
-		rows, err := r.db.NamedQueryContext(ctx, query, preparedValues[low:high])
+		rows, err := r.db.NamedQuery(ctx, query, preparedValues[low:high])
 		if err != nil {
 			log.Error().Err(err).Msg(msgRegisterSampleCodesToMessageOutFailed)
 			return ErrRegisterSampleCodesToMessageOutFailed
@@ -374,7 +374,7 @@ func (r *messageOutRepository) Update(ctx context.Context, message MessageOut) e
 		query += ", error = :error"
 	}
 	query += " WHERE id = :id;"
-	_, err := r.db.NamedExecContext(ctx, query, convertMessageOutToDAO(message))
+	_, err := r.db.NamedExec(ctx, query, convertMessageOutToDAO(message))
 	if err != nil {
 		log.Error().Err(err).Msg(msgUpdateMessageOutFailed)
 		return ErrUpdateMessageOutFailed
@@ -389,7 +389,7 @@ func (r *messageOutRepository) UpdateDEAInfo(ctx context.Context, message Messag
 		query += ", error = :error"
 	}
 	query += " WHERE id = :id;"
-	_, err := r.db.NamedExecContext(ctx, query, convertMessageOutToDAO(message))
+	_, err := r.db.NamedExec(ctx, query, convertMessageOutToDAO(message))
 	if err != nil {
 		log.Error().Err(err).Msg(msgUpdateMessageOutDEAInfoFailed)
 		return ErrUpdateMessageOutDEAInfoFailed
@@ -403,7 +403,7 @@ func (r *messageOutRepository) DeleteOldMessageOutRecords(ctx context.Context, c
                                       (SELECT id FROM %s.sk_message_out mo 
                                                  WHERE mo.dea_raw_message_id IS NOT NULL
                                                    AND mo.created_at <= current_date - ($1 ||' DAY')::INTERVAL ORDER BY mo.created_at ASC LIMIT $2);`, r.dbSchema, r.dbSchema)
-	result, err := r.db.ExecContext(ctx, query, strconv.Itoa(cleanupDays), limit)
+	result, err := r.db.Exec(ctx, query, strconv.Itoa(cleanupDays), limit)
 	if err != nil {
 		log.Error().Err(err).Msg(msgDeleteOldMessageOutRecordsFailed)
 		return 0, ErrDeleteOldMessageOutRecordsFailed
@@ -418,8 +418,8 @@ func (r *messageOutRepository) WithTransaction(tx db.DbConnection) MessageOutRep
 	return &txRepo
 }
 
-func (r *messageOutRepository) CreateTransaction() (db.DbConnection, error) {
-	return r.db.CreateTransactionConnector()
+func (r *messageOutRepository) CreateTransaction(ctx context.Context) (db.DbConnection, error) {
+	return r.db.BeginTx(ctx)
 }
 
 func NewMessageOutRepository(db db.DbConnection, dbSchema string, maxRetries, sentDaysBack int) MessageOutRepository {
@@ -432,20 +432,20 @@ func NewMessageOutRepository(db db.DbConnection, dbSchema string, maxRetries, se
 }
 
 type messageOutDAO struct {
-	ID                  uuid.UUID                   `db:"id"`
-	InstrumentID        uuid.UUID                   `db:"instrument_id"`
-	Status              messagestatus.MessageStatus `db:"status"`
-	DEARawMessageID     uuid.NullUUID               `db:"dea_raw_message_id"`
-	ProtocolID          uuid.UUID                   `db:"protocol_id"`
-	Type                messagetype.MessageType     `db:"type"`
-	Encoding            encoding.Encoding           `db:"encoding"`
-	Raw                 []byte                      `db:"raw"`
-	Error               sql.NullString              `db:"error"`
-	RetryCount          int                         `db:"retry_count"`
-	TriggerMessageInID  uuid.NullUUID               `db:"trigger_message_in_id"`
-	ResponseMessageInID uuid.NullUUID               `db:"response_message_in_id"`
-	CreatedAt           time.Time                   `db:"created_at"`
-	ModifiedAt          sql.NullTime                `db:"modified_at"`
+	ID                  uuid.UUID                    `db:"id"`
+	InstrumentID        uuid.UUID                    `db:"instrument_id"`
+	Status              instrumentenum.MessageStatus `db:"status"`
+	DEARawMessageID     uuid.NullUUID                `db:"dea_raw_message_id"`
+	ProtocolID          uuid.UUID                    `db:"protocol_id"`
+	Type                instrumentenum.MessageType   `db:"type"`
+	Encoding            encoding.Encoding            `db:"encoding"`
+	Raw                 []byte                       `db:"raw"`
+	Error               sql.NullString               `db:"error"`
+	RetryCount          int                          `db:"retry_count"`
+	TriggerMessageInID  uuid.NullUUID                `db:"trigger_message_in_id"`
+	ResponseMessageInID uuid.NullUUID                `db:"response_message_in_id"`
+	CreatedAt           time.Time                    `db:"created_at"`
+	ModifiedAt          sql.NullTime                 `db:"modified_at"`
 }
 
 func convertMessageOutsToDAOs(messages []MessageOut) []messageOutDAO {

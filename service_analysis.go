@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/blutspende/bloodlab-common/db"
+	"github.com/blutspende/bloodlab-common/instrumentenum"
 	"github.com/blutspende/bloodlab-common/utils"
-	"github.com/blutspende/skeleton/db"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 )
@@ -62,7 +63,7 @@ func (as *analysisService) CreateAnalysisRequests(ctx context.Context, analysisR
 		}
 		analysisRequests[i].CreatedAt = ts
 	}
-	tx, err := as.analysisRepository.CreateTransaction()
+	tx, err := as.analysisRepository.CreateTransaction(ctx)
 	if err != nil {
 		return err
 	}
@@ -118,7 +119,7 @@ func (as *analysisService) ProcessAnalysisRequests(ctx context.Context, analysis
 			}
 		}
 
-		tx, err := as.analysisRepository.CreateTransaction()
+		tx, err := as.analysisRepository.CreateTransaction(ctx)
 		if err != nil {
 			log.Error().Err(err).Msg("failed to create transaction")
 			return err
@@ -190,7 +191,7 @@ func (as *analysisService) ReexamineAnalysisRequestsBatch(ctx context.Context, w
 }
 
 func (as *analysisService) CreateAnalysisResultsBatch(ctx context.Context, analysisResults AnalysisResultSet) ([]AnalysisResult, error) {
-	tx, err := as.analysisRepository.CreateTransaction()
+	tx, err := as.analysisRepository.CreateTransaction(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to create transaction")
 		return nil, err
@@ -244,13 +245,13 @@ func (as *analysisService) createAnalysisResultsBatch(ctx context.Context, tx db
 			return analysisResultSet, err
 		}
 		for j, reagent := range analysisResultSet.Results[i].Reagents {
-			if reagent.Type != Standard && reagent.Type != Diluent {
+			if reagent.Type != instrumentenum.ReagentTypeStandard && reagent.Type != instrumentenum.ReagentTypeDiluent {
 				return analysisResultSet, fmt.Errorf("invalid type '%s' for reagent at index %d in analysis result at index %d", reagent.Type, j, i)
 			}
 		}
 	}
 	for i := range analysisResultSet.Reagents {
-		if analysisResultSet.Reagents[i].Type != Standard && analysisResultSet.Reagents[i].Type != Diluent {
+		if analysisResultSet.Reagents[i].Type != instrumentenum.ReagentTypeStandard && analysisResultSet.Reagents[i].Type != instrumentenum.ReagentTypeDiluent {
 			return analysisResultSet, fmt.Errorf("invalid type '%s' for reagent at index %d", analysisResultSet.Reagents[i].Type, i)
 		}
 	}
@@ -607,7 +608,7 @@ func (as *analysisService) createReagentsByAnalysisResultID(ctx context.Context,
 }
 
 func (as *analysisService) CreateControlResultBatch(ctx context.Context, controlResults []StandaloneControlResult) ([]StandaloneControlResult, []uuid.UUID, error) {
-	tx, err := as.analysisRepository.CreateTransaction()
+	tx, err := as.analysisRepository.CreateTransaction(ctx)
 	var analysisResultIds []uuid.UUID
 	if err != nil {
 		return controlResults, analysisResultIds, err
@@ -708,7 +709,7 @@ func (as *analysisService) GetAnalysisResultsByIDsWithRecalculatedStatus(ctx con
 		}
 	}
 
-	tx, err := as.analysisRepository.CreateTransaction()
+	tx, err := as.analysisRepository.CreateTransaction(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to create transaction")
 		return make([]AnalysisResult, 0), err
@@ -745,7 +746,7 @@ func (as *analysisService) ValidateAndUpdatingExistingControlResults(ctx context
 		}
 	}
 
-	tx, err := as.analysisRepository.CreateTransaction()
+	tx, err := as.analysisRepository.CreateTransaction(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to create transaction")
 		return err
@@ -796,7 +797,7 @@ func (as *analysisService) AnalysisResultStatusRecalculationAndSendForProcessing
 }
 
 func (as *analysisService) QueueAnalysisResults(ctx context.Context, results []AnalysisResult) error {
-	tx, err := as.analysisRepository.CreateTransaction()
+	tx, err := as.analysisRepository.CreateTransaction(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to create transaction")
 		return err
@@ -886,7 +887,7 @@ func (as *analysisService) ProcessStuckImagesToDEA(ctx context.Context) {
 		images := make([]*Image, len(imageDAOs))
 		for i := range imageDAOs {
 			images[i] = &Image{
-				ID: imageDAOs[i].ID,
+				ID:         imageDAOs[i].ID,
 				ImageBytes: imageDAOs[i].ImageBytes,
 				Name:       imageDAOs[i].Name,
 			}

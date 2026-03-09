@@ -5,8 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/blutspende/bloodlab-common/db"
+	"github.com/blutspende/bloodlab-common/instrumentenum"
 	"github.com/blutspende/bloodlab-common/timezone"
-	"github.com/blutspende/skeleton/db"
 	"github.com/blutspende/skeleton/utils"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
@@ -14,6 +15,8 @@ import (
 )
 
 func TestCreateAnalysisRequests(t *testing.T) {
+	defer Recover(t)
+
 	mockManager := &mockManager{}
 	analysisRequests := []AnalysisRequest{
 		{WorkItemID: uuid.MustParse("6cdc3aa0-a024-4c51-8d24-8aa12d489f41")},
@@ -28,6 +31,8 @@ func TestCreateAnalysisRequests(t *testing.T) {
 }
 
 func TestCreateAnalysisRequestDuplicates(t *testing.T) {
+	defer Recover(t)
+
 	mockManager := &mockManager{}
 	analysisRequests := []AnalysisRequest{
 		{ID: uuid.MustParse("5e095a05-ede9-4fa4-aa6d-05d8514aa3b6"), WorkItemID: uuid.MustParse("6cdc3aa0-a024-4c51-8d24-8aa12d489f41")},
@@ -50,6 +55,8 @@ func TestCreateAnalysisRequestDuplicates(t *testing.T) {
 }
 
 func TestCreateAnalysisResultStatusAndControlResultValid(t *testing.T) {
+	defer Recover(t)
+
 	analysisResult, instrumentRepositoryMock := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(true, nil)
 
 	mockManager := &mockManager{}
@@ -63,6 +70,8 @@ func TestCreateAnalysisResultStatusAndControlResultValid(t *testing.T) {
 }
 
 func TestCreateAnalysisResultStatusAndControlResultNotAllControlAvailable(t *testing.T) {
+	defer Recover(t)
+
 	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
@@ -90,6 +99,8 @@ func TestCreateAnalysisResultStatusAndControlResultNotAllControlAvailable(t *tes
 }
 
 func TestCreateAnalysisResultStatusAndControlResultIncludingCommonControlResults(t *testing.T) {
+	defer Recover(t)
+
 	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
@@ -117,6 +128,8 @@ func TestCreateAnalysisResultStatusAndControlResultIncludingCommonControlResults
 }
 
 func TestCreateAnalysisResultStatusAndControlResultNotValid(t *testing.T) {
+	defer Recover(t)
+
 	analysisResult, instrumentRepositoryMock := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(true, nil)
 	analysisResult.Reagents[0].ControlResults[0].Result = "37.5"
 
@@ -131,6 +144,8 @@ func TestCreateAnalysisResultStatusAndControlResultNotValid(t *testing.T) {
 }
 
 func TestCreateAnalysisResultStatusAndControlResultNotMatchingSampleCodes(t *testing.T) {
+	defer Recover(t)
+
 	analysisResult, instrumentRepositoryMock := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(true, nil)
 	analysisResult.Reagents[0].ControlResults[0].SampleCode = "sample2"
 	analysisResult.Reagents[0].ControlResults[0].AnalyteMapping = AnalyteMapping{}
@@ -146,6 +161,8 @@ func TestCreateAnalysisResultStatusAndControlResultNotMatchingSampleCodes(t *tes
 }
 
 func TestCreateAnalysisResultStatusAndControlResultNotRequiringExpectedControlResult(t *testing.T) {
+	defer Recover(t)
+
 	analysisResult, instrumentRepositoryMock := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(false, nil)
 	analysisResult.AnalyteMapping.ControlResultRequired = false
 
@@ -160,6 +177,8 @@ func TestCreateAnalysisResultStatusAndControlResultNotRequiringExpectedControlRe
 }
 
 func TestCreateAnalysisResultStatusAndControlResultWithoutExpectedControlResult(t *testing.T) {
+	defer Recover(t)
+
 	analysisResult, instrumentRepositoryMock := setupTestDataForAnalysisResultStatusAndControlResultValidCheck(false, nil)
 
 	mockManager := &mockManager{}
@@ -173,6 +192,8 @@ func TestCreateAnalysisResultStatusAndControlResultWithoutExpectedControlResult(
 }
 
 func TestCalculateControlResultIsValidAndExpectedControlResultIdWhereControlIsValid(t *testing.T) {
+	defer Recover(t)
+
 	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
@@ -199,6 +220,8 @@ func TestCalculateControlResultIsValidAndExpectedControlResultIdWhereControlIsVa
 }
 
 func TestCalculateControlResultIsValidAndExpectedControlResultIdWhereControlIsNotValid(t *testing.T) {
+	defer Recover(t)
+
 	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
@@ -225,6 +248,8 @@ func TestCalculateControlResultIsValidAndExpectedControlResultIdWhereControlIsNo
 }
 
 func TestCalculateControlResultIsValidAndExpectedControlResultIdWhereErrorOnValidatingResult(t *testing.T) {
+	defer Recover(t)
+
 	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
@@ -252,6 +277,8 @@ func TestCalculateControlResultIsValidAndExpectedControlResultIdWhereErrorOnVali
 }
 
 func TestCalculateControlResultIsValidAndExpectedControlResultIdWhereResultNotValidated(t *testing.T) {
+	defer Recover(t)
+
 	analyteMapping := setupAnalyteMappingForControlValidation()
 
 	controlResult := setupControlResultForValidation(analyteMapping, uuid.New())
@@ -264,6 +291,8 @@ func TestCalculateControlResultIsValidAndExpectedControlResultIdWhereResultNotVa
 }
 
 func TestCalculateControlResultIsValidAndExpectedControlResultIdWhereExpectedControlResultSampleCodeIsWildcard(t *testing.T) {
+	defer Recover(t)
+
 	// Arrange
 	expectedControlResult := ExpectedControlResult{
 		ID:            uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
@@ -284,6 +313,8 @@ func TestCalculateControlResultIsValidAndExpectedControlResultIdWhereExpectedCon
 }
 
 func TestCalculateControlResultIsValidWithOperatorEqualsValid(t *testing.T) {
+	defer Recover(t)
+
 	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
@@ -305,6 +336,8 @@ func TestCalculateControlResultIsValidWithOperatorEqualsValid(t *testing.T) {
 }
 
 func TestCalculateControlResultIsValidWithOperatorEqualsInvalid(t *testing.T) {
+	defer Recover(t)
+
 	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
@@ -326,6 +359,8 @@ func TestCalculateControlResultIsValidWithOperatorEqualsInvalid(t *testing.T) {
 }
 
 func TestCalculateControlResultIsValidWithOperatorNotEqualsValid(t *testing.T) {
+	defer Recover(t)
+
 	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
@@ -347,6 +382,8 @@ func TestCalculateControlResultIsValidWithOperatorNotEqualsValid(t *testing.T) {
 }
 
 func TestCalculateControlResultIsValidWithOperatorNotEqualsInvalid(t *testing.T) {
+	defer Recover(t)
+
 	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
@@ -368,6 +405,8 @@ func TestCalculateControlResultIsValidWithOperatorNotEqualsInvalid(t *testing.T)
 }
 
 func TestCalculateControlResultIsValidWithOperatorGreaterOrEqualValid(t *testing.T) {
+	defer Recover(t)
+
 	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
@@ -389,6 +428,8 @@ func TestCalculateControlResultIsValidWithOperatorGreaterOrEqualValid(t *testing
 }
 
 func TestCalculateControlResultIsValidWithOperatorGreaterOrEqualInvalid(t *testing.T) {
+	defer Recover(t)
+
 	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
@@ -410,6 +451,8 @@ func TestCalculateControlResultIsValidWithOperatorGreaterOrEqualInvalid(t *testi
 }
 
 func TestCalculateControlResultIsValidWithOperatorGreaterValid(t *testing.T) {
+	defer Recover(t)
+
 	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
@@ -431,6 +474,8 @@ func TestCalculateControlResultIsValidWithOperatorGreaterValid(t *testing.T) {
 }
 
 func TestCalculateControlResultIsValidWithOperatorGreaterInvalid(t *testing.T) {
+	defer Recover(t)
+
 	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
@@ -452,6 +497,8 @@ func TestCalculateControlResultIsValidWithOperatorGreaterInvalid(t *testing.T) {
 }
 
 func TestCalculateControlResultIsValidWithOperatorLessOrEqualValid(t *testing.T) {
+	defer Recover(t)
+
 	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
@@ -473,6 +520,8 @@ func TestCalculateControlResultIsValidWithOperatorLessOrEqualValid(t *testing.T)
 }
 
 func TestCalculateControlResultIsValidWithOperatorLessOrEqualInvalid(t *testing.T) {
+	defer Recover(t)
+
 	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
@@ -494,6 +543,8 @@ func TestCalculateControlResultIsValidWithOperatorLessOrEqualInvalid(t *testing.
 }
 
 func TestCalculateControlResultIsValidWithOperatorLessValid(t *testing.T) {
+	defer Recover(t)
+
 	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
@@ -515,6 +566,8 @@ func TestCalculateControlResultIsValidWithOperatorLessValid(t *testing.T) {
 }
 
 func TestCalculateControlResultIsValidWithOperatorLessInvalid(t *testing.T) {
+	defer Recover(t)
+
 	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
@@ -536,6 +589,8 @@ func TestCalculateControlResultIsValidWithOperatorLessInvalid(t *testing.T) {
 }
 
 func TestCalculateControlResultIsValidWithOperatorInOpenIntervalValid(t *testing.T) {
+	defer Recover(t)
+
 	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
@@ -557,6 +612,8 @@ func TestCalculateControlResultIsValidWithOperatorInOpenIntervalValid(t *testing
 }
 
 func TestCalculateControlResultIsValidWithOperatorInOpenIntervalInvalid(t *testing.T) {
+	defer Recover(t)
+
 	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
@@ -578,6 +635,8 @@ func TestCalculateControlResultIsValidWithOperatorInOpenIntervalInvalid(t *testi
 }
 
 func TestCalculateControlResultIsValidWithOperatorInClosedIntervalValid(t *testing.T) {
+	defer Recover(t)
+
 	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
@@ -599,6 +658,8 @@ func TestCalculateControlResultIsValidWithOperatorInClosedIntervalValid(t *testi
 }
 
 func TestCalculateControlResultIsValidWithOperatorInClosedIntervalInvalid(t *testing.T) {
+	defer Recover(t)
+
 	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
@@ -620,6 +681,8 @@ func TestCalculateControlResultIsValidWithOperatorInClosedIntervalInvalid(t *tes
 }
 
 func TestCalculateControlResultIsValidWithUnsupportedOperator(t *testing.T) {
+	defer Recover(t)
+
 	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
@@ -642,6 +705,8 @@ func TestCalculateControlResultIsValidWithUnsupportedOperator(t *testing.T) {
 }
 
 func TestCreateAnalysisResultControlRelationsWithControlAttachedToAnalysisResult(t *testing.T) {
+	defer Recover(t)
+
 	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
@@ -685,6 +750,7 @@ func TestCreateAnalysisResultControlRelationsWithControlAttachedToAnalysisResult
 }
 
 func TestCreateMultipleAnalysisResultControlRelationsWithControlAttachedToAnalysisResultSet(t *testing.T) {
+	defer Recover(t)
 
 	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
@@ -743,6 +809,8 @@ func TestCreateMultipleAnalysisResultControlRelationsWithControlAttachedToAnalys
 }
 
 func TestCreateAnalysisResultReagentControlRelations(t *testing.T) {
+	defer Recover(t)
+
 	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 	expectedControlResult := ExpectedControlResult{
 		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
@@ -784,6 +852,8 @@ func TestCreateAnalysisResultReagentControlRelations(t *testing.T) {
 }
 
 func TestCreateAnalysisResultReagentRelations(t *testing.T) {
+	defer Recover(t)
+
 	resultYieldedAt, _ := formatTimeStringToBerlinTime("20240927162727", "20060102150405")
 	validUntil, _ := formatTimeStringToBerlinTime("20240930162727", "20060102150405")
 
@@ -914,12 +984,12 @@ func TestCreateAnalysisResultReagentRelations(t *testing.T) {
 	instrument := Instrument{
 		ID:              uuid.MustParse("abb539a3-286f-4c15-a7b7-2e9adf6eab74"),
 		Name:            "TestInstrument",
-		Type:            Analyzer,
+		Type:            instrumentenum.TypeAnalyzer,
 		ProtocolID:      uuid.MustParse("abb539a3-286f-4c15-a7b7-2e9adf6eab91"),
 		ProtocolName:    "Test Protocol",
 		Enabled:         true,
-		ConnectionMode:  TCPMixed,
-		ResultMode:      Qualification,
+		ConnectionMode:  instrumentenum.ConnectionModeTCPMixed,
+		ResultMode:      instrumentenum.ResultModeQualification,
 		Status:          "ONLINE",
 		Hostname:        "192.168.1.20",
 		AnalyteMappings: analyteMappings,
@@ -930,7 +1000,7 @@ func TestCreateAnalysisResultReagentRelations(t *testing.T) {
 			Manufacturer:   "Roche",
 			SerialNumber:   "000000001",
 			LotNo:          "000000002",
-			Type:           Standard,
+			Type:           instrumentenum.ReagentTypeStandard,
 			Name:           "",
 			CreatedAt:      time.Time{},
 			ControlResults: nil,
@@ -938,7 +1008,7 @@ func TestCreateAnalysisResultReagentRelations(t *testing.T) {
 			Manufacturer:   "Roche",
 			SerialNumber:   "000000002",
 			LotNo:          "000000003",
-			Type:           Standard,
+			Type:           instrumentenum.ReagentTypeStandard,
 			Name:           "",
 			CreatedAt:      time.Time{},
 			ControlResults: nil,
@@ -946,7 +1016,7 @@ func TestCreateAnalysisResultReagentRelations(t *testing.T) {
 			Manufacturer:   "Roche",
 			SerialNumber:   "000000003",
 			LotNo:          "000000004",
-			Type:           Standard,
+			Type:           instrumentenum.ReagentTypeStandard,
 			Name:           "",
 			CreatedAt:      time.Time{},
 			ControlResults: nil,
@@ -954,7 +1024,7 @@ func TestCreateAnalysisResultReagentRelations(t *testing.T) {
 			Manufacturer:   "Roche",
 			SerialNumber:   "000000004",
 			LotNo:          "000000005",
-			Type:           Standard,
+			Type:           instrumentenum.ReagentTypeStandard,
 			Name:           "",
 			CreatedAt:      time.Time{},
 			ControlResults: nil,
@@ -962,7 +1032,7 @@ func TestCreateAnalysisResultReagentRelations(t *testing.T) {
 			Manufacturer:   "Roche",
 			SerialNumber:   "000000005",
 			LotNo:          "000000006",
-			Type:           Standard,
+			Type:           instrumentenum.ReagentTypeStandard,
 			Name:           "",
 			CreatedAt:      time.Time{},
 			ControlResults: nil,
@@ -977,7 +1047,7 @@ func TestCreateAnalysisResultReagentRelations(t *testing.T) {
 			SampleCode:               "SampleCode1",
 			MessageInID:              uuid.MustParse("92a2ba34-d891-4a1b-89fb-e0c4d717f729"),
 			Result:                   "pos",
-			ResultMode:               Qualification,
+			ResultMode:               instrumentenum.ResultModeQualification,
 			Status:                   Final,
 			ResultYieldDateTime:      &resultYieldedAt,
 			ValidUntil:               validUntil,
@@ -1001,7 +1071,7 @@ func TestCreateAnalysisResultReagentRelations(t *testing.T) {
 			SampleCode:               "SampleCode2",
 			MessageInID:              uuid.MustParse("92a2ba34-d891-4a1b-89fb-e0c4d717f729"),
 			Result:                   "pos",
-			ResultMode:               Qualification,
+			ResultMode:               instrumentenum.ResultModeQualification,
 			Status:                   Final,
 			ResultYieldDateTime:      &resultYieldedAt,
 			ValidUntil:               validUntil,
@@ -1025,7 +1095,7 @@ func TestCreateAnalysisResultReagentRelations(t *testing.T) {
 			SampleCode:               "SampleCode3",
 			MessageInID:              uuid.MustParse("92a2ba34-d891-4a1b-89fb-e0c4d717f729"),
 			Result:                   "pos",
-			ResultMode:               Qualification,
+			ResultMode:               instrumentenum.ResultModeQualification,
 			Status:                   Final,
 			ResultYieldDateTime:      &resultYieldedAt,
 			ValidUntil:               validUntil,
@@ -1049,7 +1119,7 @@ func TestCreateAnalysisResultReagentRelations(t *testing.T) {
 			SampleCode:               "SampleCode4",
 			MessageInID:              uuid.MustParse("92a2ba34-d891-4a1b-89fb-e0c4d717f729"),
 			Result:                   "pos",
-			ResultMode:               Qualification,
+			ResultMode:               instrumentenum.ResultModeQualification,
 			Status:                   Final,
 			ResultYieldDateTime:      &resultYieldedAt,
 			ValidUntil:               validUntil,
@@ -1073,7 +1143,7 @@ func TestCreateAnalysisResultReagentRelations(t *testing.T) {
 			SampleCode:               "SampleCode5",
 			MessageInID:              uuid.MustParse("92a2ba34-d891-4a1b-89fb-e0c4d717f729"),
 			Result:                   "pos",
-			ResultMode:               Qualification,
+			ResultMode:               instrumentenum.ResultModeQualification,
 			Status:                   Final,
 			ResultYieldDateTime:      &resultYieldedAt,
 			ValidUntil:               validUntil,
@@ -1118,6 +1188,8 @@ func TestCreateAnalysisResultReagentRelations(t *testing.T) {
 }
 
 func TestCreateControlResultBatchWithOnlyPreControlResults(t *testing.T) {
+	defer Recover(t)
+
 	controlResult, reagent := setupTestDataForStandaloneControlProcessing()
 	standaloneControlResults := []StandaloneControlResult{{
 		ControlResult: controlResult,
@@ -1142,6 +1214,8 @@ func TestCreateControlResultBatchWithOnlyPreControlResults(t *testing.T) {
 }
 
 func TestCreateControlResultBatchWithOnlyPostControlResults(t *testing.T) {
+	defer Recover(t)
+
 	controlResult, reagent := setupTestDataForStandaloneControlProcessing()
 
 	standaloneControlResults := []StandaloneControlResult{{
@@ -1170,6 +1244,8 @@ func TestCreateControlResultBatchWithOnlyPostControlResults(t *testing.T) {
 }
 
 func TestCreateControlResultBatch(t *testing.T) {
+	defer Recover(t)
+
 	resultYieldedAt, _ := formatTimeStringToBerlinTime("20240927162727", "20060102150405")
 	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
 
@@ -1236,7 +1312,7 @@ func TestCreateControlResultBatch(t *testing.T) {
 		SerialNumber:   "000000002",
 		LotNo:          "000000003",
 		Name:           "",
-		Type:           Standard,
+		Type:           instrumentenum.ReagentTypeStandard,
 		CreatedAt:      time.Time{},
 		ControlResults: []ControlResult{controlResult1},
 	}
@@ -1308,12 +1384,12 @@ func setupTestDataForAnalysisResultStatusAndControlResultValidCheck(addExpectedC
 	instrument := Instrument{
 		ID:              uuid.MustParse("abb539a3-286f-4c15-a7b7-2e9adf6eab74"),
 		Name:            "TestInstrument",
-		Type:            Analyzer,
+		Type:            instrumentenum.TypeAnalyzer,
 		ProtocolID:      uuid.MustParse("abb539a3-286f-4c15-a7b7-2e9adf6eab91"),
 		ProtocolName:    "Test Protocol",
 		Enabled:         true,
-		ConnectionMode:  TCPMixed,
-		ResultMode:      Qualification,
+		ConnectionMode:  instrumentenum.ConnectionModeTCPMixed,
+		ResultMode:      instrumentenum.ResultModeQualification,
 		Status:          "ONLINE",
 		Encoding:        "UTF8",
 		TimeZone:        "Europe/Budapest",
@@ -1331,7 +1407,7 @@ func setupTestDataForAnalysisResultStatusAndControlResultValidCheck(addExpectedC
 		Manufacturer:   "Roche",
 		SerialNumber:   "000000001",
 		LotNo:          "000000002",
-		Type:           Standard,
+		Type:           instrumentenum.ReagentTypeStandard,
 		Name:           "",
 		CreatedAt:      time.Time{},
 		ControlResults: []ControlResult{controlResult},
@@ -1347,7 +1423,7 @@ func setupTestDataForAnalysisResultStatusAndControlResultValidCheck(addExpectedC
 			Valid: true,
 		},
 		Result:                   "",
-		ResultMode:               Qualification,
+		ResultMode:               instrumentenum.ResultModeQualification,
 		Status:                   Final,
 		ResultYieldDateTime:      &resultYieldedAt,
 		ValidUntil:               validUntil,
@@ -1474,12 +1550,12 @@ func setupTestDataForAnalysisResultReagentAndControlRelationCheck(addExpectedCon
 	instrument := Instrument{
 		ID:              uuid.MustParse("abb539a3-286f-4c15-a7b7-2e9adf6eab74"),
 		Name:            "TestInstrument",
-		Type:            Analyzer,
+		Type:            instrumentenum.TypeAnalyzer,
 		ProtocolID:      uuid.MustParse("abb539a3-286f-4c15-a7b7-2e9adf6eab91"),
 		ProtocolName:    "Test Protocol",
 		Enabled:         true,
-		ConnectionMode:  TCPMixed,
-		ResultMode:      Qualification,
+		ConnectionMode:  instrumentenum.ConnectionModeTCPMixed,
+		ResultMode:      instrumentenum.ResultModeQualification,
 		Status:          "ONLINE",
 		Encoding:        "UTF8",
 		TimeZone:        "Europe/Budapest",
@@ -1508,7 +1584,7 @@ func setupTestDataForAnalysisResultReagentAndControlRelationCheck(addExpectedCon
 		Manufacturer:   "Roche",
 		SerialNumber:   "000000001",
 		LotNo:          "000000002",
-		Type:           Standard,
+		Type:           instrumentenum.ReagentTypeStandard,
 		Name:           "",
 		CreatedAt:      time.Time{},
 		ControlResults: nil,
@@ -1518,7 +1594,7 @@ func setupTestDataForAnalysisResultReagentAndControlRelationCheck(addExpectedCon
 		Manufacturer:   "Roche",
 		SerialNumber:   "000000002",
 		LotNo:          "000000003",
-		Type:           Standard,
+		Type:           instrumentenum.ReagentTypeStandard,
 		Name:           "",
 		CreatedAt:      time.Time{},
 		ControlResults: nil,
@@ -1532,7 +1608,7 @@ func setupTestDataForAnalysisResultReagentAndControlRelationCheck(addExpectedCon
 			SampleCode:               "SampleCode1",
 			MessageInID:              uuid.MustParse("92a2ba34-d891-4a1b-89fb-e0c4d717f729"),
 			Result:                   "",
-			ResultMode:               Qualification,
+			ResultMode:               instrumentenum.ResultModeQualification,
 			Status:                   Final,
 			ResultYieldDateTime:      &resultYieldedAt,
 			ValidUntil:               validUntil,
@@ -1623,7 +1699,7 @@ func setupTestDataForStandaloneControlProcessing() (ControlResult, Reagent) {
 		Manufacturer:   "Roche",
 		SerialNumber:   "000000001",
 		LotNo:          "000000002",
-		Type:           Standard,
+		Type:           instrumentenum.ReagentTypeStandard,
 		Name:           "",
 		CreatedAt:      time.Time{},
 		ControlResults: []ControlResult{controlResult},

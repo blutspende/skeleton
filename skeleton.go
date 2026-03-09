@@ -10,9 +10,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/blutspende/bloodlab-common/db"
+	"github.com/blutspende/bloodlab-common/instrumentenum"
 	"github.com/blutspende/bloodlab-common/utils"
 	"github.com/blutspende/skeleton/config"
-	"github.com/blutspende/skeleton/db"
 	"github.com/blutspende/skeleton/migrator"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
@@ -22,7 +23,7 @@ import (
 type skeleton struct {
 	ctx                                        context.Context
 	config                                     config.Configuration
-	dbConnector                                db.DbConnector
+	postgres                                   db.Postgres
 	dbConn                                     db.DbConnection
 	dbSchema                                   string
 	migrator                                   migrator.SkeletonMigrator
@@ -101,7 +102,7 @@ func (s *skeleton) GetAnalysisRequestExtraValues(ctx context.Context, analysisRe
 }
 
 func (s *skeleton) SaveAnalysisRequestsInstrumentTransmissions(ctx context.Context, analysisRequestIDs []uuid.UUID, instrumentID uuid.UUID) error {
-	tx, err := s.analysisRepository.CreateTransaction()
+	tx, err := s.analysisRepository.CreateTransaction(ctx)
 	if err != nil {
 		return err
 	}
@@ -170,7 +171,7 @@ func (s *skeleton) SubmitControlResults(ctx context.Context, controlResults []St
 			return fmt.Errorf("invalid instrumentID at index %d", i)
 		}
 		for j, reagent := range controlResults[i].Reagents {
-			if reagent.Type != Standard && reagent.Type != Diluent {
+			if reagent.Type != instrumentenum.ReagentTypeStandard && reagent.Type != instrumentenum.ReagentTypeDiluent {
 				return fmt.Errorf("invalid reagent type at index %d in control result at index %d", j, i)
 			}
 		}
@@ -513,7 +514,7 @@ func (s *skeleton) RegisterManufacturerTests(ctx context.Context, manufacturerTe
 	return nil
 }
 
-func (s *skeleton) SetOnlineStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error {
+func (s *skeleton) SetOnlineStatus(ctx context.Context, id uuid.UUID, status instrumentenum.ConnectionStatus) error {
 	err := s.instrumentService.UpdateInstrumentStatus(ctx, id, status)
 	if err != nil {
 		return err
@@ -662,12 +663,14 @@ func (s *skeleton) migrateUp(ctx context.Context, db *sqlx.DB, schemaName string
 func (s *skeleton) Start() error {
 	s.cutoffTime = time.Now().UTC()
 
-	err := s.dbConnector.Connect()
+	ctx := context.Background()
+
+	_, err := s.postgres.Connect(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to connect to database")
 		return err
 	}
-	sqlConn, err := s.dbConnector.GetSqlConnection()
+	sqlConn, err := s.postgres.GetSqlConnection()
 	if err != nil {
 		log.Error().Err(err).Msg("failed to get database connection")
 		return err
@@ -676,7 +679,7 @@ func (s *skeleton) Start() error {
 
 	go func() {
 		<-s.ctx.Done()
-		err = s.dbConnector.Close()
+		err = s.postgres.Close()
 		if err != nil {
 			log.Error().Err(err).Msg("failed to close database connection")
 		}
@@ -707,7 +710,7 @@ func (s *skeleton) Start() error {
 	}
 
 	// Note: Cache instruments on startup
-	_, _ = s.instrumentService.GetInstruments(context.Background())
+	_, _ = s.instrumentService.GetInstruments(ctx)
 
 	err = s.registerDriverToCerberus(s.ctx)
 	if err != nil {
@@ -1238,7 +1241,7 @@ func (s *skeleton) cleanupAnalysisRequests() {
 			log.Trace().Msg("stopping to cleanup analysis requests")
 			return
 		default:
-			tx, err := s.analysisRepository.CreateTransaction()
+			tx, err := s.analysisRepository.CreateTransaction(s.ctx)
 			if err != nil {
 				log.Error().Err(err).Msg("cleanup old analysis requests failed")
 				return
@@ -1269,7 +1272,7 @@ func (s *skeleton) cleanupAnalysisResults() {
 			log.Trace().Msg("stopping to cleanup analysis results")
 			return
 		default:
-			tx, err := s.analysisRepository.CreateTransaction()
+			tx, err := s.analysisRepository.CreateTransaction(s.ctx)
 			if err != nil {
 				log.Error().Err(err).Msg("cleanup old analysis results failed")
 				return
@@ -1701,7 +1704,7 @@ func (s *skeleton) startAnalysisRequestRevocationReexamineJob(ctx context.Contex
 }
 
 func (s *skeleton) GetDbConnection() (*sqlx.DB, error) {
-	dbConn, err := s.dbConnector.GetSqlConnection()
+	dbConn, err := s.postgres.GetSqlConnection()
 	if err != nil {
 		log.Error().Err(err).Msg("failed to get database connection")
 		return nil, err
@@ -1713,7 +1716,7 @@ func (s *skeleton) FindAnalyteMapping(instrument Instrument, isControl bool, ins
 	return FindAnalyteMapping(instrument, isControl, instrumentAnalyte)
 }
 
-func NewSkeleton(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, reagentManufacturers []string, protocols []SupportedProtocol, dbConnector db.DbConnector, dbConn db.DbConnection, dbSchema string, migrator migrator.SkeletonMigrator, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService ConsoleLogService, messageService MessageService, manager Manager, cerberusClient CerberusClient, longPollClient LongPollClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
+func NewSkeleton(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, reagentManufacturers []string, protocols []SupportedProtocol, postgres db.Postgres, dbConn db.DbConnection, dbSchema string, migrator migrator.SkeletonMigrator, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService ConsoleLogService, messageService MessageService, manager Manager, cerberusClient CerberusClient, longPollClient LongPollClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
 	skeleton := &skeleton{
 		ctx:                                    ctx,
 		serviceName:                            serviceName,
@@ -1723,7 +1726,7 @@ func NewSkeleton(ctx context.Context, serviceName, displayName string, requested
 		reagentManufacturers:                   reagentManufacturers,
 		protocols:                              protocols,
 		config:                                 config,
-		dbConnector:                            dbConnector,
+		postgres:                               postgres,
 		dbConn:                                 dbConn,
 		dbSchema:                               dbSchema,
 		migrator:                               migrator,

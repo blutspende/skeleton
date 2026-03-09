@@ -6,9 +6,9 @@ import (
 	"slices"
 	"time"
 
-	"github.com/jmoiron/sqlx"
-
+	"github.com/blutspende/bloodlab-common/instrumentenum"
 	"github.com/google/uuid"
+	"github.com/jmoiron/sqlx"
 )
 
 // A testrig that can be used for isolated Testing
@@ -141,7 +141,7 @@ func (sr *SkeletonTestRig) FindResultEntities(ctx context.Context, InstrumentID 
 	return Instrument{}, []AnalysisRequest{}, AnalyteMapping{}, nil
 }
 
-func (sr *SkeletonTestRig) SetOnlineStatus(ctx context.Context, id uuid.UUID, status InstrumentStatus) error {
+func (sr *SkeletonTestRig) SetOnlineStatus(ctx context.Context, id uuid.UUID, status instrumentenum.ConnectionStatus) error {
 	return nil
 }
 
