@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/blutspende/bloodlab-common/db"
+	"github.com/blutspende/bloodlab-common/instrumentenum"
 	"github.com/blutspende/bloodlab-common/utils"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
@@ -244,13 +245,13 @@ func (as *analysisService) createAnalysisResultsBatch(ctx context.Context, tx db
 			return analysisResultSet, err
 		}
 		for j, reagent := range analysisResultSet.Results[i].Reagents {
-			if reagent.Type != Standard && reagent.Type != Diluent {
+			if reagent.Type != instrumentenum.ReagentTypeStandard && reagent.Type != instrumentenum.ReagentTypeDiluent {
 				return analysisResultSet, fmt.Errorf("invalid type '%s' for reagent at index %d in analysis result at index %d", reagent.Type, j, i)
 			}
 		}
 	}
 	for i := range analysisResultSet.Reagents {
-		if analysisResultSet.Reagents[i].Type != Standard && analysisResultSet.Reagents[i].Type != Diluent {
+		if analysisResultSet.Reagents[i].Type != instrumentenum.ReagentTypeStandard && analysisResultSet.Reagents[i].Type != instrumentenum.ReagentTypeDiluent {
 			return analysisResultSet, fmt.Errorf("invalid type '%s' for reagent at index %d", analysisResultSet.Reagents[i].Type, i)
 		}
 	}

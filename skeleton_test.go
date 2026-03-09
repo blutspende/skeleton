@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/blutspende/bloodlab-common/db"
-	instrumentenum "github.com/blutspende/bloodlab-common/instrument"
+	"github.com/blutspende/bloodlab-common/instrumentenum"
 	"github.com/blutspende/skeleton/config"
 	"github.com/blutspende/skeleton/migrator"
 	"github.com/google/uuid"
@@ -540,7 +540,7 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 		SerialNumber:   "0001",
 		LotNo:          "0002",
 		Name:           "Reagent name",
-		Type:           Standard,
+		Type:           instrumentenum.ReagentTypeStandard,
 		CreatedAt:      time.Time{},
 		ExpirationDate: nil,
 		ControlResults: nil,
@@ -1520,7 +1520,7 @@ var analysisResultsWithoutAnalysisRequestsTest_analysisResults = []AnalysisResul
 				SerialNumber:   "serialNumber",
 				LotNo:          "lotNo",
 				Name:           "name",
-				Type:           Standard,
+				Type:           instrumentenum.ReagentTypeStandard,
 				ExpirationDate: nil,
 				ControlResults: nil,
 			},

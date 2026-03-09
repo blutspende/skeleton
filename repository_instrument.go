@@ -10,7 +10,7 @@ import (
 
 	"github.com/blutspende/bloodlab-common/db"
 	"github.com/blutspende/bloodlab-common/encoding"
-	instrumentenum "github.com/blutspende/bloodlab-common/instrument"
+	"github.com/blutspende/bloodlab-common/instrumentenum"
 	"github.com/blutspende/bloodlab-common/timezone"
 	"github.com/blutspende/bloodlab-common/utils"
 	"github.com/google/uuid"
@@ -169,16 +169,16 @@ type fileServerConfigDAO struct {
 }
 
 type analyteMappingDAO struct {
-	ID                    uuid.UUID    `db:"id"`
-	InstrumentID          uuid.UUID    `db:"instrument_id"`
-	InstrumentAnalyte     string       `db:"instrument_analyte"`
-	AnalyteID             uuid.UUID    `db:"analyte_id"`
-	ResultType            ResultType   `db:"result_type"`
-	ControlResultRequired bool         `db:"control_result_required"`
-	IsControl             bool         `db:"is_control"`
-	CreatedAt             time.Time    `db:"created_at"`
-	ModifiedAt            sql.NullTime `db:"modified_at"`
-	DeletedAt             sql.NullTime `db:"deleted_at"`
+	ID                    uuid.UUID                 `db:"id"`
+	InstrumentID          uuid.UUID                 `db:"instrument_id"`
+	InstrumentAnalyte     string                    `db:"instrument_analyte"`
+	AnalyteID             uuid.UUID                 `db:"analyte_id"`
+	ResultType            instrumentenum.ResultType `db:"result_type"`
+	ControlResultRequired bool                      `db:"control_result_required"`
+	IsControl             bool                      `db:"is_control"`
+	CreatedAt             time.Time                 `db:"created_at"`
+	ModifiedAt            sql.NullTime              `db:"modified_at"`
+	DeletedAt             sql.NullTime              `db:"deleted_at"`
 	ChannelMapping        []channelMappingDAO
 	ResultMapping         []resultMappingDAO
 	ValidatedAnalyteIDs   []uuid.UUID

@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/blutspende/bloodlab-common/db"
-	instrumentenum "github.com/blutspende/bloodlab-common/instrument"
+	"github.com/blutspende/bloodlab-common/instrumentenum"
 	"github.com/blutspende/bloodlab-common/timezone"
 	"github.com/blutspende/skeleton/utils"
 	"github.com/google/uuid"
@@ -1000,7 +1000,7 @@ func TestCreateAnalysisResultReagentRelations(t *testing.T) {
 			Manufacturer:   "Roche",
 			SerialNumber:   "000000001",
 			LotNo:          "000000002",
-			Type:           Standard,
+			Type:           instrumentenum.ReagentTypeStandard,
 			Name:           "",
 			CreatedAt:      time.Time{},
 			ControlResults: nil,
@@ -1008,7 +1008,7 @@ func TestCreateAnalysisResultReagentRelations(t *testing.T) {
 			Manufacturer:   "Roche",
 			SerialNumber:   "000000002",
 			LotNo:          "000000003",
-			Type:           Standard,
+			Type:           instrumentenum.ReagentTypeStandard,
 			Name:           "",
 			CreatedAt:      time.Time{},
 			ControlResults: nil,
@@ -1016,7 +1016,7 @@ func TestCreateAnalysisResultReagentRelations(t *testing.T) {
 			Manufacturer:   "Roche",
 			SerialNumber:   "000000003",
 			LotNo:          "000000004",
-			Type:           Standard,
+			Type:           instrumentenum.ReagentTypeStandard,
 			Name:           "",
 			CreatedAt:      time.Time{},
 			ControlResults: nil,
@@ -1024,7 +1024,7 @@ func TestCreateAnalysisResultReagentRelations(t *testing.T) {
 			Manufacturer:   "Roche",
 			SerialNumber:   "000000004",
 			LotNo:          "000000005",
-			Type:           Standard,
+			Type:           instrumentenum.ReagentTypeStandard,
 			Name:           "",
 			CreatedAt:      time.Time{},
 			ControlResults: nil,
@@ -1032,7 +1032,7 @@ func TestCreateAnalysisResultReagentRelations(t *testing.T) {
 			Manufacturer:   "Roche",
 			SerialNumber:   "000000005",
 			LotNo:          "000000006",
-			Type:           Standard,
+			Type:           instrumentenum.ReagentTypeStandard,
 			Name:           "",
 			CreatedAt:      time.Time{},
 			ControlResults: nil,
@@ -1312,7 +1312,7 @@ func TestCreateControlResultBatch(t *testing.T) {
 		SerialNumber:   "000000002",
 		LotNo:          "000000003",
 		Name:           "",
-		Type:           Standard,
+		Type:           instrumentenum.ReagentTypeStandard,
 		CreatedAt:      time.Time{},
 		ControlResults: []ControlResult{controlResult1},
 	}
@@ -1407,7 +1407,7 @@ func setupTestDataForAnalysisResultStatusAndControlResultValidCheck(addExpectedC
 		Manufacturer:   "Roche",
 		SerialNumber:   "000000001",
 		LotNo:          "000000002",
-		Type:           Standard,
+		Type:           instrumentenum.ReagentTypeStandard,
 		Name:           "",
 		CreatedAt:      time.Time{},
 		ControlResults: []ControlResult{controlResult},
@@ -1584,7 +1584,7 @@ func setupTestDataForAnalysisResultReagentAndControlRelationCheck(addExpectedCon
 		Manufacturer:   "Roche",
 		SerialNumber:   "000000001",
 		LotNo:          "000000002",
-		Type:           Standard,
+		Type:           instrumentenum.ReagentTypeStandard,
 		Name:           "",
 		CreatedAt:      time.Time{},
 		ControlResults: nil,
@@ -1594,7 +1594,7 @@ func setupTestDataForAnalysisResultReagentAndControlRelationCheck(addExpectedCon
 		Manufacturer:   "Roche",
 		SerialNumber:   "000000002",
 		LotNo:          "000000003",
-		Type:           Standard,
+		Type:           instrumentenum.ReagentTypeStandard,
 		Name:           "",
 		CreatedAt:      time.Time{},
 		ControlResults: nil,
@@ -1699,7 +1699,7 @@ func setupTestDataForStandaloneControlProcessing() (ControlResult, Reagent) {
 		Manufacturer:   "Roche",
 		SerialNumber:   "000000001",
 		LotNo:          "000000002",
-		Type:           Standard,
+		Type:           instrumentenum.ReagentTypeStandard,
 		Name:           "",
 		CreatedAt:      time.Time{},
 		ControlResults: []ControlResult{controlResult},

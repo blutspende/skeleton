@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	"github.com/blutspende/bloodlab-common/encoding"
-	instrumentenum "github.com/blutspende/bloodlab-common/instrument"
+	"github.com/blutspende/bloodlab-common/instrumentenum"
 	"github.com/blutspende/bloodlab-common/timezone"
 	"github.com/google/uuid"
 )
@@ -49,15 +49,15 @@ type fileServerConfigTO struct {
 }
 
 type analyteMappingTO struct {
-	ID                  uuid.UUID          `json:"id"`
-	InstrumentAnalyte   string             `json:"instrumentAnalyte"`
-	AnalyteID           uuid.UUID          `json:"analyteId"`
-	ChannelMappings     []channelMappingTO `json:"channelMappings"`
-	ResultMappings      []resultMappingTO  `json:"resultMappings"`
-	ResultType          ResultType         `json:"resultType"`
-	ControlRequired     bool               `json:"controlRequired"`
-	IsControl           bool               `json:"isControl"`
-	ValidatedAnalyteIDs []uuid.UUID        `json:"validatedAnalyteIDs"`
+	ID                  uuid.UUID                 `json:"id"`
+	InstrumentAnalyte   string                    `json:"instrumentAnalyte"`
+	AnalyteID           uuid.UUID                 `json:"analyteId"`
+	ChannelMappings     []channelMappingTO        `json:"channelMappings"`
+	ResultMappings      []resultMappingTO         `json:"resultMappings"`
+	ResultType          instrumentenum.ResultType `json:"resultType"`
+	ControlRequired     bool                      `json:"controlRequired"`
+	IsControl           bool                      `json:"isControl"`
+	ValidatedAnalyteIDs []uuid.UUID               `json:"validatedAnalyteIDs"`
 }
 
 type requestMappingTO struct {

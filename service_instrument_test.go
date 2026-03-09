@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/blutspende/bloodlab-common/db"
-	instrumentenum "github.com/blutspende/bloodlab-common/instrument"
+	"github.com/blutspende/bloodlab-common/instrumentenum"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 )

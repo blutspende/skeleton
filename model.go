@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/blutspende/bloodlab-common/encoding"
-	instrumentenum "github.com/blutspende/bloodlab-common/instrument"
+	"github.com/blutspende/bloodlab-common/instrumentenum"
 	"github.com/blutspende/bloodlab-common/timezone"
 	"github.com/google/uuid"
 )
@@ -69,33 +69,13 @@ const (
 	Final ResultStatus = "FIN"
 )
 
-type ResultType string // nolint
-
-const (
-	DataType_Int            ResultType = "int"
-	DataType_Decimal        ResultType = "decimal"
-	DataType_BoundedDecimal ResultType = "boundedDecimal"
-	DataType_String         ResultType = "string"
-	DataType_Pein           ResultType = "pein"
-	DataType_React          ResultType = "react"
-	DataType_InValid        ResultType = "invalid"
-	DataType_Enum           ResultType = "enum"
-)
-
-type ReagentType string
-
-const (
-	Standard ReagentType = "reagent"
-	Diluent  ReagentType = "diluent"
-)
-
 type Reagent struct {
 	ID             uuid.UUID
 	Manufacturer   string
 	SerialNumber   string
 	LotNo          string
 	Name           string
-	Type           ReagentType
+	Type           instrumentenum.ReagentType
 	CreatedAt      time.Time
 	ExpirationDate *time.Time
 	ControlResults []ControlResult
@@ -165,7 +145,7 @@ type AnalyteMapping struct {
 	AnalyteID              uuid.UUID
 	ChannelMappings        []ChannelMapping
 	ResultMappings         []ResultMapping
-	ResultType             ResultType
+	ResultType             instrumentenum.ResultType
 	ControlResultRequired  bool
 	ExpectedControlResults []ExpectedControlResult
 	IsControl              bool
@@ -425,10 +405,6 @@ type InstrumentSetting struct {
 	ProtocolSettingID uuid.UUID
 	Value             string
 }
-
-const (
-	AllowResendingAbility instrumentenum.Ability = "ALLOW_RESENDING"
-)
 
 type SortingRule struct {
 	ID           uuid.UUID

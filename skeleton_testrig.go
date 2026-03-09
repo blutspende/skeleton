@@ -6,7 +6,7 @@ import (
 	"slices"
 	"time"
 
-	instrumentenum "github.com/blutspende/bloodlab-common/instrument"
+	"github.com/blutspende/bloodlab-common/instrumentenum"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 )

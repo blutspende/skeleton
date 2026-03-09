@@ -11,7 +11,7 @@ import (
 
 	"github.com/blutspende/bloodlab-common/db"
 	"github.com/blutspende/bloodlab-common/encoding"
-	instrumentenum "github.com/blutspende/bloodlab-common/instrument"
+	"github.com/blutspende/bloodlab-common/instrumentenum"
 	"github.com/blutspende/bloodlab-common/utils"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"

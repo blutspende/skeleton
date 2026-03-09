@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/blutspende/bloodlab-common/db"
-	instrumentenum "github.com/blutspende/bloodlab-common/instrument"
+	"github.com/blutspende/bloodlab-common/instrumentenum"
 	"github.com/blutspende/bloodlab-common/utils"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
@@ -281,14 +281,14 @@ type requestExtraValueDAO struct {
 }
 
 type reagentDAO struct {
-	ID             uuid.UUID    `db:"id"`
-	Manufacturer   string       `db:"manufacturer"`
-	SerialNumber   string       `db:"serial"`
-	LotNo          string       `db:"lot_no"`
-	Name           string       `db:"name"`
-	Type           ReagentType  `db:"type"`
-	ExpirationDate sql.NullTime `db:"expiration_date"`
-	CreatedAt      time.Time    `db:"created_at"`
+	ID             uuid.UUID                  `db:"id"`
+	Manufacturer   string                     `db:"manufacturer"`
+	SerialNumber   string                     `db:"serial"`
+	LotNo          string                     `db:"lot_no"`
+	Name           string                     `db:"name"`
+	Type           instrumentenum.ReagentType `db:"type"`
+	ExpirationDate sql.NullTime               `db:"expiration_date"`
+	CreatedAt      time.Time                  `db:"created_at"`
 }
 
 type controlResultDAO struct {

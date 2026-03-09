@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	instrumentenum "github.com/blutspende/bloodlab-common/instrument"
+	"github.com/blutspende/bloodlab-common/instrumentenum"
 	"github.com/blutspende/bloodlab-common/utils"
 	"github.com/blutspende/skeleton/middleware"
 	"github.com/go-resty/resty/v2"
@@ -126,13 +126,13 @@ type ImageTO struct {
 }
 
 type ReagentTO struct {
-	ID             uuid.UUID         `json:"id"`
-	Manufacturer   string            `json:"manufacturer"`
-	Name           string            `json:"name"`
-	SerialNo       string            `json:"serialNo"`
-	LotNo          string            `json:"lotNo"`
-	Type           ReagentType       `json:"type"`
-	ControlResults []ControlResultTO `json:"controlResults"`
+	ID             uuid.UUID                  `json:"id"`
+	Manufacturer   string                     `json:"manufacturer"`
+	Name           string                     `json:"name"`
+	SerialNo       string                     `json:"serialNo"`
+	LotNo          string                     `json:"lotNo"`
+	Type           instrumentenum.ReagentType `json:"type"`
+	ControlResults []ControlResultTO          `json:"controlResults"`
 }
 
 type ControlResultTO struct {

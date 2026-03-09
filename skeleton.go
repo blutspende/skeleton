@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/blutspende/bloodlab-common/db"
-	instrumentenum "github.com/blutspende/bloodlab-common/instrument"
+	"github.com/blutspende/bloodlab-common/instrumentenum"
 	"github.com/blutspende/bloodlab-common/utils"
 	"github.com/blutspende/skeleton/config"
 	"github.com/blutspende/skeleton/migrator"
@@ -171,7 +171,7 @@ func (s *skeleton) SubmitControlResults(ctx context.Context, controlResults []St
 			return fmt.Errorf("invalid instrumentID at index %d", i)
 		}
 		for j, reagent := range controlResults[i].Reagents {
-			if reagent.Type != Standard && reagent.Type != Diluent {
+			if reagent.Type != instrumentenum.ReagentTypeStandard && reagent.Type != instrumentenum.ReagentTypeDiluent {
 				return fmt.Errorf("invalid reagent type at index %d in control result at index %d", j, i)
 			}
 		}
