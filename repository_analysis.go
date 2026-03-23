@@ -2329,7 +2329,7 @@ func (r *analysisRepository) DeleteOldCerberusQueueItems(ctx context.Context, cl
 func (r *analysisRepository) DeleteOldAnalysisRequestsWithTx(ctx context.Context, cleanupDays, limit int, tx db.DbConnection) (int64, error) {
 	txR := *r
 	txR.db = tx
-	query := fmt.Sprintf(`SELECT id, sample_code FROM %s.sk_analysis_requests WHERE valid_until_time < (current_date - make_interval(days := $1)) AND (is_processed OR deleted_at IS NOT NULL) LIMIT $2;`, r.dbSchema)
+	query := fmt.Sprintf(`SELECT id, sample_code FROM %s.sk_analysis_requests WHERE created_at < (current_date - make_interval(days := $1)) AND (is_processed OR deleted_at IS NOT NULL) LIMIT $2;`, r.dbSchema)
 	rows, err := txR.db.Queryx(ctx, query, cleanupDays, limit)
 	if err != nil {
 		log.Error().Err(err).Msg(msgDeleteOldAnalysisRequestsFailed)
