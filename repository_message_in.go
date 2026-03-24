@@ -32,19 +32,21 @@ type MessageInRepository interface {
 	DeleteMessageInSampleCodesByIDs(ctx context.Context, ids []uuid.UUID) error
 	GetMessageInIDsBySampleCode(ctx context.Context, sampleCode string) ([]uuid.UUID, error)
 	GetMessageInSampleCodeIDsToDelete(ctx context.Context, limit int) ([]uuid.UUID, error)
-	GetUnsentMessageInSampleCodes(ctx context.Context) (map[uuid.UUID]map[uuid.UUID]string, error)
+	GetUnsentMessageInSampleCodes(ctx context.Context) (map[uuid.UUID][]MessageSampleCode, error)
 	MarkSampleCodesAsUploadedByIDs(ctx context.Context, ids []uuid.UUID) error
-	RegisterSampleCodes(ctx context.Context, id uuid.UUID, sampleCodes []string) ([]uuid.UUID, error)
+	IncrementRetryCounterByIDs(ctx context.Context, ids []uuid.UUID) error
+	RegisterSampleCodes(ctx context.Context, id uuid.UUID, sampleCodes []string) ([]MessageSampleCode, error)
 
 	WithTransaction(tx db.DbConnection) MessageInRepository
 	CreateTransaction(ctx context.Context) (db.DbConnection, error)
 }
 
 type messageInRepository struct {
-	db           db.DbConnection
-	dbSchema     string
-	maxRetries   int
-	sentDaysBack int
+	db                          db.DbConnection
+	dbSchema                    string
+	maxRetries                  int
+	sentDaysBack                int
+	messageSampleCodeMaxRetries int
 }
 
 func (r *messageInRepository) Create(ctx context.Context, message MessageIn) (uuid.UUID, error) {
@@ -298,10 +300,10 @@ func (r *messageInRepository) GetMessageInSampleCodeIDsToDelete(ctx context.Cont
 	return ids, nil
 }
 
-func (r *messageInRepository) GetUnsentMessageInSampleCodes(ctx context.Context) (map[uuid.UUID]map[uuid.UUID]string, error) {
-	sampleCodesByMessageIDsAndIDs := make(map[uuid.UUID]map[uuid.UUID]string)
-	query := fmt.Sprintf(`SELECT id, message_in_id, sample_code FROM %s.sk_message_in_sample_codes WHERE uploaded_to_dea_at IS NULL;`, r.dbSchema)
-	rows, err := r.db.Queryx(ctx, query)
+func (r *messageInRepository) GetUnsentMessageInSampleCodes(ctx context.Context) (map[uuid.UUID][]MessageSampleCode, error) {
+	sampleCodesByMessageIDsAndIDs := make(map[uuid.UUID][]MessageSampleCode)
+	query := fmt.Sprintf(`SELECT id, message_in_id, sample_code, retry_count FROM %s.sk_message_in_sample_codes WHERE uploaded_to_dea_at IS NULL and retry_count < $1;`, r.dbSchema)
+	rows, err := r.db.Queryx(ctx, query, r.messageSampleCodeMaxRetries)
 	if err != nil {
 		log.Error().Err(err).Msg(msgGetUnsentMessageInSampleCodeIDsFailed)
 		return nil, ErrGetUnsentMessageInSampleCodeIDsFailed
@@ -311,15 +313,17 @@ func (r *messageInRepository) GetUnsentMessageInSampleCodes(ctx context.Context)
 	for rows.Next() {
 		var id, messageID uuid.UUID
 		var sampleCode string
-		err = rows.Scan(&id, &messageID, &sampleCode)
+		var retryCount int
+		err = rows.Scan(&id, &messageID, &sampleCode, &retryCount)
 		if err != nil {
 			log.Error().Err(err).Msg(msgGetUnsentMessageInSampleCodeIDsFailed)
 			return nil, ErrGetUnsentMessageInSampleCodeIDsFailed
 		}
-		if _, ok := sampleCodesByMessageIDsAndIDs[messageID]; !ok {
-			sampleCodesByMessageIDsAndIDs[messageID] = make(map[uuid.UUID]string)
-		}
-		sampleCodesByMessageIDsAndIDs[messageID][id] = sampleCode
+		sampleCodesByMessageIDsAndIDs[messageID] = append(sampleCodesByMessageIDsAndIDs[messageID], MessageSampleCode{
+			MessageSampleCodeId: id,
+			SampleCode:          sampleCode,
+			RetryCount:          retryCount,
+		})
 	}
 
 	return sampleCodesByMessageIDsAndIDs, nil
@@ -341,7 +345,23 @@ func (r *messageInRepository) MarkSampleCodesAsUploadedByIDs(ctx context.Context
 	return err
 }
 
-func (r *messageInRepository) RegisterSampleCodes(ctx context.Context, id uuid.UUID, sampleCodes []string) ([]uuid.UUID, error) {
+func (r *messageInRepository) IncrementRetryCounterByIDs(ctx context.Context, ids []uuid.UUID) error {
+	err := utils.Partition(len(ids), idPartitionSize, func(low int, high int) error {
+		query := fmt.Sprintf(`UPDATE %s.sk_message_in_sample_codes SET retry_count = retry_count + 1 WHERE id IN (?);`, r.dbSchema)
+		query, args, _ := sqlx.In(query, ids[low:high])
+		query = r.db.Rebind(query)
+		_, err := r.db.Exec(ctx, query, args...)
+		if err != nil {
+			log.Error().Err(err).Msg(msgMarkMessageInSampleCodesAsUploadedByIDsFailed)
+			return ErrMarkMessageInSampleCodesAsUploadedByIDsFailed
+		}
+		return nil
+	})
+
+	return err
+}
+
+func (r *messageInRepository) RegisterSampleCodes(ctx context.Context, id uuid.UUID, sampleCodes []string) ([]MessageSampleCode, error) {
 	preparedValues := make([]map[string]interface{}, len(sampleCodes))
 	for i := range sampleCodes {
 		preparedValues[i] = map[string]interface{}{
@@ -349,9 +369,9 @@ func (r *messageInRepository) RegisterSampleCodes(ctx context.Context, id uuid.U
 			"sample_code":   sampleCodes[i],
 		}
 	}
-	ids := make([]uuid.UUID, 0)
+	insertedValues := make([]MessageSampleCode, 0)
 	err := utils.Partition(len(preparedValues), maxParams/2, func(low int, high int) error {
-		query := fmt.Sprintf(`INSERT INTO %s.sk_message_in_sample_codes (message_in_id, sample_code) VALUES (:message_in_id, :sample_code) ON CONFLICT (message_in_id, sample_code) DO NOTHING RETURNING id;`, r.dbSchema)
+		query := fmt.Sprintf(`INSERT INTO %s.sk_message_in_sample_codes (message_in_id, sample_code) VALUES (:message_in_id, :sample_code) ON CONFLICT (message_in_id, sample_code) DO NOTHING RETURNING id, sample_code;`, r.dbSchema)
 		rows, err := r.db.NamedQuery(ctx, query, preparedValues[low:high])
 		if err != nil {
 			log.Error().Err(err).Msg(msgRegisterSampleCodesToMessageInFailed)
@@ -361,18 +381,23 @@ func (r *messageInRepository) RegisterSampleCodes(ctx context.Context, id uuid.U
 
 		for rows.Next() {
 			var insertedID uuid.UUID
-			err = rows.Scan(&insertedID)
+			var sampleCode string
+			err = rows.Scan(&insertedID, &sampleCode)
 			if err != nil {
 				log.Error().Err(err).Msg(msgRegisterSampleCodesToMessageInFailed)
 				return ErrRegisterSampleCodesToMessageInFailed
 			}
-			ids = append(ids, insertedID)
+			insertedValues = append(insertedValues, MessageSampleCode{
+				MessageSampleCodeId: insertedID,
+				SampleCode:          sampleCode,
+				RetryCount:          0,
+			})
 		}
 
 		return nil
 	})
 
-	return ids, err
+	return insertedValues, err
 }
 
 func (r *messageInRepository) DeleteOldMessageInRecords(ctx context.Context, cleanupDays int, limit int) (int64, error) {
@@ -402,12 +427,13 @@ func (r *messageInRepository) CreateTransaction(ctx context.Context) (db.DbConne
 	return r.db.BeginTx(ctx)
 }
 
-func NewMessageInRepository(db db.DbConnection, dbSchema string, maxRetries, sentDaysBack int) MessageInRepository {
+func NewMessageInRepository(db db.DbConnection, dbSchema string, maxRetries int, sentDaysBack int, messageSampleCodeMaxRetries int) MessageInRepository {
 	return &messageInRepository{
-		db:           db,
-		dbSchema:     dbSchema,
-		maxRetries:   maxRetries,
-		sentDaysBack: sentDaysBack,
+		db:                          db,
+		dbSchema:                    dbSchema,
+		maxRetries:                  maxRetries,
+		sentDaysBack:                sentDaysBack,
+		messageSampleCodeMaxRetries: messageSampleCodeMaxRetries,
 	}
 }
 

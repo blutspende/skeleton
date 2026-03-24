@@ -544,3 +544,9 @@ type SampleSeenMessage struct {
 	SampleCode   string
 	SeenAt       time.Time
 }
+
+type MessageSampleCode struct {
+	MessageSampleCodeId uuid.UUID
+	SampleCode          string
+	RetryCount          int
+}

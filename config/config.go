@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/base64"
 	"errors"
+
 	"github.com/rs/zerolog"
 	"golang.org/x/time/rate"
 
@@ -68,6 +69,7 @@ type Configuration struct {
 	LongPollingLoggingEnabled                  bool          `envconfig:"LONG_POLLING_LOGGING_ENABLED" default:"false"`
 	LongPollingRetrySeconds                    int           `envconfig:"LONG_POLLING_RETRY_SECONDS" default:"30"`
 	MessageMaxRetries                          int           `envconfig:"MESSAGE_MAX_RETRIES" default:"25"`
+	MessageSampleCodeMaxRetries                int           `envconfig:"MESSAGE_SAMPLE_CODE_MAX_RETRIES" default:"25"`
 	BlackListedTCPClientIPAddresses            string        `envconfig:"BLACKLISTED_TCP_CLIENT_IP_ADDRESSES" default:""`
 	MaxRequestsPerSecond                       rate.Limit    `envconfig:"MAX_REQUESTS_PER_SECOND" default:"15"`
 	AnalysisResultWithoutControlSearchDays     int           `envconfig:"ANALYSIS_RESULT_WITHOUT_CONTROL_SEARCH_DAYS" default:"14"`
@@ -75,6 +77,8 @@ type Configuration struct {
 	ControlResultSearchDays                    int           `envconfig:"CONTROL_RESULT_SEARCH_DAYS" default:"14"`
 	SampleSeenMessageFlushSeconds              int           `envconfig:"SAMPLE_SEEN_MESSAGE_FLUSH_SECONDS" default:"30"`
 	ConsoleLogFlushSeconds                     int           `envconfig:"CONSOLE_LOG_FLUSH_SECONDS" default:"30"`
+	SampleSeenBatchSize                        int           `envconfig:"SAMPLE_SEEN_BATCH_SIZE" default:"50"`
+	SampleSeenBatchTimeOut                     int           `envconfig:"SAMPLE_SEEN_BATCH_TIMEOUT" default:"5"`
 	ClientCredentialAuthHeaderValue            string
 }
 

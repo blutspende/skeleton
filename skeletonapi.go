@@ -188,10 +188,11 @@ func New(ctx context.Context, serviceName, displayName string, requestedExtraVal
 	sortingRuleRepository := NewSortingRuleRepository(dbConn, dbSchema)
 	sortingRuleService := NewSortingRuleService(analysisRepository, conditionService, sortingRuleRepository)
 	instrumentService := NewInstrumentService(sortingRuleService, instrumentRepository, manager, instrumentCache, cerberusClient)
-	messageInRepository := NewMessageInRepository(dbConn, dbSchema, config.MessageMaxRetries, config.LookBackDays)
-	messageOutRepository := NewMessageOutRepository(dbConn, dbSchema, config.MessageMaxRetries, config.LookBackDays)
+	messageInRepository := NewMessageInRepository(dbConn, dbSchema, config.MessageMaxRetries, config.LookBackDays, config.MessageSampleCodeMaxRetries)
+	messageOutRepository := NewMessageOutRepository(dbConn, dbSchema, config.MessageMaxRetries, config.LookBackDays, config.MessageSampleCodeMaxRetries)
 	messageOutOrderRepository := NewMessageOutOrderRepository(dbConn, dbSchema, config.MessageMaxRetries)
-	messageService := NewMessageService(deaClient, cerberusClient, messageInRepository, messageOutRepository, messageOutOrderRepository, serviceName, config.SampleSeenMessageFlushSeconds)
+	messageService := NewMessageService(deaClient, cerberusClient, messageInRepository, messageOutRepository, messageOutOrderRepository, serviceName,
+		config.SampleSeenMessageFlushSeconds, config.MessageSampleCodeMaxRetries, config.SampleSeenBatchSize, config.SampleSeenBatchTimeOut)
 
 	consoleLogService := NewConsoleLogService(cerberusClient, config.ConsoleLogFlushSeconds)
 
