@@ -44,18 +44,21 @@ type MessageService interface {
 }
 
 type messageService struct {
-	cerberusClient             CerberusClient
-	deaClient                  DeaClientV1
-	messageInRepository        MessageInRepository
-	messageOutRepository       MessageOutRepository
-	messageOutOrderRepository  MessageOutOrderRepository
-	messageInArchivingChan     chan []MessageIn
-	messageOutArchivingChan    chan []MessageOut
-	messageInSampleCodeIDChan  chan []sampleCodesWithIDsAndMessageID
-	messageOutSampleCodeIDChan chan []sampleCodesWithIDsAndMessageID
-	sampleSeenMessageChan      chan []SampleSeenMessage
-	sampleSeenFlushSeconds     int
-	serviceName                string
+	cerberusClient              CerberusClient
+	deaClient                   DeaClientV1
+	messageInRepository         MessageInRepository
+	messageOutRepository        MessageOutRepository
+	messageOutOrderRepository   MessageOutOrderRepository
+	messageInArchivingChan      chan []MessageIn
+	messageOutArchivingChan     chan []MessageOut
+	messageInSampleCodeIDChan   chan []messageSampleCodesWithMessageID
+	messageOutSampleCodeIDChan  chan []messageSampleCodesWithMessageID
+	sampleSeenMessageChan       chan []SampleSeenMessage
+	sampleSeenFlushSeconds      int
+	sampleSeenBatchSize         int
+	sampleSeenBatchTimeOut      int
+	messageSampleCodeMaxRetries int
+	serviceName                 string
 }
 
 func (s *messageService) AddAnalysisRequestsToMessageOutOrder(ctx context.Context, messageOutOrderID uuid.UUID, analysisRequestIDs []uuid.UUID) error {
@@ -342,18 +345,17 @@ func (s *messageService) uploadRawMessageToDEA(message SaveInstrumentMessageTO) 
 }
 
 func (s *messageService) RegisterSampleCodesToMessageIn(ctx context.Context, messageID uuid.UUID, sampleCodes []string) error {
-	ids, err := s.messageInRepository.RegisterSampleCodes(ctx, messageID, sampleCodes)
+	messageSampleCodes, err := s.messageInRepository.RegisterSampleCodes(ctx, messageID, sampleCodes)
 	if err != nil {
 		return err
 	}
-	if len(ids) == 0 {
+	if len(messageSampleCodes) == 0 {
 		return nil
 	}
-	s.messageInSampleCodeIDChan <- []sampleCodesWithIDsAndMessageID{
+	s.messageInSampleCodeIDChan <- []messageSampleCodesWithMessageID{
 		{
-			MessageID:            messageID,
-			MessageSampleCodeIDs: ids,
-			SampleCodes:          sampleCodes,
+			MessageID:          messageID,
+			MessageSampleCodes: messageSampleCodes,
 		},
 	}
 
@@ -361,18 +363,17 @@ func (s *messageService) RegisterSampleCodesToMessageIn(ctx context.Context, mes
 }
 
 func (s *messageService) RegisterSampleCodesToMessageOut(ctx context.Context, messageID uuid.UUID, sampleCodes []string) error {
-	ids, err := s.messageOutRepository.RegisterSampleCodes(ctx, messageID, sampleCodes)
+	messageSampleCodes, err := s.messageOutRepository.RegisterSampleCodes(ctx, messageID, sampleCodes)
 	if err != nil {
 		return err
 	}
-	if len(ids) == 0 {
+	if len(messageSampleCodes) == 0 {
 		return nil
 	}
-	s.messageOutSampleCodeIDChan <- []sampleCodesWithIDsAndMessageID{
+	s.messageOutSampleCodeIDChan <- []messageSampleCodesWithMessageID{
 		{
-			MessageID:            messageID,
-			MessageSampleCodeIDs: ids,
-			SampleCodes:          sampleCodes,
+			MessageID:          messageID,
+			MessageSampleCodes: messageSampleCodes,
 		},
 	}
 
@@ -397,14 +398,14 @@ func (s *messageService) StartSampleCodeRegisteringToDEA(ctx context.Context) {
 	go s.addUnsentMessageOutSampleCodesToQueue(ctx)
 	go s.startMessageOutSampleCodeCleanupJob(ctx)
 	go s.startMessageInSampleCodeCleanupJob(ctx)
-	messageInBatchChan := make(chan []sampleCodesWithIDsAndMessageID, 1)
-	messageOutBatchChan := make(chan []sampleCodesWithIDsAndMessageID, 1)
-	go startMessageSampleCodeBatching(ctx, s.messageInSampleCodeIDChan, messageInBatchChan)
-	go startMessageSampleCodeBatching(ctx, s.messageOutSampleCodeIDChan, messageOutBatchChan)
+	messageInBatchChan := make(chan []messageSampleCodesWithMessageID, 1)
+	messageOutBatchChan := make(chan []messageSampleCodesWithMessageID, 1)
+	go startMessageSampleCodeBatching(ctx, s.messageInSampleCodeIDChan, messageInBatchChan, s.sampleSeenBatchSize, s.sampleSeenBatchTimeOut)
+	go startMessageSampleCodeBatching(ctx, s.messageOutSampleCodeIDChan, messageOutBatchChan, s.sampleSeenBatchSize, s.sampleSeenBatchTimeOut)
 	for {
 		select {
 		case sampleCodesWithMessageIDAndIDs := <-messageOutBatchChan:
-			messagesToRetry := make([]sampleCodesWithIDsAndMessageID, 0)
+			messagesToRetry := make([]messageSampleCodesWithMessageID, 0)
 			messageIDs := make([]uuid.UUID, len(sampleCodesWithMessageIDAndIDs))
 			for i := range sampleCodesWithMessageIDAndIDs {
 				messageIDs[i] = sampleCodesWithMessageIDAndIDs[i].MessageID
@@ -423,15 +424,29 @@ func (s *messageService) StartSampleCodeRegisteringToDEA(ctx context.Context) {
 					messagesToRetry = append(messagesToRetry, sampleCodesWithMessageIDAndIDs[i])
 					continue
 				}
-				err = s.deaClient.RegisterSampleCodes(messageOut.deaRawMessageID.UUID, sampleCodesWithMessageIDAndIDs[i].SampleCodes)
+				var messageSampleCodeIDs []uuid.UUID
+				var sampleCodes []string
+				messageSampleCodeIDs, sampleCodes, sampleCodesWithMessageIDAndIDs[i] = s.assembleMessageSampleCodesForProcessing(sampleCodesWithMessageIDAndIDs[i])
+				if len(sampleCodesWithMessageIDAndIDs[i].MessageSampleCodes) == 0 {
+					continue
+				}
+				err = s.deaClient.RegisterSampleCodes(messageOut.deaRawMessageID.UUID, sampleCodes)
 				if err != nil {
 					log.Error().Err(err).Msg("register message out sample codes failed")
+					err = s.messageOutRepository.IncrementRetryCounterByIDs(ctx, messageSampleCodeIDs)
+					if err != nil {
+						log.Error().Err(err).Msg("increment retry counter for message in sample code registration failed")
+					}
 					messagesToRetry = append(messagesToRetry, sampleCodesWithMessageIDAndIDs[i])
 					continue
 				}
-				err = s.messageOutRepository.MarkSampleCodesAsUploadedByIDs(ctx, sampleCodesWithMessageIDAndIDs[i].MessageSampleCodeIDs)
+				err = s.messageOutRepository.MarkSampleCodesAsUploadedByIDs(ctx, messageSampleCodeIDs)
 				if err != nil {
-					log.Error().Err(err).Msg("register message in sample codes failed")
+					log.Error().Err(err).Msg("mark message out sample codes as uploaded failed")
+					err = s.messageOutRepository.IncrementRetryCounterByIDs(ctx, messageSampleCodeIDs)
+					if err != nil {
+						log.Error().Err(err).Msg("increment retry counter for message in sample code registration failed")
+					}
 					messagesToRetry = append(messagesToRetry, sampleCodesWithMessageIDAndIDs[i])
 					continue
 				}
@@ -443,7 +458,7 @@ func (s *messageService) StartSampleCodeRegisteringToDEA(ctx context.Context) {
 				s.messageOutSampleCodeIDChan <- messagesToRetry
 			})
 		case sampleCodesWithMessageIDAndIDs := <-messageInBatchChan:
-			messagesToRetry := make([]sampleCodesWithIDsAndMessageID, 0)
+			messagesToRetry := make([]messageSampleCodesWithMessageID, 0)
 			messageIDs := make([]uuid.UUID, len(sampleCodesWithMessageIDAndIDs))
 			for i := range sampleCodesWithMessageIDAndIDs {
 				messageIDs[i] = sampleCodesWithMessageIDAndIDs[i].MessageID
@@ -466,15 +481,29 @@ func (s *messageService) StartSampleCodeRegisteringToDEA(ctx context.Context) {
 					messagesToRetry = append(messagesToRetry, sampleCodesWithMessageIDAndIDs[i])
 					continue
 				}
-				err := s.deaClient.RegisterSampleCodes(messageIn.deaRawMessageID.UUID, sampleCodesWithMessageIDAndIDs[i].SampleCodes)
+				var messageSampleCodeIDs []uuid.UUID
+				var sampleCodes []string
+				messageSampleCodeIDs, sampleCodes, sampleCodesWithMessageIDAndIDs[i] = s.assembleMessageSampleCodesForProcessing(sampleCodesWithMessageIDAndIDs[i])
+				if len(sampleCodesWithMessageIDAndIDs[i].MessageSampleCodes) == 0 {
+					continue
+				}
+				err = s.deaClient.RegisterSampleCodes(messageIn.deaRawMessageID.UUID, sampleCodes)
 				if err != nil {
 					log.Error().Err(err).Msg("register message in sample codes failed")
+					err = s.messageInRepository.IncrementRetryCounterByIDs(ctx, messageSampleCodeIDs)
+					if err != nil {
+						log.Error().Err(err).Msg("increment retry counter for message out sample code registration failed")
+					}
 					messagesToRetry = append(messagesToRetry, sampleCodesWithMessageIDAndIDs[i])
 					continue
 				}
-				err = s.messageInRepository.MarkSampleCodesAsUploadedByIDs(ctx, sampleCodesWithMessageIDAndIDs[i].MessageSampleCodeIDs)
+				err = s.messageInRepository.MarkSampleCodesAsUploadedByIDs(ctx, messageSampleCodeIDs)
 				if err != nil {
-					log.Error().Err(err).Msg("register message in sample codes failed")
+					log.Error().Err(err).Msg("mark message out sample codes as uploaded failed")
+					err = s.messageInRepository.IncrementRetryCounterByIDs(ctx, messageSampleCodeIDs)
+					if err != nil {
+						log.Error().Err(err).Msg("increment retry counter for message out sample code registration failed")
+					}
 					messagesToRetry = append(messagesToRetry, sampleCodesWithMessageIDAndIDs[i])
 				}
 			}
@@ -490,13 +519,33 @@ func (s *messageService) StartSampleCodeRegisteringToDEA(ctx context.Context) {
 	}
 }
 
-func startMessageSampleCodeBatching(ctx context.Context, listeningChan chan []sampleCodesWithIDsAndMessageID, batchChan chan []sampleCodesWithIDsAndMessageID) {
-	batchSize := 50
-	timeout := 20 * time.Second
-	batch := make([]sampleCodesWithIDsAndMessageID, 0)
+func (s *messageService) assembleMessageSampleCodesForProcessing(messageSampleCodes messageSampleCodesWithMessageID) ([]uuid.UUID, []string, messageSampleCodesWithMessageID) {
+	messageSampleCodeIDs := make([]uuid.UUID, 0)
+	sampleCodes := make([]string, 0)
+	messageSampleCodesToProcess := make([]MessageSampleCode, 0)
+	for j := range messageSampleCodes.MessageSampleCodes {
+		if messageSampleCodes.MessageSampleCodes[j].RetryCount >= s.messageSampleCodeMaxRetries {
+			continue
+		}
+		messageSampleCodeIDs = append(messageSampleCodeIDs, messageSampleCodes.MessageSampleCodes[j].MessageSampleCodeId)
+		sampleCodes = append(sampleCodes, messageSampleCodes.MessageSampleCodes[j].SampleCode)
+		messageSampleCodes.MessageSampleCodes[j].RetryCount = messageSampleCodes.MessageSampleCodes[j].RetryCount + 1
+		messageSampleCodesToProcess = append(messageSampleCodesToProcess, messageSampleCodes.MessageSampleCodes[j])
+	}
+	return messageSampleCodeIDs, sampleCodes, messageSampleCodesWithMessageID{
+		MessageID:          messageSampleCodes.MessageID,
+		MessageSampleCodes: messageSampleCodesToProcess,
+	}
+}
+
+func startMessageSampleCodeBatching(ctx context.Context, listeningChan chan []messageSampleCodesWithMessageID, batchChan chan []messageSampleCodesWithMessageID, sampleSeenBatchSize int, sampleSeenBatchTimeOut int) {
+	batchSize := sampleSeenBatchSize
+	batch := make([]messageSampleCodesWithMessageID, 0)
+	ticker := time.NewTicker(time.Duration(sampleSeenBatchTimeOut) * time.Second)
 	for {
 		select {
 		case <-ctx.Done():
+			ticker.Stop()
 			return
 		case sampleCodesWithMessageIDAndIDs := <-listeningChan:
 			batch = append(batch, sampleCodesWithMessageIDAndIDs...)
@@ -504,13 +553,13 @@ func startMessageSampleCodeBatching(ctx context.Context, listeningChan chan []sa
 				continue
 			}
 			batchChan <- batch
-			batch = make([]sampleCodesWithIDsAndMessageID, 0)
-		case <-time.After(timeout):
+			batch = make([]messageSampleCodesWithMessageID, 0)
+		case <-ticker.C:
 			if len(batch) == 0 {
 				continue
 			}
 			batchChan <- batch
-			batch = make([]sampleCodesWithIDsAndMessageID, 0)
+			batch = make([]messageSampleCodesWithMessageID, 0)
 		}
 	}
 }
@@ -607,16 +656,13 @@ func (s *messageService) addUnsentMessageInSampleCodesToQueue(ctx context.Contex
 		log.Error().Err(err).Msg("register unprocessed sample codes on startup failed")
 		return
 	}
-	unsentSampleCodes := make([]sampleCodesWithIDsAndMessageID, 0)
-	for messageID, sampleCodeByID := range unsentMessageInSampleCodes {
-		sampleCodes := sampleCodesWithIDsAndMessageID{
+	unsentSampleCodes := make([]messageSampleCodesWithMessageID, 0)
+	for messageID, messageSampleCodeByID := range unsentMessageInSampleCodes {
+		sampleCodes := messageSampleCodesWithMessageID{
 			MessageID: messageID,
 		}
-		for id, sampleCode := range sampleCodeByID {
-			sampleCodes.MessageSampleCodeIDs = append(sampleCodes.MessageSampleCodeIDs, id)
-			sampleCodes.SampleCodes = append(sampleCodes.SampleCodes, sampleCode)
-		}
-		if len(sampleCodes.SampleCodes) == 0 {
+		sampleCodes.MessageSampleCodes = append(sampleCodes.MessageSampleCodes, messageSampleCodeByID...)
+		if len(sampleCodes.MessageSampleCodes) == 0 {
 			continue
 		}
 		unsentSampleCodes = append(unsentSampleCodes, sampleCodes)
@@ -633,16 +679,13 @@ func (s *messageService) addUnsentMessageOutSampleCodesToQueue(ctx context.Conte
 		log.Error().Err(err).Msg("register unprocessed sample codes on startup failed")
 		return
 	}
-	unsentSampleCodes := make([]sampleCodesWithIDsAndMessageID, 0)
-	for messageID, sampleCodeByID := range unsentMessageOutSampleCodes {
-		sampleCodes := sampleCodesWithIDsAndMessageID{
+	unsentSampleCodes := make([]messageSampleCodesWithMessageID, 0)
+	for messageID, messageSampleCodeByID := range unsentMessageOutSampleCodes {
+		sampleCodes := messageSampleCodesWithMessageID{
 			MessageID: messageID,
 		}
-		for id, sampleCode := range sampleCodeByID {
-			sampleCodes.MessageSampleCodeIDs = append(sampleCodes.MessageSampleCodeIDs, id)
-			sampleCodes.SampleCodes = append(sampleCodes.SampleCodes, sampleCode)
-		}
-		if len(sampleCodes.SampleCodes) == 0 {
+		sampleCodes.MessageSampleCodes = append(sampleCodes.MessageSampleCodes, messageSampleCodeByID...)
+		if len(sampleCodes.MessageSampleCodes) == 0 {
 			continue
 		}
 		unsentSampleCodes = append(unsentSampleCodes, sampleCodes)
@@ -719,20 +762,24 @@ func startSampleSeenBatching(ctx context.Context, listeningChan chan []SampleSee
 	}
 }
 
-func NewMessageService(deaClient DeaClientV1, cerberusClient CerberusClient, messageInRepository MessageInRepository, messageOutRepository MessageOutRepository, messageOutOrderRepository MessageOutOrderRepository, serviceName string, sampleSeenFlushSeconds int) MessageService {
+func NewMessageService(deaClient DeaClientV1, cerberusClient CerberusClient, messageInRepository MessageInRepository, messageOutRepository MessageOutRepository, messageOutOrderRepository MessageOutOrderRepository,
+	serviceName string, sampleSeenFlushSeconds int, messageSampleCodeMaxRetries int, sampleSeenBatchSize int, sampleSeenBatchTimeOut int) MessageService {
 	return &messageService{
-		deaClient:                  deaClient,
-		cerberusClient:             cerberusClient,
-		messageInRepository:        messageInRepository,
-		messageOutRepository:       messageOutRepository,
-		messageOutOrderRepository:  messageOutOrderRepository,
-		messageInArchivingChan:     make(chan []MessageIn, 100),
-		messageOutArchivingChan:    make(chan []MessageOut, 100),
-		messageInSampleCodeIDChan:  make(chan []sampleCodesWithIDsAndMessageID, 100),
-		messageOutSampleCodeIDChan: make(chan []sampleCodesWithIDsAndMessageID, 100),
-		sampleSeenMessageChan:      make(chan []SampleSeenMessage, 100),
-		serviceName:                serviceName,
-		sampleSeenFlushSeconds:     sampleSeenFlushSeconds,
+		deaClient:                   deaClient,
+		cerberusClient:              cerberusClient,
+		messageInRepository:         messageInRepository,
+		messageOutRepository:        messageOutRepository,
+		messageOutOrderRepository:   messageOutOrderRepository,
+		messageInArchivingChan:      make(chan []MessageIn, 100),
+		messageOutArchivingChan:     make(chan []MessageOut, 100),
+		messageInSampleCodeIDChan:   make(chan []messageSampleCodesWithMessageID, 100),
+		messageOutSampleCodeIDChan:  make(chan []messageSampleCodesWithMessageID, 100),
+		sampleSeenMessageChan:       make(chan []SampleSeenMessage, 100),
+		serviceName:                 serviceName,
+		sampleSeenFlushSeconds:      sampleSeenFlushSeconds,
+		sampleSeenBatchSize:         sampleSeenBatchSize,
+		sampleSeenBatchTimeOut:      sampleSeenBatchTimeOut,
+		messageSampleCodeMaxRetries: messageSampleCodeMaxRetries,
 	}
 }
 
@@ -746,8 +793,7 @@ func isTypeValid(messageType instrumentenum.MessageType) bool {
 		messageType == instrumentenum.MessageTypeDiagnostics || messageType == instrumentenum.MessageTypeUnidentified
 }
 
-type sampleCodesWithIDsAndMessageID struct {
-	SampleCodes          []string
-	MessageID            uuid.UUID
-	MessageSampleCodeIDs []uuid.UUID
+type messageSampleCodesWithMessageID struct {
+	MessageID          uuid.UUID
+	MessageSampleCodes []MessageSampleCode
 }
