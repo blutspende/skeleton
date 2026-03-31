@@ -58,14 +58,11 @@ func (r *messageOutRepository) CreateBatch(ctx context.Context, messages []Messa
 		if messages[i].ID == uuid.Nil {
 			messages[i].ID = uuid.New()
 		}
-		if messages[i].CreatedAt.IsZero() {
-			messages[i].CreatedAt = time.Now().UTC()
-		}
 		messageIDs[i] = messages[i].ID
 	}
 	err := utils.Partition(len(messages), maxParams/8, func(low int, high int) error {
-		query := fmt.Sprintf(`INSERT INTO %s.sk_message_out (id, instrument_id, status, protocol_id, "type", encoding, raw, trigger_message_in_id, response_message_in_id, created_at)
-									VALUES (:id, :instrument_id, :status, :protocol_id, :type, :encoding, :raw, :trigger_message_in_id, :response_message_in_id, :created_at);`, r.dbSchema)
+		query := fmt.Sprintf(`INSERT INTO %s.sk_message_out (id, instrument_id, status, protocol_id, "type", encoding, raw, trigger_message_in_id, response_message_in_id)
+									VALUES (:id, :instrument_id, :status, :protocol_id, :type, :encoding, :raw, :trigger_message_in_id, :response_message_in_id);`, r.dbSchema)
 		_, err := r.db.NamedExec(ctx, query, convertMessageOutsToDAOs(messages[low:high]))
 		if err != nil {
 			log.Error().Err(err).Msg(msgCreateMessageOutBatchFailed)

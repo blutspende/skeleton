@@ -53,11 +53,8 @@ func (r *messageInRepository) Create(ctx context.Context, message MessageIn) (uu
 	if message.ID == uuid.Nil {
 		message.ID = uuid.New()
 	}
-	if message.CreatedAt.IsZero() {
-		message.CreatedAt = time.Now().UTC()
-	}
-	query := fmt.Sprintf(`INSERT INTO %s.sk_message_in (id, instrument_id, instrument_module_id, protocol_id, "type", encoding, raw, status, created_at)
-									VALUES (:id, :instrument_id, :instrument_module_id, :protocol_id, :type, :encoding, :raw, :status, :created_at);`, r.dbSchema)
+	query := fmt.Sprintf(`INSERT INTO %s.sk_message_in (id, instrument_id, instrument_module_id, protocol_id, "type", encoding, raw, status)
+									VALUES (:id, :instrument_id, :instrument_module_id, :protocol_id, :type, :encoding, :raw, :status);`, r.dbSchema)
 	_, err := r.db.NamedExec(ctx, query, convertMessageInToDAO(message))
 	if err != nil {
 		log.Error().Err(err).Msg(msgCreateMessageInFailed)
