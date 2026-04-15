@@ -13,6 +13,10 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const (
+	msgFailedToCreateTransaction = "failed to create transaction"
+)
+
 var (
 	ErrAnalysisRequestWithMatchingWorkItemIdFound = errors.New("analysis request with matching workitem id found")
 	ErrUnsupportedExpectedControlResultFound      = errors.New("unsupported expected control result operator found")
@@ -30,6 +34,7 @@ type AnalysisService interface {
 	ValidateAndUpdatingExistingControlResults(ctx context.Context, analyteMappingIds []uuid.UUID) error
 	AnalysisResultStatusRecalculationAndSendForProcessingIfFinal(ctx context.Context, controlResultIds []uuid.UUID) error
 	QueueAnalysisResults(ctx context.Context, results []AnalysisResult) error
+	QueueControlResults(ctx context.Context, standaloneControlResults []StandaloneControlResult) error
 	RetransmitResult(ctx context.Context, resultID uuid.UUID) error
 	ProcessStuckImagesToDEA(ctx context.Context)
 	ProcessStuckImagesToCerberus(ctx context.Context)
@@ -121,7 +126,7 @@ func (as *analysisService) ProcessAnalysisRequests(ctx context.Context, analysis
 
 		tx, err := as.analysisRepository.CreateTransaction(ctx)
 		if err != nil {
-			log.Error().Err(err).Msg("failed to create transaction")
+			log.Error().Err(err).Msg(msgFailedToCreateTransaction)
 			return err
 		}
 
@@ -193,7 +198,7 @@ func (as *analysisService) ReexamineAnalysisRequestsBatch(ctx context.Context, w
 func (as *analysisService) CreateAnalysisResultsBatch(ctx context.Context, analysisResults AnalysisResultSet) ([]AnalysisResult, error) {
 	tx, err := as.analysisRepository.CreateTransaction(ctx)
 	if err != nil {
-		log.Error().Err(err).Msg("failed to create transaction")
+		log.Error().Err(err).Msg(msgFailedToCreateTransaction)
 		return nil, err
 	}
 	savedResultDataList, err := as.createAnalysisResultsBatch(ctx, tx, analysisResults)
@@ -711,7 +716,7 @@ func (as *analysisService) GetAnalysisResultsByIDsWithRecalculatedStatus(ctx con
 
 	tx, err := as.analysisRepository.CreateTransaction(ctx)
 	if err != nil {
-		log.Error().Err(err).Msg("failed to create transaction")
+		log.Error().Err(err).Msg(msgFailedToCreateTransaction)
 		return make([]AnalysisResult, 0), err
 	}
 
@@ -748,7 +753,7 @@ func (as *analysisService) ValidateAndUpdatingExistingControlResults(ctx context
 
 	tx, err := as.analysisRepository.CreateTransaction(ctx)
 	if err != nil {
-		log.Error().Err(err).Msg("failed to create transaction")
+		log.Error().Err(err).Msg(msgFailedToCreateTransaction)
 		return err
 	}
 
@@ -799,7 +804,7 @@ func (as *analysisService) AnalysisResultStatusRecalculationAndSendForProcessing
 func (as *analysisService) QueueAnalysisResults(ctx context.Context, results []AnalysisResult) error {
 	tx, err := as.analysisRepository.CreateTransaction(ctx)
 	if err != nil {
-		log.Error().Err(err).Msg("failed to create transaction")
+		log.Error().Err(err).Msg(msgFailedToCreateTransaction)
 		return err
 	}
 
@@ -845,6 +850,44 @@ func (as *analysisService) QueueAnalysisResults(ctx context.Context, results []A
 	if err != nil {
 		_ = tx.Rollback()
 		return err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	return nil
+}
+
+func (as *analysisService) QueueControlResults(ctx context.Context, standaloneControlResults []StandaloneControlResult) error {
+	tx, err := as.analysisRepository.CreateTransaction(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg(msgFailedToCreateTransaction)
+		return err
+	}
+
+	_, err = as.analysisRepository.WithTransaction(tx).CreateControlResultQueueItem(ctx, standaloneControlResults)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	controlResultReagentRelationsToMarkAsProcessed := make(map[uuid.UUID][]uuid.UUID)
+
+	for _, standaloneControlResult := range standaloneControlResults {
+		for _, reagent := range standaloneControlResult.Reagents {
+			controlResultReagentRelationsToMarkAsProcessed[standaloneControlResult.ControlResult.ID] = append(controlResultReagentRelationsToMarkAsProcessed[standaloneControlResult.ControlResult.ID], reagent.ID)
+		}
+	}
+
+	for controlResultID, reagentIDs := range controlResultReagentRelationsToMarkAsProcessed {
+		err = as.analysisRepository.WithTransaction(tx).MarkReagentControlResultRelationsAsProcessed(ctx, controlResultID, reagentIDs)
+		if err != nil {
+			_ = tx.Rollback()
+			return err
+		}
 	}
 
 	err = tx.Commit()

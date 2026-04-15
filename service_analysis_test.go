@@ -1709,8 +1709,9 @@ func setupTestDataForStandaloneControlProcessing() (ControlResult, Reagent) {
 }
 
 type mockManager struct {
-	AnalysisResultsForProcessing      []AnalysisResult
-	AnalysisRequestsSentForProcessing []AnalysisRequest
+	AnalysisResultsForProcessing          []AnalysisResult
+	StandaloneControlResultsForProcessing []StandaloneControlResult
+	AnalysisRequestsSentForProcessing     []AnalysisRequest
 }
 
 func (m *mockManager) SetCallbackHandler(eventHandler SkeletonCallbackHandlerV1) {
@@ -1728,7 +1729,13 @@ func (m *mockManager) GetProcessableAnalysisRequestQueue() *utils.ConcurrentQueu
 func (m *mockManager) SendResultForProcessing(analysisResult AnalysisResult) {
 	m.AnalysisResultsForProcessing = append(m.AnalysisResultsForProcessing, analysisResult)
 }
+func (m *mockManager) SendControlResultForProcessing(standaloneControlResult StandaloneControlResult) {
+	m.StandaloneControlResultsForProcessing = append(m.StandaloneControlResultsForProcessing, standaloneControlResult)
+}
 func (m *mockManager) GetResultChan() chan AnalysisResult {
+	return nil
+}
+func (m *mockManager) GetControlResultChan() chan StandaloneControlResult {
 	return nil
 }
 
@@ -1790,7 +1797,7 @@ func (r *extendedMockAnalysisRepo) CreateAnalysisResultReagentRelations(ctx cont
 	return nil
 }
 
-func (r *extendedMockAnalysisRepo) GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMapping AnalyteMapping, instrumentId uuid.UUID, ControlResultSearchDays int) ([]ControlResult, error) {
+func (r *extendedMockAnalysisRepo) GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMapping AnalyteMapping, instrumentId uuid.UUID, instrumentModule *string, ControlResultSearchDays int) ([]ControlResult, error) {
 	return nil, nil
 }
 

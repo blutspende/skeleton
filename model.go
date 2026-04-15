@@ -45,7 +45,15 @@ type CerberusQueueItem struct {
 	RetryNotBefore      time.Time
 	RawResponse         string
 	ResponseJsonMessage string
+	DataType            DataType
 }
+
+type DataType string
+
+const (
+	AnalysisResultDataType DataType = "AnalysisResult"
+	ControlResultDataType  DataType = "ControlResult"
+)
 
 // SubjectInfo - Additional Information about the subject for the AnalysisRequest
 // Do not use in implentation directly
@@ -231,6 +239,7 @@ type AnalysisResult struct {
 	Operator                 string
 	TechnicalReleaseDateTime *time.Time
 	InstrumentRunID          uuid.UUID
+	InstrumentModule         *string
 	Edited                   bool
 	EditReason               string
 	IsInvalid                bool
@@ -248,6 +257,7 @@ type AnalysisResult struct {
 type ControlResult struct {
 	ID                         uuid.UUID
 	SampleCode                 string
+	MessageInID                uuid.UUID
 	AnalyteMapping             AnalyteMapping
 	Result                     string
 	ExpectedControlResultId    uuid.NullUUID
@@ -255,9 +265,12 @@ type ControlResult struct {
 	IsComparedToExpectedResult bool
 	ExaminedAt                 time.Time
 	InstrumentID               uuid.UUID
+	InstrumentModule           *string
 	Warnings                   []string
 	ChannelResults             []ChannelResult
 	ExtraValues                []ExtraValue
+
+	deaRawMessageID uuid.NullUUID
 }
 
 type StandaloneControlResult struct {
@@ -302,17 +315,10 @@ func (r AnalysisResultBatchResponse) IsSuccess() bool {
 	return r.HTTPStatusCode >= http.StatusOK && r.HTTPStatusCode < http.StatusMultipleChoices
 }
 
-type ControlResultBatchItemInfo struct {
-	ControlResult      *StandaloneControlResultTO
-	CerberusID         uuid.UUID
-	CerberusReagentIDs []uuid.UUID
-}
-
 type ControlResultBatchResponse struct {
-	ControlResultBatchItemInfoList []ControlResultBatchItemInfo
-	ErrorMessage                   string
-	HTTPStatusCode                 int
-	RawResponse                    string
+	ErrorMessage   string
+	HTTPStatusCode int
+	RawResponse    string
 }
 
 func (r ControlResultBatchResponse) HasResult() bool {
