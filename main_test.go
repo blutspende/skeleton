@@ -82,7 +82,7 @@ func setupDbConnection(ctx context.Context, schemaName string) (db.DbConnection,
 	pgConfig := db.PgConfig{
 		ApplicationName: "skeleton_test",
 		Host:            "localhost",
-		Port:            uint32(dbPort.Int()),
+		Port:            uint32(dbPort.Num()),
 		User:            "postgres",
 		Pass:            "postgres",
 		Database:        "postgres",

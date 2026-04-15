@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/blutspende/skeleton/migrator"
-	_ "github.com/jackc/pgx/v4/stdlib"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/assert"
 	"github.com/testcontainers/testcontainers-go"
@@ -42,7 +42,7 @@ func TestSkeletonMigrations(t *testing.T) {
 
 	dbPort, err := postgresContainer.MappedPort(ctx, "5432")
 	assert.Nil(t, err)
-	connStr := fmt.Sprintf("host=localhost port=%d user=postgres password=postgres dbname=postgres sslmode=disable", dbPort.Int())
+	connStr := fmt.Sprintf("host=localhost port=%d user=postgres password=postgres dbname=postgres sslmode=disable", dbPort.Num())
 	dbConn, err := sqlx.Connect("pgx", connStr)
 	assert.Nil(t, err)
 
@@ -67,5 +67,5 @@ func TestSkeletonMigrations(t *testing.T) {
 	assert.Nil(t, err)
 
 	//MODIFY THE EXPECTED VERSION AFTER ADDING NEW SKELETON MIGRATION!!!
-	assert.Equal(t, 33, version)
+	assert.Equal(t, 34, version)
 }
