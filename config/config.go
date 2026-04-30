@@ -51,6 +51,8 @@ type Configuration struct {
 	ResultTransferBatchSize                    int           `envconfig:"RESULT_TRANSFER_BATCH_SIZE" default:"100"`
 	ResultTransferFlushTimeout                 int           `envconfig:"RESULT_TRANSFER_FLUSH_TIMEOUT" default:"5"`
 	ResultTransferRetryTimeout                 int           `envconfig:"RESULT_TRANSFER_RETRY_TIMEOUT" default:"5"`
+	ResultBufferFlushTimeout                   int           `envconfig:"RESULT_BUFFER_FLUSH_TIMEOUT" default:"3"`
+	CerberusQueueItemRetryTimeout              int           `envconfig:"CERBERUS_QUEUE_ITEM_RETRY_TIMEOUT" default:"10"`
 	ImageRetrySeconds                          int           `envconfig:"IMAGE_RETRY_SECONDS" default:"60"`
 	AnalysisRequestsChannelBufferSize          int           `envconfig:"ANALYSIS_REQUESTS_CHANNEL_BUFFER_SIZE" default:"1024"`
 	AnalysisResultsChannelBufferSize           int           `envconfig:"ANALYSIS_RESULTS_CHANNEL_BUFFER_SIZE" default:"1024"`
@@ -63,6 +65,7 @@ type Configuration struct {
 	UnprocessedAnalysisResultErrorRetryMinute  int           `envconfig:"UNPROCESSED_ANALYSIS_RESULT_ERROR_RETRY" default:"5"`
 	GetUnprocessedAnalysisRequestRetryMinute   int           `envconfig:"GET_UNPROCESSED_ANALYSIS_REQUEST_RETRY" default:"5"`
 	GetUnprocessedAnalysisResultIDsRetryMinute int           `envconfig:"GET_UNPROCESSED_ANALYSIS_RESULT_IDS_RETRY" default:"5"`
+	GetUnprocessedControlResultIDsRetryMinute  int           `envconfig:"GET_UNPROCESSED_CONTROL_RESULT_IDS_RETRY" default:"5"`
 	StandardAPIClientTimeoutSeconds            uint          `envconfig:"STANDARD_API_CLIENT_TIMEOUT_SECONDS" default:"10"`
 	LongPollingAPIClientTimeoutSeconds         uint          `envconfig:"LONG_POLLING_API_CLIENT_TIMEOUT_SECONDS" default:"80"`
 	LongPollingReattemptWaitSeconds            uint          `envconfig:"LONG_POLLING_REATTEMPT_WAIT_SECONDS" default:"5"`

@@ -32,6 +32,7 @@ const (
 	MsgFailedToCallLogsAPI                      = "Failed to call Cerberus API (/v1/instruments/logs)"
 	MsgFailedToCallRegisterManufacturerTestsAPI = "Failed to call Cerberus API (/v1/instrument-drivers/manufacturer-tests)"
 	MsgFailedToCallSampleSeenAPI                = "Failed to call Cerberus API (/v1/instruments/sample-seen)"
+	MsgEmptyControlResultsBatch                 = "Send control results batch called with empty array"
 )
 
 var (
@@ -45,6 +46,7 @@ type CerberusClient interface {
 	RegisterManufacturerTests(driverName string, tests []supportedManufacturerTestTO) error
 	SendAnalysisResultBatch(analysisResults []AnalysisResultTO) (AnalysisResultBatchResponse, error)
 	SendAnalysisResultImageBatch(images []WorkItemResultImageTO) error
+	SendControlResultBatch(controlResults []StandaloneControlResultTO) (ControlResultBatchResponse, error)
 	SendSampleSeenMessageBatch(messages []SampleSeenMessage) error
 	VerifyInstrumentHash(hash string) error
 	VerifyExpectedControlResultsHash(hash string) error
@@ -107,6 +109,7 @@ type AnalysisResultTO struct {
 	TechnicalReleaseDateTime *time.Time        `json:"technicalReleaseDateTime"`
 	InstrumentID             uuid.UUID         `json:"instrumentId"`
 	InstrumentRunID          uuid.UUID         `json:"instrumentRunId"`
+	InstrumentModule         *string           `json:"instrumentModule,omitempty"`
 	Edited                   bool              `json:"resultEdit"`
 	EditReason               string            `json:"editReason"`
 	IsInvalid                bool              `json:"isInvalid"`
@@ -138,6 +141,8 @@ type ReagentTO struct {
 type ControlResultTO struct {
 	ID                         uuid.UUID         `json:"id"`
 	InstrumentID               uuid.UUID         `json:"instrumentID"`
+	InstrumentModule           *string           `json:"instrumentModule,omitempty"`
+	DEARawMessageID            uuid.UUID         `json:"deaRawMessageId"`
 	SampleCode                 string            `json:"sampleCode"`
 	AnalyteID                  uuid.UUID         `json:"analyteID"`
 	IsValid                    bool              `json:"isValid"`
@@ -152,7 +157,7 @@ type ControlResultTO struct {
 type StandaloneControlResultTO struct {
 	ControlResultTO
 	Reagents  []ReagentTO `json:"reagents"`
-	ResultIDs []uuid.UUID `json:"resultIds"`
+	ResultIDs []uuid.UUID `json:"analysisResultIds"`
 }
 
 type WorkItemResultImageTO struct {
@@ -374,6 +379,63 @@ func (c *cerberusClient) SendAnalysisResultImageBatch(images []WorkItemResultIma
 	}
 
 	return nil
+}
+
+func (c *cerberusClient) SendControlResultBatch(controlResults []StandaloneControlResultTO) (ControlResultBatchResponse, error) {
+	if len(controlResults) < 1 {
+		log.Warn().Msg(MsgEmptyControlResultsBatch)
+		return ControlResultBatchResponse{}, nil
+	}
+
+	resp, err := c.client.R().
+		SetHeader("Content-Type", "application/json").
+		SetBody(controlResults).
+		Post(c.cerberusUrl + "/v1/control-results")
+
+	if err != nil {
+		response := ControlResultBatchResponse{
+			ErrorMessage: err.Error(),
+		}
+
+		return response, fmt.Errorf("%s (%w)", ErrSendResultBatchFailed, err)
+	}
+
+	switch {
+	case resp.StatusCode() == http.StatusCreated, resp.StatusCode() == http.StatusAccepted:
+		response := ControlResultBatchResponse{
+			HTTPStatusCode: resp.StatusCode(),
+			RawResponse:    string(resp.Body()),
+		}
+
+		return response, nil
+	case resp.StatusCode() == http.StatusInternalServerError:
+		errReps := middleware.ClientError{}
+		err = json.Unmarshal(resp.Body(), &errReps)
+		if err != nil {
+			err = fmt.Errorf("can not unmarshal error of response (%w)", err)
+			response := ControlResultBatchResponse{
+				HTTPStatusCode: resp.StatusCode(),
+				ErrorMessage:   err.Error(),
+				RawResponse:    string(resp.Body()),
+			}
+			return response, err
+		}
+		err = errors.New(errReps.Message)
+		response := ControlResultBatchResponse{
+			HTTPStatusCode: resp.StatusCode(),
+			ErrorMessage:   err.Error(),
+			RawResponse:    string(resp.Body()),
+		}
+		return response, err
+	default:
+		err = fmt.Errorf("%s %d", MsgUnexpectedErrorFromCerberus, resp.StatusCode())
+		response := ControlResultBatchResponse{
+			HTTPStatusCode: resp.StatusCode(),
+			ErrorMessage:   err.Error(),
+			RawResponse:    string(resp.Body()),
+		}
+		return response, err
+	}
 }
 
 func (c *cerberusClient) VerifyInstrumentHash(hash string) error {
