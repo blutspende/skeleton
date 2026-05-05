@@ -83,8 +83,18 @@ type ExtraValueTO struct {
 
 type createAnalysisResultResponseItemTO struct {
 	ID         uuid.NullUUID `json:"id"`
-	WorkItemID uuid.UUID     `json:"workItemId"`
+	WorkItemID uuid.UUID     `json:"originalId"`
 	Error      *string       `json:"error"`
+}
+
+type createAnalysisResultResponseItemsTO struct {
+	AnalysisResultIDs []createAnalysisResultResponseItemTO `json:"resultIds"`
+	ControlResultIds  []createControlResultResponseItemTO  `json:"controlResultIds"`
+}
+
+type createControlResultResponseItemTO struct {
+	ID              uuid.NullUUID `json:"id"`
+	ControlResultID uuid.UUID     `json:"originalId"`
 }
 
 type ChannelResultTO struct {
@@ -147,6 +157,7 @@ type ControlResultTO struct {
 	AnalyteID                  uuid.UUID         `json:"analyteID"`
 	IsValid                    bool              `json:"isValid"`
 	IsComparedToExpectedResult bool              `json:"isComparedToExpectedResult"`
+	ExpectedControlResultID    uuid.NullUUID     `json:"expectedControlResultId"`
 	Result                     string            `json:"result"`
 	ExaminedAt                 time.Time         `json:"examinedAt"`
 	ChannelResults             []ChannelResultTO `json:"channelResults"`
@@ -274,20 +285,12 @@ func (c *cerberusClient) SendAnalysisResultBatch(analysisResults []AnalysisResul
 	}
 
 	analysisResultBatchItemInfoList := make([]AnalysisResultBatchItemInfo, len(analysisResults))
+	controlResultBatchItemList := make([]ControlResultBatchItem, 0)
 
-	var hasError bool
 	for i := range analysisResults {
 		analysisResultBatchItemInfoList[i] = AnalysisResultBatchItemInfo{
 			AnalysisResult: &analysisResults[i],
 		}
-	}
-
-	if hasError {
-		response := AnalysisResultBatchResponse{
-			AnalysisResultBatchItemInfoList: analysisResultBatchItemInfoList,
-			ErrorMessage:                    MsgFailedToPrepareData,
-		}
-		return response, nil
 	}
 
 	resp, err := c.client.R().
@@ -298,6 +301,7 @@ func (c *cerberusClient) SendAnalysisResultBatch(analysisResults []AnalysisResul
 	if err != nil {
 		response := AnalysisResultBatchResponse{
 			AnalysisResultBatchItemInfoList: analysisResultBatchItemInfoList,
+			ControlResultBatchItemList:      controlResultBatchItemList,
 			ErrorMessage:                    err.Error(),
 		}
 
@@ -309,7 +313,7 @@ func (c *cerberusClient) SendAnalysisResultBatch(analysisResults []AnalysisResul
 
 	switch {
 	case resp.StatusCode() == http.StatusCreated, resp.StatusCode() == http.StatusAccepted:
-		responseItems := make([]createAnalysisResultResponseItemTO, 0)
+		var responseItems createAnalysisResultResponseItemsTO
 		err = json.Unmarshal(resp.Body(), &responseItems)
 		if err != nil {
 			response := AnalysisResultBatchResponse{
@@ -322,13 +326,23 @@ func (c *cerberusClient) SendAnalysisResultBatch(analysisResults []AnalysisResul
 			return response, err
 		}
 
-		for i, responseItem := range responseItems {
+		for i, responseItem := range responseItems.AnalysisResultIDs {
 			analysisResultBatchItemInfoList[i].ErrorMessage = utils.StringPointerToString(responseItem.Error)
 			analysisResultBatchItemInfoList[i].CerberusAnalysisResultID = utils.NullUUIDToUUIDPointer(responseItem.ID)
 		}
 
+		for _, controlResponseItem := range responseItems.ControlResultIds {
+			if controlResponseItem.ID.Valid {
+				controlResultBatchItemList = append(controlResultBatchItemList, ControlResultBatchItem{
+					ControlResultID:         new(controlResponseItem.ControlResultID),
+					CerberusControlResultID: utils.NullUUIDToUUIDPointer(controlResponseItem.ID),
+				})
+			}
+		}
+
 		response := AnalysisResultBatchResponse{
 			AnalysisResultBatchItemInfoList: analysisResultBatchItemInfoList,
+			ControlResultBatchItemList:      controlResultBatchItemList,
 			HTTPStatusCode:                  resp.StatusCode(),
 			RawResponse:                     string(resp.Body()),
 		}
@@ -341,6 +355,7 @@ func (c *cerberusClient) SendAnalysisResultBatch(analysisResults []AnalysisResul
 			err = fmt.Errorf("can not unmarshal error of response (%w)", err)
 			response := AnalysisResultBatchResponse{
 				AnalysisResultBatchItemInfoList: analysisResultBatchItemInfoList,
+				ControlResultBatchItemList:      controlResultBatchItemList,
 				HTTPStatusCode:                  resp.StatusCode(),
 				ErrorMessage:                    err.Error(),
 				RawResponse:                     string(resp.Body()),
@@ -350,6 +365,7 @@ func (c *cerberusClient) SendAnalysisResultBatch(analysisResults []AnalysisResul
 		err = errors.New(errReps.Message)
 		response := AnalysisResultBatchResponse{
 			AnalysisResultBatchItemInfoList: analysisResultBatchItemInfoList,
+			ControlResultBatchItemList:      controlResultBatchItemList,
 			HTTPStatusCode:                  resp.StatusCode(),
 			ErrorMessage:                    err.Error(),
 			RawResponse:                     string(resp.Body()),
@@ -359,6 +375,7 @@ func (c *cerberusClient) SendAnalysisResultBatch(analysisResults []AnalysisResul
 		err = fmt.Errorf("%s %d", MsgUnexpectedErrorFromCerberus, resp.StatusCode())
 		response := AnalysisResultBatchResponse{
 			AnalysisResultBatchItemInfoList: analysisResultBatchItemInfoList,
+			ControlResultBatchItemList:      controlResultBatchItemList,
 			HTTPStatusCode:                  resp.StatusCode(),
 			ErrorMessage:                    err.Error(),
 			RawResponse:                     string(resp.Body()),

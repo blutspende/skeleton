@@ -249,6 +249,7 @@ type AnalysisResult struct {
 	ExtraValues              []ExtraValue
 	Reagents                 []Reagent
 	ControlResults           []ControlResult
+	ControlResultIDs         []uuid.UUID
 	Images                   []Image
 
 	deaRawMessageID uuid.NullUUID
@@ -303,6 +304,7 @@ func (i AnalysisResultBatchItemInfo) IsSuccessful() bool {
 
 type AnalysisResultBatchResponse struct {
 	AnalysisResultBatchItemInfoList []AnalysisResultBatchItemInfo
+	ControlResultBatchItemList      []ControlResultBatchItem
 	ErrorMessage                    string
 	HTTPStatusCode                  int
 	RawResponse                     string
@@ -316,10 +318,17 @@ func (r AnalysisResultBatchResponse) IsSuccess() bool {
 	return r.HTTPStatusCode >= http.StatusOK && r.HTTPStatusCode < http.StatusMultipleChoices
 }
 
+type ControlResultBatchItem struct {
+	ControlResultID         *uuid.UUID
+	CerberusControlResultID *uuid.UUID
+	ErrorMessage            string
+}
+
 type ControlResultBatchResponse struct {
-	ErrorMessage   string
-	HTTPStatusCode int
-	RawResponse    string
+	ControlResultBatchItemInfoList []ControlResultBatchItem
+	ErrorMessage                   string
+	HTTPStatusCode                 int
+	RawResponse                    string
 }
 
 func (r ControlResultBatchResponse) HasResult() bool {

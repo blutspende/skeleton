@@ -682,6 +682,7 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 
 	analysisRepositoryMock.analysisResultsById = analysisResults
 	analysisRepositoryMock.analysisRequests = analysisRequests
+	analysisRepositoryMock.analysisResultIDsNotSavedToCerberus = []uuid.UUID{analysisResultId1, analysisResultId2}
 	err = skeletonInstance.SubmitControlResults(context.TODO(), []StandaloneControlResult{
 		{
 			ControlResult: controlResult,
@@ -697,6 +698,7 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 
 	analysisRepositoryMock.analysisResultsById = make([]AnalysisResult, 0)
 	analysisRepositoryMock.analysisRequests = make([]AnalysisRequest, 0)
+	analysisRepositoryMock.analysisResultIDsNotSavedToCerberus = make([]uuid.UUID, 0)
 	skeletonManagerMock.AnalysisResultsForProcessing = make([]AnalysisResult, 0)
 	skeletonManagerMock.StandaloneControlResultsForProcessing = make([]StandaloneControlResult, 0)
 
@@ -715,6 +717,7 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 
 	analysisRepositoryMock.analysisResultsById = analysisResults
 	analysisRepositoryMock.analysisRequests = analysisRequests
+	analysisRepositoryMock.analysisResultIDsNotSavedToCerberus = []uuid.UUID{analysisResultId1, analysisResultId2}
 	skeletonManagerMock.AnalysisResultsForProcessing = make([]AnalysisResult, 0)
 	skeletonManagerMock.StandaloneControlResultsForProcessing = make([]StandaloneControlResult, 0)
 	controlResultWithoutAnalysisResult := ControlResult{
@@ -774,6 +777,35 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 	time.Sleep(6 * time.Second)
 	assert.Equal(t, 2, len(skeletonManagerMock.AnalysisResultsForProcessing))
 	assert.Equal(t, 2, len(skeletonManagerMock.StandaloneControlResultsForProcessing))
+
+	analysisRepositoryMock.analysisResultsById = []AnalysisResult{analysisResults[0]}
+	analysisRepositoryMock.analysisRequests = analysisRequests
+	analysisRepositoryMock.analysisResultIDsNotSavedToCerberus = []uuid.UUID{analysisResultId1}
+	skeletonManagerMock.AnalysisResultsForProcessing = make([]AnalysisResult, 0)
+	skeletonManagerMock.StandaloneControlResultsForProcessing = make([]StandaloneControlResult, 0)
+
+	err = skeletonInstance.SubmitControlResults(context.TODO(), []StandaloneControlResult{
+		{
+			ControlResult: controlResultWithoutAnalysisResult,
+			Reagents:      []Reagent{reagent},
+			ResultIDs:     []uuid.UUID{},
+		},
+		{
+			ControlResult: controlResultWithoutReagentAnalysisResult,
+			Reagents:      []Reagent{},
+			ResultIDs:     []uuid.UUID{},
+		},
+		{
+			ControlResult: controlResult,
+			Reagents:      []Reagent{reagent},
+			ResultIDs:     []uuid.UUID{analysisResultId1, analysisResultId2},
+		},
+	})
+	assert.Nil(t, err)
+
+	time.Sleep(6 * time.Second)
+	assert.Equal(t, 1, len(skeletonManagerMock.AnalysisResultsForProcessing))
+	assert.Equal(t, 3, len(skeletonManagerMock.StandaloneControlResultsForProcessing))
 }
 
 func TestSubmitAnalysisResultFieldValidations(t *testing.T) {
@@ -1384,8 +1416,8 @@ func (m *analysisServiceMock) CreateAnalysisResultsBatch(ctx context.Context, an
 	}
 	return analysisResults.Results, nil
 }
-func (m *analysisServiceMock) CreateControlResultBatch(ctx context.Context, controlResults []StandaloneControlResult) ([]StandaloneControlResult, []uuid.UUID, error) {
-	return nil, nil, nil
+func (m *analysisServiceMock) CreateControlResultBatch(ctx context.Context, controlResults []StandaloneControlResult) ([]StandaloneControlResult, error) {
+	return nil, nil
 }
 func (m *analysisServiceMock) GetAnalysisResultsByIDsWithRecalculatedStatus(ctx context.Context, analysisResultIDs []uuid.UUID, reValidateControlResult bool) ([]AnalysisResult, error) {
 	return nil, nil
@@ -1412,6 +1444,11 @@ func (m *analysisServiceMock) ProcessStuckImagesToCerberus(ctx context.Context) 
 }
 func (m *analysisServiceMock) SetAnalysisResultStatusBasedOnControlResults(ctx context.Context, analysisResult AnalysisResult, commonControlResults []ControlResult, reValidateControlResult bool) (AnalysisResult, error) {
 	return analysisResult, nil
+}
+func (m *analysisServiceMock) SaveCerberusIDsForControlResultBatchItems(ctx context.Context, analysisResults []ControlResultBatchItem) {
+}
+func (m *analysisServiceMock) GetAnalysisResultIDsNotSavedIntoCerberusByAnalysisResultIDMap(ctx context.Context, analysisResultIDMap map[uuid.UUID]interface{}) (map[uuid.UUID]interface{}, error) {
+	return nil, nil
 }
 
 type analysisRepositoryMock struct {

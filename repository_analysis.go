@@ -886,6 +886,9 @@ func (r *analysisRepository) IncreaseSentToInstrumentCounter(ctx context.Context
 }
 
 func (r *analysisRepository) SaveAnalysisRequestsInstrumentTransmissions(ctx context.Context, analysisRequestIDs []uuid.UUID, instrumentID uuid.UUID) error {
+	if len(analysisRequestIDs) == 0 {
+		return nil
+	}
 	args := make([]map[string]interface{}, len(analysisRequestIDs))
 	for i := range analysisRequestIDs {
 		args[i] = map[string]interface{}{
@@ -1340,6 +1343,10 @@ func (r *analysisRepository) gatherAndAttachAllConnectedDataToAnalysisResults(ct
 }
 
 func (r *analysisRepository) GetAnalysisResultIdsForStatusRecalculationByControlIds(ctx context.Context, controlResultIds []uuid.UUID) ([]uuid.UUID, error) {
+	if len(controlResultIds) == 0 {
+		return []uuid.UUID{}, nil
+	}
+
 	analysisResultIds := make([]uuid.UUID, 0)
 	query := `SELECT sar.id
 		FROM %schema_name%.sk_analysis_results sar
@@ -3094,6 +3101,10 @@ func (r *analysisRepository) IncreaseImageUploadRetryCount(ctx context.Context, 
 }
 
 func (r *analysisRepository) MarkImagesAsSyncedToCerberus(ctx context.Context, ids []uuid.UUID) error {
+	if len(ids) == 0 {
+		return nil
+	}
+
 	query := fmt.Sprintf(`UPDATE %s.sk_analysis_result_images SET sync_to_cerberus_needed = false WHERE id IN (?);`, r.dbSchema)
 
 	query, args, _ := sqlx.In(query, ids)
@@ -3680,6 +3691,7 @@ func convertControlResultsToTO(controlResult ControlResult) (ControlResultTO, er
 		AnalyteID:                  controlResult.AnalyteMapping.AnalyteID,
 		IsValid:                    controlResult.IsValid,
 		IsComparedToExpectedResult: controlResult.IsComparedToExpectedResult,
+		ExpectedControlResultID:    controlResult.ExpectedControlResultId,
 		Result:                     controlResult.Result,
 		ExaminedAt:                 controlResult.ExaminedAt,
 		ChannelResults:             make([]ChannelResultTO, 0),
@@ -3740,6 +3752,7 @@ func convertStandaloneControlResultsToTOs(standaloneControlResults []StandaloneC
 				AnalyteID:                  controlResult.AnalyteMapping.AnalyteID,
 				IsValid:                    controlResult.IsValid,
 				IsComparedToExpectedResult: controlResult.IsComparedToExpectedResult,
+				ExpectedControlResultID:    controlResult.ExpectedControlResultId,
 				Result:                     controlResult.Result,
 				ExaminedAt:                 controlResult.ExaminedAt,
 				ChannelResults:             make([]ChannelResultTO, 0),

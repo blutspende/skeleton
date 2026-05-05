@@ -134,15 +134,40 @@ func (s *skeleton) SubmitAnalysisResultBatch(ctx context.Context, resultBatch An
 
 	go func(analysisResults []AnalysisResult) {
 		for i := range analysisResults {
+			analysisResults[i].ControlResultIDs = make([]uuid.UUID, 0)
 			err := s.saveImages(ctx, &analysisResults[i])
 			if err != nil {
 				log.Error().Err(err).Str("analysisResultID", analysisResults[i].ID.String()).Msg("save images of analysis result failed")
 			}
-			for j := range analysisResults[i].ControlResults {
-				err := s.SaveControlResultImages(ctx, &analysisResults[i].ControlResults[j])
-				if err != nil {
-					log.Error().Err(err).Str("controlResultID", analysisResults[i].ControlResults[j].ID.String()).Msg("save images of control result failed")
+
+			notSentControlResults := make([]ControlResult, 0)
+			for j, controlResult := range analysisResults[i].ControlResults {
+				if controlResult.CerberusID.Valid {
+					analysisResults[i].ControlResultIDs = append(analysisResults[i].ControlResultIDs, analysisResults[i].ControlResults[j].ID)
+				} else {
+					err := s.SaveControlResultImages(ctx, &analysisResults[i].ControlResults[j])
+					if err != nil {
+						log.Error().Err(err).Str("controlResultID", analysisResults[i].ControlResults[j].ID.String()).Msg("save images of control result failed")
+					}
+					notSentControlResults = append(notSentControlResults, analysisResults[i].ControlResults[j])
 				}
+			}
+			analysisResults[i].ControlResults = notSentControlResults
+
+			for j, reagent := range analysisResults[i].Reagents {
+				notSentControlResults = make([]ControlResult, 0)
+				for k, controlResult := range reagent.ControlResults {
+					if controlResult.CerberusID.Valid {
+						analysisResults[i].ControlResultIDs = append(analysisResults[i].ControlResultIDs, analysisResults[i].Reagents[j].ControlResults[k].ID)
+					} else {
+						err := s.SaveControlResultImages(ctx, &analysisResults[i].Reagents[j].ControlResults[k])
+						if err != nil {
+							log.Error().Err(err).Str("controlResultID", analysisResults[i].Reagents[j].ControlResults[k].ID.String()).Msg("save images of control result failed")
+						}
+						notSentControlResults = append(notSentControlResults, analysisResults[i].Reagents[j].ControlResults[k])
+					}
+				}
+				analysisResults[i].Reagents[j].ControlResults = notSentControlResults
 			}
 
 			analyteRequests, err := s.analysisRepository.GetAnalysisRequestsBySampleCodeAndAnalyteID(ctx, analysisResults[i].SampleCode, analysisResults[i].AnalyteMapping.AnalyteID)
@@ -175,21 +200,52 @@ func (s *skeleton) SubmitControlResults(ctx context.Context, standaloneControlRe
 				return fmt.Errorf("invalid reagent type at index %d in control result at index %d", j, i)
 			}
 		}
+
+		err := s.SaveControlResultImages(ctx, &standaloneControlResults[i].ControlResult)
+		if err != nil {
+			log.Error().Err(err).Str("controlResultID", standaloneControlResults[i].ControlResult.ID.String()).Msg("save images of control result failed")
+		}
 	}
 	var err error
-	var analysisResultIds []uuid.UUID
-	standaloneControlResults, analysisResultIds, err = s.analysisService.CreateControlResultBatch(ctx, standaloneControlResults)
+	standaloneControlResults, err = s.analysisService.CreateControlResultBatch(ctx, standaloneControlResults)
 	if err != nil {
 		return err
 	}
 
-	go func(controlResults []StandaloneControlResult) {
-		for i := range controlResults {
-			if len(controlResults[i].ResultIDs) == 0 {
-				s.manager.SendControlResultForProcessing(controlResults[i])
+	analysisResultIDMap := make(map[uuid.UUID]interface{})
+	for i, standaloneControl := range standaloneControlResults {
+		for j, analysisResultID := range standaloneControl.ResultIDs {
+			if _, ok := analysisResultIDMap[analysisResultID]; !ok {
+				analysisResultIDMap[standaloneControlResults[i].ResultIDs[j]] = nil
 			}
 		}
-	}(standaloneControlResults)
+	}
+
+	var analysisResultIDMapNotSentToCerberus map[uuid.UUID]interface{}
+	analysisResultIDsNotSentToCerberus := make([]uuid.UUID, 0)
+	standaloneControlResultsToUpload := make([]StandaloneControlResult, 0)
+	analysisResultIDMapNotSentToCerberus, err = s.analysisService.GetAnalysisResultIDsNotSavedIntoCerberusByAnalysisResultIDMap(ctx, analysisResultIDMap)
+
+	for i, standaloneControl := range standaloneControlResults {
+		analysisResultIDsAlreadySentToCerberus := make([]uuid.UUID, 0)
+		for j, analysisResultID := range standaloneControl.ResultIDs {
+			if _, ok := analysisResultIDMapNotSentToCerberus[analysisResultID]; !ok {
+				analysisResultIDsAlreadySentToCerberus = append(analysisResultIDsAlreadySentToCerberus, standaloneControlResults[i].ResultIDs[j])
+			} else {
+				analysisResultIDsNotSentToCerberus = append(analysisResultIDsNotSentToCerberus, standaloneControlResults[i].ResultIDs[j])
+			}
+		}
+		standaloneControlResults[i].ResultIDs = analysisResultIDsAlreadySentToCerberus
+		if len(standaloneControlResults[i].ResultIDs) > 0 || len(analysisResultIDsNotSentToCerberus) == 0 {
+			standaloneControlResultsToUpload = append(standaloneControlResultsToUpload, standaloneControlResults[i])
+		}
+	}
+
+	go func(controlResults []StandaloneControlResult) {
+		for i := range controlResults {
+			s.manager.SendControlResultForProcessing(controlResults[i])
+		}
+	}(standaloneControlResultsToUpload)
 
 	go func(analysisResultIDs []uuid.UUID) {
 		analysisResults, err := s.analysisService.GetAnalysisResultsByIDsWithRecalculatedStatus(ctx, analysisResultIDs, true)
@@ -210,7 +266,7 @@ func (s *skeleton) SubmitControlResults(ctx context.Context, standaloneControlRe
 				s.manager.SendResultForProcessing(analysisResults[i])
 			}
 		}
-	}(analysisResultIds)
+	}(analysisResultIDsNotSentToCerberus)
 
 	return nil
 }
@@ -1616,6 +1672,7 @@ func (s *skeleton) submitResultsToCerberus(ctx context.Context) {
 					}
 
 					s.analysisService.SaveCerberusIDsForAnalysisResultBatchItems(ctx, response.AnalysisResultBatchItemInfoList)
+					s.analysisService.SaveCerberusIDsForControlResultBatchItems(ctx, response.ControlResultBatchItemList)
 
 					log.Trace().Int64("elapsedExecutionTime", time.Since(executionStarted).Milliseconds()).
 						Msgf("Sent (or tried to send) %d analysis results to cerberus", sentResultCount)
@@ -1656,6 +1713,8 @@ func (s *skeleton) submitResultsToCerberus(ctx context.Context) {
 					if err != nil {
 						log.Error().Err(err).Msg("Failed to update the status of the cerberus queue item")
 					}
+
+					s.analysisService.SaveCerberusIDsForControlResultBatchItems(ctx, response.ControlResultBatchItemInfoList)
 
 					log.Trace().Int64("elapsedExecutionTime", time.Since(executionStarted).Milliseconds()).
 						Msgf("Sent (or tried to send) %d control results to cerberus", sentResultCount)

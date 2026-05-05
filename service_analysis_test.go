@@ -1199,10 +1199,9 @@ func TestCreateControlResultBatchWithOnlyPreControlResults(t *testing.T) {
 	mockManager := &mockManager{}
 	extendedMockAnalysisRepo := &extendedMockAnalysisRepo{}
 	analysisService := NewAnalysisService(extendedMockAnalysisRepo, &instrumentRepositoryMock{}, nil, nil, mockManager)
-	results, analysisResultIds, err := analysisService.CreateControlResultBatch(context.TODO(), standaloneControlResults)
+	results, err := analysisService.CreateControlResultBatch(context.TODO(), standaloneControlResults)
 	assert.Nil(t, err)
 	assert.Equal(t, 1, len(results))
-	assert.Equal(t, 0, len(analysisResultIds))
 	assert.Equal(t, 1, len(results[0].AnalyteMapping.ExpectedControlResults))
 	assert.NotEqual(t, uuid.Nil, results[0].ID)
 	assert.Equal(t, true, results[0].IsValid)
@@ -1229,10 +1228,9 @@ func TestCreateControlResultBatchWithOnlyPostControlResults(t *testing.T) {
 	mockManager := &mockManager{}
 	extendedMockAnalysisRepo := &extendedMockAnalysisRepo{}
 	analysisService := NewAnalysisService(extendedMockAnalysisRepo, &instrumentRepositoryMock{}, nil, nil, mockManager)
-	results, analysisResultIds, err := analysisService.CreateControlResultBatch(context.TODO(), standaloneControlResults)
+	results, err := analysisService.CreateControlResultBatch(context.TODO(), standaloneControlResults)
 	assert.Nil(t, err)
 	assert.Equal(t, 1, len(results))
-	assert.Equal(t, 3, len(analysisResultIds))
 	assert.Equal(t, 1, len(results[0].AnalyteMapping.ExpectedControlResults))
 	assert.NotEqual(t, uuid.Nil, results[0].ID)
 	assert.Equal(t, true, results[0].IsValid)
@@ -1332,10 +1330,9 @@ func TestCreateControlResultBatch(t *testing.T) {
 	mockManager := &mockManager{}
 	extendedMockAnalysisRepo := &extendedMockAnalysisRepo{}
 	analysisService := NewAnalysisService(extendedMockAnalysisRepo, &instrumentRepositoryMock{}, nil, nil, mockManager)
-	results, analysisResultIds, err := analysisService.CreateControlResultBatch(context.TODO(), standaloneControlResults)
+	results, err := analysisService.CreateControlResultBatch(context.TODO(), standaloneControlResults)
 	assert.Nil(t, err)
 	assert.Equal(t, 2, len(results))
-	assert.Equal(t, 3, len(analysisResultIds))
 	assert.Equal(t, 1, len(results[0].AnalyteMapping.ExpectedControlResults))
 	assert.NotEqual(t, uuid.Nil, results[0].ID)
 	assert.Equal(t, false, results[0].IsValid)

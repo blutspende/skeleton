@@ -89,6 +89,11 @@ func (r *messageOutOrderRepository) AddAnalysisRequestsToMessageOutOrder(ctx con
 }
 
 func (r *messageOutOrderRepository) GetBySampleCodesAndRequestMappingIDs(ctx context.Context, sampleCodes []string, instrumentID uuid.UUID, includePending bool) (map[string]map[uuid.UUID][]MessageOutOrder, error) {
+	messageOutOrdersBySampleCodesMap := make(map[string]map[uuid.UUID][]MessageOutOrder)
+	if len(sampleCodes) == 0 {
+		return messageOutOrdersBySampleCodesMap, nil
+	}
+
 	queryArgs := []interface{}{sampleCodes, instrumentID, instrumentenum.MessageStatusSent}
 	filterCondition := " AND (smo.status = ?"
 	if includePending {
@@ -111,7 +116,7 @@ func (r *messageOutOrderRepository) GetBySampleCodesAndRequestMappingIDs(ctx con
 		return nil, ErrGetMessageOutOrdersBySampleCodesAndRequestMappingIDsFailed
 	}
 	defer rows.Close()
-	messageOutOrdersBySampleCodesMap := make(map[string]map[uuid.UUID][]MessageOutOrder)
+
 	for rows.Next() {
 		var dao messageOutOrderDAO
 		err = rows.StructScan(&dao)

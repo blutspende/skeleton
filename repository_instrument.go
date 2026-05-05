@@ -620,6 +620,9 @@ func (r *instrumentRepository) GetProtocolAbilities(ctx context.Context, protoco
 }
 
 func (r *instrumentRepository) UpsertProtocolAbilities(ctx context.Context, protocolID uuid.UUID, protocolAbilities []ProtocolAbility) error {
+	if len(protocolAbilities) == 0 {
+		return nil
+	}
 	query := fmt.Sprintf(`INSERT INTO %s.sk_protocol_abilities(protocol_id, connection_mode, abilities, request_mapping_available)
 		VALUES(:protocol_id, :connection_mode, :abilities, :request_mapping_available)
 		ON CONFLICT (protocol_id, connection_mode) WHERE deleted_at IS NULL
@@ -724,6 +727,10 @@ func (r *instrumentRepository) DeleteProtocolSettings(ctx context.Context, proto
 }
 
 func (r *instrumentRepository) UpsertManufacturerTests(ctx context.Context, manufacturerTests []SupportedManufacturerTests) error {
+	if len(manufacturerTests) == 0 {
+		return nil
+	}
+
 	query := fmt.Sprintf(`INSERT INTO %s.sk_manufacturer_tests(test_name, channels, valid_result_values)
 		VALUES(:test_name, :channels, :valid_result_values)
 		ON CONFLICT (test_name) WHERE deleted_at IS NULL
@@ -1139,7 +1146,7 @@ func (r *instrumentRepository) GetNotSpecifiedExpectedControlResultsByInstrument
 
 func (r *instrumentRepository) GetExpectedControlResultsByInstrumentIdAndSampleCodes(ctx context.Context, instrumentId uuid.UUID, sampleCodes []string) (map[uuid.UUID]ExpectedControlResult, error) {
 	expectedControlResultsMapById := make(map[uuid.UUID]ExpectedControlResult)
-	if (instrumentId == uuid.UUID{}) || (instrumentId == uuid.Nil) {
+	if (instrumentId == uuid.UUID{}) || instrumentId == uuid.Nil || len(sampleCodes) == 0 {
 		return expectedControlResultsMapById, nil
 	}
 	query := fmt.Sprintf(`SELECT secr.* FROM %s.sk_expected_control_result secr
@@ -1266,6 +1273,11 @@ func (r *instrumentRepository) GetRequestMappings(ctx context.Context, instrumen
 }
 
 func (r *instrumentRepository) GetRequestMappingAnalytes(ctx context.Context, requestMappingIDs []uuid.UUID) (map[uuid.UUID][]uuid.UUID, error) {
+	analyteIDsByRequestMappingIDs := make(map[uuid.UUID][]uuid.UUID)
+	if len(requestMappingIDs) == 0 {
+		return analyteIDsByRequestMappingIDs, nil
+	}
+
 	query := fmt.Sprintf(`SELECT request_mapping_id, analyte_id FROM %s.sk_request_mapping_analytes WHERE request_mapping_id IN (?) AND deleted_at IS NULL;`, r.dbSchema)
 	query, args, _ := sqlx.In(query, requestMappingIDs)
 	query = r.db.Rebind(query)
@@ -1275,7 +1287,6 @@ func (r *instrumentRepository) GetRequestMappingAnalytes(ctx context.Context, re
 		return nil, ErrGetRequestMappingAnalytesFailed
 	}
 	defer rows.Close()
-	analyteIDsByRequestMappingIDs := make(map[uuid.UUID][]uuid.UUID)
 	for rows.Next() {
 		var requestMappingID, analyteID uuid.UUID
 		err = rows.Scan(&requestMappingID, &analyteID)
@@ -1289,6 +1300,10 @@ func (r *instrumentRepository) GetRequestMappingAnalytes(ctx context.Context, re
 }
 
 func (r *instrumentRepository) DeleteRequestMappings(ctx context.Context, requestMappingIDs []uuid.UUID) error {
+	if len(requestMappingIDs) == 0 {
+		return nil
+	}
+
 	query := fmt.Sprintf(`UPDATE %s.sk_request_mappings SET deleted_at = timezone('utc', now()) WHERE id IN (?);`, r.dbSchema)
 	query, args, _ := sqlx.In(query, requestMappingIDs)
 	query = r.db.Rebind(query)
@@ -1301,6 +1316,10 @@ func (r *instrumentRepository) DeleteRequestMappings(ctx context.Context, reques
 }
 
 func (r *instrumentRepository) DeleteRequestMappingAnalytes(ctx context.Context, requestMappingID uuid.UUID, analyteIDs []uuid.UUID) error {
+	if len(analyteIDs) == 0 {
+		return nil
+	}
+
 	query := fmt.Sprintf(`UPDATE %s.sk_request_mapping_analytes SET deleted_at = timezone('utc', now()) WHERE request_mapping_id = ? AND analyte_id IN (?);`, r.dbSchema)
 	query, args, _ := sqlx.In(query, requestMappingID, analyteIDs)
 	query = r.db.Rebind(query)
@@ -1345,6 +1364,11 @@ func (r *instrumentRepository) CreateValidatedAnalyteIDs(ctx context.Context, an
 }
 
 func (r *instrumentRepository) GetValidatedAnalyteIDsByAnalyteMappingID(ctx context.Context, analyteMappingIDs []uuid.UUID) (map[uuid.UUID][]uuid.UUID, error) {
+	validatedAnalyteIDsByAnalyteMappingID := make(map[uuid.UUID][]uuid.UUID)
+	if len(analyteMappingIDs) == 0 {
+		return validatedAnalyteIDsByAnalyteMappingID, nil
+	}
+
 	query := fmt.Sprintf(`SELECT analyte_mapping_id, validated_analyte_id FROM %s.sk_validated_analytes WHERE analyte_mapping_id IN (?) AND deleted_at IS NULL;`, r.dbSchema)
 	query, args, _ := sqlx.In(query, analyteMappingIDs)
 	query = r.db.Rebind(query)
@@ -1355,7 +1379,6 @@ func (r *instrumentRepository) GetValidatedAnalyteIDsByAnalyteMappingID(ctx cont
 	}
 	defer rows.Close()
 
-	validatedAnalyteIDsByAnalyteMappingID := make(map[uuid.UUID][]uuid.UUID)
 	for rows.Next() {
 		var analyteMappingID, validatedAnalyteID uuid.UUID
 		err = rows.Scan(&analyteMappingID, &validatedAnalyteID)
@@ -1417,6 +1440,10 @@ func (r *instrumentRepository) GetEncodings(ctx context.Context) ([]string, erro
 }
 
 func (r *instrumentRepository) GetInstrumentsSettings(ctx context.Context, instrumentIDs []uuid.UUID) (map[uuid.UUID][]InstrumentSetting, error) {
+	settingsMap := make(map[uuid.UUID][]InstrumentSetting)
+	if len(instrumentIDs) == 0 {
+		return settingsMap, nil
+	}
 	query := fmt.Sprintf(`SELECT * FROM %s.sk_instrument_settings WHERE instrument_id IN (?) AND deleted_at IS NULL;`, r.dbSchema)
 	query, args, _ := sqlx.In(query, instrumentIDs)
 	query = r.db.Rebind(query)
@@ -1426,7 +1453,7 @@ func (r *instrumentRepository) GetInstrumentsSettings(ctx context.Context, instr
 		return nil, ErrGetInstrumentsSettingsFailed
 	}
 	defer rows.Close()
-	settingsMap := make(map[uuid.UUID][]InstrumentSetting)
+
 	for rows.Next() {
 		var settingDao instrumentSettingDao
 		err = rows.StructScan(&settingDao)
@@ -1464,6 +1491,9 @@ func (r *instrumentRepository) UpsertInstrumentSetting(ctx context.Context, inst
 }
 
 func (r *instrumentRepository) DeleteInstrumentSettings(ctx context.Context, ids []uuid.UUID) error {
+	if len(ids) == 0 {
+		return nil
+	}
 	query := fmt.Sprintf(`UPDATE %s.sk_instrument_settings SET deleted_at = now() WHERE id IN (?);`, r.dbSchema)
 	query, args, _ := sqlx.In(query, ids)
 	query = r.db.Rebind(query)
@@ -1476,6 +1506,10 @@ func (r *instrumentRepository) DeleteInstrumentSettings(ctx context.Context, ids
 }
 
 func (r *instrumentRepository) CheckAnalytesUsage(ctx context.Context, analyteIDs []uuid.UUID) (map[uuid.UUID][]Instrument, error) {
+	analyteUsageMap := make(map[uuid.UUID][]Instrument)
+	if len(analyteIDs) == 0 {
+		return analyteUsageMap, nil
+	}
 	query := fmt.Sprintf(`SELECT am.analyte_id, i.id, i.name FROM %s.sk_analyte_mappings am INNER JOIN %s.sk_instruments i ON am.instrument_id = i.id
 	  WHERE am.analyte_id IN (?) AND am.deleted_at IS NULL AND i.deleted_at IS NULL;`, r.dbSchema, r.dbSchema)
 	query, args, _ := sqlx.In(query, analyteIDs)
@@ -1486,7 +1520,7 @@ func (r *instrumentRepository) CheckAnalytesUsage(ctx context.Context, analyteID
 		return nil, ErrCheckAnalyteUsageFailed
 	}
 	defer rows.Close()
-	analyteUsageMap := make(map[uuid.UUID][]Instrument)
+
 	for rows.Next() {
 		var analyteID, instrumentID uuid.UUID
 		var name string
