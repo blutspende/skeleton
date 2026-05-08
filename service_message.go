@@ -722,7 +722,7 @@ func (s *messageService) CreateSampleSeenMessages(sampleSeenMessages ...SampleSe
 func (s *messageService) StartSampleSeenRegisteringToCerberus(ctx context.Context) {
 	sampleSeenBatchChan := make(chan []SampleSeenMessage, 1024)
 	timeout := time.Duration(s.sampleSeenFlushSeconds) * time.Second
-	go startSampleSeenBatching(ctx, s.sampleSeenMessageChan, sampleSeenBatchChan, timeout)
+	go startSampleSeenBatching(ctx, s.sampleSeenMessageChan, sampleSeenBatchChan, s.sampleSeenBatchSize, timeout)
 	for {
 		select {
 		case messages := <-sampleSeenBatchChan:
@@ -738,21 +738,23 @@ func (s *messageService) StartSampleSeenRegisteringToCerberus(ctx context.Contex
 	}
 }
 
-func startSampleSeenBatching(ctx context.Context, listeningChan chan []SampleSeenMessage, batchChan chan []SampleSeenMessage, timeout time.Duration) {
-	batchSize := 200
+func startSampleSeenBatching(ctx context.Context, listeningChan chan []SampleSeenMessage, batchChan chan []SampleSeenMessage, batchSize int, timeout time.Duration) {
 	batch := make([]SampleSeenMessage, 0, batchSize)
+	t := time.NewTicker(timeout)
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case sampleCodesWithMessageIDAndIDs := <-listeningChan:
-			batch = append(batch, sampleCodesWithMessageIDAndIDs...)
-			if len(batch) < batchSize {
-				continue
+			for _, ssm := range sampleCodesWithMessageIDAndIDs {
+				batch = append(batch, ssm)
+				if len(batch) < batchSize {
+					continue
+				}
+				batchChan <- batch
+				batch = make([]SampleSeenMessage, 0, batchSize)
 			}
-			batchChan <- batch
-			batch = make([]SampleSeenMessage, 0, batchSize)
-		case <-time.After(timeout):
+		case <-t.C:
 			if len(batch) == 0 {
 				continue
 			}
@@ -774,7 +776,7 @@ func NewMessageService(deaClient DeaClientV1, cerberusClient CerberusClient, mes
 		messageOutArchivingChan:     make(chan []MessageOut, 100),
 		messageInSampleCodeIDChan:   make(chan []messageSampleCodesWithMessageID, 100),
 		messageOutSampleCodeIDChan:  make(chan []messageSampleCodesWithMessageID, 100),
-		sampleSeenMessageChan:       make(chan []SampleSeenMessage, 100),
+		sampleSeenMessageChan:       make(chan []SampleSeenMessage, sampleSeenBatchSize*2),
 		serviceName:                 serviceName,
 		sampleSeenFlushSeconds:      sampleSeenFlushSeconds,
 		sampleSeenBatchSize:         sampleSeenBatchSize,

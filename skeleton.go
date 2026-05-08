@@ -1108,27 +1108,27 @@ func (s *skeleton) processResults(ctx context.Context) {
 				log.Fatal().Msg("processing analysis results stopped: results channel closed")
 			}
 			s.resultsBuffer = append(s.resultsBuffer, result)
-			if len(s.resultsBuffer) >= 500 {
+			if len(s.resultsBuffer) >= s.config.ResultTransferBatchSize {
 				s.resultBatchesChan <- s.resultsBuffer
-				s.resultsBuffer = make([]AnalysisResult, 0, 500)
+				s.resultsBuffer = make([]AnalysisResult, 0, s.config.ResultTransferBatchSize)
 			}
 		case controlResult, ok := <-s.manager.GetControlResultChan():
 			if !ok {
 				log.Fatal().Msg("processing control results stopped: control results channel closed")
 			}
 			s.controlResultsBuffer = append(s.controlResultsBuffer, controlResult)
-			if len(s.controlResultsBuffer) >= 500 {
+			if len(s.controlResultsBuffer) >= s.config.ResultTransferBatchSize {
 				s.controlResultBatchesChan <- s.controlResultsBuffer
-				s.controlResultsBuffer = make([]StandaloneControlResult, 0, 500)
+				s.controlResultsBuffer = make([]StandaloneControlResult, 0, s.config.ResultTransferBatchSize)
 			}
 		case <-ticker.C:
 			if len(s.resultsBuffer) > 0 {
 				s.resultBatchesChan <- s.resultsBuffer
-				s.resultsBuffer = make([]AnalysisResult, 0, 500)
+				s.resultsBuffer = make([]AnalysisResult, 0, s.config.ResultTransferBatchSize)
 			}
 			if len(s.controlResultsBuffer) > 0 {
 				s.controlResultBatchesChan <- s.controlResultsBuffer
-				s.controlResultsBuffer = make([]StandaloneControlResult, 0, 500)
+				s.controlResultsBuffer = make([]StandaloneControlResult, 0, s.config.ResultTransferBatchSize)
 			}
 		}
 	}
@@ -2006,10 +2006,10 @@ func NewSkeleton(ctx context.Context, serviceName, displayName string, requested
 		cerberusClient:                         cerberusClient,
 		longPollClient:                         longPollClient,
 		deaClient:                              deaClient,
-		resultsBuffer:                          make([]AnalysisResult, 0, 500),
-		resultBatchesChan:                      make(chan []AnalysisResult, 10),
-		controlResultsBuffer:                   make([]StandaloneControlResult, 0, 500),
-		controlResultBatchesChan:               make(chan []StandaloneControlResult, 10),
+		resultsBuffer:                          make([]AnalysisResult, 0, config.ResultTransferBatchSize),
+		resultBatchesChan:                      make(chan []AnalysisResult, 100),
+		controlResultsBuffer:                   make([]StandaloneControlResult, 0, config.ResultTransferBatchSize),
+		controlResultBatchesChan:               make(chan []StandaloneControlResult, 100),
 		controlValidationAnalyteMappingsBuffer: make([]uuid.UUID, 0, 500),
 		controlValidationAnalyteMappingBatchesChan: make(chan []uuid.UUID, 10),
 		analysisResultStatusControlIdsBuffer:       make([]uuid.UUID, 0, 500),

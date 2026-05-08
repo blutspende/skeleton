@@ -55,7 +55,6 @@ type Configuration struct {
 	CerberusQueueItemRetryTimeout              int           `envconfig:"CERBERUS_QUEUE_ITEM_RETRY_TIMEOUT" default:"10"`
 	ImageRetrySeconds                          int           `envconfig:"IMAGE_RETRY_SECONDS" default:"60"`
 	AnalysisRequestsChannelBufferSize          int           `envconfig:"ANALYSIS_REQUESTS_CHANNEL_BUFFER_SIZE" default:"1024"`
-	AnalysisResultsChannelBufferSize           int           `envconfig:"ANALYSIS_RESULTS_CHANNEL_BUFFER_SIZE" default:"1024"`
 	AnalysisRequestWorkerPoolSize              int           `envconfig:"ANALYSIS_REQUEST_WORKER_POOL_SIZE" default:"3"`
 	InstrumentDriverRegistrationTimeoutSeconds int           `envconfig:"INSTRUMENT_DRIVER_REGISTRATION_RETRY_TIMEOUT" default:"10"`
 	InstrumentDriverRegistrationMaxRetry       int           `envconfig:"INSTRUMENT_DRIVER_REGISTRATION_MAX_RETRY" default:"20"`
@@ -80,7 +79,7 @@ type Configuration struct {
 	ControlResultSearchDays                    int           `envconfig:"CONTROL_RESULT_SEARCH_DAYS" default:"14"`
 	SampleSeenMessageFlushSeconds              int           `envconfig:"SAMPLE_SEEN_MESSAGE_FLUSH_SECONDS" default:"30"`
 	ConsoleLogFlushSeconds                     int           `envconfig:"CONSOLE_LOG_FLUSH_SECONDS" default:"30"`
-	SampleSeenBatchSize                        int           `envconfig:"SAMPLE_SEEN_BATCH_SIZE" default:"50"`
+	SampleSeenBatchSize                        int           `envconfig:"SAMPLE_SEEN_BATCH_SIZE" default:"100"`
 	SampleSeenBatchTimeOut                     int           `envconfig:"SAMPLE_SEEN_BATCH_TIMEOUT" default:"5"`
 	ClientCredentialAuthHeaderValue            string
 }
