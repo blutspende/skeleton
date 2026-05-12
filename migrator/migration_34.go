@@ -1,7 +1,7 @@
 package migrator
 
 const migration_34 = `
-	ALTER TABLE <SCHEMA_PLACEHOLDER>.sk_cerberus_queue_items ADD COLUMN IF NOT EXISTS data_type varchar NOT NULL;
+	ALTER TABLE <SCHEMA_PLACEHOLDER>.sk_cerberus_queue_items ADD COLUMN IF NOT EXISTS data_type varchar NULL;
 	ALTER TABLE <SCHEMA_PLACEHOLDER>.sk_control_results ADD COLUMN IF NOT EXISTS dea_raw_message_id UUID NULL;
 	ALTER TABLE <SCHEMA_PLACEHOLDER>.sk_control_results ADD COLUMN IF NOT EXISTS message_in_id uuid NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000';
 	ALTER TABLE <SCHEMA_PLACEHOLDER>.sk_control_results ADD COLUMN IF NOT EXISTS instrument_module varchar NULL;
