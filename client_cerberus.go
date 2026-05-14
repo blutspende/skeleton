@@ -23,7 +23,6 @@ const (
 	MsgUnexpectedErrorFromCerberus              = "unexpected error from cerberus"
 	MsgEmptyAnalysisResultsBatch                = "Send analysis results batch called with empty array"
 	MsgSendSampleSeenMessageBatchFailed         = "send sample seen message batch failed"
-	MsgFailedToPrepareData                      = "Failed to prepare data for sending"
 	MsgFailedToSetOnlineStatus                  = "Failed to set instrument online status"
 	MsgFailedToCallImageBatchAPI                = "Failed to call Cerberus API (/v1/analysis-results/image/batch)"
 	MsgFailedToCallVerifyAPI                    = "Failed to call Cerberus API (/v1/instrument/verify)"
@@ -83,18 +82,19 @@ type ExtraValueTO struct {
 
 type createAnalysisResultResponseItemTO struct {
 	ID         uuid.NullUUID `json:"id"`
-	WorkItemID uuid.UUID     `json:"originalId"`
+	OriginalID uuid.UUID     `json:"originalId"`
 	Error      *string       `json:"error"`
 }
 
 type createAnalysisResultResponseItemsTO struct {
-	AnalysisResultIDs []createAnalysisResultResponseItemTO `json:"resultIds"`
-	ControlResultIds  []createControlResultResponseItemTO  `json:"controlResultIds"`
+	AnalysisResultIDs []createAnalysisResultResponseItemTO `json:"results"`
+	ReagentIDs        []createAnalysisResultResponseItemTO `json:"reagents"`
+	ControlResultIDs  []createAnalysisResultResponseItemTO `json:"controlResults"`
 }
 
-type createControlResultResponseItemTO struct {
-	ID              uuid.NullUUID `json:"id"`
-	ControlResultID uuid.UUID     `json:"originalId"`
+type createControlResultResponseItemsTO struct {
+	ReagentIDs       []createAnalysisResultResponseItemTO `json:"reagents"`
+	ControlResultIDs []createAnalysisResultResponseItemTO `json:"controlResults"`
 }
 
 type ChannelResultTO struct {
@@ -106,30 +106,31 @@ type ChannelResultTO struct {
 }
 
 type AnalysisResultTO struct {
-	ID                       uuid.UUID         `json:"id"`
-	WorkingItemID            uuid.UUID         `json:"workItemId"`
-	DEARawMessageID          uuid.UUID         `json:"deaRawMessageId"`
-	ValidUntil               time.Time         `json:"validUntil"`
-	Status                   string            `json:"status"`
-	Mode                     string            `json:"mode"` // ResultMode
-	ResultYieldDateTime      *time.Time        `json:"resultYieldDateTime"`
-	ExaminedMaterial         uuid.UUID         `json:"examinedMaterial"`
-	Result                   string            `json:"result"`
-	Operator                 string            `json:"operator"`
-	TechnicalReleaseDateTime *time.Time        `json:"technicalReleaseDateTime"`
-	InstrumentID             uuid.UUID         `json:"instrumentId"`
-	InstrumentRunID          uuid.UUID         `json:"instrumentRunId"`
-	InstrumentModule         *string           `json:"instrumentModule,omitempty"`
-	Edited                   bool              `json:"resultEdit"`
-	EditReason               string            `json:"editReason"`
-	IsInvalid                bool              `json:"isInvalid"`
-	ChannelResults           []ChannelResultTO `json:"channelResults"`
-	ExtraValues              []ExtraValueTO    `json:"extraValues"`
-	Reagents                 []ReagentTO       `json:"reagents"`
-	ControlResults           []ControlResultTO `json:"controlResults"`
-	Images                   []ImageTO         `json:"images"`
-	WarnFlag                 bool              `json:"warnFlag"`
-	Warnings                 []string          `json:"warnings"`
+	ID                       uuid.UUID            `json:"id"`
+	WorkingItemID            uuid.UUID            `json:"workItemId"`
+	DEARawMessageID          uuid.UUID            `json:"deaRawMessageId"`
+	ValidUntil               time.Time            `json:"validUntil"`
+	Status                   string               `json:"status"`
+	Mode                     string               `json:"mode"` // ResultMode
+	ResultYieldDateTime      *time.Time           `json:"resultYieldDateTime"`
+	ExaminedMaterial         uuid.UUID            `json:"examinedMaterial"`
+	Result                   string               `json:"result"`
+	Operator                 string               `json:"operator"`
+	TechnicalReleaseDateTime *time.Time           `json:"technicalReleaseDateTime"`
+	InstrumentID             uuid.UUID            `json:"instrumentId"`
+	InstrumentRunID          uuid.UUID            `json:"instrumentRunId"`
+	InstrumentModule         *string              `json:"instrumentModule,omitempty"`
+	Edited                   bool                 `json:"resultEdit"`
+	EditReason               string               `json:"editReason"`
+	IsInvalid                bool                 `json:"isInvalid"`
+	ChannelResults           []ChannelResultTO    `json:"channelResults"`
+	ExtraValues              []ExtraValueTO       `json:"extraValues"`
+	Reagents                 []ReagentTO          `json:"reagents"`
+	ReagentReferences        []ReagentReferenceTO `json:"reagentReferences"`
+	ControlResults           []ControlResultTO    `json:"controlResults"`
+	Images                   []ImageTO            `json:"images"`
+	WarnFlag                 bool                 `json:"warnFlag"`
+	Warnings                 []string             `json:"warnings"`
 }
 
 type ImageTO struct {
@@ -146,6 +147,12 @@ type ReagentTO struct {
 	LotNo          string                     `json:"lotNo"`
 	Type           instrumentenum.ReagentType `json:"type"`
 	ControlResults []ControlResultTO          `json:"controlResults"`
+}
+
+type ReagentReferenceTO struct {
+	ReagentID        uuid.UUID         `json:"reagentId"`
+	ControlResultIDs []uuid.UUID       `json:"controlResultIds"`
+	ControlResults   []ControlResultTO `json:"controlResults"`
 }
 
 type ControlResultTO struct {
@@ -285,7 +292,7 @@ func (c *cerberusClient) SendAnalysisResultBatch(analysisResults []AnalysisResul
 	}
 
 	analysisResultBatchItemInfoList := make([]AnalysisResultBatchItemInfo, len(analysisResults))
-	controlResultBatchItemList := make([]ControlResultBatchItem, 0)
+	controlResultBatchItemList := make([]ResultBatchItem, 0)
 
 	for i := range analysisResults {
 		analysisResultBatchItemInfoList[i] = AnalysisResultBatchItemInfo{
@@ -311,8 +318,8 @@ func (c *cerberusClient) SendAnalysisResultBatch(analysisResults []AnalysisResul
 		//TODO:Better soltion for request-logging c.ciaHistoryService.Create(model.TYPE_AnalysisResultBatch, err.Error(), string(requestBody), 0, nil, analysisResultIDs)
 	}
 
-	switch {
-	case resp.StatusCode() == http.StatusCreated, resp.StatusCode() == http.StatusAccepted:
+	switch resp.StatusCode() {
+	case http.StatusCreated, http.StatusAccepted:
 		var responseItems createAnalysisResultResponseItemsTO
 		err = json.Unmarshal(resp.Body(), &responseItems)
 		if err != nil {
@@ -331,11 +338,11 @@ func (c *cerberusClient) SendAnalysisResultBatch(analysisResults []AnalysisResul
 			analysisResultBatchItemInfoList[i].CerberusAnalysisResultID = utils.NullUUIDToUUIDPointer(responseItem.ID)
 		}
 
-		for _, controlResponseItem := range responseItems.ControlResultIds {
+		for _, controlResponseItem := range responseItems.ControlResultIDs {
 			if controlResponseItem.ID.Valid {
-				controlResultBatchItemList = append(controlResultBatchItemList, ControlResultBatchItem{
-					ControlResultID:         new(controlResponseItem.ControlResultID),
-					CerberusControlResultID: utils.NullUUIDToUUIDPointer(controlResponseItem.ID),
+				controlResultBatchItemList = append(controlResultBatchItemList, ResultBatchItem{
+					ID:         new(controlResponseItem.OriginalID),
+					CerberusID: utils.NullUUIDToUUIDPointer(controlResponseItem.ID),
 				})
 			}
 		}
@@ -348,7 +355,7 @@ func (c *cerberusClient) SendAnalysisResultBatch(analysisResults []AnalysisResul
 		}
 
 		return response, nil
-	case resp.StatusCode() == http.StatusInternalServerError:
+	case http.StatusInternalServerError:
 		errReps := middleware.ClientError{}
 		err = json.Unmarshal(resp.Body(), &errReps)
 		if err != nil {
@@ -417,15 +424,51 @@ func (c *cerberusClient) SendControlResultBatch(controlResults []StandaloneContr
 		return response, fmt.Errorf("%s (%w)", ErrSendResultBatchFailed, err)
 	}
 
-	switch {
-	case resp.StatusCode() == http.StatusCreated, resp.StatusCode() == http.StatusAccepted:
+	reagentBatchItemInfoList := make([]ResultBatchItem, 0)
+	controlResultBatchItemList := make([]ResultBatchItem, 0)
+
+	switch resp.StatusCode() {
+	case http.StatusCreated, http.StatusAccepted:
+		var responseItems createControlResultResponseItemsTO
+		err = json.Unmarshal(resp.Body(), &responseItems)
+		if err != nil {
+			response := ControlResultBatchResponse{
+				ControlResultBatchItemInfoList: nil,
+				ReagentBatchItemInfoList:       nil,
+				ErrorMessage:                   err.Error(),
+				HTTPStatusCode:                 resp.StatusCode(),
+				RawResponse:                    string(resp.Body()),
+			}
+
+			return response, err
+		}
+		for _, reagentResponseItem := range responseItems.ReagentIDs {
+			if reagentResponseItem.ID.Valid {
+				reagentBatchItemInfoList = append(reagentBatchItemInfoList, ResultBatchItem{
+					ID:         new(reagentResponseItem.OriginalID),
+					CerberusID: utils.NullUUIDToUUIDPointer(reagentResponseItem.ID),
+				})
+			}
+		}
+
+		for _, controlResponseItem := range responseItems.ControlResultIDs {
+			if controlResponseItem.ID.Valid {
+				controlResultBatchItemList = append(controlResultBatchItemList, ResultBatchItem{
+					ID:         new(controlResponseItem.OriginalID),
+					CerberusID: utils.NullUUIDToUUIDPointer(controlResponseItem.ID),
+				})
+			}
+		}
+
 		response := ControlResultBatchResponse{
-			HTTPStatusCode: resp.StatusCode(),
-			RawResponse:    string(resp.Body()),
+			ControlResultBatchItemInfoList: controlResultBatchItemList,
+			ReagentBatchItemInfoList:       reagentBatchItemInfoList,
+			HTTPStatusCode:                 resp.StatusCode(),
+			RawResponse:                    string(resp.Body()),
 		}
 
 		return response, nil
-	case resp.StatusCode() == http.StatusInternalServerError:
+	case http.StatusInternalServerError:
 		errReps := middleware.ClientError{}
 		err = json.Unmarshal(resp.Body(), &errReps)
 		if err != nil {

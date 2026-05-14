@@ -39,7 +39,8 @@ type AnalysisService interface {
 	ProcessStuckImagesToDEA(ctx context.Context)
 	ProcessStuckImagesToCerberus(ctx context.Context)
 	SaveCerberusIDsForAnalysisResultBatchItems(ctx context.Context, analysisResults []AnalysisResultBatchItemInfo)
-	SaveCerberusIDsForControlResultBatchItems(ctx context.Context, analysisResults []ControlResultBatchItem)
+	SaveCerberusIDsForControlResultBatchItems(ctx context.Context, controlResults []ResultBatchItem)
+	SaveCerberusIDsForReagentBatchItems(ctx context.Context, reagents []ResultBatchItem)
 	SetAnalysisResultStatusBasedOnControlResults(ctx context.Context, analysisResult AnalysisResult, commonControlResults []ControlResult, reValidateControlResult bool) (AnalysisResult, error)
 	GetAnalysisResultIDsNotSavedIntoCerberusByAnalysisResultIDMap(ctx context.Context, analysisResultIDMap map[uuid.UUID]interface{}) (map[uuid.UUID]interface{}, error)
 }
@@ -216,14 +217,56 @@ func (as *analysisService) CreateAnalysisResultsBatch(ctx context.Context, analy
 	savedAnalysisResults := savedResultDataList.Results
 	for i := range savedAnalysisResults {
 		savedAnalysisResults[i].Reagents = append(savedAnalysisResults[i].Reagents, savedResultDataList.Reagents...)
-		for j := range savedAnalysisResults[i].Reagents {
-			if savedAnalysisResults[i].Reagents[j].ControlResults == nil {
-				savedAnalysisResults[i].Reagents[j].ControlResults = make([]ControlResult, 0)
+		if len(savedAnalysisResults[i].Reagents) != 0 {
+			newReagents := make([]Reagent, 0)
+			existingReagents := make([]ReagentReference, 0)
+			for j := range savedAnalysisResults[i].Reagents {
+				if savedAnalysisResults[i].Reagents[j].ControlResults == nil {
+					savedAnalysisResults[i].Reagents[j].ControlResults = make([]ControlResult, 0)
+				}
+				savedAnalysisResults[i].Reagents[j].ControlResults = append(savedAnalysisResults[i].Reagents[j].ControlResults, savedResultDataList.ControlResults...)
+				savedAnalysisResults[i].Reagents[j].ControlResults = append(savedAnalysisResults[i].Reagents[j].ControlResults, savedAnalysisResults[i].ControlResults...)
+
+				newControlResults := make([]ControlResult, 0)
+				existingControlResults := make([]uuid.UUID, 0)
+				for k, controlResult := range savedAnalysisResults[i].Reagents[j].ControlResults {
+					if controlResult.CerberusID.Valid {
+						existingControlResults = append(existingControlResults, savedAnalysisResults[i].Reagents[j].ControlResults[k].ID)
+					} else {
+						newControlResults = append(newControlResults, savedAnalysisResults[i].Reagents[j].ControlResults[k])
+					}
+				}
+
+				if savedAnalysisResults[i].Reagents[j].CerberusID.Valid {
+					existingReagents = append(existingReagents, ReagentReference{
+						ReagentID:        savedAnalysisResults[i].Reagents[j].ID,
+						ControlResultIDs: existingControlResults,
+						ControlResults:   newControlResults,
+					})
+				} else {
+					savedAnalysisResults[i].Reagents[j].ControlResults = newControlResults
+					savedAnalysisResults[i].Reagents[j].ControlResultIDs = existingControlResults
+					newReagents = append(newReagents, savedAnalysisResults[i].Reagents[j])
+				}
 			}
-			savedAnalysisResults[i].Reagents[j].ControlResults = append(savedAnalysisResults[i].Reagents[j].ControlResults, savedResultDataList.ControlResults...)
-			savedAnalysisResults[i].Reagents[j].ControlResults = append(savedAnalysisResults[i].Reagents[j].ControlResults, savedAnalysisResults[i].ControlResults...)
+
+			savedAnalysisResults[i].Reagents = newReagents
+			savedAnalysisResults[i].ReagentReferences = existingReagents
+			savedAnalysisResults[i].ControlResults = nil
+		} else {
+			savedAnalysisResults[i].ControlResults = append(savedAnalysisResults[i].ControlResults, savedResultDataList.ControlResults...)
+			newControlResults := make([]ControlResult, 0)
+			existingControlResults := make([]uuid.UUID, 0)
+			for k, controlResult := range savedAnalysisResults[i].ControlResults {
+				if controlResult.CerberusID.Valid {
+					existingControlResults = append(existingControlResults, savedAnalysisResults[i].ControlResults[k].ID)
+				} else {
+					newControlResults = append(newControlResults, savedAnalysisResults[i].ControlResults[k])
+				}
+			}
+			savedAnalysisResults[i].ControlResults = newControlResults
+			savedAnalysisResults[i].ControlResultIDs = existingControlResults
 		}
-		savedAnalysisResults[i].ControlResults = nil
 	}
 
 	return savedAnalysisResults, nil
@@ -1009,13 +1052,24 @@ func (as *analysisService) SaveCerberusIDsForAnalysisResultBatchItems(ctx contex
 	}
 }
 
-func (as *analysisService) SaveCerberusIDsForControlResultBatchItems(ctx context.Context, controlResults []ControlResultBatchItem) {
+func (as *analysisService) SaveCerberusIDsForControlResultBatchItems(ctx context.Context, controlResults []ResultBatchItem) {
 	for _, controlResult := range controlResults {
 		if len(controlResult.ErrorMessage) != 0 {
-			log.Warn().Msgf("Possible error happened in Cerberus at saving ControlResult with ID: %s Error: %s", controlResult.ControlResultID.String(), controlResult.ErrorMessage)
+			log.Warn().Msgf("Possible error happened in Cerberus at saving ControlResult with ID: %s Error: %s", controlResult.ID.String(), controlResult.ErrorMessage)
 		}
-		if controlResult.ControlResultID != nil && controlResult.CerberusControlResultID != nil {
-			_ = as.analysisRepository.SaveCerberusIDForControlResult(ctx, *controlResult.ControlResultID, *controlResult.CerberusControlResultID)
+		if controlResult.ID != nil && controlResult.CerberusID != nil {
+			_ = as.analysisRepository.SaveCerberusIDForControlResult(ctx, *controlResult.ID, *controlResult.CerberusID)
+		}
+	}
+}
+
+func (as *analysisService) SaveCerberusIDsForReagentBatchItems(ctx context.Context, reagents []ResultBatchItem) {
+	for _, reagent := range reagents {
+		if len(reagent.ErrorMessage) != 0 {
+			log.Warn().Msgf("Possible error happened in Cerberus at saving Reagent with ID: %s Error: %s", reagent.ID.String(), reagent.ErrorMessage)
+		}
+		if reagent.ID != nil && reagent.CerberusID != nil {
+			_ = as.analysisRepository.SaveCerberusIDForReagent(ctx, *reagent.ID, *reagent.CerberusID)
 		}
 	}
 }

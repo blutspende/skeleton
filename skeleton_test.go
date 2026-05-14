@@ -42,7 +42,7 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 		ImageRetrySeconds:                60,
 		AnalysisRequestWorkerPoolSize:    1,
 		LookBackDays:                     0,
-		SampleSeenMessageFlushSeconds:    0,
+		SampleSeenMessageFlushSeconds:    1,
 		MessageMaxRetries:                0,
 		MessageSampleCodeMaxRetries:      0,
 		SampleSeenBatchTimeOut:           3,
@@ -170,7 +170,7 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 		ResultTransferFlushTimeout:       5,
 		ImageRetrySeconds:                60,
 		LookBackDays:                     0,
-		SampleSeenMessageFlushSeconds:    0,
+		SampleSeenMessageFlushSeconds:    1,
 		MessageMaxRetries:                0,
 		MessageSampleCodeMaxRetries:      0,
 		SampleSeenBatchTimeOut:           3,
@@ -380,7 +380,7 @@ func TestAnalysisResultsReprocessing(t *testing.T) {
 		ResultTransferFlushTimeout:       5,
 		ImageRetrySeconds:                60,
 		LookBackDays:                     0,
-		SampleSeenMessageFlushSeconds:    0,
+		SampleSeenMessageFlushSeconds:    1,
 		MessageMaxRetries:                0,
 		MessageSampleCodeMaxRetries:      0,
 		SampleSeenBatchTimeOut:           3,
@@ -452,7 +452,7 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 		ResultTransferFlushTimeout:       5,
 		ImageRetrySeconds:                60,
 		LookBackDays:                     0,
-		SampleSeenMessageFlushSeconds:    0,
+		SampleSeenMessageFlushSeconds:    1,
 		MessageMaxRetries:                0,
 		MessageSampleCodeMaxRetries:      0,
 		SampleSeenBatchTimeOut:           3,
@@ -1397,6 +1397,10 @@ type analysisServiceMock struct {
 
 func (m *analysisServiceMock) SaveCerberusIDsForAnalysisResultBatchItems(ctx context.Context, analysisResults []AnalysisResultBatchItemInfo) {
 }
+func (m *analysisServiceMock) SaveCerberusIDsForControlResultBatchItems(ctx context.Context, controlResults []ResultBatchItem) {
+}
+func (m *analysisServiceMock) SaveCerberusIDsForReagentBatchItems(ctx context.Context, reagents []ResultBatchItem) {
+}
 
 func (m *analysisServiceMock) CreateAnalysisRequests(ctx context.Context, analysisRequests []AnalysisRequest) error {
 	return nil
@@ -1444,8 +1448,6 @@ func (m *analysisServiceMock) ProcessStuckImagesToCerberus(ctx context.Context) 
 }
 func (m *analysisServiceMock) SetAnalysisResultStatusBasedOnControlResults(ctx context.Context, analysisResult AnalysisResult, commonControlResults []ControlResult, reValidateControlResult bool) (AnalysisResult, error) {
 	return analysisResult, nil
-}
-func (m *analysisServiceMock) SaveCerberusIDsForControlResultBatchItems(ctx context.Context, analysisResults []ControlResultBatchItem) {
 }
 func (m *analysisServiceMock) GetAnalysisResultIDsNotSavedIntoCerberusByAnalysisResultIDMap(ctx context.Context, analysisResultIDMap map[uuid.UUID]interface{}) (map[uuid.UUID]interface{}, error) {
 	return nil, nil
@@ -1524,6 +1526,10 @@ func (m *analysisRepositoryMock) SaveCerberusIDForAnalysisResult(ctx context.Con
 }
 
 func (m *analysisRepositoryMock) SaveCerberusIDForControlResult(ctx context.Context, controlResultID uuid.UUID, cerberusID uuid.UUID) error {
+	return nil
+}
+
+func (m *analysisRepositoryMock) SaveCerberusIDForReagent(ctx context.Context, reagentID uuid.UUID, cerberusID uuid.UUID) error {
 	return nil
 }
 

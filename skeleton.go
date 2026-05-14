@@ -1673,6 +1673,7 @@ func (s *skeleton) submitResultsToCerberus(ctx context.Context) {
 
 					s.analysisService.SaveCerberusIDsForAnalysisResultBatchItems(ctx, response.AnalysisResultBatchItemInfoList)
 					s.analysisService.SaveCerberusIDsForControlResultBatchItems(ctx, response.ControlResultBatchItemList)
+					s.analysisService.SaveCerberusIDsForReagentBatchItems(ctx, response.ReagentBatchItemList)
 
 					log.Trace().Int64("elapsedExecutionTime", time.Since(executionStarted).Milliseconds()).
 						Msgf("Sent (or tried to send) %d analysis results to cerberus", sentResultCount)
@@ -1715,6 +1716,7 @@ func (s *skeleton) submitResultsToCerberus(ctx context.Context) {
 					}
 
 					s.analysisService.SaveCerberusIDsForControlResultBatchItems(ctx, response.ControlResultBatchItemInfoList)
+					s.analysisService.SaveCerberusIDsForReagentBatchItems(ctx, response.ReagentBatchItemInfoList)
 
 					log.Trace().Int64("elapsedExecutionTime", time.Since(executionStarted).Milliseconds()).
 						Msgf("Sent (or tried to send) %d control results to cerberus", sentResultCount)
