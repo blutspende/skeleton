@@ -5,7 +5,7 @@ import (
 	"errors"
 	"strings"
 
-	pgx "github.com/jackc/pgconn"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/lib/pq"
 )
 
@@ -41,7 +41,7 @@ func IsErrorCode(err error, errCode pq.ErrorCode) bool {
 		return pgErr.Code == errCode
 	}
 
-	pgxErr, ok := err.(*pgx.PgError)
+	pgxErr, ok := err.(*pgconn.PgError)
 	if ok {
 		currentCode := pq.ErrorCode(pgxErr.Code)
 		return currentCode == errCode

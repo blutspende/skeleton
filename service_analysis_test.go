@@ -1199,10 +1199,9 @@ func TestCreateControlResultBatchWithOnlyPreControlResults(t *testing.T) {
 	mockManager := &mockManager{}
 	extendedMockAnalysisRepo := &extendedMockAnalysisRepo{}
 	analysisService := NewAnalysisService(extendedMockAnalysisRepo, &instrumentRepositoryMock{}, nil, nil, mockManager)
-	results, analysisResultIds, err := analysisService.CreateControlResultBatch(context.TODO(), standaloneControlResults)
+	results, err := analysisService.CreateControlResultBatch(context.TODO(), standaloneControlResults)
 	assert.Nil(t, err)
 	assert.Equal(t, 1, len(results))
-	assert.Equal(t, 0, len(analysisResultIds))
 	assert.Equal(t, 1, len(results[0].AnalyteMapping.ExpectedControlResults))
 	assert.NotEqual(t, uuid.Nil, results[0].ID)
 	assert.Equal(t, true, results[0].IsValid)
@@ -1229,10 +1228,9 @@ func TestCreateControlResultBatchWithOnlyPostControlResults(t *testing.T) {
 	mockManager := &mockManager{}
 	extendedMockAnalysisRepo := &extendedMockAnalysisRepo{}
 	analysisService := NewAnalysisService(extendedMockAnalysisRepo, &instrumentRepositoryMock{}, nil, nil, mockManager)
-	results, analysisResultIds, err := analysisService.CreateControlResultBatch(context.TODO(), standaloneControlResults)
+	results, err := analysisService.CreateControlResultBatch(context.TODO(), standaloneControlResults)
 	assert.Nil(t, err)
 	assert.Equal(t, 1, len(results))
-	assert.Equal(t, 3, len(analysisResultIds))
 	assert.Equal(t, 1, len(results[0].AnalyteMapping.ExpectedControlResults))
 	assert.NotEqual(t, uuid.Nil, results[0].ID)
 	assert.Equal(t, true, results[0].IsValid)
@@ -1332,10 +1330,9 @@ func TestCreateControlResultBatch(t *testing.T) {
 	mockManager := &mockManager{}
 	extendedMockAnalysisRepo := &extendedMockAnalysisRepo{}
 	analysisService := NewAnalysisService(extendedMockAnalysisRepo, &instrumentRepositoryMock{}, nil, nil, mockManager)
-	results, analysisResultIds, err := analysisService.CreateControlResultBatch(context.TODO(), standaloneControlResults)
+	results, err := analysisService.CreateControlResultBatch(context.TODO(), standaloneControlResults)
 	assert.Nil(t, err)
 	assert.Equal(t, 2, len(results))
-	assert.Equal(t, 3, len(analysisResultIds))
 	assert.Equal(t, 1, len(results[0].AnalyteMapping.ExpectedControlResults))
 	assert.NotEqual(t, uuid.Nil, results[0].ID)
 	assert.Equal(t, false, results[0].IsValid)
@@ -1709,8 +1706,9 @@ func setupTestDataForStandaloneControlProcessing() (ControlResult, Reagent) {
 }
 
 type mockManager struct {
-	AnalysisResultsForProcessing      []AnalysisResult
-	AnalysisRequestsSentForProcessing []AnalysisRequest
+	AnalysisResultsForProcessing          []AnalysisResult
+	StandaloneControlResultsForProcessing []StandaloneControlResult
+	AnalysisRequestsSentForProcessing     []AnalysisRequest
 }
 
 func (m *mockManager) SetCallbackHandler(eventHandler SkeletonCallbackHandlerV1) {
@@ -1728,7 +1726,13 @@ func (m *mockManager) GetProcessableAnalysisRequestQueue() *utils.ConcurrentQueu
 func (m *mockManager) SendResultForProcessing(analysisResult AnalysisResult) {
 	m.AnalysisResultsForProcessing = append(m.AnalysisResultsForProcessing, analysisResult)
 }
+func (m *mockManager) SendControlResultForProcessing(standaloneControlResult StandaloneControlResult) {
+	m.StandaloneControlResultsForProcessing = append(m.StandaloneControlResultsForProcessing, standaloneControlResult)
+}
 func (m *mockManager) GetResultChan() chan AnalysisResult {
+	return nil
+}
+func (m *mockManager) GetControlResultChan() chan StandaloneControlResult {
 	return nil
 }
 
@@ -1790,7 +1794,14 @@ func (r *extendedMockAnalysisRepo) CreateAnalysisResultReagentRelations(ctx cont
 	return nil
 }
 
-func (r *extendedMockAnalysisRepo) GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMapping AnalyteMapping, instrumentId uuid.UUID, ControlResultSearchDays int) ([]ControlResult, error) {
+func (r *extendedMockAnalysisRepo) GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMapping AnalyteMapping, instrumentId uuid.UUID, instrumentModule *string, ControlResultSearchDays int) ([]ControlResult, error) {
+	return nil, nil
+}
+
+func (r *extendedMockAnalysisRepo) GetUnprocessedControlResultIDs(ctx context.Context) ([]uuid.UUID, error) {
+	return nil, nil
+}
+func (r *extendedMockAnalysisRepo) GetControlReagentRelationsByControlResultIDs(ctx context.Context, controlIDs []uuid.UUID) (map[uuid.UUID][]uuid.UUID, error) {
 	return nil, nil
 }
 

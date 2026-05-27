@@ -2,9 +2,10 @@ package skeleton
 
 import (
 	"context"
+	"sync"
+
 	"github.com/blutspende/skeleton/utils"
 	"github.com/google/uuid"
-	"sync"
 
 	"github.com/rs/zerolog/log"
 )
@@ -17,7 +18,9 @@ type Manager interface {
 	GetProcessableAnalysisRequestQueue() *utils.ConcurrentQueue[[]AnalysisRequest]
 
 	SendResultForProcessing(analysisResult AnalysisResult)
+	SendControlResultForProcessing(standaloneControlResult StandaloneControlResult)
 	GetResultChan() chan AnalysisResult
+	GetControlResultChan() chan StandaloneControlResult
 
 	SendAnalyteMappingsToValidateControlResults(analyteMappingIds []uuid.UUID)
 	GetControlValidationChan() chan []uuid.UUID
@@ -28,6 +31,7 @@ type Manager interface {
 
 type manager struct {
 	resultsChan                         chan AnalysisResult
+	controlResultsChan                  chan StandaloneControlResult
 	processableAnalysisRequestBatchChan chan []AnalysisRequest
 	processableAnalysisRequestQueue     *utils.ConcurrentQueue[[]AnalysisRequest]
 	analyteMappingIdBatchChan           chan []uuid.UUID
@@ -39,6 +43,7 @@ type manager struct {
 func NewSkeletonManager(ctx context.Context) Manager {
 	skeletonManager := &manager{
 		resultsChan:                         make(chan AnalysisResult, 500),
+		controlResultsChan:                  make(chan StandaloneControlResult, 500),
 		processableAnalysisRequestBatchChan: make(chan []AnalysisRequest),
 		processableAnalysisRequestQueue:     utils.NewConcurrentQueue[[]AnalysisRequest](ctx),
 		analyteMappingIdBatchChan:           make(chan []uuid.UUID, 10),
@@ -76,6 +81,14 @@ func (sm *manager) SendResultForProcessing(analysisResult AnalysisResult) {
 
 func (sm *manager) GetResultChan() chan AnalysisResult {
 	return sm.resultsChan
+}
+
+func (sm *manager) SendControlResultForProcessing(standaloneControlResult StandaloneControlResult) {
+	sm.controlResultsChan <- standaloneControlResult
+}
+
+func (sm *manager) GetControlResultChan() chan StandaloneControlResult {
+	return sm.controlResultsChan
 }
 
 func (sm *manager) SendAnalyteMappingsToValidateControlResults(analyteMappingIds []uuid.UUID) {

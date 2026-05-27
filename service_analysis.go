@@ -13,6 +13,10 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const (
+	msgFailedToCreateTransaction = "failed to create transaction"
+)
+
 var (
 	ErrAnalysisRequestWithMatchingWorkItemIdFound = errors.New("analysis request with matching workitem id found")
 	ErrUnsupportedExpectedControlResultFound      = errors.New("unsupported expected control result operator found")
@@ -25,16 +29,20 @@ type AnalysisService interface {
 	RevokeAnalysisRequests(ctx context.Context, workItemIDs []uuid.UUID) error
 	ReexamineAnalysisRequestsBatch(ctx context.Context, workItemIDs []uuid.UUID) error
 	CreateAnalysisResultsBatch(ctx context.Context, analysisResults AnalysisResultSet) ([]AnalysisResult, error)
-	CreateControlResultBatch(ctx context.Context, controlResults []StandaloneControlResult) ([]StandaloneControlResult, []uuid.UUID, error)
+	CreateControlResultBatch(ctx context.Context, controlResults []StandaloneControlResult) ([]StandaloneControlResult, error)
 	GetAnalysisResultsByIDsWithRecalculatedStatus(ctx context.Context, analysisResultIDs []uuid.UUID, reValidateControlResult bool) ([]AnalysisResult, error)
 	ValidateAndUpdatingExistingControlResults(ctx context.Context, analyteMappingIds []uuid.UUID) error
 	AnalysisResultStatusRecalculationAndSendForProcessingIfFinal(ctx context.Context, controlResultIds []uuid.UUID) error
 	QueueAnalysisResults(ctx context.Context, results []AnalysisResult) error
+	QueueControlResults(ctx context.Context, standaloneControlResults []StandaloneControlResult) error
 	RetransmitResult(ctx context.Context, resultID uuid.UUID) error
 	ProcessStuckImagesToDEA(ctx context.Context)
 	ProcessStuckImagesToCerberus(ctx context.Context)
 	SaveCerberusIDsForAnalysisResultBatchItems(ctx context.Context, analysisResults []AnalysisResultBatchItemInfo)
+	SaveCerberusIDsForControlResultBatchItems(ctx context.Context, controlResults []ResultBatchItem)
+	SaveCerberusIDsForReagentBatchItems(ctx context.Context, reagents []ResultBatchItem)
 	SetAnalysisResultStatusBasedOnControlResults(ctx context.Context, analysisResult AnalysisResult, commonControlResults []ControlResult, reValidateControlResult bool) (AnalysisResult, error)
+	GetAnalysisResultIDsNotSavedIntoCerberusByAnalysisResultIDMap(ctx context.Context, analysisResultIDMap map[uuid.UUID]interface{}) (map[uuid.UUID]interface{}, error)
 }
 
 type analysisService struct {
@@ -121,7 +129,7 @@ func (as *analysisService) ProcessAnalysisRequests(ctx context.Context, analysis
 
 		tx, err := as.analysisRepository.CreateTransaction(ctx)
 		if err != nil {
-			log.Error().Err(err).Msg("failed to create transaction")
+			log.Error().Err(err).Msg(msgFailedToCreateTransaction)
 			return err
 		}
 
@@ -193,7 +201,7 @@ func (as *analysisService) ReexamineAnalysisRequestsBatch(ctx context.Context, w
 func (as *analysisService) CreateAnalysisResultsBatch(ctx context.Context, analysisResults AnalysisResultSet) ([]AnalysisResult, error) {
 	tx, err := as.analysisRepository.CreateTransaction(ctx)
 	if err != nil {
-		log.Error().Err(err).Msg("failed to create transaction")
+		log.Error().Err(err).Msg(msgFailedToCreateTransaction)
 		return nil, err
 	}
 	savedResultDataList, err := as.createAnalysisResultsBatch(ctx, tx, analysisResults)
@@ -209,14 +217,56 @@ func (as *analysisService) CreateAnalysisResultsBatch(ctx context.Context, analy
 	savedAnalysisResults := savedResultDataList.Results
 	for i := range savedAnalysisResults {
 		savedAnalysisResults[i].Reagents = append(savedAnalysisResults[i].Reagents, savedResultDataList.Reagents...)
-		for j := range savedAnalysisResults[i].Reagents {
-			if savedAnalysisResults[i].Reagents[j].ControlResults == nil {
-				savedAnalysisResults[i].Reagents[j].ControlResults = make([]ControlResult, 0)
+		if len(savedAnalysisResults[i].Reagents) != 0 {
+			newReagents := make([]Reagent, 0)
+			existingReagents := make([]ReagentReference, 0)
+			for j := range savedAnalysisResults[i].Reagents {
+				if savedAnalysisResults[i].Reagents[j].ControlResults == nil {
+					savedAnalysisResults[i].Reagents[j].ControlResults = make([]ControlResult, 0)
+				}
+				savedAnalysisResults[i].Reagents[j].ControlResults = append(savedAnalysisResults[i].Reagents[j].ControlResults, savedResultDataList.ControlResults...)
+				savedAnalysisResults[i].Reagents[j].ControlResults = append(savedAnalysisResults[i].Reagents[j].ControlResults, savedAnalysisResults[i].ControlResults...)
+
+				newControlResults := make([]ControlResult, 0)
+				existingControlResults := make([]uuid.UUID, 0)
+				for k, controlResult := range savedAnalysisResults[i].Reagents[j].ControlResults {
+					if controlResult.CerberusID.Valid {
+						existingControlResults = append(existingControlResults, savedAnalysisResults[i].Reagents[j].ControlResults[k].ID)
+					} else {
+						newControlResults = append(newControlResults, savedAnalysisResults[i].Reagents[j].ControlResults[k])
+					}
+				}
+
+				if savedAnalysisResults[i].Reagents[j].CerberusID.Valid {
+					existingReagents = append(existingReagents, ReagentReference{
+						ReagentID:        savedAnalysisResults[i].Reagents[j].ID,
+						ControlResultIDs: existingControlResults,
+						ControlResults:   newControlResults,
+					})
+				} else {
+					savedAnalysisResults[i].Reagents[j].ControlResults = newControlResults
+					savedAnalysisResults[i].Reagents[j].ControlResultIDs = existingControlResults
+					newReagents = append(newReagents, savedAnalysisResults[i].Reagents[j])
+				}
 			}
-			savedAnalysisResults[i].Reagents[j].ControlResults = append(savedAnalysisResults[i].Reagents[j].ControlResults, savedResultDataList.ControlResults...)
-			savedAnalysisResults[i].Reagents[j].ControlResults = append(savedAnalysisResults[i].Reagents[j].ControlResults, savedAnalysisResults[i].ControlResults...)
+
+			savedAnalysisResults[i].Reagents = newReagents
+			savedAnalysisResults[i].ReagentReferences = existingReagents
+			savedAnalysisResults[i].ControlResults = nil
+		} else {
+			savedAnalysisResults[i].ControlResults = append(savedAnalysisResults[i].ControlResults, savedResultDataList.ControlResults...)
+			newControlResults := make([]ControlResult, 0)
+			existingControlResults := make([]uuid.UUID, 0)
+			for k, controlResult := range savedAnalysisResults[i].ControlResults {
+				if controlResult.CerberusID.Valid {
+					existingControlResults = append(existingControlResults, savedAnalysisResults[i].ControlResults[k].ID)
+				} else {
+					newControlResults = append(newControlResults, savedAnalysisResults[i].ControlResults[k])
+				}
+			}
+			savedAnalysisResults[i].ControlResults = newControlResults
+			savedAnalysisResults[i].ControlResultIDs = existingControlResults
 		}
-		savedAnalysisResults[i].ControlResults = nil
 	}
 
 	return savedAnalysisResults, nil
@@ -607,55 +657,48 @@ func (as *analysisService) createReagentsByAnalysisResultID(ctx context.Context,
 	return controlResultsMap, reagentsByAnalysisResultID, nil
 }
 
-func (as *analysisService) CreateControlResultBatch(ctx context.Context, controlResults []StandaloneControlResult) ([]StandaloneControlResult, []uuid.UUID, error) {
+func (as *analysisService) CreateControlResultBatch(ctx context.Context, controlResults []StandaloneControlResult) ([]StandaloneControlResult, error) {
 	tx, err := as.analysisRepository.CreateTransaction(ctx)
-	var analysisResultIds []uuid.UUID
 	if err != nil {
-		return controlResults, analysisResultIds, err
+		return controlResults, err
 	}
 
-	controlResults, analysisResultIds, err = as.createControlResultBatch(ctx, tx, controlResults)
+	controlResults, err = as.createControlResultBatch(ctx, tx, controlResults)
 	if err != nil {
 		_ = tx.Rollback()
-		return controlResults, analysisResultIds, err
+		return controlResults, err
 	}
 
 	if err = tx.Commit(); err != nil {
 		_ = tx.Rollback()
-		return controlResults, analysisResultIds, err
+		return controlResults, err
 	}
-	return controlResults, analysisResultIds, nil
+	return controlResults, nil
 }
 
-func (as *analysisService) createControlResultBatch(ctx context.Context, tx db.DbConnection, standaloneControlResults []StandaloneControlResult) ([]StandaloneControlResult, []uuid.UUID, error) {
+func (as *analysisService) createControlResultBatch(ctx context.Context, tx db.DbConnection, standaloneControlResults []StandaloneControlResult) ([]StandaloneControlResult, error) {
 	crs := make([]ControlResult, len(standaloneControlResults))
-	analysisResultIDs := make([]uuid.UUID, 0)
 	reagents := make([]Reagent, 0)
 
 	var err error
-	for i, controlResult := range standaloneControlResults {
+	for i := range standaloneControlResults {
 		crs[i], err = setControlResultIsValidAndExpectedControlResultId(standaloneControlResults[i].ControlResult)
 		if err != nil {
 			_ = tx.Rollback()
-			return standaloneControlResults, analysisResultIDs, err
+			return standaloneControlResults, err
 		}
 		standaloneControlResults[i].ControlResult = crs[i]
-		analysisResultIDs = append(analysisResultIDs, controlResult.ResultIDs...)
 		reagents = append(reagents, standaloneControlResults[i].Reagents...)
 	}
 
 	controlResults, err := as.analysisRepository.WithTransaction(tx).CreateControlResultBatch(ctx, crs)
 	if err != nil {
-		return standaloneControlResults, analysisResultIDs, err
+		return standaloneControlResults, err
 	}
 
 	reagentIDs, err := as.analysisRepository.WithTransaction(tx).CreateReagents(ctx, reagents)
 	if err != nil {
-		return standaloneControlResults, analysisResultIDs, err
-	}
-
-	for i := range controlResults {
-		standaloneControlResults[i].ID = controlResults[i].ID
+		return standaloneControlResults, err
 	}
 
 	reagentControlResultRelationDAOs := make([]reagentControlResultRelationDAO, 0)
@@ -681,15 +724,15 @@ func (as *analysisService) createControlResultBatch(ctx context.Context, tx db.D
 
 	err = as.analysisRepository.WithTransaction(tx).CreateReagentControlResultRelations(ctx, reagentControlResultRelationDAOs)
 	if err != nil {
-		return standaloneControlResults, analysisResultIDs, err
+		return standaloneControlResults, err
 	}
 
 	err = as.analysisRepository.WithTransaction(tx).CreateAnalysisResultControlResultRelations(ctx, analysisResultControlResultRelationDAOs)
 	if err != nil {
-		return standaloneControlResults, analysisResultIDs, err
+		return standaloneControlResults, err
 	}
 
-	return standaloneControlResults, analysisResultIDs, nil
+	return standaloneControlResults, nil
 }
 
 func (as *analysisService) GetAnalysisResultsByIDsWithRecalculatedStatus(ctx context.Context, analysisResultIDs []uuid.UUID, reValidateControlResult bool) ([]AnalysisResult, error) {
@@ -711,7 +754,7 @@ func (as *analysisService) GetAnalysisResultsByIDsWithRecalculatedStatus(ctx con
 
 	tx, err := as.analysisRepository.CreateTransaction(ctx)
 	if err != nil {
-		log.Error().Err(err).Msg("failed to create transaction")
+		log.Error().Err(err).Msg(msgFailedToCreateTransaction)
 		return make([]AnalysisResult, 0), err
 	}
 
@@ -748,11 +791,11 @@ func (as *analysisService) ValidateAndUpdatingExistingControlResults(ctx context
 
 	tx, err := as.analysisRepository.CreateTransaction(ctx)
 	if err != nil {
-		log.Error().Err(err).Msg("failed to create transaction")
+		log.Error().Err(err).Msg(msgFailedToCreateTransaction)
 		return err
 	}
 
-	err = as.analysisRepository.WithTransaction(tx).UpdateControlResultBatch(ctx, controlResults)
+	err = as.analysisRepository.WithTransaction(tx).UpdateControlResultBatchWithExpectedControl(ctx, controlResults)
 	if err != nil {
 		_ = tx.Rollback()
 		return err
@@ -799,7 +842,7 @@ func (as *analysisService) AnalysisResultStatusRecalculationAndSendForProcessing
 func (as *analysisService) QueueAnalysisResults(ctx context.Context, results []AnalysisResult) error {
 	tx, err := as.analysisRepository.CreateTransaction(ctx)
 	if err != nil {
-		log.Error().Err(err).Msg("failed to create transaction")
+		log.Error().Err(err).Msg(msgFailedToCreateTransaction)
 		return err
 	}
 
@@ -845,6 +888,44 @@ func (as *analysisService) QueueAnalysisResults(ctx context.Context, results []A
 	if err != nil {
 		_ = tx.Rollback()
 		return err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	return nil
+}
+
+func (as *analysisService) QueueControlResults(ctx context.Context, standaloneControlResults []StandaloneControlResult) error {
+	tx, err := as.analysisRepository.CreateTransaction(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg(msgFailedToCreateTransaction)
+		return err
+	}
+
+	_, err = as.analysisRepository.WithTransaction(tx).CreateControlResultQueueItem(ctx, standaloneControlResults)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	controlResultReagentRelationsToMarkAsProcessed := make(map[uuid.UUID][]uuid.UUID)
+
+	for _, standaloneControlResult := range standaloneControlResults {
+		for _, reagent := range standaloneControlResult.Reagents {
+			controlResultReagentRelationsToMarkAsProcessed[standaloneControlResult.ControlResult.ID] = append(controlResultReagentRelationsToMarkAsProcessed[standaloneControlResult.ControlResult.ID], reagent.ID)
+		}
+	}
+
+	for controlResultID, reagentIDs := range controlResultReagentRelationsToMarkAsProcessed {
+		err = as.analysisRepository.WithTransaction(tx).MarkReagentControlResultRelationsAsProcessed(ctx, controlResultID, reagentIDs)
+		if err != nil {
+			_ = tx.Rollback()
+			return err
+		}
 	}
 
 	err = tx.Commit()
@@ -969,4 +1050,44 @@ func (as *analysisService) SaveCerberusIDsForAnalysisResultBatchItems(ctx contex
 			_ = as.analysisRepository.SaveCerberusIDForAnalysisResult(ctx, analysisResult.AnalysisResult.ID, *analysisResult.CerberusAnalysisResultID)
 		}
 	}
+}
+
+func (as *analysisService) SaveCerberusIDsForControlResultBatchItems(ctx context.Context, controlResults []ResultBatchItem) {
+	for _, controlResult := range controlResults {
+		if len(controlResult.ErrorMessage) != 0 {
+			log.Warn().Msgf("Possible error happened in Cerberus at saving ControlResult with ID: %s Error: %s", controlResult.ID.String(), controlResult.ErrorMessage)
+		}
+		if controlResult.ID != nil && controlResult.CerberusID != nil {
+			_ = as.analysisRepository.SaveCerberusIDForControlResult(ctx, *controlResult.ID, *controlResult.CerberusID)
+		}
+	}
+}
+
+func (as *analysisService) SaveCerberusIDsForReagentBatchItems(ctx context.Context, reagents []ResultBatchItem) {
+	for _, reagent := range reagents {
+		if len(reagent.ErrorMessage) != 0 {
+			log.Warn().Msgf("Possible error happened in Cerberus at saving Reagent with ID: %s Error: %s", reagent.ID.String(), reagent.ErrorMessage)
+		}
+		if reagent.ID != nil && reagent.CerberusID != nil {
+			_ = as.analysisRepository.SaveCerberusIDForReagent(ctx, *reagent.ID, *reagent.CerberusID)
+		}
+	}
+}
+
+func (as *analysisService) GetAnalysisResultIDsNotSavedIntoCerberusByAnalysisResultIDMap(ctx context.Context, analysisResultIDMap map[uuid.UUID]interface{}) (map[uuid.UUID]interface{}, error) {
+	analysisResultIDs := make([]uuid.UUID, 0)
+	analysisResultIDMapNotSentToCerberus := make(map[uuid.UUID]interface{})
+	for analysisResultID := range analysisResultIDMap {
+		analysisResultIDs = append(analysisResultIDs, analysisResultID)
+	}
+	analysisResultIDsNotSentToCerberus, err := as.analysisRepository.GetAnalysisResultIDsNotSavedIntoCerberusByAnalysisResultIDs(ctx, analysisResultIDs)
+	if err != nil {
+		return analysisResultIDMapNotSentToCerberus, err
+	}
+
+	for i := range analysisResultIDsNotSentToCerberus {
+		analysisResultIDMapNotSentToCerberus[analysisResultIDsNotSentToCerberus[i]] = nil
+	}
+
+	return analysisResultIDMapNotSentToCerberus, nil
 }

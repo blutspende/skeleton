@@ -69,6 +69,11 @@ func (r *sortingRuleRepository) GetById(ctx context.Context, id uuid.UUID) (*Sor
 }
 
 func (r *sortingRuleRepository) GetByInstrumentIDs(ctx context.Context, instrumentIDs []uuid.UUID) (map[uuid.UUID][]SortingRule, error) {
+	sortingRulesMap := make(map[uuid.UUID][]SortingRule)
+	if len(instrumentIDs) == 0 {
+		return sortingRulesMap, nil
+	}
+
 	query := fmt.Sprintf("SELECT * FROM %s.sk_sorting_rules WHERE deleted_at IS NULL AND instrument_id IN (?) ORDER BY priority ASC;", r.dbSchema)
 	query, args, err := sqlx.In(query, instrumentIDs)
 	query = r.db.Rebind(query)
@@ -79,7 +84,7 @@ func (r *sortingRuleRepository) GetByInstrumentIDs(ctx context.Context, instrume
 	}
 
 	defer rows.Close()
-	sortingRulesMap := make(map[uuid.UUID][]SortingRule)
+
 	for rows.Next() {
 		var dao sortingRuleDAO
 		err = rows.StructScan(&dao)

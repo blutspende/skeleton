@@ -45,7 +45,15 @@ type CerberusQueueItem struct {
 	RetryNotBefore      time.Time
 	RawResponse         string
 	ResponseJsonMessage string
+	DataType            DataType
 }
+
+type DataType string
+
+const (
+	AnalysisResultDataType DataType = "AnalysisResult"
+	ControlResultDataType  DataType = "ControlResult"
+)
 
 // SubjectInfo - Additional Information about the subject for the AnalysisRequest
 // Do not use in implentation directly
@@ -70,15 +78,23 @@ const (
 )
 
 type Reagent struct {
-	ID             uuid.UUID
-	Manufacturer   string
-	SerialNumber   string
-	LotNo          string
-	Name           string
-	Type           instrumentenum.ReagentType
-	CreatedAt      time.Time
-	ExpirationDate *time.Time
-	ControlResults []ControlResult
+	ID               uuid.UUID
+	Manufacturer     string
+	SerialNumber     string
+	LotNo            string
+	Name             string
+	Type             instrumentenum.ReagentType
+	CerberusID       uuid.NullUUID
+	CreatedAt        time.Time
+	ExpirationDate   *time.Time
+	ControlResults   []ControlResult
+	ControlResultIDs []uuid.UUID
+}
+
+type ReagentReference struct {
+	ReagentID        uuid.UUID
+	ControlResultIDs []uuid.UUID
+	ControlResults   []ControlResult
 }
 
 type ExtraValue struct {
@@ -231,6 +247,7 @@ type AnalysisResult struct {
 	Operator                 string
 	TechnicalReleaseDateTime *time.Time
 	InstrumentRunID          uuid.UUID
+	InstrumentModule         *string
 	Edited                   bool
 	EditReason               string
 	IsInvalid                bool
@@ -239,7 +256,9 @@ type AnalysisResult struct {
 	ChannelResults           []ChannelResult
 	ExtraValues              []ExtraValue
 	Reagents                 []Reagent
+	ReagentReferences        []ReagentReference
 	ControlResults           []ControlResult
+	ControlResultIDs         []uuid.UUID
 	Images                   []Image
 
 	deaRawMessageID uuid.NullUUID
@@ -248,6 +267,7 @@ type AnalysisResult struct {
 type ControlResult struct {
 	ID                         uuid.UUID
 	SampleCode                 string
+	MessageInID                uuid.UUID
 	AnalyteMapping             AnalyteMapping
 	Result                     string
 	ExpectedControlResultId    uuid.NullUUID
@@ -255,9 +275,13 @@ type ControlResult struct {
 	IsComparedToExpectedResult bool
 	ExaminedAt                 time.Time
 	InstrumentID               uuid.UUID
+	InstrumentModule           *string
+	CerberusID                 uuid.NullUUID
 	Warnings                   []string
 	ChannelResults             []ChannelResult
 	ExtraValues                []ExtraValue
+
+	deaRawMessageID uuid.NullUUID
 }
 
 type StandaloneControlResult struct {
@@ -289,6 +313,8 @@ func (i AnalysisResultBatchItemInfo) IsSuccessful() bool {
 
 type AnalysisResultBatchResponse struct {
 	AnalysisResultBatchItemInfoList []AnalysisResultBatchItemInfo
+	ReagentBatchItemList            []ResultBatchItem
+	ControlResultBatchItemList      []ResultBatchItem
 	ErrorMessage                    string
 	HTTPStatusCode                  int
 	RawResponse                     string
@@ -302,14 +328,15 @@ func (r AnalysisResultBatchResponse) IsSuccess() bool {
 	return r.HTTPStatusCode >= http.StatusOK && r.HTTPStatusCode < http.StatusMultipleChoices
 }
 
-type ControlResultBatchItemInfo struct {
-	ControlResult      *StandaloneControlResultTO
-	CerberusID         uuid.UUID
-	CerberusReagentIDs []uuid.UUID
+type ResultBatchItem struct {
+	ID           *uuid.UUID
+	CerberusID   *uuid.UUID
+	ErrorMessage string
 }
 
 type ControlResultBatchResponse struct {
-	ControlResultBatchItemInfoList []ControlResultBatchItemInfo
+	ControlResultBatchItemInfoList []ResultBatchItem
+	ReagentBatchItemInfoList       []ResultBatchItem
 	ErrorMessage                   string
 	HTTPStatusCode                 int
 	RawResponse                    string

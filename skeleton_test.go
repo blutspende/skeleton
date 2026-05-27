@@ -13,7 +13,7 @@ import (
 	"github.com/blutspende/skeleton/config"
 	"github.com/blutspende/skeleton/migrator"
 	"github.com/google/uuid"
-	_ "github.com/jackc/pgx/v4/stdlib"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -42,11 +42,13 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 		ImageRetrySeconds:                60,
 		AnalysisRequestWorkerPoolSize:    1,
 		LookBackDays:                     0,
-		SampleSeenMessageFlushSeconds:    0,
+		SampleSeenMessageFlushSeconds:    1,
 		MessageMaxRetries:                0,
 		MessageSampleCodeMaxRetries:      0,
 		SampleSeenBatchTimeOut:           3,
 		SampleSeenBatchSize:              50,
+		ResultBufferFlushTimeout:         3,
+		CerberusQueueItemRetryTimeout:    10,
 	}
 
 	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
@@ -168,11 +170,13 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 		ResultTransferFlushTimeout:       5,
 		ImageRetrySeconds:                60,
 		LookBackDays:                     0,
-		SampleSeenMessageFlushSeconds:    0,
+		SampleSeenMessageFlushSeconds:    1,
 		MessageMaxRetries:                0,
 		MessageSampleCodeMaxRetries:      0,
 		SampleSeenBatchTimeOut:           3,
 		SampleSeenBatchSize:              50,
+		ResultBufferFlushTimeout:         3,
+		CerberusQueueItemRetryTimeout:    10,
 	}
 
 	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
@@ -376,11 +380,13 @@ func TestAnalysisResultsReprocessing(t *testing.T) {
 		ResultTransferFlushTimeout:       5,
 		ImageRetrySeconds:                60,
 		LookBackDays:                     0,
-		SampleSeenMessageFlushSeconds:    0,
+		SampleSeenMessageFlushSeconds:    1,
 		MessageMaxRetries:                0,
 		MessageSampleCodeMaxRetries:      0,
 		SampleSeenBatchTimeOut:           3,
 		SampleSeenBatchSize:              50,
+		ResultBufferFlushTimeout:         3,
+		CerberusQueueItemRetryTimeout:    10,
 	}
 
 	analysisRepositoryMock := &analysisRepositoryMock{}
@@ -446,11 +452,13 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 		ResultTransferFlushTimeout:       5,
 		ImageRetrySeconds:                60,
 		LookBackDays:                     0,
-		SampleSeenMessageFlushSeconds:    0,
+		SampleSeenMessageFlushSeconds:    1,
 		MessageMaxRetries:                0,
 		MessageSampleCodeMaxRetries:      0,
 		SampleSeenBatchTimeOut:           3,
 		SampleSeenBatchSize:              50,
+		ResultBufferFlushTimeout:         3,
+		CerberusQueueItemRetryTimeout:    10,
 	}
 
 	analysisRepositoryMock := &analysisRepositoryMock{}
@@ -670,9 +678,11 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 	time.Sleep(6 * time.Second)
 
 	skeletonManagerMock.AnalysisResultsForProcessing = make([]AnalysisResult, 0)
+	skeletonManagerMock.StandaloneControlResultsForProcessing = make([]StandaloneControlResult, 0)
 
 	analysisRepositoryMock.analysisResultsById = analysisResults
 	analysisRepositoryMock.analysisRequests = analysisRequests
+	analysisRepositoryMock.analysisResultIDsNotSavedToCerberus = []uuid.UUID{analysisResultId1, analysisResultId2}
 	err = skeletonInstance.SubmitControlResults(context.TODO(), []StandaloneControlResult{
 		{
 			ControlResult: controlResult,
@@ -684,10 +694,13 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 
 	time.Sleep(6 * time.Second)
 	assert.Equal(t, 2, len(skeletonManagerMock.AnalysisResultsForProcessing))
+	assert.Equal(t, 0, len(skeletonManagerMock.StandaloneControlResultsForProcessing))
 
 	analysisRepositoryMock.analysisResultsById = make([]AnalysisResult, 0)
 	analysisRepositoryMock.analysisRequests = make([]AnalysisRequest, 0)
+	analysisRepositoryMock.analysisResultIDsNotSavedToCerberus = make([]uuid.UUID, 0)
 	skeletonManagerMock.AnalysisResultsForProcessing = make([]AnalysisResult, 0)
+	skeletonManagerMock.StandaloneControlResultsForProcessing = make([]StandaloneControlResult, 0)
 
 	err = skeletonInstance.SubmitControlResults(context.TODO(), []StandaloneControlResult{
 		{
@@ -700,15 +713,35 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 
 	time.Sleep(6 * time.Second)
 	assert.Equal(t, 0, len(skeletonManagerMock.AnalysisResultsForProcessing))
+	assert.Equal(t, 1, len(skeletonManagerMock.StandaloneControlResultsForProcessing))
 
 	analysisRepositoryMock.analysisResultsById = analysisResults
 	analysisRepositoryMock.analysisRequests = analysisRequests
+	analysisRepositoryMock.analysisResultIDsNotSavedToCerberus = []uuid.UUID{analysisResultId1, analysisResultId2}
 	skeletonManagerMock.AnalysisResultsForProcessing = make([]AnalysisResult, 0)
+	skeletonManagerMock.StandaloneControlResultsForProcessing = make([]StandaloneControlResult, 0)
 	controlResultWithoutAnalysisResult := ControlResult{
 		ID:             uuid.UUID{},
 		SampleCode:     "",
 		AnalyteMapping: analyteMappings[0],
 		Result:         "40",
+		ExpectedControlResultId: uuid.NullUUID{
+			UUID:  uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
+			Valid: true,
+		},
+		IsValid:                    false,
+		IsComparedToExpectedResult: false,
+		ExaminedAt:                 time.Time{},
+		InstrumentID:               instrumentID,
+		Warnings:                   nil,
+		ChannelResults:             nil,
+		ExtraValues:                nil,
+	}
+	controlResultWithoutReagentAnalysisResult := ControlResult{
+		ID:             uuid.UUID{},
+		SampleCode:     "",
+		AnalyteMapping: analyteMappings[0],
+		Result:         "30",
 		ExpectedControlResultId: uuid.NullUUID{
 			UUID:  uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
 			Valid: true,
@@ -729,6 +762,11 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 			ResultIDs:     []uuid.UUID{},
 		},
 		{
+			ControlResult: controlResultWithoutReagentAnalysisResult,
+			Reagents:      []Reagent{},
+			ResultIDs:     []uuid.UUID{},
+		},
+		{
 			ControlResult: controlResult,
 			Reagents:      []Reagent{reagent},
 			ResultIDs:     []uuid.UUID{analysisResultId1, analysisResultId2},
@@ -738,6 +776,36 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 
 	time.Sleep(6 * time.Second)
 	assert.Equal(t, 2, len(skeletonManagerMock.AnalysisResultsForProcessing))
+	assert.Equal(t, 2, len(skeletonManagerMock.StandaloneControlResultsForProcessing))
+
+	analysisRepositoryMock.analysisResultsById = []AnalysisResult{analysisResults[0]}
+	analysisRepositoryMock.analysisRequests = analysisRequests
+	analysisRepositoryMock.analysisResultIDsNotSavedToCerberus = []uuid.UUID{analysisResultId1}
+	skeletonManagerMock.AnalysisResultsForProcessing = make([]AnalysisResult, 0)
+	skeletonManagerMock.StandaloneControlResultsForProcessing = make([]StandaloneControlResult, 0)
+
+	err = skeletonInstance.SubmitControlResults(context.TODO(), []StandaloneControlResult{
+		{
+			ControlResult: controlResultWithoutAnalysisResult,
+			Reagents:      []Reagent{reagent},
+			ResultIDs:     []uuid.UUID{},
+		},
+		{
+			ControlResult: controlResultWithoutReagentAnalysisResult,
+			Reagents:      []Reagent{},
+			ResultIDs:     []uuid.UUID{},
+		},
+		{
+			ControlResult: controlResult,
+			Reagents:      []Reagent{reagent},
+			ResultIDs:     []uuid.UUID{analysisResultId1, analysisResultId2},
+		},
+	})
+	assert.Nil(t, err)
+
+	time.Sleep(6 * time.Second)
+	assert.Equal(t, 1, len(skeletonManagerMock.AnalysisResultsForProcessing))
+	assert.Equal(t, 3, len(skeletonManagerMock.StandaloneControlResultsForProcessing))
 }
 
 func TestSubmitAnalysisResultFieldValidations(t *testing.T) {
@@ -766,6 +834,8 @@ func TestSubmitAnalysisResultFieldValidations(t *testing.T) {
 		MessageSampleCodeMaxRetries:      0,
 		SampleSeenBatchTimeOut:           3,
 		SampleSeenBatchSize:              50,
+		ResultBufferFlushTimeout:         3,
+		CerberusQueueItemRetryTimeout:    10,
 	}
 
 	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
@@ -928,6 +998,8 @@ func TestSubmitControlResultsFieldValidations(t *testing.T) {
 		MessageSampleCodeMaxRetries:      0,
 		SampleSeenBatchTimeOut:           3,
 		SampleSeenBatchSize:              50,
+		ResultBufferFlushTimeout:         3,
+		CerberusQueueItemRetryTimeout:    10,
 	}
 
 	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
@@ -1031,6 +1103,8 @@ func TestSampleSeenRegistration(t *testing.T) {
 		MessageSampleCodeMaxRetries:      25,
 		SampleSeenBatchTimeOut:           3,
 		SampleSeenBatchSize:              50,
+		ResultBufferFlushTimeout:         3,
+		CerberusQueueItemRetryTimeout:    10,
 	}
 
 	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
@@ -1246,7 +1320,6 @@ type cerberusClientMock struct {
 
 	AnalysisResults                     []AnalysisResultTO
 	BatchResponse                       AnalysisResultBatchResponse
-	ControlBatchResponse                ControlResultBatchResponse
 	VerifiedInstrumentHashes            []string
 	VerifiedExpectedControlResultHashes []string
 }
@@ -1315,11 +1388,18 @@ func (m *cerberusClientMock) SendAnalysisResultImageBatch(images []WorkItemResul
 
 	return m.sendAnalysisResultImageBatchFunc(images)
 }
+func (m *cerberusClientMock) SendControlResultBatch(controlResults []StandaloneControlResultTO) (ControlResultBatchResponse, error) {
+	return ControlResultBatchResponse{}, nil
+}
 
 type analysisServiceMock struct {
 }
 
 func (m *analysisServiceMock) SaveCerberusIDsForAnalysisResultBatchItems(ctx context.Context, analysisResults []AnalysisResultBatchItemInfo) {
+}
+func (m *analysisServiceMock) SaveCerberusIDsForControlResultBatchItems(ctx context.Context, controlResults []ResultBatchItem) {
+}
+func (m *analysisServiceMock) SaveCerberusIDsForReagentBatchItems(ctx context.Context, reagents []ResultBatchItem) {
 }
 
 func (m *analysisServiceMock) CreateAnalysisRequests(ctx context.Context, analysisRequests []AnalysisRequest) error {
@@ -1340,8 +1420,8 @@ func (m *analysisServiceMock) CreateAnalysisResultsBatch(ctx context.Context, an
 	}
 	return analysisResults.Results, nil
 }
-func (m *analysisServiceMock) CreateControlResultBatch(ctx context.Context, controlResults []StandaloneControlResult) ([]StandaloneControlResult, []uuid.UUID, error) {
-	return nil, nil, nil
+func (m *analysisServiceMock) CreateControlResultBatch(ctx context.Context, controlResults []StandaloneControlResult) ([]StandaloneControlResult, error) {
+	return nil, nil
 }
 func (m *analysisServiceMock) GetAnalysisResultsByIDsWithRecalculatedStatus(ctx context.Context, analysisResultIDs []uuid.UUID, reValidateControlResult bool) ([]AnalysisResult, error) {
 	return nil, nil
@@ -1355,6 +1435,9 @@ func (m *analysisServiceMock) AnalysisResultStatusRecalculationAndSendForProcess
 func (m *analysisServiceMock) QueueAnalysisResults(ctx context.Context, results []AnalysisResult) error {
 	return nil
 }
+func (m *analysisServiceMock) QueueControlResults(ctx context.Context, standaloneControlResults []StandaloneControlResult) error {
+	return nil
+}
 
 func (m *analysisServiceMock) RetransmitResult(ctx context.Context, resultID uuid.UUID) error {
 	return nil
@@ -1366,14 +1449,22 @@ func (m *analysisServiceMock) ProcessStuckImagesToCerberus(ctx context.Context) 
 func (m *analysisServiceMock) SetAnalysisResultStatusBasedOnControlResults(ctx context.Context, analysisResult AnalysisResult, commonControlResults []ControlResult, reValidateControlResult bool) (AnalysisResult, error) {
 	return analysisResult, nil
 }
+func (m *analysisServiceMock) GetAnalysisResultIDsNotSavedIntoCerberusByAnalysisResultIDMap(ctx context.Context, analysisResultIDMap map[uuid.UUID]interface{}) (map[uuid.UUID]interface{}, error) {
+	return nil, nil
+}
 
 type analysisRepositoryMock struct {
-	analysisResultsById []AnalysisResult
-	analysisRequests    []AnalysisRequest
-	savedWorkItemIDs    map[uuid.UUID]any
+	analysisResultsById                 []AnalysisResult
+	analysisRequests                    []AnalysisRequest
+	controlResults                      []ControlResult
+	savedWorkItemIDs                    map[uuid.UUID]any
+	analysisResultIDsNotSavedToCerberus []uuid.UUID
 }
 
 func (m *analysisRepositoryMock) UpdateAnalysisResultDEARawMessageID(ctx context.Context, analysisResultID uuid.UUID, deaRawMessageID uuid.NullUUID) error {
+	return nil
+}
+func (m *analysisRepositoryMock) UpdateControlResultDEARawMessageID(ctx context.Context, controlResultID uuid.UUID, deaRawMessageID uuid.NullUUID) error {
 	return nil
 }
 
@@ -1415,7 +1506,7 @@ func (m *analysisRepositoryMock) GetReagentsByIDs(ctx context.Context, reagentID
 }
 
 func (m *analysisRepositoryMock) CreateControlResultBatch(ctx context.Context, controlResults []ControlResult) ([]ControlResult, error) {
-	return []ControlResult{}, nil
+	return controlResults, nil
 }
 
 func (m *analysisRepositoryMock) GetControlResultsByIDs(ctx context.Context, controlResultIDs []uuid.UUID) (map[uuid.UUID]ControlResult, error) {
@@ -1431,6 +1522,14 @@ func (m *analysisRepositoryMock) CreateAnalysisResultControlResultRelations(ctx 
 }
 
 func (m *analysisRepositoryMock) SaveCerberusIDForAnalysisResult(ctx context.Context, analysisResultID uuid.UUID, cerberusID uuid.UUID) error {
+	return nil
+}
+
+func (m *analysisRepositoryMock) SaveCerberusIDForControlResult(ctx context.Context, controlResultID uuid.UUID, cerberusID uuid.UUID) error {
+	return nil
+}
+
+func (m *analysisRepositoryMock) SaveCerberusIDForReagent(ctx context.Context, reagentID uuid.UUID, cerberusID uuid.UUID) error {
 	return nil
 }
 
@@ -1577,6 +1676,9 @@ func (m *analysisRepositoryMock) GetAnalysisResultQueueItems(ctx context.Context
 func (m *analysisRepositoryMock) CreateAnalysisResultQueueItem(ctx context.Context, analysisResults []AnalysisResult) (uuid.UUID, error) {
 	return uuid.New(), nil
 }
+func (m *analysisRepositoryMock) CreateControlResultQueueItem(ctx context.Context, standaloneControlResults []StandaloneControlResult) (uuid.UUID, error) {
+	return uuid.New(), nil
+}
 func (m *analysisRepositoryMock) SaveImages(ctx context.Context, images []imageDAO) ([]uuid.UUID, error) {
 	return nil, nil
 }
@@ -1608,7 +1710,20 @@ func (m *analysisRepositoryMock) GetUnprocessedAnalysisRequests(ctx context.Cont
 	return nil, nil
 }
 
-func (m *analysisRepositoryMock) GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMapping AnalyteMapping, instrumentId uuid.UUID, ControlResultSearchDays int) ([]ControlResult, error) {
+func (m *analysisRepositoryMock) GetUnprocessedControlResultIDs(ctx context.Context) ([]uuid.UUID, error) {
+	return nil, nil
+}
+func (m *analysisRepositoryMock) GetControlReagentRelationsByControlResultIDs(ctx context.Context, controlIDs []uuid.UUID) (map[uuid.UUID][]uuid.UUID, error) {
+	return nil, nil
+}
+func (m *analysisRepositoryMock) GetAnalysisResultIDsNotSavedIntoCerberusByAnalysisResultIDs(ctx context.Context, analysisResultIDs []uuid.UUID) ([]uuid.UUID, error) {
+	return m.analysisResultIDsNotSavedToCerberus, nil
+}
+func (m *analysisRepositoryMock) UpdateControlResultBatchWithExpectedControl(ctx context.Context, controlResults []ControlResult) error {
+	return nil
+}
+
+func (m *analysisRepositoryMock) GetLatestControlResultsByReagent(ctx context.Context, reagent Reagent, resultYieldTime *time.Time, analyteMapping AnalyteMapping, instrumentId uuid.UUID, instrumentModule *string, ControlResultSearchDays int) ([]ControlResult, error) {
 	return nil, nil
 }
 func (m *analysisRepositoryMock) GetControlResultsToValidate(ctx context.Context, analyteMappingIds []uuid.UUID) ([]ControlResult, error) {
