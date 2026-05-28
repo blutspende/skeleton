@@ -292,6 +292,7 @@ func (c *cerberusClient) SendAnalysisResultBatch(analysisResults []AnalysisResul
 	}
 
 	analysisResultBatchItemInfoList := make([]AnalysisResultBatchItemInfo, len(analysisResults))
+	reagentBatchItemInfoList := make([]ResultBatchItem, 0)
 	controlResultBatchItemList := make([]ResultBatchItem, 0)
 
 	for i := range analysisResults {
@@ -338,6 +339,15 @@ func (c *cerberusClient) SendAnalysisResultBatch(analysisResults []AnalysisResul
 			analysisResultBatchItemInfoList[i].CerberusAnalysisResultID = utils.NullUUIDToUUIDPointer(responseItem.ID)
 		}
 
+		for _, reagentResponseItem := range responseItems.ReagentIDs {
+			if reagentResponseItem.ID.Valid {
+				reagentBatchItemInfoList = append(reagentBatchItemInfoList, ResultBatchItem{
+					ID:         new(reagentResponseItem.OriginalID),
+					CerberusID: utils.NullUUIDToUUIDPointer(reagentResponseItem.ID),
+				})
+			}
+		}
+
 		for _, controlResponseItem := range responseItems.ControlResultIDs {
 			if controlResponseItem.ID.Valid {
 				controlResultBatchItemList = append(controlResultBatchItemList, ResultBatchItem{
@@ -349,6 +359,7 @@ func (c *cerberusClient) SendAnalysisResultBatch(analysisResults []AnalysisResul
 
 		response := AnalysisResultBatchResponse{
 			AnalysisResultBatchItemInfoList: analysisResultBatchItemInfoList,
+			ReagentBatchItemList:            reagentBatchItemInfoList,
 			ControlResultBatchItemList:      controlResultBatchItemList,
 			HTTPStatusCode:                  resp.StatusCode(),
 			RawResponse:                     string(resp.Body()),
@@ -362,6 +373,7 @@ func (c *cerberusClient) SendAnalysisResultBatch(analysisResults []AnalysisResul
 			err = fmt.Errorf("can not unmarshal error of response (%w)", err)
 			response := AnalysisResultBatchResponse{
 				AnalysisResultBatchItemInfoList: analysisResultBatchItemInfoList,
+				ReagentBatchItemList:            reagentBatchItemInfoList,
 				ControlResultBatchItemList:      controlResultBatchItemList,
 				HTTPStatusCode:                  resp.StatusCode(),
 				ErrorMessage:                    err.Error(),
@@ -372,6 +384,7 @@ func (c *cerberusClient) SendAnalysisResultBatch(analysisResults []AnalysisResul
 		err = errors.New(errReps.Message)
 		response := AnalysisResultBatchResponse{
 			AnalysisResultBatchItemInfoList: analysisResultBatchItemInfoList,
+			ReagentBatchItemList:            reagentBatchItemInfoList,
 			ControlResultBatchItemList:      controlResultBatchItemList,
 			HTTPStatusCode:                  resp.StatusCode(),
 			ErrorMessage:                    err.Error(),
@@ -382,6 +395,7 @@ func (c *cerberusClient) SendAnalysisResultBatch(analysisResults []AnalysisResul
 		err = fmt.Errorf("%s %d", MsgUnexpectedErrorFromCerberus, resp.StatusCode())
 		response := AnalysisResultBatchResponse{
 			AnalysisResultBatchItemInfoList: analysisResultBatchItemInfoList,
+			ReagentBatchItemList:            reagentBatchItemInfoList,
 			ControlResultBatchItemList:      controlResultBatchItemList,
 			HTTPStatusCode:                  resp.StatusCode(),
 			ErrorMessage:                    err.Error(),
