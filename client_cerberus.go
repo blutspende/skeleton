@@ -31,6 +31,7 @@ const (
 	MsgFailedToCallLogsAPI                      = "Failed to call Cerberus API (/v1/instruments/logs)"
 	MsgFailedToCallRegisterManufacturerTestsAPI = "Failed to call Cerberus API (/v1/instrument-drivers/manufacturer-tests)"
 	MsgFailedToCallSampleSeenAPI                = "Failed to call Cerberus API (/v1/instruments/sample-seen)"
+	MsgFailedToCallPoolSamplesAPI               = "Failed to call Cerberus API (/v1/pool-samples)"
 	MsgEmptyControlResultsBatch                 = "Send control results batch called with empty array"
 )
 
@@ -47,6 +48,7 @@ type CerberusClient interface {
 	SendAnalysisResultImageBatch(images []WorkItemResultImageTO) error
 	SendControlResultBatch(controlResults []StandaloneControlResultTO) (ControlResultBatchResponse, error)
 	SendSampleSeenMessageBatch(messages []SampleSeenMessage) error
+	SendPoolsAndPlatesBatch(platesAndPoolsRequest CreatePlatesAndPoolsRequestTO) (CreatePlatesAndPoolsResponseTO, error)
 	VerifyInstrumentHash(hash string) error
 	VerifyExpectedControlResultsHash(hash string) error
 	SyncAnalysisRequests(workItemIDs []uuid.UUID, syncType string) error
@@ -80,21 +82,21 @@ type ExtraValueTO struct {
 	Value string `json:"value"`
 }
 
-type createAnalysisResultResponseItemTO struct {
+type creationResponseItemTO struct {
 	ID         uuid.NullUUID `json:"id"`
 	OriginalID uuid.UUID     `json:"originalId"`
 	Error      *string       `json:"error"`
 }
 
 type createAnalysisResultResponseItemsTO struct {
-	AnalysisResultIDs []createAnalysisResultResponseItemTO `json:"results"`
-	ReagentIDs        []createAnalysisResultResponseItemTO `json:"reagents"`
-	ControlResultIDs  []createAnalysisResultResponseItemTO `json:"controlResults"`
+	AnalysisResultIDs []creationResponseItemTO `json:"results"`
+	ReagentIDs        []creationResponseItemTO `json:"reagents"`
+	ControlResultIDs  []creationResponseItemTO `json:"controlResults"`
 }
 
 type createControlResultResponseItemsTO struct {
-	ReagentIDs       []createAnalysisResultResponseItemTO `json:"reagents"`
-	ControlResultIDs []createAnalysisResultResponseItemTO `json:"controlResults"`
+	ReagentIDs       []creationResponseItemTO `json:"reagents"`
+	ControlResultIDs []creationResponseItemTO `json:"controlResults"`
 }
 
 type ChannelResultTO struct {
@@ -214,6 +216,55 @@ type sampleSeenMessageTO struct {
 	ModuleName   string    `json:"moduleName"`
 	SampleCode   string    `json:"sampleCode"`
 	SeenAt       time.Time `json:"seenAt"`
+}
+
+type SampleType string
+
+const (
+	SampleTypeStandard     SampleType = "Standard"
+	SampleTypeTwoStagePool SampleType = "TwoStagePool"
+	SampleTypeColumnPool   SampleType = "ColumnPool"
+	SampleTypeRowPool      SampleType = "RowPool"
+)
+
+type CreatePlateTO struct {
+	ID               uuid.UUID             `json:"id"`
+	PlateIdentifier  string                `json:"plateIdentifier"`
+	InstrumentID     uuid.NullUUID         `json:"instrumentId"`
+	InstrumentModule *string               `json:"instrumentModule"`
+	CreatedAt        *time.Time            `json:"createdAt"`
+	Samples          []CreatePlateSampleTO `json:"samples"`
+}
+
+type CreatePlateSampleTO struct {
+	SampleID       uuid.UUID `json:"id"`
+	ColumnPosition int       `json:"columnPosition"`
+	RowPosition    int       `json:"rowPosition"`
+}
+type CreatePoolSampleTO struct {
+	ID               uuid.UUID     `json:"id"`
+	SampleCode       string        `json:"sampleCode"`
+	Type             SampleType    `json:"type"`
+	InstrumentID     uuid.NullUUID `json:"instrumentId"`
+	InstrumentModule *string       `json:"instrumentModule"`
+	CreatedAt        *time.Time    `json:"createdAt"`
+	SourceSampleIDs  []uuid.UUID   `json:"sourceSampleIds"`
+}
+
+type CreateSampleTO struct {
+	ID         uuid.UUID `json:"id"`
+	SampleCode string    `json:"sampleCode"`
+}
+type CreatePlatesAndPoolsRequestTO struct {
+	Samples     []CreateSampleTO     `json:"samples"`
+	Plates      []CreatePlateTO      `json:"plates"`
+	PoolSamples []CreatePoolSampleTO `json:"poolSamples"`
+}
+
+type CreatePlatesAndPoolsResponseTO struct {
+	Samples     []creationResponseItemTO `json:"samples"`
+	Plates      []creationResponseItemTO `json:"plates"`
+	PoolSamples []creationResponseItemTO `json:"poolSamples"`
 }
 
 func NewCerberusClient(cerberusUrl string, restyClient *resty.Client) (CerberusClient, error) {
@@ -510,6 +561,28 @@ func (c *cerberusClient) SendControlResultBatch(controlResults []StandaloneContr
 		}
 		return response, err
 	}
+}
+
+//TODO implement
+func (c *cerberusClient) SendPoolsAndPlatesBatch(platesAndPoolsRequest CreatePlatesAndPoolsRequestTO) (CreatePlatesAndPoolsResponseTO, error) {
+	var result CreatePlatesAndPoolsResponseTO
+	var errResponse clientError
+	resp, err := c.client.R().
+		SetHeader("Content-Type", "application/json").
+		SetBody(nil).
+		SetError(&errResponse).
+		Post(c.cerberusUrl + "/v1/pool-samples")
+
+	if err != nil {
+		log.Error().Err(err).Msg(MsgFailedToCallPoolSamplesAPI)
+		return result, err
+	}
+
+	if resp.IsError() {
+		log.Error().Str("Message", errResponse.Message).Msg(MsgFailedToCallPoolSamplesAPI)
+		return result, errors.New(MsgFailedToCallPoolSamplesAPI)
+	}
+	return result, nil
 }
 
 func (c *cerberusClient) VerifyInstrumentHash(hash string) error {
