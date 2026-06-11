@@ -209,6 +209,9 @@ func (r *messageInRepository) Update(ctx context.Context, message MessageIn) err
 	if message.Error != nil {
 		query += ", error = :error"
 	}
+	if message.Type != "" {
+		query += ", type = :type"
+	}
 	query += " WHERE id = :id;"
 	_, err := r.db.NamedExec(ctx, query, convertMessageInToDAO(message))
 	if err != nil {
