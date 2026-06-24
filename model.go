@@ -134,6 +134,7 @@ type Instrument struct {
 	RequestMappings    []RequestMapping
 	SortingRules       []SortingRule
 	Settings           []InstrumentSetting
+	MaterialMappings   []MaterialMapping
 	CreatedAt          time.Time
 	ModifiedAt         *time.Time
 	DeletedAt          *time.Time
@@ -576,4 +577,12 @@ type MessageSampleCode struct {
 	MessageSampleCodeId uuid.UUID
 	SampleCode          string
 	RetryCount          int
+}
+
+type MaterialMapping struct {
+	ID         uuid.UUID
+	MaterialID uuid.UUID
+	Code       string
+	Volume     string
+	Unit       string
 }

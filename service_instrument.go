@@ -89,6 +89,11 @@ func (s *instrumentService) CreateInstrument(ctx context.Context, instrument Ins
 			return uuid.Nil, err
 		}
 	}
+	_, err = s.instrumentRepository.WithTransaction(transaction).UpsertMaterialMappings(ctx, instrument.MaterialMappings, instrument.ID)
+	if err != nil {
+		_ = transaction.Rollback()
+		return uuid.Nil, err
+	}
 
 	analyteMappingIDs, err := s.instrumentRepository.WithTransaction(transaction).UpsertAnalyteMappings(ctx, instrument.AnalyteMappings, id)
 	if err != nil {
@@ -308,6 +313,16 @@ func (s *instrumentService) GetInstruments(ctx context.Context) ([]Instrument, e
 		}
 		instrumentsByIDs[instrumentID].SortingRules = sortingRules
 	}
+	materialMappingsByInstrumentIDs, err := s.instrumentRepository.GetMaterialMappings(ctx, instrumentIDs)
+	if err != nil {
+		return nil, err
+	}
+	for instrumentID, materialMappings := range materialMappingsByInstrumentIDs {
+		if _, ok := instrumentsByIDs[instrumentID]; !ok {
+			continue
+		}
+		instrumentsByIDs[instrumentID].MaterialMappings = materialMappings
+	}
 
 	s.instrumentCache.Set(instruments)
 
@@ -431,6 +446,13 @@ func (s *instrumentService) GetInstrumentByID(ctx context.Context, tx db.DbConne
 	for _, sortingRules := range sortingRulesMap {
 		instrument.SortingRules = sortingRules
 	}
+	materialMappingsByInstrumentIDs, err := s.instrumentRepository.WithTransaction(tx).GetMaterialMappings(ctx, instrumentIDs)
+	if err != nil {
+		return instrument, err
+	}
+	for _, materialMappings := range materialMappingsByInstrumentIDs {
+		instrument.MaterialMappings = materialMappings
+	}
 
 	return instrument, nil
 }
@@ -551,6 +573,14 @@ func (s *instrumentService) GetInstrumentByIP(ctx context.Context, ip string) (I
 		instrument.SortingRules = sortingRules
 	}
 
+	materialMappingsByInstrumentIDs, err := s.instrumentRepository.GetMaterialMappings(ctx, instrumentIDs)
+	if err != nil {
+		return instrument, err
+	}
+	for _, materialMappings := range materialMappingsByInstrumentIDs {
+		instrument.MaterialMappings = materialMappings
+	}
+
 	return instrument, nil
 }
 
@@ -607,6 +637,7 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 	deletedSettingIDs := make([]uuid.UUID, 0)
 	deletedValidatedAnalyteIDs := make(map[uuid.UUID][]uuid.UUID)
 	createdValidatedAnalyteIDs := make(map[uuid.UUID][]uuid.UUID)
+	deletedMaterialMappingIDs := make([]uuid.UUID, 0)
 
 	for _, oldAnalyteMapping := range oldInstrument.AnalyteMappings {
 		analyteMappingFound := false
@@ -698,6 +729,18 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 			deletedSettingIDs = append(deletedSettingIDs, oldSetting.ID)
 		}
 	}
+	for _, oldMaterialMapping := range oldInstrument.MaterialMappings {
+		found := false
+		for i := range instrument.MaterialMappings {
+			if instrument.MaterialMappings[i].ID == oldMaterialMapping.ID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			deletedMaterialMappingIDs = append(deletedMaterialMappingIDs, oldMaterialMapping.ID)
+		}
+	}
 
 	// Delete removed validated analyte links
 	for analyteMappingID, validatedAnalyteIDs := range deletedValidatedAnalyteIDs {
@@ -737,6 +780,11 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 		return err
 	}
 	err = s.instrumentRepository.WithTransaction(tx).DeleteInstrumentSettings(ctx, deletedSettingIDs)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	err = s.instrumentRepository.WithTransaction(tx).DeleteMaterialMappings(ctx, deletedMaterialMappingIDs)
 	if err != nil {
 		_ = tx.Rollback()
 		return err
@@ -804,6 +852,11 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 			_ = tx.Rollback()
 			return err
 		}
+	}
+	_, err = s.instrumentRepository.UpsertMaterialMappings(ctx, instrument.MaterialMappings, instrument.ID)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
 	}
 	err = s.instrumentRepository.WithTransaction(tx).UpsertRequestMappings(ctx, instrument.RequestMappings, instrument.ID)
 	if err != nil {

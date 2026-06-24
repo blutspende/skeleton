@@ -34,6 +34,7 @@ type instrumentTO struct {
 	RequestMappings    []requestMappingTO            `json:"requestMappings"`
 	Settings           []instrumentSettingTO         `json:"instrumentSettings"`
 	SortingRuleGroups  []sortingRuleGroupTO          `json:"sortingRuleGroups"`
+	MaterialMappings   []materialMappingTO           `json:"materialMappings"`
 }
 
 type fileServerConfigTO struct {
@@ -154,6 +155,14 @@ type supportedManufacturerTestTO struct {
 	ValidResultValues []string `json:"validResultValues"`
 }
 
+type materialMappingTO struct {
+	ID         uuid.UUID `json:"id"`
+	MaterialID uuid.UUID `json:"materialId"`
+	Code       string    `json:"code"`
+	Volume     string    `json:"volume"`
+	Unit       string    `json:"unit"`
+}
+
 // converters
 
 func convertInstrumentTOToInstrument(instrumentTO instrumentTO) Instrument {
@@ -179,6 +188,7 @@ func convertInstrumentTOToInstrument(instrumentTO instrumentTO) Instrument {
 		RequestMappings:    make([]RequestMapping, len(instrumentTO.RequestMappings)),
 		SortingRules:       make([]SortingRule, 0),
 		Settings:           convertInstrumentSettingTOsToInstrumentSettings(instrumentTO.Settings),
+		MaterialMappings:   make([]MaterialMapping, len(instrumentTO.MaterialMappings)),
 	}
 
 	if instrumentTO.ConnectionMode == instrumentenum.ConnectionModeFileServer {
@@ -219,6 +229,10 @@ func convertInstrumentTOToInstrument(instrumentTO instrumentTO) Instrument {
 
 	for i, requestMapping := range instrumentTO.RequestMappings {
 		model.RequestMappings[i] = convertRequestMappingTOToRequestMapping(requestMapping)
+	}
+
+	for i := range instrumentTO.MaterialMappings {
+		model.MaterialMappings[i] = convertTOToMaterialMapping(instrumentTO.MaterialMappings[i])
 	}
 
 	model.SortingRules = convertSortingRuleGroupTOsToSortingRules(instrumentTO.SortingRuleGroups, instrumentTO.ID)
@@ -458,4 +472,14 @@ func convertTOToExpectedControlResult(expectedControlResultTO ExpectedControlRes
 	}
 
 	return expectedControlResult
+}
+
+func convertTOToMaterialMapping(to materialMappingTO) MaterialMapping {
+	return MaterialMapping{
+		ID:         to.ID,
+		MaterialID: to.MaterialID,
+		Code:       to.Code,
+		Volume:     to.Volume,
+		Unit:       to.Unit,
+	}
 }

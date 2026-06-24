@@ -133,6 +133,17 @@ func HashInstrument(instrument Instrument) string {
 		return s.ProtocolSettingID.String() + s.Value
 	})
 
+	hashSlice(&builder, instrument.MaterialMappings, func(mapping MaterialMapping) string {
+		var materialBuilder strings.Builder
+		materialBuilder.WriteString(mapping.ID.String())
+		materialBuilder.WriteString(mapping.MaterialID.String())
+		materialBuilder.WriteString(mapping.Code)
+		materialBuilder.WriteString(mapping.Volume)
+		materialBuilder.WriteString(mapping.Unit)
+		fmt.Println(mapping.ID.String())
+		return materialBuilder.String()
+	})
+
 	// Create the hash
 	hasher := sha256.New()
 	hasher.Write([]byte(builder.String()))
