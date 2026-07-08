@@ -1255,6 +1255,18 @@ type instrumentRepositoryMock struct {
 	ExpectedControlResults          []ExpectedControlResult
 }
 
+func (r *instrumentRepositoryMock) UpsertMaterialMappings(ctx context.Context, materialMappings []MaterialMapping, instrumentID uuid.UUID) ([]uuid.UUID, error) {
+	return nil, nil
+}
+
+func (r *instrumentRepositoryMock) GetMaterialMappings(ctx context.Context, instrumentIDs []uuid.UUID) (map[uuid.UUID][]MaterialMapping, error) {
+	return nil, nil
+}
+
+func (r *instrumentRepositoryMock) DeleteMaterialMappings(ctx context.Context, ids []uuid.UUID) error {
+	return nil
+}
+
 func (r *instrumentRepositoryMock) DeleteProtocolAbilities(ctx context.Context, protocolID uuid.UUID, protocolAbilities []ProtocolAbility) error {
 	return nil
 }

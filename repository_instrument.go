@@ -72,6 +72,10 @@ const (
 	msgDeleteInstrumentSettingsFailed                = "delete instrument settings failed"
 	msgCheckAnalyteUsageFailed                       = "check analyte usage failed"
 	msgUniqueViolationInstrumentAnalyte              = "instrument Analyte already set to an Analyte Mapping for this instrument"
+	msgGetMaterialMappingsFailed                     = "get material mappings failed"
+	msgUpsertMaterialMappingsFailed                  = "upsert material mapping failed"
+	msgDeleteMaterialMappingsFailed                  = "delete material mapping failed"
+	msgUniqueViolationMaterialMapping                = "material is already mapped to this instrument"
 )
 
 var (
@@ -127,7 +131,10 @@ var (
 	ErrUpsertInstrumentSettingsFailed                = errors.New(msgUpsertInstrumentSettingsFailed)
 	ErrDeleteInstrumentSettingsFailed                = errors.New(msgDeleteInstrumentSettingsFailed)
 	ErrCheckAnalyteUsageFailed                       = errors.New(msgCheckAnalyteUsageFailed)
-	ErrUniqueViolationInstrumentAnalyte              = errors.New(msgUniqueViolationInstrumentAnalyte)
+	ErrGetMaterialMappingsFailed                     = errors.New(msgGetMaterialMappingsFailed)
+	ErrUpsertMaterialMappingsFailed                  = errors.New(msgUpsertMaterialMappingsFailed)
+	ErrDeleteMaterialMappingsFailed                  = errors.New(msgDeleteMaterialMappingsFailed)
+	ErrUniqueViolationMaterialMapping                = errors.New(msgUniqueViolationMaterialMapping)
 )
 
 type instrumentDAO struct {
@@ -293,6 +300,18 @@ type protocolSettingDAO struct {
 	DeletedAt   sql.NullTime                       `db:"deleted_at"`
 }
 
+type materialMappingDAO struct {
+	ID           uuid.UUID    `db:"id"`
+	MaterialID   uuid.UUID    `db:"material_id"`
+	InstrumentID uuid.UUID    `db:"instrument_id"`
+	Code         string       `db:"code"`
+	Volume       string       `db:"volume"`
+	Unit         string       `db:"unit"`
+	CreatedAt    time.Time    `db:"created_at"`
+	ModifiedAt   sql.NullTime `db:"modified_at"`
+	DeletedAt    sql.NullTime `db:"deleted_at"`
+}
+
 type instrumentRepository struct {
 	db       db.DbConnection
 	dbSchema string
@@ -345,6 +364,9 @@ type InstrumentRepository interface {
 	GetRequestMappingAnalytes(ctx context.Context, requestMappingIDs []uuid.UUID) (map[uuid.UUID][]uuid.UUID, error)
 	DeleteRequestMappings(ctx context.Context, requestMappingIDs []uuid.UUID) error
 	DeleteRequestMappingAnalytes(ctx context.Context, requestMappingID uuid.UUID, analyteIDs []uuid.UUID) error
+	UpsertMaterialMappings(ctx context.Context, materialMappings []MaterialMapping, instrumentID uuid.UUID) ([]uuid.UUID, error)
+	GetMaterialMappings(ctx context.Context, instrumentIDs []uuid.UUID) (map[uuid.UUID][]MaterialMapping, error)
+	DeleteMaterialMappings(ctx context.Context, ids []uuid.UUID) error
 
 	// Validated analytes
 	CreateValidatedAnalyteIDs(ctx context.Context, analyteMappingID uuid.UUID, validatedAnalyteIDs []uuid.UUID) error
@@ -787,19 +809,23 @@ func (r *instrumentRepository) UpsertAnalyteMappings(ctx context.Context, analyt
 	for i := range analyteMappings {
 		ids[i] = analyteMappings[i].ID
 	}
-	query := fmt.Sprintf(`INSERT INTO %s.sk_analyte_mappings(id, instrument_id, instrument_analyte, analyte_id, result_type, control_result_required, is_control) 
+	err := utils.Partition(len(analyteMappings), db.MaxQueryParams, func(low int, high int) error {
+		query := fmt.Sprintf(`INSERT INTO %s.sk_analyte_mappings(id, instrument_id, instrument_analyte, analyte_id, result_type, control_result_required, is_control) 
 		VALUES(:id, :instrument_id, :instrument_analyte, :analyte_id, :result_type, :control_result_required, :is_control)
 		ON CONFLICT (id) WHERE deleted_at IS NULL DO UPDATE SET instrument_analyte = excluded.instrument_analyte, analyte_id = excluded.analyte_id,
 		    result_type = excluded.result_type, control_result_required = excluded.control_result_required, is_control = excluded.is_control, modified_at = timezone('utc', now());`, r.dbSchema)
-	_, err := r.db.NamedExec(ctx, query, convertAnalyteMappingsToDAOs(analyteMappings, instrumentID))
-	if err != nil {
-		log.Error().Err(err).Msg(msgUpsertAnalyteMappingsFailed)
-		if IsErrorCode(err, UniqueViolationErrorCode) {
-			return []uuid.UUID{}, ErrUniqueViolationInstrumentAnalyte
+		_, err := r.db.NamedExec(ctx, query, convertAnalyteMappingsToDAOs(analyteMappings[low:high], instrumentID))
+		if err != nil {
+			log.Error().Err(err).Msg(msgUpsertAnalyteMappingsFailed)
+			if IsErrorCode(err, UniqueViolationErrorCode) {
+				return ErrUniqueViolationMaterialMapping
+			}
+			return ErrUpsertAnalyteMappingsFailed
 		}
-		return []uuid.UUID{}, ErrUpsertAnalyteMappingsFailed
-	}
-	return ids, nil
+		return nil
+	})
+
+	return ids, err
 }
 
 func (r *instrumentRepository) GetAnalyteMappings(ctx context.Context, instrumentIDs []uuid.UUID) (map[uuid.UUID][]AnalyteMapping, error) {
@@ -1328,6 +1354,79 @@ func (r *instrumentRepository) DeleteRequestMappingAnalytes(ctx context.Context,
 		log.Error().Err(err).Msg(msgDeleteRequestMappingAnalytesFailed)
 		return ErrDeleteRequestMappingAnalytesFailed
 	}
+	return nil
+}
+
+func (r *instrumentRepository) UpsertMaterialMappings(ctx context.Context, materialMappings []MaterialMapping, instrumentID uuid.UUID) ([]uuid.UUID, error) {
+	if len(materialMappings) == 0 {
+		return nil, nil
+	}
+	ids := make([]uuid.UUID, len(materialMappings))
+	for i := range materialMappings {
+		ids[i] = materialMappings[i].ID
+	}
+	err := utils.Partition(len(materialMappings), db.MaxQueryParams, func(low int, high int) error {
+		query := fmt.Sprintf(`insert into %s.sk_material_mappings(id, instrument_id, material_id, code, volume, unit) 
+		values(:id, :instrument_id, :material_id, :code, :volume, :unit)
+		on conflict (id) where deleted_at is null do update set code = excluded.code, material_id = excluded.material_id,
+		    volume = excluded.volume, unit = excluded.unit, modified_at = timezone('utc', now());`, r.dbSchema)
+		_, err := r.db.NamedExec(ctx, query, convertMaterialMappingsToDAOs(materialMappings[low:high], instrumentID))
+		if err != nil {
+			log.Error().Err(err).Msg(msgUpsertMaterialMappingsFailed)
+			return ErrUpsertMaterialMappingsFailed
+		}
+		return nil
+	})
+
+	return ids, err
+}
+
+func (r *instrumentRepository) GetMaterialMappings(ctx context.Context, instrumentIDs []uuid.UUID) (map[uuid.UUID][]MaterialMapping, error) {
+	if len(instrumentIDs) == 0 {
+		return nil, nil
+	}
+	materialMappingsByInstrumentIDs := make(map[uuid.UUID][]MaterialMapping)
+	query := `select * from %s.sk_material_mappings where instrument_id in (?) and deleted_at is null;`
+	query, args, _ := sqlx.In(fmt.Sprintf(query, r.dbSchema), instrumentIDs)
+	query = r.db.Rebind(query)
+	rows, err := r.db.Queryx(ctx, query, args...)
+	if err != nil {
+		log.Error().Err(err).Msg(msgGetMaterialMappingsFailed)
+		return nil, ErrGetMaterialMappingsFailed
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	for rows.Next() {
+		var dao materialMappingDAO
+		err = rows.StructScan(&dao)
+		if err != nil {
+			log.Error().Err(err).Msg(msgGetMaterialMappingsFailed)
+			return nil, ErrGetMaterialMappingsFailed
+		}
+		materialMappingsByInstrumentIDs[dao.InstrumentID] = append(materialMappingsByInstrumentIDs[dao.InstrumentID], convertDAOToMaterialMapping(dao))
+	}
+
+	return materialMappingsByInstrumentIDs, nil
+}
+
+func (r *instrumentRepository) DeleteMaterialMappings(ctx context.Context, ids []uuid.UUID) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	err := utils.Partition(len(ids), db.MaxQueryParams, func(low int, high int) error {
+		query := fmt.Sprintf(`update %s.sk_material_mappings set deleted_at = timezone('utc', now()) where id in (?) and deleted_at is null;`, r.dbSchema)
+		query, args, _ := sqlx.In(query, ids[low:high])
+		query = r.db.Rebind(query)
+		_, err := r.db.Exec(ctx, query, args...)
+		return err
+	})
+	if err != nil {
+		log.Error().Err(err).Msg(msgDeleteMaterialMappingsFailed)
+		return ErrDeleteMaterialMappingsFailed
+	}
+
 	return nil
 }
 
@@ -1880,6 +1979,36 @@ func convertDAOToSupportedManufacturerTest(dao supportedManufacturerTestsDAO) Su
 		TestName:          dao.TestName,
 		Channels:          strings.Split(dao.Channels, ","),
 		ValidResultValues: strings.Split(dao.ValidResultValues, ","),
+	}
+}
+
+func convertMaterialMappingsToDAOs(materialMappings []MaterialMapping, instrumentID uuid.UUID) []materialMappingDAO {
+	daos := make([]materialMappingDAO, len(materialMappings))
+	for i := range materialMappings {
+		daos[i] = convertMaterialMappingToDAO(materialMappings[i], instrumentID)
+	}
+
+	return daos
+}
+
+func convertMaterialMappingToDAO(materialMapping MaterialMapping, instrumentID uuid.UUID) materialMappingDAO {
+	return materialMappingDAO{
+		ID:           materialMapping.ID,
+		MaterialID:   materialMapping.MaterialID,
+		InstrumentID: instrumentID,
+		Code:         materialMapping.Code,
+		Volume:       materialMapping.Volume,
+		Unit:         materialMapping.Unit,
+	}
+}
+
+func convertDAOToMaterialMapping(dao materialMappingDAO) MaterialMapping {
+	return MaterialMapping{
+		ID:         dao.ID,
+		MaterialID: dao.MaterialID,
+		Code:       dao.Code,
+		Volume:     dao.Volume,
+		Unit:       dao.Unit,
 	}
 }
 
