@@ -109,6 +109,7 @@ const (
 	msgMissingDEARawMessageID                                        = "missing DEA raw message ID"
 	msgGetUnprocessedControlIDsFailed                                = "get unprocessed control ids failed"
 	msgGetAnalysisResultIDsNotSavedIntoCerberusFailed                = "get analysisResultIDs not saved into Cerberus failed"
+	msgMissingMessageInID                                            = "missing message in ID"
 )
 
 var (
@@ -202,6 +203,7 @@ var (
 	ErrMissingDEARawMessageID                                        = errors.New(msgMissingDEARawMessageID)
 	ErrGetUnprocessedControlIDsFailed                                = errors.New(msgGetUnprocessedControlIDsFailed)
 	ErrGetAnalysisResultIDsNotSavedIntoCerberusFailed                = errors.New(msgGetAnalysisResultIDsNotSavedIntoCerberusFailed)
+	ErrMissingMessageInID                                            = errors.New(msgMissingMessageInID)
 )
 
 type analysisRequestDAO struct {
@@ -2079,8 +2081,12 @@ func (r *analysisRepository) createControlResults(ctx context.Context, controlRe
 	err := utils.Partition(len(controlResults), controlResultBatchSize, func(low int, high int) error {
 		query := fmt.Sprintf(`INSERT INTO %s.sk_control_results(id, sample_code, analyte_mapping_id, instrument_id, message_in_id, instrument_module, dea_raw_message_id, expected_control_result_id, is_valid, is_compared_to_expected_result, result, examined_at)
 		VALUES(:id, :sample_code, :analyte_mapping_id, :instrument_id, :message_in_id, :instrument_module, :dea_raw_message_id, :expected_control_result_id, :is_valid, :is_compared_to_expected_result, :result, :examined_at)`, r.dbSchema)
-
-		_, err := r.db.NamedExec(ctx, query, convertControlResultsToDAO(controlResults[low:high]))
+		daos, err := convertControlResultsToDAO(controlResults[low:high])
+		if err != nil {
+			log.Error().Err(err).Msg(msgCreateControlResultFailed)
+			return ErrCreateControlResultFailed
+		}
+		_, err = r.db.NamedExec(ctx, query, daos)
 		if err != nil {
 			log.Error().Err(err).Msg(msgCreateControlResultFailed)
 			if IsErrorCode(err, ForeignKeyViolationErrorCode) {
@@ -3343,7 +3349,11 @@ func (r *analysisRepository) UpdateControlResultBatchWithExpectedControl(ctx con
 	if len(controlResults) == 0 {
 		return nil
 	}
-	controlResultDAOs := convertControlResultsToDAO(controlResults)
+	controlResultDAOs, err := convertControlResultsToDAO(controlResults)
+	if err != nil {
+		log.Error().Err(err).Msg(msgUpdateControlResultFailed)
+		return ErrUpdateControlResultFailed
+	}
 	query := fmt.Sprintf(`UPDATE %s.sk_control_results SET expected_control_result_id = :expected_control_result_id, is_valid = :is_valid, is_compared_to_expected_result = :is_compared_to_expected_result WHERE id = :id;`, r.dbSchema)
 	for i := range controlResultDAOs {
 		_, err := r.db.NamedExec(ctx, query, controlResultDAOs[i])
@@ -4419,9 +4429,12 @@ func convertReagentToDAO(reagent Reagent) reagentDAO {
 	return dao
 }
 
-func convertControlResultsToDAO(controlResults []ControlResult) []controlResultDAO {
+func convertControlResultsToDAO(controlResults []ControlResult) ([]controlResultDAO, error) {
 	controlResultDAOs := make([]controlResultDAO, len(controlResults))
 	for i := range controlResults {
+		if controlResults[i].MessageInID == uuid.Nil {
+			return nil, ErrMissingMessageInID
+		}
 		controlResultDAOs[i] = controlResultDAO{
 			ID:                         controlResults[i].ID,
 			SampleCode:                 controlResults[i].SampleCode,
@@ -4440,7 +4453,7 @@ func convertControlResultsToDAO(controlResults []ControlResult) []controlResultD
 		}
 	}
 
-	return controlResultDAOs
+	return controlResultDAOs, nil
 }
 
 func convertWarningsToDAOs(warnings []string, analysisResultID uuid.UUID) []warningDAO {
