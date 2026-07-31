@@ -218,35 +218,56 @@ func (as *analysisService) CreateAnalysisResultsBatch(ctx context.Context, analy
 	for i := range savedAnalysisResults {
 		savedAnalysisResults[i].Reagents = append(savedAnalysisResults[i].Reagents, savedResultDataList.Reagents...)
 		if len(savedAnalysisResults[i].Reagents) != 0 {
+			//gathering unique Reagents By ID and the unique ControlResults by ID that are connected to the reagents
+			reagentMap := make(map[uuid.UUID]Reagent)
+			controlMapByReagentID := make(map[uuid.UUID]map[uuid.UUID]ControlResult)
+			for j := range savedAnalysisResults[i].Reagents {
+				if _, ok := reagentMap[savedAnalysisResults[i].Reagents[j].ID]; !ok {
+					reagentMap[savedAnalysisResults[i].Reagents[j].ID] = savedAnalysisResults[i].Reagents[j]
+					controlMapByReagentID[savedAnalysisResults[i].Reagents[j].ID] = make(map[uuid.UUID]ControlResult)
+				}
+				for k := range savedResultDataList.ControlResults {
+					if _, ok := controlMapByReagentID[savedAnalysisResults[i].Reagents[j].ID][savedResultDataList.ControlResults[k].ID]; !ok {
+						controlMapByReagentID[savedAnalysisResults[i].Reagents[j].ID][savedResultDataList.ControlResults[k].ID] = savedResultDataList.ControlResults[k]
+					}
+				}
+				for k := range savedAnalysisResults[i].ControlResults {
+					if _, ok := controlMapByReagentID[savedAnalysisResults[i].Reagents[j].ID][savedAnalysisResults[i].ControlResults[k].ID]; !ok {
+						controlMapByReagentID[savedAnalysisResults[i].Reagents[j].ID][savedAnalysisResults[i].ControlResults[k].ID] = savedAnalysisResults[i].ControlResults[k]
+					}
+				}
+				for k := range savedAnalysisResults[i].Reagents[j].ControlResults {
+					if _, ok := controlMapByReagentID[savedAnalysisResults[i].Reagents[j].ID][savedAnalysisResults[i].Reagents[j].ControlResults[k].ID]; !ok {
+						controlMapByReagentID[savedAnalysisResults[i].Reagents[j].ID][savedAnalysisResults[i].Reagents[j].ControlResults[k].ID] = savedAnalysisResults[i].Reagents[j].ControlResults[k]
+					}
+				}
+			}
+
+			//separating the existing ControlResults from the new ControlResults and the same with Reagents to minimize the amount of data sent
 			newReagents := make([]Reagent, 0)
 			existingReagents := make([]ReagentReference, 0)
-			for j := range savedAnalysisResults[i].Reagents {
-				if savedAnalysisResults[i].Reagents[j].ControlResults == nil {
-					savedAnalysisResults[i].Reagents[j].ControlResults = make([]ControlResult, 0)
-				}
-				savedAnalysisResults[i].Reagents[j].ControlResults = append(savedAnalysisResults[i].Reagents[j].ControlResults, savedResultDataList.ControlResults...)
-				savedAnalysisResults[i].Reagents[j].ControlResults = append(savedAnalysisResults[i].Reagents[j].ControlResults, savedAnalysisResults[i].ControlResults...)
-
+			for reagentID := range reagentMap {
 				newControlResults := make([]ControlResult, 0)
 				existingControlResults := make([]uuid.UUID, 0)
-				for k, controlResult := range savedAnalysisResults[i].Reagents[j].ControlResults {
-					if controlResult.CerberusID.Valid {
-						existingControlResults = append(existingControlResults, savedAnalysisResults[i].Reagents[j].ControlResults[k].ID)
+				for controlID := range controlMapByReagentID[reagentID] {
+					if controlMapByReagentID[reagentID][controlID].CerberusID.Valid {
+						existingControlResults = append(existingControlResults, controlID)
 					} else {
-						newControlResults = append(newControlResults, savedAnalysisResults[i].Reagents[j].ControlResults[k])
+						newControlResults = append(newControlResults, controlMapByReagentID[reagentID][controlID])
 					}
 				}
 
-				if savedAnalysisResults[i].Reagents[j].CerberusID.Valid {
+				if reagentMap[reagentID].CerberusID.Valid {
 					existingReagents = append(existingReagents, ReagentReference{
-						ReagentID:        savedAnalysisResults[i].Reagents[j].ID,
+						ReagentID:        reagentID,
 						ControlResultIDs: existingControlResults,
 						ControlResults:   newControlResults,
 					})
 				} else {
-					savedAnalysisResults[i].Reagents[j].ControlResults = newControlResults
-					savedAnalysisResults[i].Reagents[j].ControlResultIDs = existingControlResults
-					newReagents = append(newReagents, savedAnalysisResults[i].Reagents[j])
+					reagent := reagentMap[reagentID]
+					reagent.ControlResults = newControlResults
+					reagent.ControlResultIDs = existingControlResults
+					newReagents = append(newReagents, reagent)
 				}
 			}
 
@@ -379,20 +400,25 @@ func (as *analysisService) createAnalysisResultsBatch(ctx context.Context, tx db
 		}
 	}
 
-	controlResultsMap, reagentsMapWithIds, err := as.createReagentsByAnalysisResultID(ctx, tx, reagentsMap)
+	reagentsMapWithIds, err := as.createReagentsByAnalysisResultID(ctx, tx, reagentsMap)
 	if err != nil {
 		return analysisResultSet, err
 	}
 
-	resultRelationsMap, err := as.analysisRepository.WithTransaction(tx).CreateControlResults(ctx, controlResultsMap)
+	reagentMapByAnalysisResultID, err := as.analysisRepository.WithTransaction(tx).CreateControlResultsFromReagents(ctx, reagentsMapWithIds)
 	if err != nil {
 		return analysisResultSet, err
 	}
+	resultRelationsMap := make(map[uuid.UUID]map[uuid.UUID][]uuid.UUID)
 	for i, result := range analysisResultSet.Results {
+		if _, ok := resultRelationsMap[result.ID]; !ok {
+			resultRelationsMap[result.ID] = make(map[uuid.UUID][]uuid.UUID)
+		}
 		for j, reagent := range result.Reagents {
 			analysisResultSet.Results[i].Reagents[j].ID = reagentsMapWithIds[result.ID][j].ID
 			for k := range reagent.ControlResults {
-				analysisResultSet.Results[i].Reagents[j].ControlResults[k].ID = resultRelationsMap[result.ID][reagent.ID][k]
+				analysisResultSet.Results[i].Reagents[j].ControlResults[k].ID = reagentMapByAnalysisResultID[result.ID][j].ControlResults[k].ID
+				resultRelationsMap[result.ID][analysisResultSet.Results[i].Reagents[j].ID] = append(resultRelationsMap[result.ID][analysisResultSet.Results[i].Reagents[j].ID], analysisResultSet.Results[i].Reagents[j].ControlResults[k].ID)
 			}
 		}
 	}
@@ -622,10 +648,9 @@ func calculateControlResultIsValid(controlResult string, expectedControlResult E
 	return false, ErrUnsupportedExpectedControlResultFound
 }
 
-func (as *analysisService) createReagentsByAnalysisResultID(ctx context.Context, tx db.DbConnection, reagentsByAnalysisResultID map[uuid.UUID][]Reagent) (map[uuid.UUID]map[uuid.UUID][]ControlResult, map[uuid.UUID][]Reagent, error) {
+func (as *analysisService) createReagentsByAnalysisResultID(ctx context.Context, tx db.DbConnection, reagentsByAnalysisResultID map[uuid.UUID][]Reagent) (map[uuid.UUID][]Reagent, error) {
 	reagentList := make([]Reagent, 0)
 	analysisResultIDsProcessingOrder := make([]uuid.UUID, 0)
-	controlResultsMap := make(map[uuid.UUID]map[uuid.UUID][]ControlResult)
 	for analysisResultID, reagents := range reagentsByAnalysisResultID {
 		for i := range reagents {
 			reagentList = append(reagentList, reagents[i])
@@ -636,25 +661,20 @@ func (as *analysisService) createReagentsByAnalysisResultID(ctx context.Context,
 
 	reagentIDs, err := as.analysisRepository.WithTransaction(tx).CreateReagents(ctx, reagentList)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	var index = 0
 	for _, analysisResultID := range analysisResultIDsProcessingOrder {
 		reagents := reagentsByAnalysisResultID[analysisResultID]
-		for j, reagent := range reagents {
-			if _, ok := controlResultsMap[analysisResultID]; !ok {
-				controlResultsMap[analysisResultID] = make(map[uuid.UUID][]ControlResult)
-			}
-
-			controlResultsMap[analysisResultID][reagentIDs[index]] = reagent.ControlResults
+		for j := range reagents {
 			reagentsByAnalysisResultID[analysisResultID][j].ID = reagentIDs[index]
 
 			index++
 		}
 	}
 
-	return controlResultsMap, reagentsByAnalysisResultID, nil
+	return reagentsByAnalysisResultID, nil
 }
 
 func (as *analysisService) CreateControlResultBatch(ctx context.Context, controlResults []StandaloneControlResult) ([]StandaloneControlResult, error) {

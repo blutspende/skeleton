@@ -459,7 +459,7 @@ type AnalysisRepository interface {
 	CreateChannelResults(ctx context.Context, channelResults []ChannelResult, analysisResultID uuid.UUID) ([]uuid.UUID, error)
 	CreateChannelResultQuantitativeValues(ctx context.Context, quantitativeValuesByChannelResultIDs map[uuid.UUID]map[string]string) error
 	CreateReagentBatch(ctx context.Context, reagents []Reagent) ([]Reagent, error)
-	CreateControlResults(ctx context.Context, controlResultsMap map[uuid.UUID]map[uuid.UUID][]ControlResult) (map[uuid.UUID]map[uuid.UUID][]uuid.UUID, error)
+	CreateControlResultsFromReagents(ctx context.Context, reagentMap map[uuid.UUID][]Reagent) (map[uuid.UUID][]Reagent, error)
 	CreateWarnings(ctx context.Context, warningsByAnalysisResultID map[uuid.UUID][]string) error
 
 	UpdateCerberusQueueItemStatus(ctx context.Context, queueItem CerberusQueueItem) error
@@ -2028,29 +2028,18 @@ func getUniqueReagentString(reagent reagentDAO) string {
 
 const controlResultBatchSize = 5000
 
-func (r *analysisRepository) CreateControlResults(ctx context.Context, controlResultsMap map[uuid.UUID]map[uuid.UUID][]ControlResult) (map[uuid.UUID]map[uuid.UUID][]uuid.UUID, error) {
+func (r *analysisRepository) CreateControlResultsFromReagents(ctx context.Context, reagentMap map[uuid.UUID][]Reagent) (map[uuid.UUID][]Reagent, error) {
 	controlResults := make([]ControlResult, 0)
-	idMap := make(map[uuid.UUID]map[uuid.UUID][]uuid.UUID)
-	for analysisResultID, reagents := range controlResultsMap {
-		idMap[analysisResultID] = make(map[uuid.UUID][]uuid.UUID)
-
-		for reagentID, reagentControlResults := range reagents {
-			idMap[analysisResultID][reagentID] = make([]uuid.UUID, 0)
+	for i, reagents := range reagentMap {
+		for j, reagent := range reagents {
 
 			crs := make([]ControlResult, 0)
-			for i := range reagentControlResults {
-				var crID uuid.UUID
+			for k := range reagent.ControlResults {
 
-				if reagentControlResults[i].ID == uuid.Nil {
-					crID = uuid.New()
-					reagentControlResults[i].ID = crID
-
-					crs = append(crs, reagentControlResults[i])
-				} else {
-					crID = reagentControlResults[i].ID
+				if reagent.ControlResults[k].ID == uuid.Nil {
+					reagentMap[i][j].ControlResults[k].ID = uuid.New()
+					crs = append(crs, reagent.ControlResults[k])
 				}
-
-				idMap[analysisResultID][reagentID] = append(idMap[analysisResultID][reagentID], crID)
 			}
 
 			controlResults = append(controlResults, crs...)
@@ -2061,7 +2050,7 @@ func (r *analysisRepository) CreateControlResults(ctx context.Context, controlRe
 	if err != nil {
 		return nil, err
 	}
-	return idMap, nil
+	return reagentMap, nil
 }
 
 func (r *analysisRepository) createControlResults(ctx context.Context, controlResults []ControlResult) ([]uuid.UUID, error) {

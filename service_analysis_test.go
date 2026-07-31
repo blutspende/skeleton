@@ -1187,6 +1187,203 @@ func TestCreateAnalysisResultReagentRelations(t *testing.T) {
 	assert.Equal(t, extendedMockAnalysisRepo.uniqueReagentIDMap[getUniqueReagentString(convertReagentToDAO(results[4].Reagents[0]))], results[4].Reagents[0].ID)
 }
 
+func TestCreateAnalysisResultWithNonUniqueReagentsAndControlResults(t *testing.T) {
+	defer Recover(t)
+
+	resultYieldedAt, _ := formatTimeStringToBerlinTime("20240927162727", "20060102150405")
+	validUntil, _ := formatTimeStringToBerlinTime("20240930162727", "20060102150405")
+
+	expectedControlResultCreatedAt, _ := formatTimeStringToBerlinTime("20240925162727", "20060102150405")
+	expectedControlResult := ExpectedControlResult{
+		ID:             uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
+		SampleCode:     "Sample1",
+		Operator:       InClosedInterval,
+		ExpectedValue:  "40",
+		ExpectedValue2: strToPtr("50"),
+		CreatedAt:      expectedControlResultCreatedAt,
+		DeletedAt:      nil,
+		CreatedBy:      uuid.UUID{},
+		DeletedBy:      uuid.NullUUID{},
+	}
+
+	analyteMappings := []AnalyteMapping{
+		{
+			ID:                uuid.MustParse("1bc041a7-5a48-4290-8f66-a3e8db64062d"),
+			InstrumentAnalyte: "TESTHIVDuo_01",
+			AnalyteID:         uuid.MustParse("fdc9dcd3-2133-4164-87ee-3f8a533fd18e"),
+			ChannelMappings: []ChannelMapping{
+				{
+					InstrumentChannel: "TestInstrumentChannel",
+					ChannelID:         uuid.MustParse("6ded3ef2-4f98-45bb-b0d5-3ff3bd294d8b"),
+				},
+			},
+			ResultMappings: []ResultMapping{
+				{
+					Key:   "pos",
+					Value: "pos",
+					Index: 0,
+				},
+				{
+					Key:   "neg",
+					Value: "neg",
+					Index: 1,
+				},
+			},
+			ResultType:             "pein",
+			ControlResultRequired:  true,
+			ExpectedControlResults: []ExpectedControlResult{expectedControlResult},
+		},
+	}
+
+	instrument := Instrument{
+		ID:              uuid.MustParse("abb539a3-286f-4c15-a7b7-2e9adf6eab74"),
+		Name:            "TestInstrument",
+		Type:            instrumentenum.TypeAnalyzer,
+		ProtocolID:      uuid.MustParse("abb539a3-286f-4c15-a7b7-2e9adf6eab91"),
+		ProtocolName:    "Test Protocol",
+		Enabled:         true,
+		ConnectionMode:  instrumentenum.ConnectionModeTCPMixed,
+		ResultMode:      instrumentenum.ResultModeQualification,
+		Status:          "ONLINE",
+		Hostname:        "192.168.1.20",
+		AnalyteMappings: analyteMappings,
+	}
+
+	instrumentRepositoryMock := &instrumentRepositoryMock{}
+	instrumentRepositoryMock.ExpectedControlResults = []ExpectedControlResult{expectedControlResult}
+
+	controlResult := ControlResult{
+		SampleCode:     "Sample1",
+		AnalyteMapping: analyteMappings[0],
+		Result:         "40",
+		ExpectedControlResultId: uuid.NullUUID{
+			UUID:  uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
+			Valid: true,
+		},
+		IsValid:                    false,
+		IsComparedToExpectedResult: false,
+		ExaminedAt:                 resultYieldedAt,
+		InstrumentID:               instrument.ID,
+		Warnings:                   nil,
+		ChannelResults:             nil,
+		ExtraValues:                nil,
+	}
+
+	controlResult2 := ControlResult{
+		SampleCode:     "Sample1",
+		AnalyteMapping: analyteMappings[0],
+		Result:         "45",
+		ExpectedControlResultId: uuid.NullUUID{
+			UUID:  uuid.MustParse("5d175eb3-e70f-405e-ab33-c15a854f17a0"),
+			Valid: true,
+		},
+		IsValid:                    false,
+		IsComparedToExpectedResult: false,
+		ExaminedAt:                 resultYieldedAt,
+		InstrumentID:               instrument.ID,
+		Warnings:                   nil,
+		ChannelResults:             nil,
+		ExtraValues:                nil,
+	}
+
+	regents := []Reagent{
+		{
+			Manufacturer:   "Roche",
+			SerialNumber:   "000000001",
+			LotNo:          "000000002",
+			Type:           instrumentenum.ReagentTypeStandard,
+			Name:           "",
+			CreatedAt:      time.Time{},
+			ControlResults: []ControlResult{controlResult},
+		}, {
+			Manufacturer:   "Roche",
+			SerialNumber:   "000000002",
+			LotNo:          "000000003",
+			Type:           instrumentenum.ReagentTypeStandard,
+			Name:           "",
+			CreatedAt:      time.Time{},
+			ControlResults: nil,
+		}, {
+			Manufacturer:   "Roche",
+			SerialNumber:   "000000003",
+			LotNo:          "000000004",
+			Type:           instrumentenum.ReagentTypeStandard,
+			Name:           "",
+			CreatedAt:      time.Time{},
+			ControlResults: []ControlResult{controlResult2},
+		}, {
+			Manufacturer:   "Roche",
+			SerialNumber:   "000000001",
+			LotNo:          "000000002",
+			Type:           instrumentenum.ReagentTypeStandard,
+			Name:           "",
+			CreatedAt:      time.Time{},
+			ControlResults: []ControlResult{controlResult2},
+		}, {
+			Manufacturer:   "Roche",
+			SerialNumber:   "000000002",
+			LotNo:          "000000003",
+			Type:           instrumentenum.ReagentTypeStandard,
+			Name:           "",
+			CreatedAt:      time.Time{},
+			ControlResults: []ControlResult{controlResult, controlResult2},
+		},
+	}
+
+	analysisResults := []AnalysisResult{
+		{
+			AnalysisRequest:          AnalysisRequest{},
+			AnalyteMapping:           analyteMappings[0],
+			Instrument:               instrument,
+			SampleCode:               "SampleCode1",
+			MessageInID:              uuid.MustParse("92a2ba34-d891-4a1b-89fb-e0c4d717f729"),
+			Result:                   "pos",
+			ResultMode:               instrumentenum.ResultModeQualification,
+			Status:                   Final,
+			ResultYieldDateTime:      &resultYieldedAt,
+			ValidUntil:               validUntil,
+			Operator:                 "",
+			TechnicalReleaseDateTime: nil,
+			InstrumentRunID:          uuid.MustParse("c0dbcfb6-6a90-4ab6-bcab-0cfbec4abd06"),
+			Edited:                   false,
+			EditReason:               "",
+			IsInvalid:                false,
+			WarnFlag:                 false,
+			Warnings:                 nil,
+			ChannelResults:           nil,
+			ExtraValues:              nil,
+			Reagents:                 regents,
+			ControlResults:           []ControlResult{controlResult},
+			Images:                   nil,
+		},
+	}
+
+	mockManager := &mockManager{}
+	extendedMockAnalysisRepo := &extendedMockAnalysisRepo{}
+	analysisService := NewAnalysisService(extendedMockAnalysisRepo, instrumentRepositoryMock, nil, nil, mockManager)
+	results, err := analysisService.CreateAnalysisResultsBatch(context.TODO(), AnalysisResultSet{
+		Results: analysisResults,
+	})
+	assert.Nil(t, err)
+	assert.Equal(t, 1, len(results))
+	assert.Equal(t, 3, len(results[0].Reagents))
+	reagentMap := make(map[string]Reagent)
+	for _, reagent := range results[0].Reagents {
+		reagentMap[reagent.SerialNumber+reagent.LotNo] = reagent
+	}
+	assert.Equal(t, 3, len(reagentMap["000000001000000002"].ControlResults))
+	assert.Equal(t, 0, len(reagentMap["000000001000000002"].ControlResultIDs))
+	assert.Equal(t, 3, len(reagentMap["000000002000000003"].ControlResults))
+	assert.Equal(t, 0, len(reagentMap["000000002000000003"].ControlResultIDs))
+	assert.Equal(t, 2, len(reagentMap["000000003000000004"].ControlResults))
+	assert.Equal(t, 0, len(reagentMap["000000003000000004"].ControlResultIDs))
+	assert.Equal(t, 0, len(results[0].ControlResults))
+
+	assert.Equal(t, 3, len(extendedMockAnalysisRepo.analysisResultReagentRelationDAOs))
+	assert.Equal(t, 6, len(extendedMockAnalysisRepo.analysisResultControlResultRelationDAOs))
+	assert.Equal(t, 8, len(extendedMockAnalysisRepo.reagentControlResultRelationDAOs))
+}
+
 func TestCreateControlResultBatchWithOnlyPreControlResults(t *testing.T) {
 	defer Recover(t)
 
