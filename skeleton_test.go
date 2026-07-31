@@ -1647,19 +1647,15 @@ func (m *analysisRepositoryMock) CreateChannelResultQuantitativeValues(ctx conte
 func (m *analysisRepositoryMock) CreateReagentBatch(ctx context.Context, reagents []Reagent) ([]Reagent, error) {
 	return nil, nil
 }
-func (m *analysisRepositoryMock) CreateControlResults(ctx context.Context, controlResultsMap map[uuid.UUID]map[uuid.UUID][]ControlResult) (map[uuid.UUID]map[uuid.UUID][]uuid.UUID, error) {
-	controlResultIdsMap := make(map[uuid.UUID]map[uuid.UUID][]uuid.UUID)
-	for analysisResultId, reagentMap := range controlResultsMap {
-		controlResultIdsMap[analysisResultId] = make(map[uuid.UUID][]uuid.UUID)
-		for reagentId, controlResults := range reagentMap {
-			controlResultIds := make([]uuid.UUID, 0)
-			for i := 0; i < len(controlResults); i++ {
-				controlResultIds = append(controlResultIds, uuid.New())
+func (m *analysisRepositoryMock) CreateControlResultsFromReagents(ctx context.Context, reagentMap map[uuid.UUID][]Reagent) (map[uuid.UUID][]Reagent, error) {
+	for analysisResultId, reagents := range reagentMap {
+		for i, reagent := range reagents {
+			for j := range reagent.ControlResults {
+				reagentMap[analysisResultId][i].ControlResults[j].ID = uuid.New()
 			}
-			controlResultIdsMap[analysisResultId][reagentId] = controlResultIds
 		}
 	}
-	return controlResultIdsMap, nil
+	return reagentMap, nil
 }
 func (m *analysisRepositoryMock) UpdateControlResultBatch(ctx context.Context, controlResults []ControlResult) error {
 	return nil
