@@ -597,16 +597,28 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 	}
 
 	if instrument.ConnectionMode == instrumentenum.ConnectionModeFileServer && instrument.FileServerConfig != nil {
-		err = s.instrumentRepository.WithTransaction(tx).DeleteFileServerConfig(ctx, instrument.ID)
-		if err != nil {
-			_ = tx.Rollback()
-			return err
-		}
-
-		err = s.instrumentRepository.WithTransaction(tx).CreateFileServerConfig(ctx, *instrument.FileServerConfig)
-		if err != nil {
-			_ = tx.Rollback()
-			return err
+		if oldInstrument.ConnectionMode == instrumentenum.ConnectionModeFileServer && oldInstrument.FileServerConfig != nil {
+			if instrument.FileServerConfig.Password == "" {
+				instrument.FileServerConfig.Password = oldInstrument.FileServerConfig.Password
+			}
+			if !areFileServerConfigsSame(*oldInstrument.FileServerConfig, *instrument.FileServerConfig) {
+				err = s.instrumentRepository.WithTransaction(tx).DeleteFileServerConfig(ctx, instrument.ID)
+				if err != nil {
+					_ = tx.Rollback()
+					return err
+				}
+				err = s.instrumentRepository.WithTransaction(tx).CreateFileServerConfig(ctx, *instrument.FileServerConfig)
+				if err != nil {
+					_ = tx.Rollback()
+					return err
+				}
+			}
+		} else {
+			err = s.instrumentRepository.WithTransaction(tx).CreateFileServerConfig(ctx, *instrument.FileServerConfig)
+			if err != nil {
+				_ = tx.Rollback()
+				return err
+			}
 		}
 	}
 
@@ -1301,4 +1313,16 @@ func (s *instrumentService) UpdateInstrumentStatus(ctx context.Context, id uuid.
 
 func (s *instrumentService) CheckAnalytesUsage(ctx context.Context, analyteIDs []uuid.UUID) (map[uuid.UUID][]Instrument, error) {
 	return s.instrumentRepository.CheckAnalytesUsage(ctx, analyteIDs)
+}
+
+func areFileServerConfigsSame(old, new FileServerConfig) bool {
+	return old.Username == new.Username &&
+		old.Password == new.Password &&
+		old.OrderPath == new.OrderPath &&
+		old.OrderFileMask == new.OrderFileMask &&
+		old.OrderFileSuffix == new.OrderFileSuffix &&
+		old.ResultPath == new.ResultPath &&
+		old.ResultFileMask == new.ResultFileMask &&
+		old.ResultFileSuffix == new.ResultFileSuffix &&
+		old.ServerType == new.ServerType
 }
