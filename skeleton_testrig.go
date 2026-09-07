@@ -29,6 +29,17 @@ type SkeletonTestRig struct {
 	AnalysisRequestExtraValues        map[string]string
 }
 
+func (sr *SkeletonTestRig) GetAnalysisResultsBySampleCodes(ctx context.Context, sampleCodes []string) (map[string][]AnalysisResult, error) {
+	analysisResultsBySampleCodes := make(map[string][]AnalysisResult)
+	for _, resultSet := range sr.StoredAnalysisResults {
+		for _, result := range resultSet.Results {
+			analysisResultsBySampleCodes[result.SampleCode] = append(analysisResultsBySampleCodes[result.SampleCode], result)
+		}
+	}
+
+	return analysisResultsBySampleCodes, nil
+}
+
 func NewTestRig() *SkeletonTestRig {
 	return &SkeletonTestRig{
 		storedInstrumentsMap:       make(map[string]Instrument),

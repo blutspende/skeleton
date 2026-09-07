@@ -42,6 +42,7 @@ const (
 	msgUpdateInstrumentStatusFailed                  = "update instrument status failed"
 	msgUpsertAnalyteMappingsFailed                   = "upsert analyte mappings failed"
 	msgGetAnalyteMappingsFailed                      = "get analyte mappings failed"
+	msgGetAnalyteMappingsByIDsFailed                 = "get analyte mappings by IDs failed"
 	msgDeleteAnalyteMappingFailed                    = "delete analyte mapping failed"
 	msgCreateChannelMappingsFailed                   = "create channel mappings failed"
 	msgGetChannelMappingsFailed                      = "get channel mappings failed"
@@ -102,6 +103,7 @@ var (
 	ErrUpdateInstrumentStatusFailed                  = errors.New(msgUpdateInstrumentStatusFailed)
 	ErrUpsertAnalyteMappingsFailed                   = errors.New(msgUpsertAnalyteMappingsFailed)
 	ErrGetAnalyteMappingsFailed                      = errors.New(msgGetAnalyteMappingsFailed)
+	ErrGetAnalyteMappingsByIDsFailed                 = errors.New(msgGetAnalyteMappingsByIDsFailed)
 	ErrDeleteAnalyteMappingFailed                    = errors.New(msgDeleteAnalyteMappingFailed)
 	ErrCreateChannelMappingsFailed                   = errors.New(msgCreateChannelMappingsFailed)
 	ErrGetChannelMappingsFailed                      = errors.New(msgGetChannelMappingsFailed)
@@ -342,6 +344,7 @@ type InstrumentRepository interface {
 	UpdateInstrumentStatus(ctx context.Context, id uuid.UUID, status instrumentenum.ConnectionStatus) error
 	UpsertAnalyteMappings(ctx context.Context, analyteMappings []AnalyteMapping, instrumentID uuid.UUID) ([]uuid.UUID, error)
 	GetAnalyteMappings(ctx context.Context, instrumentIDs []uuid.UUID) (map[uuid.UUID][]AnalyteMapping, error)
+	GetAnalyteMappingsByIDs(ctx context.Context, analyteMappingIDs []uuid.UUID) (map[uuid.UUID]AnalyteMapping, error)
 	GetExpectedControlResultsForControlValidation(ctx context.Context, instrumentID uuid.UUID, analyteID uuid.UUID) ([]ExpectedControlResult, error)
 	DeleteAnalyteMappings(ctx context.Context, ids []uuid.UUID) error
 	UpsertChannelMappings(ctx context.Context, channelMappings []ChannelMapping, analyteMappingID uuid.UUID) ([]uuid.UUID, error)
@@ -852,6 +855,35 @@ func (r *instrumentRepository) GetAnalyteMappings(ctx context.Context, instrumen
 		analyteMappingsByInstrumentID[dao.InstrumentID] = append(analyteMappingsByInstrumentID[dao.InstrumentID], convertAnalyteMappingDaoToAnalyteMapping(dao))
 	}
 	return analyteMappingsByInstrumentID, nil
+}
+
+func (r *instrumentRepository) GetAnalyteMappingsByIDs(ctx context.Context, analyteMappingIDs []uuid.UUID) (map[uuid.UUID]AnalyteMapping, error) {
+	if len(analyteMappingIDs) == 0 {
+		return nil, nil
+	}
+	analyteMappingsByID := make(map[uuid.UUID]AnalyteMapping)
+	query := fmt.Sprintf(`SELECT * FROM %s.sk_analyte_mappings WHERE id IN (?) AND deleted_at IS NULL;`, r.dbSchema)
+	query, args, _ := sqlx.In(query, analyteMappingIDs)
+	query = r.db.Rebind(query)
+	rows, err := r.db.Queryx(ctx, query, args...)
+	if err != nil {
+		log.Error().Err(err).Msg(msgGetAnalyteMappingsByIDsFailed)
+		return nil, ErrGetAnalyteMappingsByIDsFailed
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+	for rows.Next() {
+		var dao analyteMappingDAO
+		err = rows.StructScan(&dao)
+		if err != nil {
+			log.Error().Err(err).Msg(msgGetAnalyteMappingsByIDsFailed)
+			return nil, ErrGetAnalyteMappingsByIDsFailed
+		}
+		analyteMappingsByID[dao.ID] = convertAnalyteMappingDaoToAnalyteMapping(dao)
+	}
+
+	return analyteMappingsByID, nil
 }
 
 func (r *instrumentRepository) GetExpectedControlResultsForControlValidation(ctx context.Context, instrumentID uuid.UUID, analyteID uuid.UUID) ([]ExpectedControlResult, error) {

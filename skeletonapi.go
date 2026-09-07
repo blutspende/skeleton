@@ -145,6 +145,9 @@ type SkeletonAPI interface {
 
 	// FindAnalyteMapping - Reusable filter method to find analyte mapping by name and type
 	FindAnalyteMapping(instrument Instrument, isControl bool, instrumentAnalyte string) (AnalyteMapping, error)
+
+	// GetAnalysisResultsBySampleCode - Returns all analysis results for the given sample codes
+	GetAnalysisResultsBySampleCodes(ctx context.Context, sampleCodes []string) (map[string][]AnalysisResult, error)
 }
 
 func New(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, reagentManufacturers []string, protocols []SupportedProtocol, dbSchema string) (SkeletonAPI, error) {

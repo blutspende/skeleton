@@ -2044,6 +2044,10 @@ func (s *skeleton) FindAnalyteMapping(instrument Instrument, isControl bool, ins
 	return FindAnalyteMapping(instrument, isControl, instrumentAnalyte)
 }
 
+func (s *skeleton) GetAnalysisResultsBySampleCodes(ctx context.Context, sampleCodes []string) (map[string][]AnalysisResult, error) {
+	return s.analysisService.GetAnalysisResultsBySampleCodes(ctx, sampleCodes)
+}
+
 func NewSkeleton(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, reagentManufacturers []string, protocols []SupportedProtocol, postgres db.Postgres, dbConn db.DbConnection, dbSchema string, migrator migrator.SkeletonMigrator, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService ConsoleLogService, messageService MessageService, manager Manager, cerberusClient CerberusClient, longPollClient LongPollClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
 	skeleton := &skeleton{
 		ctx:                                    ctx,

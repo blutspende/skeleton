@@ -43,6 +43,7 @@ type AnalysisService interface {
 	SaveCerberusIDsForReagentBatchItems(ctx context.Context, reagents []ResultBatchItem)
 	SetAnalysisResultStatusBasedOnControlResults(ctx context.Context, analysisResult AnalysisResult, commonControlResults []ControlResult, reValidateControlResult bool) (AnalysisResult, error)
 	GetAnalysisResultIDsNotSavedIntoCerberusByAnalysisResultIDMap(ctx context.Context, analysisResultIDMap map[uuid.UUID]interface{}) (map[uuid.UUID]interface{}, error)
+	GetAnalysisResultsBySampleCodes(ctx context.Context, sampleCodes []string) (map[string][]AnalysisResult, error)
 }
 
 type analysisService struct {
@@ -1110,4 +1111,35 @@ func (as *analysisService) GetAnalysisResultIDsNotSavedIntoCerberusByAnalysisRes
 	}
 
 	return analysisResultIDMapNotSentToCerberus, nil
+}
+
+func (as *analysisService) GetAnalysisResultsBySampleCodes(ctx context.Context, sampleCodes []string) (map[string][]AnalysisResult, error) {
+	analysisResultsBySampleCodes, err := as.analysisRepository.GetAnalysisResultsBySampleCodes(ctx, sampleCodes)
+	if err != nil {
+		return analysisResultsBySampleCodes, err
+	}
+	analyteMappingIDsMap := make(map[uuid.UUID]interface{})
+	analyteMappingIDs := make([]uuid.UUID, 0)
+	for _, results := range analysisResultsBySampleCodes {
+		for _, result := range results {
+			if _, ok := analyteMappingIDsMap[result.AnalyteMapping.ID]; !ok {
+				analyteMappingIDsMap[result.AnalyteMapping.ID] = nil
+				analyteMappingIDs = append(analyteMappingIDs, result.AnalyteMapping.ID)
+			}
+		}
+	}
+	analyteMappings, err := as.instrumentRepository.GetAnalyteMappingsByIDs(ctx, analyteMappingIDs)
+	if err != nil {
+		return analysisResultsBySampleCodes, err
+	}
+	for sampleCode, results := range analysisResultsBySampleCodes {
+		for i := range results {
+			mapping, ok := analyteMappings[results[i].AnalyteMapping.ID]
+			if ok {
+				analysisResultsBySampleCodes[sampleCode][i].AnalyteMapping = mapping
+			}
+		}
+	}
+
+	return analysisResultsBySampleCodes, nil
 }

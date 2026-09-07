@@ -110,6 +110,7 @@ const (
 	msgGetUnprocessedControlIDsFailed                                = "get unprocessed control ids failed"
 	msgGetAnalysisResultIDsNotSavedIntoCerberusFailed                = "get analysisResultIDs not saved into Cerberus failed"
 	msgMissingMessageInID                                            = "missing message in ID"
+	msgGetAnalysisResultsBySampleCodesFailed                         = "get analysis results by sample code failed"
 )
 
 var (
@@ -204,6 +205,7 @@ var (
 	ErrGetUnprocessedControlIDsFailed                                = errors.New(msgGetUnprocessedControlIDsFailed)
 	ErrGetAnalysisResultIDsNotSavedIntoCerberusFailed                = errors.New(msgGetAnalysisResultIDsNotSavedIntoCerberusFailed)
 	ErrMissingMessageInID                                            = errors.New(msgMissingMessageInID)
+	ErrGetAnalysisResultsBySampleCodesFailed                         = errors.New(msgGetAnalysisResultsBySampleCodesFailed)
 )
 
 type analysisRequestDAO struct {
@@ -461,6 +463,7 @@ type AnalysisRepository interface {
 	CreateReagentBatch(ctx context.Context, reagents []Reagent) ([]Reagent, error)
 	CreateControlResultsFromReagents(ctx context.Context, reagentMap map[uuid.UUID][]Reagent) (map[uuid.UUID][]Reagent, error)
 	CreateWarnings(ctx context.Context, warningsByAnalysisResultID map[uuid.UUID][]string) error
+	GetAnalysisResultsBySampleCodes(ctx context.Context, sampleCodes []string) (map[string][]AnalysisResult, error)
 
 	UpdateCerberusQueueItemStatus(ctx context.Context, queueItem CerberusQueueItem) error
 	GetAnalysisResultQueueItems(ctx context.Context) ([]CerberusQueueItem, error)
@@ -4182,6 +4185,31 @@ func (r *analysisRepository) MarkReagentControlResultRelationsAsProcessed(ctx co
 	return err
 }
 
+func (r *analysisRepository) GetAnalysisResultsBySampleCodes(ctx context.Context, sampleCodes []string) (map[string][]AnalysisResult, error) {
+	query := fmt.Sprintf(`SELECT id, analyte_mapping_id, instrument_id, instrument_run_id, instrument_module, sample_code,
+									message_in_id, result, status, result_mode, yielded_at, valid_until, operator, edited, edit_reason, is_invalid FROM %s.sk_analysis_results WHERE sample_code IN (?);`, r.dbSchema)
+	query, args, _ := sqlx.In(query, sampleCodes)
+	query = r.db.Rebind(query)
+	rows, err := r.db.Queryx(ctx, query, args...)
+	if err != nil {
+		log.Error().Err(err).Msg(msgGetAnalysisResultsBySampleCodesFailed)
+		return nil, ErrGetAnalysisResultsBySampleCodesFailed
+	}
+	defer func() { _ = rows.Close() }()
+	analysisResultsBySampleCodes := make(map[string][]AnalysisResult)
+	for rows.Next() {
+		var dao analysisResultDAO
+		err = rows.StructScan(&dao)
+		if err != nil {
+			log.Error().Err(err).Msg(msgGetAnalysisResultsBySampleCodesFailed)
+			return nil, ErrGetAnalysisResultsBySampleCodesFailed
+		}
+		analysisResultsBySampleCodes[dao.SampleCode] = append(analysisResultsBySampleCodes[dao.SampleCode], convertAnalysisResultDAOToAnalysisResult(dao))
+	}
+
+	return analysisResultsBySampleCodes, nil
+}
+
 func (r *analysisRepository) MarkAnalysisResultControlResultRelationsAsProcessed(ctx context.Context, controlResultID uuid.UUID, analysisResultIDs []uuid.UUID) error {
 	err := utils.Partition(len(analysisResultIDs), maxParams, func(low int, high int) error {
 		query := fmt.Sprintf(`UPDATE %s.sk_analysis_result_control_result_relations SET is_processed = true WHERE control_result_id = ? AND analysis_result_id IN (?);`, r.dbSchema)
@@ -4297,8 +4325,10 @@ func convertAnalysisResultsToDAOs(analysisResults []AnalysisResult) []analysisRe
 
 func convertAnalysisResultDAOToAnalysisResult(analysisResultDAO analysisResultDAO) AnalysisResult {
 	analysisResult := AnalysisResult{
-		ID:             analysisResultDAO.ID,
-		AnalyteMapping: convertAnalyteMappingDaoToAnalyteMapping(analysisResultDAO.AnalyteMapping),
+		ID: analysisResultDAO.ID,
+		AnalyteMapping: AnalyteMapping{
+			ID: analysisResultDAO.AnalyteMappingID,
+		},
 		Instrument: Instrument{
 			ID: analysisResultDAO.InstrumentID,
 		},
