@@ -1255,6 +1255,10 @@ type instrumentRepositoryMock struct {
 	ExpectedControlResults          []ExpectedControlResult
 }
 
+func (r *instrumentRepositoryMock) GetAnalyteMappingsByIDs(ctx context.Context, analyteMappingIDs []uuid.UUID) (map[uuid.UUID]AnalyteMapping, error) {
+	return nil, nil
+}
+
 func (r *instrumentRepositoryMock) UpsertMaterialMappings(ctx context.Context, materialMappings []MaterialMapping, instrumentID uuid.UUID) ([]uuid.UUID, error) {
 	return nil, nil
 }

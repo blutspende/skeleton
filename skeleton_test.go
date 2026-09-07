@@ -1466,6 +1466,10 @@ func (m *cerberusClientMock) SendControlResultBatch(controlResults []StandaloneC
 type analysisServiceMock struct {
 }
 
+func (m *analysisServiceMock) GetAnalysisResultsBySampleCodes(ctx context.Context, sampleCodes []string, cutoffDays int) (map[string][]AnalysisResult, error) {
+	return nil, nil
+}
+
 func (m *analysisServiceMock) SaveCerberusIDsForAnalysisResultBatchItems(ctx context.Context, analysisResults []AnalysisResultBatchItemInfo) {
 }
 func (m *analysisServiceMock) SaveCerberusIDsForControlResultBatchItems(ctx context.Context, controlResults []ResultBatchItem) {
@@ -1530,6 +1534,10 @@ type analysisRepositoryMock struct {
 	controlResults                      []ControlResult
 	savedWorkItemIDs                    map[uuid.UUID]any
 	analysisResultIDsNotSavedToCerberus []uuid.UUID
+}
+
+func (m *analysisRepositoryMock) GetAnalysisResultsBySampleCodes(ctx context.Context, sampleCodes []string, cutoffDays int) (map[string][]AnalysisResult, error) {
+	return nil, nil
 }
 
 func (m *analysisRepositoryMock) UpdateAnalysisResultDEARawMessageID(ctx context.Context, analysisResultID uuid.UUID, deaRawMessageID uuid.NullUUID) error {
