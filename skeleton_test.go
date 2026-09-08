@@ -101,7 +101,7 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 	messageService := NewMessageService(deaClientMock, cerberusClientMock, messageInRepository, messageOutRepository, messageOutOrderRepository, schemaName,
 		configuration.SampleSeenMessageFlushSeconds, configuration.MessageSampleCodeMaxRetries, configuration.SampleSeenBatchSize, configuration.SampleSeenBatchTimeOut)
 
-	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, []string{}, nil, pg, dbConn, schemaName, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, messageService, skeletonManager, cerberusClientMock, &longPollClientMock{AnalysisRequests: analysisResultsWithoutAnalysisRequestsTest_AnalysisRequests}, deaClientMock, configuration)
+	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, []string{}, nil, pg, dbConn, schemaName, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, messageService, sortingRuleService, skeletonManager, cerberusClientMock, &longPollClientMock{AnalysisRequests: analysisResultsWithoutAnalysisRequestsTest_AnalysisRequests}, deaClientMock, configuration)
 
 	_, _ = dbConn.Exec(ctx, fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description)
 		VALUES ('abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
@@ -208,7 +208,7 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 	messageOutOrderRepository := NewMessageOutOrderRepository(dbConn, schemaName, 0)
 	messageService := NewMessageService(deaClientMock, cerberusClientMock, messageInRepository, messageOutRepository, messageOutOrderRepository, schemaName,
 		configuration.SampleSeenMessageFlushSeconds, configuration.MessageSampleCodeMaxRetries, configuration.SampleSeenBatchSize, configuration.SampleSeenBatchTimeOut)
-	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, []string{}, nil, pg, dbConn, schemaName, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, messageService, skeletonManager, cerberusClientMock, longPollClientMock, deaClientMock, configuration)
+	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, []string{}, nil, pg, dbConn, schemaName, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, messageService, sortingRuleService, skeletonManager, cerberusClientMock, longPollClientMock, deaClientMock, configuration)
 	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('9bec3063-435d-490f-bec0-88a6633ef4c2', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
 
 	go func() {
@@ -423,7 +423,7 @@ func TestAnalysisResultsReprocessing(t *testing.T) {
 	messageOutOrderRepository := NewMessageOutOrderRepository(dbConn, schemaName, 0)
 	messageService := NewMessageService(deaClientMock, cerberusClientMock, messageInRepository, messageOutRepository, messageOutOrderRepository, schemaName,
 		configuration.SampleSeenMessageFlushSeconds, configuration.MessageSampleCodeMaxRetries, configuration.SampleSeenBatchSize, configuration.SampleSeenBatchTimeOut)
-	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, []string{}, nil, pg, dbConn, schemaName, migrator.NewSkeletonMigrator(), analysisRepositoryMock, analysisServiceMock, instrumentService, consoleLogService, messageService, skeletonManager, cerberusClientMock, longPollClient, deaClientMock, configuration)
+	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, []string{}, nil, pg, dbConn, schemaName, migrator.NewSkeletonMigrator(), analysisRepositoryMock, analysisServiceMock, instrumentService, consoleLogService, messageService, sortingRuleService, skeletonManager, cerberusClientMock, longPollClient, deaClientMock, configuration)
 	go func() {
 		_ = skeletonInstance.Start()
 	}()
@@ -489,7 +489,7 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 	messageService := NewMessageService(deaClientMock, cerberusClientMock, messageInRepository, messageOutRepository, messageOutOrderRepository, schemaName,
 		configuration.SampleSeenMessageFlushSeconds, configuration.MessageSampleCodeMaxRetries, configuration.SampleSeenBatchSize, configuration.SampleSeenBatchTimeOut)
 
-	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, []string{}, nil, pg, dbConn, schemaName, migrator.NewSkeletonMigrator(), analysisRepositoryMock, analysisService, instrumentService, consoleLogService, messageService, skeletonManagerMock, cerberusClientMock, &longPollClientMock{AnalysisRequests: analysisResultsWithoutAnalysisRequestsTest_AnalysisRequests}, deaClientMock, configuration)
+	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, []string{}, nil, pg, dbConn, schemaName, migrator.NewSkeletonMigrator(), analysisRepositoryMock, analysisService, instrumentService, consoleLogService, messageService, sortingRuleService, skeletonManagerMock, cerberusClientMock, &longPollClientMock{AnalysisRequests: analysisResultsWithoutAnalysisRequestsTest_AnalysisRequests}, deaClientMock, configuration)
 	go func() {
 		_ = skeletonInstance.Start()
 	}()
@@ -867,7 +867,7 @@ func TestSubmitAnalysisResultFieldValidations(t *testing.T) {
 	messageOutOrderRepository := NewMessageOutOrderRepository(dbConn, schemaName, 0)
 	messageService := NewMessageService(deaClientMock, cerberusClientMock, messageInRepository, messageOutRepository, messageOutOrderRepository, schemaName,
 		configuration.SampleSeenMessageFlushSeconds, configuration.MessageSampleCodeMaxRetries, configuration.SampleSeenBatchSize, configuration.SampleSeenBatchTimeOut)
-	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, []string{}, nil, pg, dbConn, schemaName, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, messageService, skeletonManager, cerberusClientMock, longPollClientMock, deaClientMock, configuration)
+	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, []string{}, nil, pg, dbConn, schemaName, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, messageService, sortingRuleService, skeletonManager, cerberusClientMock, longPollClientMock, deaClientMock, configuration)
 	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('9bec3063-435d-490f-bec0-88a6633ef4c2', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
 	_ = skeletonInstance.Start()
 	err = skeletonInstance.SubmitAnalysisResultBatch(context.TODO(), AnalysisResultSet{
@@ -1031,7 +1031,7 @@ func TestSubmitControlResultsFieldValidations(t *testing.T) {
 	messageOutOrderRepository := NewMessageOutOrderRepository(dbConn, schemaName, 0)
 	messageService := NewMessageService(deaClientMock, cerberusClientMock, messageInRepository, messageOutRepository, messageOutOrderRepository, schemaName,
 		configuration.SampleSeenMessageFlushSeconds, configuration.MessageSampleCodeMaxRetries, configuration.SampleSeenBatchSize, configuration.SampleSeenBatchTimeOut)
-	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, []string{}, nil, pg, dbConn, schemaName, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, messageService, skeletonManager, cerberusClientMock, longPollClientMock, deaClientMock, configuration)
+	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, []string{}, nil, pg, dbConn, schemaName, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, messageService, sortingRuleService, skeletonManager, cerberusClientMock, longPollClientMock, deaClientMock, configuration)
 	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('9bec3063-435d-490f-bec0-88a6633ef4c2', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
 	_ = skeletonInstance.Start()
 	err = skeletonInstance.SubmitControlResults(ctx, []StandaloneControlResult{
@@ -1136,7 +1136,7 @@ func TestSampleSeenRegistration(t *testing.T) {
 	messageOutOrderRepository := NewMessageOutOrderRepository(dbConn, schemaName, 0)
 	messageService := NewMessageService(deaClientMock, cerberusClientMock, messageInRepository, messageOutRepository, messageOutOrderRepository, schemaName,
 		configuration.SampleSeenMessageFlushSeconds, configuration.MessageSampleCodeMaxRetries, configuration.SampleSeenBatchSize, configuration.SampleSeenBatchTimeOut)
-	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, []string{}, nil, pg, dbConn, schemaName, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, messageService, skeletonManager, cerberusClientMock, longPollClientMock, deaClientMock, configuration)
+	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, []string{}, nil, pg, dbConn, schemaName, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, messageService, sortingRuleService, skeletonManager, cerberusClientMock, longPollClientMock, deaClientMock, configuration)
 	_, _ = dbConn.Exec(ctx, fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description)
 		VALUES ('abb539a3-286f-4c15-a7b7-2e9adf6eab91', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
 	_, _ = dbConn.Exec(ctx, fmt.Sprintf(`INSERT INTO %s.sk_instruments(id, protocol_id, "name", hostname, client_port, enabled, connection_mode, running_mode, captureresults, capturediagnostics, replytoquery, status, timezone, file_encoding)

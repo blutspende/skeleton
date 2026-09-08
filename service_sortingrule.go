@@ -3,10 +3,11 @@ package skeleton
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/blutspende/bloodlab-common/db"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
-	"time"
 )
 
 type SortingRuleService interface {
@@ -70,21 +71,28 @@ func (s *sortingRuleService) UpsertWithTx(ctx context.Context, sortingRule *Sort
 		log.Error().Msg(msgRequiredSortingRuleTransactionNotFound)
 		return ErrorRequiredSortingRuleTransactionNotFound
 	}
-
+	shouldUpdateCondition := true
 	existingSortingRule, err := s.sortingRuleRepository.WithTransaction(tx).GetById(ctx, sortingRule.ID)
 	if err != nil {
 		return err
 	}
 
 	if existingSortingRule != nil && existingSortingRule.Condition != nil {
-		err = s.conditionService.WithTransaction(tx).DeleteConditionWithTx(ctx, existingSortingRule.Condition.ID)
+		existingCondition, err := s.conditionService.WithTransaction(tx).GetCondition(ctx, existingSortingRule.Condition.ID)
 		if err != nil {
 			return err
 		}
+		shouldUpdateCondition = !areConditionsEquivalent(&existingCondition, sortingRule.Condition)
+		if shouldUpdateCondition {
+			err = s.conditionService.WithTransaction(tx).DeleteConditionWithTx(ctx, existingSortingRule.Condition.ID)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
-	if sortingRule.Condition != nil {
-		conditionID, err := s.conditionService.WithTransaction(tx).UpsertConditionWithTx(ctx, *sortingRule.Condition)
+	if sortingRule.Condition != nil && shouldUpdateCondition {
+		conditionID, err := s.conditionService.WithTransaction(tx).CreateConditionWithTx(ctx, *sortingRule.Condition)
 		if err != nil {
 			return err
 		}
@@ -198,6 +206,49 @@ func (s *sortingRuleService) WithTransaction(tx db.DbConnection) SortingRuleServ
 	txSvc := *s
 	txSvc.externalTx = tx
 	return &txSvc
+}
+
+func areConditionsEquivalent(cond1, cond2 *Condition) bool {
+	if cond1 == nil && cond2 == nil {
+		return true
+	}
+	if cond1 == nil || cond2 == nil {
+		return false
+	}
+	if !areOperandsEquivalent(cond1.Operand1, cond2.Operand1) || !areOperandsEquivalent(cond1.Operand2, cond2.Operand2) {
+		return false
+	}
+	if cond1.Operator != cond2.Operator {
+		return false
+	}
+	if !isEquivalent(cond1.Name, cond2.Name) || cond1.NegateSubCondition1 != cond2.NegateSubCondition1 ||
+		cond1.NegateSubCondition2 != cond2.NegateSubCondition2 {
+		return false
+	}
+
+	return areConditionsEquivalent(cond1.SubCondition1, cond2.SubCondition1) && areConditionsEquivalent(cond1.SubCondition2, cond2.SubCondition2)
+}
+
+func areOperandsEquivalent(operand1, operand2 *ConditionOperand) bool {
+	if operand1 == nil && operand2 == nil {
+		return true
+	}
+	if operand1 == nil || operand2 == nil {
+		return false
+	}
+	return isEquivalent(operand1.ConstantValue, operand2.ConstantValue) && isEquivalent(operand1.Name, operand2.Name) &&
+		isEquivalent(operand1.ExtraValueKey, operand2.ExtraValueKey) &&
+		isEquivalent(&operand1.Type, &operand2.Type)
+}
+
+func isEquivalent[T comparable](a, b *T) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
 }
 
 func NewSortingRuleService(analysisRepository AnalysisRepository, conditionService ConditionService, sortingRuleRepository SortingRuleRepository) SortingRuleService {
