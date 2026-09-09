@@ -32,23 +32,30 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 	}
 
 	configuration := config.Configuration{
-		APIPort:                          5000,
-		Authorization:                    false,
-		PermittedOrigin:                  "*",
-		ApplicationName:                  "Instrument API Test",
-		TCPListenerPort:                  5401,
-		InstrumentTransferRetryDelayInMs: 100,
-		ResultTransferFlushTimeout:       5,
-		ImageRetrySeconds:                60,
-		AnalysisRequestWorkerPoolSize:    1,
-		LookBackDays:                     0,
-		SampleSeenMessageFlushSeconds:    1,
-		MessageMaxRetries:                0,
-		MessageSampleCodeMaxRetries:      0,
-		SampleSeenBatchTimeOut:           3,
-		SampleSeenBatchSize:              50,
-		ResultBufferFlushTimeout:         3,
-		CerberusQueueItemRetryTimeout:    10,
+		APIPort:                                    5000,
+		Authorization:                              false,
+		PermittedOrigin:                            "*",
+		ApplicationName:                            "Instrument API Test",
+		TCPListenerPort:                            5401,
+		InstrumentTransferRetryDelayInMs:           100,
+		ResultTransferFlushTimeout:                 5,
+		ImageRetrySeconds:                          60,
+		AnalysisRequestWorkerPoolSize:              1,
+		LookBackDays:                               0,
+		SampleSeenMessageFlushSeconds:              1,
+		MessageMaxRetries:                          0,
+		MessageSampleCodeMaxRetries:                0,
+		SampleSeenBatchTimeOut:                     3,
+		SampleSeenBatchSize:                        50,
+		ResultBufferFlushTimeout:                   3,
+		CerberusQueueItemRetryTimeout:              10,
+		CleanupJobRunIntervalHours:                 1,
+		InstrumentDriverRegistrationTimeoutSeconds: 10,
+		GetUnprocessedAnalysisRequestRetryMinute:   5,
+		UnprocessedAnalysisRequestErrorRetryMinute: 5,
+		GetUnprocessedAnalysisResultIDsRetryMinute: 5,
+		UnprocessedAnalysisResultErrorRetryMinute:  5,
+		GetUnprocessedControlResultIDsRetryMinute:  5,
 	}
 
 	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
@@ -136,7 +143,7 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, 2, resultCount)
 
-	time.Sleep(10 * time.Second)
+	time.Sleep(5 * time.Second)
 	assert.Equal(t, 2, len(cerberusClientMock.AnalysisResults))
 	sort.Slice(cerberusClientMock.AnalysisResults, func(i, j int) bool {
 		return cerberusClientMock.AnalysisResults[i].WorkingItemID.String() < cerberusClientMock.AnalysisResults[j].WorkingItemID.String()
@@ -164,22 +171,29 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 	}
 
 	configuration := config.Configuration{
-		APIPort:                          5000,
-		Authorization:                    false,
-		PermittedOrigin:                  "*",
-		ApplicationName:                  "Instrument API Test",
-		TCPListenerPort:                  5401,
-		InstrumentTransferRetryDelayInMs: 100,
-		ResultTransferFlushTimeout:       5,
-		ImageRetrySeconds:                60,
-		LookBackDays:                     0,
-		SampleSeenMessageFlushSeconds:    1,
-		MessageMaxRetries:                0,
-		MessageSampleCodeMaxRetries:      0,
-		SampleSeenBatchTimeOut:           3,
-		SampleSeenBatchSize:              50,
-		ResultBufferFlushTimeout:         3,
-		CerberusQueueItemRetryTimeout:    10,
+		APIPort:                                    5000,
+		Authorization:                              false,
+		PermittedOrigin:                            "*",
+		ApplicationName:                            "Instrument API Test",
+		TCPListenerPort:                            5401,
+		InstrumentTransferRetryDelayInMs:           100,
+		ResultTransferFlushTimeout:                 5,
+		ImageRetrySeconds:                          60,
+		LookBackDays:                               0,
+		SampleSeenMessageFlushSeconds:              1,
+		MessageMaxRetries:                          0,
+		MessageSampleCodeMaxRetries:                0,
+		SampleSeenBatchTimeOut:                     3,
+		SampleSeenBatchSize:                        50,
+		ResultBufferFlushTimeout:                   3,
+		CerberusQueueItemRetryTimeout:              10,
+		CleanupJobRunIntervalHours:                 1,
+		InstrumentDriverRegistrationTimeoutSeconds: 10,
+		GetUnprocessedAnalysisRequestRetryMinute:   5,
+		UnprocessedAnalysisRequestErrorRetryMinute: 5,
+		GetUnprocessedAnalysisResultIDsRetryMinute: 5,
+		UnprocessedAnalysisResultErrorRetryMinute:  5,
+		GetUnprocessedControlResultIDsRetryMinute:  5,
 	}
 
 	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
@@ -377,22 +391,29 @@ func TestAnalysisResultsReprocessing(t *testing.T) {
 	}
 
 	configuration := config.Configuration{
-		APIPort:                          5679,
-		Authorization:                    false,
-		PermittedOrigin:                  "*",
-		ApplicationName:                  "Submit Analysis Request Parallel Test",
-		TCPListenerPort:                  5401,
-		InstrumentTransferRetryDelayInMs: 100,
-		ResultTransferFlushTimeout:       5,
-		ImageRetrySeconds:                60,
-		LookBackDays:                     0,
-		SampleSeenMessageFlushSeconds:    1,
-		MessageMaxRetries:                0,
-		MessageSampleCodeMaxRetries:      0,
-		SampleSeenBatchTimeOut:           3,
-		SampleSeenBatchSize:              50,
-		ResultBufferFlushTimeout:         3,
-		CerberusQueueItemRetryTimeout:    10,
+		APIPort:                                    5679,
+		Authorization:                              false,
+		PermittedOrigin:                            "*",
+		ApplicationName:                            "Submit Analysis Request Parallel Test",
+		TCPListenerPort:                            5401,
+		InstrumentTransferRetryDelayInMs:           100,
+		ResultTransferFlushTimeout:                 5,
+		ImageRetrySeconds:                          60,
+		LookBackDays:                               0,
+		SampleSeenMessageFlushSeconds:              1,
+		MessageMaxRetries:                          0,
+		MessageSampleCodeMaxRetries:                0,
+		SampleSeenBatchTimeOut:                     3,
+		SampleSeenBatchSize:                        50,
+		ResultBufferFlushTimeout:                   3,
+		CerberusQueueItemRetryTimeout:              10,
+		CleanupJobRunIntervalHours:                 1,
+		InstrumentDriverRegistrationTimeoutSeconds: 10,
+		GetUnprocessedAnalysisRequestRetryMinute:   5,
+		UnprocessedAnalysisRequestErrorRetryMinute: 5,
+		GetUnprocessedAnalysisResultIDsRetryMinute: 5,
+		UnprocessedAnalysisResultErrorRetryMinute:  5,
+		GetUnprocessedControlResultIDsRetryMinute:  5,
 	}
 
 	analysisRepositoryMock := &analysisRepositoryMock{}
@@ -452,22 +473,29 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 	}
 
 	configuration := config.Configuration{
-		APIPort:                          5679,
-		Authorization:                    false,
-		PermittedOrigin:                  "*",
-		ApplicationName:                  "Submit Control Results Processing Test",
-		TCPListenerPort:                  5401,
-		InstrumentTransferRetryDelayInMs: 100,
-		ResultTransferFlushTimeout:       5,
-		ImageRetrySeconds:                60,
-		LookBackDays:                     0,
-		SampleSeenMessageFlushSeconds:    1,
-		MessageMaxRetries:                0,
-		MessageSampleCodeMaxRetries:      0,
-		SampleSeenBatchTimeOut:           3,
-		SampleSeenBatchSize:              50,
-		ResultBufferFlushTimeout:         3,
-		CerberusQueueItemRetryTimeout:    10,
+		APIPort:                                    5679,
+		Authorization:                              false,
+		PermittedOrigin:                            "*",
+		ApplicationName:                            "Submit Control Results Processing Test",
+		TCPListenerPort:                            5401,
+		InstrumentTransferRetryDelayInMs:           100,
+		ResultTransferFlushTimeout:                 2,
+		ImageRetrySeconds:                          60,
+		LookBackDays:                               0,
+		SampleSeenMessageFlushSeconds:              1,
+		MessageMaxRetries:                          0,
+		MessageSampleCodeMaxRetries:                0,
+		SampleSeenBatchTimeOut:                     2,
+		SampleSeenBatchSize:                        50,
+		ResultBufferFlushTimeout:                   2,
+		CerberusQueueItemRetryTimeout:              10,
+		CleanupJobRunIntervalHours:                 1,
+		InstrumentDriverRegistrationTimeoutSeconds: 10,
+		GetUnprocessedAnalysisRequestRetryMinute:   5,
+		UnprocessedAnalysisRequestErrorRetryMinute: 5,
+		GetUnprocessedAnalysisResultIDsRetryMinute: 5,
+		UnprocessedAnalysisResultErrorRetryMinute:  5,
+		GetUnprocessedControlResultIDsRetryMinute:  5,
 	}
 
 	analysisRepositoryMock := &analysisRepositoryMock{}
@@ -687,7 +715,7 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 	})
 	assert.Nil(t, err)
 
-	time.Sleep(6 * time.Second)
+	time.Sleep(3 * time.Second)
 
 	skeletonManagerMock.AnalysisResultsForProcessing = make([]AnalysisResult, 0)
 	skeletonManagerMock.StandaloneControlResultsForProcessing = make([]StandaloneControlResult, 0)
@@ -698,13 +726,12 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 	err = skeletonInstance.SubmitControlResults(context.TODO(), []StandaloneControlResult{
 		{
 			ControlResult: controlResult,
-			Reagents:      []Reagent{reagent},
-			ResultIDs:     []uuid.UUID{analysisResultId1, analysisResultId2},
+			Reagents:      []Reagent{reagent}, ResultIDs: []uuid.UUID{analysisResultId1, analysisResultId2},
 		},
 	})
 	assert.Nil(t, err)
 
-	time.Sleep(6 * time.Second)
+	time.Sleep(3 * time.Second)
 	assert.Equal(t, 2, len(skeletonManagerMock.AnalysisResultsForProcessing))
 	assert.Equal(t, 0, len(skeletonManagerMock.StandaloneControlResultsForProcessing))
 
@@ -723,7 +750,7 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 	})
 	assert.Nil(t, err)
 
-	time.Sleep(6 * time.Second)
+	time.Sleep(3 * time.Second)
 	assert.Equal(t, 0, len(skeletonManagerMock.AnalysisResultsForProcessing))
 	assert.Equal(t, 1, len(skeletonManagerMock.StandaloneControlResultsForProcessing))
 
@@ -786,7 +813,7 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 	})
 	assert.Nil(t, err)
 
-	time.Sleep(6 * time.Second)
+	time.Sleep(3 * time.Second)
 	assert.Equal(t, 2, len(skeletonManagerMock.AnalysisResultsForProcessing))
 	assert.Equal(t, 2, len(skeletonManagerMock.StandaloneControlResultsForProcessing))
 
@@ -815,7 +842,7 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 	})
 	assert.Nil(t, err)
 
-	time.Sleep(6 * time.Second)
+	time.Sleep(3 * time.Second)
 	assert.Equal(t, 1, len(skeletonManagerMock.AnalysisResultsForProcessing))
 	assert.Equal(t, 3, len(skeletonManagerMock.StandaloneControlResultsForProcessing))
 }
@@ -832,22 +859,29 @@ func TestSubmitAnalysisResultFieldValidations(t *testing.T) {
 	}
 
 	configuration := config.Configuration{
-		APIPort:                          5000,
-		Authorization:                    false,
-		PermittedOrigin:                  "*",
-		ApplicationName:                  "Instrument API Test",
-		TCPListenerPort:                  5401,
-		InstrumentTransferRetryDelayInMs: 100,
-		ResultTransferFlushTimeout:       5,
-		ImageRetrySeconds:                60,
-		LookBackDays:                     0,
-		SampleSeenMessageFlushSeconds:    30,
-		MessageMaxRetries:                0,
-		MessageSampleCodeMaxRetries:      0,
-		SampleSeenBatchTimeOut:           3,
-		SampleSeenBatchSize:              50,
-		ResultBufferFlushTimeout:         3,
-		CerberusQueueItemRetryTimeout:    10,
+		APIPort:                                    5000,
+		Authorization:                              false,
+		PermittedOrigin:                            "*",
+		ApplicationName:                            "Instrument API Test",
+		TCPListenerPort:                            5401,
+		InstrumentTransferRetryDelayInMs:           100,
+		ResultTransferFlushTimeout:                 5,
+		ImageRetrySeconds:                          60,
+		LookBackDays:                               0,
+		SampleSeenMessageFlushSeconds:              30,
+		MessageMaxRetries:                          0,
+		MessageSampleCodeMaxRetries:                0,
+		SampleSeenBatchTimeOut:                     3,
+		SampleSeenBatchSize:                        50,
+		ResultBufferFlushTimeout:                   3,
+		CerberusQueueItemRetryTimeout:              10,
+		CleanupJobRunIntervalHours:                 1,
+		InstrumentDriverRegistrationTimeoutSeconds: 10,
+		GetUnprocessedAnalysisRequestRetryMinute:   5,
+		UnprocessedAnalysisRequestErrorRetryMinute: 5,
+		GetUnprocessedAnalysisResultIDsRetryMinute: 5,
+		UnprocessedAnalysisResultErrorRetryMinute:  5,
+		GetUnprocessedControlResultIDsRetryMinute:  5,
 	}
 
 	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
@@ -999,22 +1033,29 @@ func TestSubmitControlResultsFieldValidations(t *testing.T) {
 	}
 
 	configuration := config.Configuration{
-		APIPort:                          5000,
-		Authorization:                    false,
-		PermittedOrigin:                  "*",
-		ApplicationName:                  "Instrument API Test",
-		TCPListenerPort:                  5401,
-		InstrumentTransferRetryDelayInMs: 100,
-		ResultTransferFlushTimeout:       5,
-		ImageRetrySeconds:                60,
-		LookBackDays:                     0,
-		SampleSeenMessageFlushSeconds:    30,
-		MessageMaxRetries:                0,
-		MessageSampleCodeMaxRetries:      0,
-		SampleSeenBatchTimeOut:           3,
-		SampleSeenBatchSize:              50,
-		ResultBufferFlushTimeout:         3,
-		CerberusQueueItemRetryTimeout:    10,
+		APIPort:                                    5000,
+		Authorization:                              false,
+		PermittedOrigin:                            "*",
+		ApplicationName:                            "Instrument API Test",
+		TCPListenerPort:                            5401,
+		InstrumentTransferRetryDelayInMs:           100,
+		ResultTransferFlushTimeout:                 5,
+		ImageRetrySeconds:                          60,
+		LookBackDays:                               0,
+		SampleSeenMessageFlushSeconds:              30,
+		MessageMaxRetries:                          0,
+		MessageSampleCodeMaxRetries:                0,
+		SampleSeenBatchTimeOut:                     3,
+		SampleSeenBatchSize:                        50,
+		ResultBufferFlushTimeout:                   3,
+		CerberusQueueItemRetryTimeout:              10,
+		CleanupJobRunIntervalHours:                 1,
+		InstrumentDriverRegistrationTimeoutSeconds: 10,
+		GetUnprocessedAnalysisRequestRetryMinute:   5,
+		UnprocessedAnalysisRequestErrorRetryMinute: 5,
+		GetUnprocessedAnalysisResultIDsRetryMinute: 5,
+		UnprocessedAnalysisResultErrorRetryMinute:  5,
+		GetUnprocessedControlResultIDsRetryMinute:  5,
 	}
 
 	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
@@ -1052,6 +1093,8 @@ func TestSubmitControlResultsFieldValidations(t *testing.T) {
 	skeletonInstance, _ := NewSkeleton(ctx, serviceName, displayName, []string{}, []string{}, []string{}, nil, pg, dbConn, schemaName, migrator.NewSkeletonMigrator(), analysisRepository, analysisService, instrumentService, consoleLogService, messageService, sortingRuleService, skeletonManager, cerberusClientMock, longPollClientMock, deaClientMock, configuration)
 	_, _ = sqlConn.Exec(fmt.Sprintf(`INSERT INTO %s.sk_supported_protocols (id, "name", description) VALUES ('9bec3063-435d-490f-bec0-88a6633ef4c2', 'IH-1000 v5.2', 'IHCOM');`, schemaName))
 	_ = skeletonInstance.Start()
+	time.Sleep(2 * time.Second)
+
 	err = skeletonInstance.SubmitControlResults(ctx, []StandaloneControlResult{
 		{
 			ControlResult: ControlResult{
@@ -1107,22 +1150,29 @@ func TestSampleSeenRegistration(t *testing.T) {
 	}
 
 	configuration := config.Configuration{
-		APIPort:                          5000,
-		Authorization:                    false,
-		PermittedOrigin:                  "*",
-		ApplicationName:                  "Instrument API Test",
-		TCPListenerPort:                  5401,
-		InstrumentTransferRetryDelayInMs: 100,
-		ResultTransferFlushTimeout:       5,
-		ImageRetrySeconds:                60,
-		LookBackDays:                     0,
-		SampleSeenMessageFlushSeconds:    30,
-		MessageMaxRetries:                0,
-		MessageSampleCodeMaxRetries:      25,
-		SampleSeenBatchTimeOut:           3,
-		SampleSeenBatchSize:              50,
-		ResultBufferFlushTimeout:         3,
-		CerberusQueueItemRetryTimeout:    10,
+		APIPort:                                    5000,
+		Authorization:                              false,
+		PermittedOrigin:                            "*",
+		ApplicationName:                            "Instrument API Test",
+		TCPListenerPort:                            5401,
+		InstrumentTransferRetryDelayInMs:           100,
+		ResultTransferFlushTimeout:                 5,
+		ImageRetrySeconds:                          60,
+		LookBackDays:                               0,
+		SampleSeenMessageFlushSeconds:              30,
+		MessageMaxRetries:                          0,
+		MessageSampleCodeMaxRetries:                25,
+		SampleSeenBatchTimeOut:                     3,
+		SampleSeenBatchSize:                        50,
+		ResultBufferFlushTimeout:                   3,
+		CerberusQueueItemRetryTimeout:              10,
+		CleanupJobRunIntervalHours:                 1,
+		InstrumentDriverRegistrationTimeoutSeconds: 10,
+		GetUnprocessedAnalysisRequestRetryMinute:   5,
+		UnprocessedAnalysisRequestErrorRetryMinute: 5,
+		GetUnprocessedAnalysisResultIDsRetryMinute: 5,
+		UnprocessedAnalysisResultErrorRetryMinute:  5,
+		GetUnprocessedControlResultIDsRetryMinute:  5,
 	}
 
 	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
@@ -1185,7 +1235,7 @@ func TestSampleSeenRegistration(t *testing.T) {
 	go func() {
 		_ = skeletonInstance.Start()
 	}()
-	time.Sleep(5 * time.Second)
+	time.Sleep(6 * time.Second)
 
 	assert.Equal(t, 3, len(deaClientMock.sampleCodes))
 	assert.Contains(t, deaClientMock.sampleCodes, "VALSAMPLETEST1", "VALSAMPLETEST3", "VALSAMPLETEST5")
