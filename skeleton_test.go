@@ -53,9 +53,12 @@ func TestSubmitAnalysisResultWithoutRequests(t *testing.T) {
 
 	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
 	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
 
-	defer cancel()
+	defer func() {
+		cancel()
+		time.Sleep(1 * time.Second)
+	}()
 
 	skeletonManager := NewSkeletonManager(ctx)
 	skeletonManager.SetCallbackHandler(&skeletonCallbackHandlerV1Mock{
@@ -181,9 +184,12 @@ func TestSubmitAnalysisResultWithRequests(t *testing.T) {
 
 	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
 	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
 
-	defer cancel()
+	defer func() {
+		cancel()
+		time.Sleep(1 * time.Second)
+	}()
 
 	skeletonManager := NewSkeletonManager(ctx)
 	skeletonManager.SetCallbackHandler(&skeletonCallbackHandlerV1Mock{
@@ -391,9 +397,12 @@ func TestAnalysisResultsReprocessing(t *testing.T) {
 
 	analysisRepositoryMock := &analysisRepositoryMock{}
 	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
 
-	defer cancel()
+	defer func() {
+		cancel()
+		time.Sleep(1 * time.Second)
+	}()
 
 	skeletonManager := NewSkeletonManager(ctx)
 	skeletonManager.SetCallbackHandler(&skeletonCallbackHandlerV1Mock{
@@ -465,9 +474,12 @@ func TestSubmitControlResultsProcessing(t *testing.T) {
 	conditionRepository := NewConditionRepository(dbConn, schemaName)
 	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
 
-	defer cancel()
+	defer func() {
+		cancel()
+		time.Sleep(1 * time.Second)
+	}()
 
 	skeletonManagerMock := &mockManager{}
 	cerberusClientMock := &cerberusClientMock{
@@ -840,9 +852,12 @@ func TestSubmitAnalysisResultFieldValidations(t *testing.T) {
 
 	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
 	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
 
-	defer cancel()
+	defer func() {
+		cancel()
+		time.Sleep(1 * time.Second)
+	}()
 
 	skeletonManager := NewSkeletonManager(ctx)
 	skeletonManager.SetCallbackHandler(&skeletonCallbackHandlerV1Mock{
@@ -1004,9 +1019,12 @@ func TestSubmitControlResultsFieldValidations(t *testing.T) {
 
 	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
 	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
 
-	defer cancel()
+	defer func() {
+		cancel()
+		time.Sleep(1 * time.Second)
+	}()
 
 	skeletonManager := NewSkeletonManager(ctx)
 	skeletonManager.SetCallbackHandler(&skeletonCallbackHandlerV1Mock{
@@ -1109,9 +1127,12 @@ func TestSampleSeenRegistration(t *testing.T) {
 
 	analysisRepository := NewAnalysisRepository(dbConn, schemaName)
 	instrumentRepository := NewInstrumentRepository(dbConn, schemaName)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
 
-	defer cancel()
+	defer func() {
+		cancel()
+		time.Sleep(1 * time.Second)
+	}()
 
 	skeletonManager := NewSkeletonManager(ctx)
 	skeletonManager.SetCallbackHandler(&skeletonCallbackHandlerV1Mock{
