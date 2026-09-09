@@ -38,7 +38,7 @@ type instrumentTO struct {
 }
 
 type fileServerConfigTO struct {
-	Username         string                        `json:"userName"`
+	Username         string                        `json:"username"`
 	Password         string                        `json:"password"`
 	OrderPath        string                        `json:"orderPath"`
 	OrderFileMask    string                        `json:"orderFileMask"`
@@ -413,7 +413,7 @@ func convertTOToCondition(to conditionTO) Condition {
 		Name:                to.Name,
 		Operator:            to.Operator,
 		NegateSubCondition1: to.NegateSubCondition1,
-		NegateSubCondition2: to.NegateSubCondition1,
+		NegateSubCondition2: to.NegateSubCondition2,
 	}
 	if to.SubCondition1 != nil {
 		subCondition1 := convertTOToCondition(*to.SubCondition1)

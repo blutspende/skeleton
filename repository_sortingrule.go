@@ -35,10 +35,6 @@ type sortingRuleRepository struct {
 }
 
 func (r *sortingRuleRepository) Upsert(ctx context.Context, sortingRule SortingRule) (uuid.UUID, error) {
-	if sortingRule.ID == uuid.Nil {
-		sortingRule.ID = uuid.New()
-	}
-
 	query := fmt.Sprintf(`INSERT INTO %s.sk_sorting_rules (id, instrument_id, priority, target, condition_id, programme)
 		VALUES (:id, :instrument_id, :priority, :target, :condition_id, :programme)
 		ON CONFLICT (id) DO UPDATE SET instrument_id = EXCLUDED.instrument_id, priority = EXCLUDED.priority,

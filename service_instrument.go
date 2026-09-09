@@ -919,9 +919,6 @@ func (s *instrumentService) UpdateInstrument(ctx context.Context, instrument Ins
 		for j := range instrument.SortingRules {
 			if instrument.SortingRules[j].ID == oldInstrument.SortingRules[i].ID {
 				isRuleFound = true
-				if instrument.SortingRules[j].Priority != j {
-					instrument.SortingRules[j].Priority = j
-				}
 				break
 			}
 		}

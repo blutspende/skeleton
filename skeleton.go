@@ -2044,7 +2044,7 @@ func (s *skeleton) FindAnalyteMapping(instrument Instrument, isControl bool, ins
 	return FindAnalyteMapping(instrument, isControl, instrumentAnalyte)
 }
 
-func NewSkeleton(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, reagentManufacturers []string, protocols []SupportedProtocol, postgres db.Postgres, dbConn db.DbConnection, dbSchema string, migrator migrator.SkeletonMigrator, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService ConsoleLogService, messageService MessageService, manager Manager, cerberusClient CerberusClient, longPollClient LongPollClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
+func NewSkeleton(ctx context.Context, serviceName, displayName string, requestedExtraValueKeys, encodings []string, reagentManufacturers []string, protocols []SupportedProtocol, postgres db.Postgres, dbConn db.DbConnection, dbSchema string, migrator migrator.SkeletonMigrator, analysisRepository AnalysisRepository, analysisService AnalysisService, instrumentService InstrumentService, consoleLogService ConsoleLogService, messageService MessageService, sortingRuleService SortingRuleService, manager Manager, cerberusClient CerberusClient, longPollClient LongPollClient, deaClient DeaClientV1, config config.Configuration) (SkeletonAPI, error) {
 	skeleton := &skeleton{
 		ctx:                                    ctx,
 		serviceName:                            serviceName,
@@ -2061,6 +2061,7 @@ func NewSkeleton(ctx context.Context, serviceName, displayName string, requested
 		analysisRepository:                     analysisRepository,
 		analysisService:                        analysisService,
 		instrumentService:                      instrumentService,
+		sortingRuleService:                     sortingRuleService,
 		consoleLogService:                      consoleLogService,
 		messageService:                         messageService,
 		manager:                                manager,

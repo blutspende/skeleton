@@ -2,18 +2,19 @@ package skeleton
 
 import (
 	"context"
-	"github.com/blutspende/bloodlab-common/db"
-	"github.com/google/uuid"
-	"github.com/rs/zerolog/log"
-	"github.com/shopspring/decimal"
 	"math/rand/v2"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/blutspende/bloodlab-common/db"
+	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
+	"github.com/shopspring/decimal"
 )
 
 type ConditionService interface {
-	UpsertConditionWithTx(ctx context.Context, condition Condition) (uuid.UUID, error)
+	CreateConditionWithTx(ctx context.Context, condition Condition) (uuid.UUID, error)
 	GetCondition(ctx context.Context, id uuid.UUID) (Condition, error)
 	DeleteConditionWithTx(ctx context.Context, id uuid.UUID) error
 	WithTransaction(tx db.DbConnection) ConditionService
@@ -24,30 +25,30 @@ type conditionService struct {
 	externalTx          db.DbConnection
 }
 
-func (s *conditionService) UpsertConditionWithTx(ctx context.Context, condition Condition) (uuid.UUID, error) {
+func (s *conditionService) CreateConditionWithTx(ctx context.Context, condition Condition) (uuid.UUID, error) {
 	tx := s.getTransaction()
 	if tx == nil {
 		log.Error().Msg(msgRequiredConditionTransactionNotFound)
 		return uuid.Nil, ErrorRequiredConditionTransactionNotFound
 	}
 
-	id, err := s.upsertConditionWithTx(ctx, tx, condition)
+	id, err := s.createConditionWithTx(ctx, tx, condition)
 	if err != nil {
 		return uuid.Nil, err
 	}
 	return id, nil
 }
 
-func (s *conditionService) upsertConditionWithTx(ctx context.Context, tx db.DbConnection, condition Condition) (uuid.UUID, error) {
+func (s *conditionService) createConditionWithTx(ctx context.Context, tx db.DbConnection, condition Condition) (uuid.UUID, error) {
 	if condition.SubCondition1 != nil {
-		subCondition1ID, err := s.upsertConditionWithTx(ctx, tx, *condition.SubCondition1)
+		subCondition1ID, err := s.createConditionWithTx(ctx, tx, *condition.SubCondition1)
 		if err != nil {
 			return uuid.Nil, err
 		}
 		condition.SubCondition1.ID = subCondition1ID
 	}
 	if condition.SubCondition2 != nil {
-		subCondition2ID, err := s.upsertConditionWithTx(ctx, tx, *condition.SubCondition2)
+		subCondition2ID, err := s.createConditionWithTx(ctx, tx, *condition.SubCondition2)
 		if err != nil {
 			return uuid.Nil, err
 		}
@@ -55,21 +56,21 @@ func (s *conditionService) upsertConditionWithTx(ctx context.Context, tx db.DbCo
 	}
 
 	if condition.Operand1 != nil {
-		operand1ID, err := s.conditionRepository.WithTransaction(tx).UpsertConditionOperand(ctx, *condition.Operand1)
+		operand1ID, err := s.conditionRepository.WithTransaction(tx).CreateConditionOperand(ctx, *condition.Operand1)
 		if err != nil {
 			return uuid.Nil, err
 		}
 		condition.Operand1.ID = operand1ID
 	}
 	if condition.Operand2 != nil {
-		operand2ID, err := s.conditionRepository.WithTransaction(tx).UpsertConditionOperand(ctx, *condition.Operand2)
+		operand2ID, err := s.conditionRepository.WithTransaction(tx).CreateConditionOperand(ctx, *condition.Operand2)
 		if err != nil {
 			return uuid.Nil, err
 		}
 		condition.Operand2.ID = operand2ID
 	}
 
-	return s.conditionRepository.WithTransaction(tx).UpsertCondition(ctx, condition)
+	return s.conditionRepository.WithTransaction(tx).CreateCondition(ctx, condition)
 }
 
 func (s *conditionService) GetCondition(ctx context.Context, id uuid.UUID) (condition Condition, err error) {
