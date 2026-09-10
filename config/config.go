@@ -60,11 +60,11 @@ type Configuration struct {
 	InstrumentDriverRegistrationMaxRetry        int           `envconfig:"INSTRUMENT_DRIVER_REGISTRATION_MAX_RETRY" default:"20"`
 	CleanupDays                                 int           `envconfig:"CLEANUP_DAYS" default:"90"`
 	CleanupJobRunIntervalHours                  int           `envconfig:"CLEANUP_JOB_RUN_INTERVAL_HOURS" default:"4"`
-	UnprocessedAnalysisRequestErrorRetryMinute  int           `envconfig:"UNPROCESSED_ANALYSIS_REQUEST_ERROR_RETRY" default:"5"`
-	UnprocessedAnalysisResultErrorRetryMinute   int           `envconfig:"UNPROCESSED_ANALYSIS_RESULT_ERROR_RETRY" default:"5"`
-	GetUnprocessedAnalysisRequestRetryMinute    int           `envconfig:"GET_UNPROCESSED_ANALYSIS_REQUEST_RETRY" default:"5"`
-	GetUnprocessedAnalysisResultIDsRetryMinute  int           `envconfig:"GET_UNPROCESSED_ANALYSIS_RESULT_IDS_RETRY" default:"5"`
-	GetUnprocessedControlResultIDsRetryMinute   int           `envconfig:"GET_UNPROCESSED_CONTROL_RESULT_IDS_RETRY" default:"5"`
+	UnprocessedAnalysisRequestErrorRetryMinutes int           `envconfig:"UNPROCESSED_ANALYSIS_REQUEST_ERROR_RETRY" default:"5"`
+	UnprocessedAnalysisResultErrorRetryMinutes  int           `envconfig:"UNPROCESSED_ANALYSIS_RESULT_ERROR_RETRY" default:"5"`
+	GetUnprocessedAnalysisRequestRetryMinutes   int           `envconfig:"GET_UNPROCESSED_ANALYSIS_REQUEST_RETRY" default:"5"`
+	GetUnprocessedAnalysisResultIDsRetryMinutes int           `envconfig:"GET_UNPROCESSED_ANALYSIS_RESULT_IDS_RETRY" default:"5"`
+	GetUnprocessedControlResultIDsRetryMinutes  int           `envconfig:"GET_UNPROCESSED_CONTROL_RESULT_IDS_RETRY" default:"5"`
 	StandardAPIClientTimeoutSeconds             uint          `envconfig:"STANDARD_API_CLIENT_TIMEOUT_SECONDS" default:"10"`
 	LongPollingAPIClientTimeoutSeconds          uint          `envconfig:"LONG_POLLING_API_CLIENT_TIMEOUT_SECONDS" default:"80"`
 	LongPollingReattemptWaitSeconds             uint          `envconfig:"LONG_POLLING_REATTEMPT_WAIT_SECONDS" default:"5"`
