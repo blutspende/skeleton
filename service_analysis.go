@@ -416,6 +416,10 @@ func (as *analysisService) createAnalysisResultsBatch(ctx context.Context, tx db
 		}
 		for j, reagent := range result.Reagents {
 			analysisResultSet.Results[i].Reagents[j].ID = reagentsMapWithIds[result.ID][j].ID
+			//an empty slice initialization is needed for the data structure to link reagents without any control results and to add common control results to link at later stages
+			if _, ok := resultRelationsMap[result.ID][analysisResultSet.Results[i].Reagents[j].ID]; !ok {
+				resultRelationsMap[result.ID][analysisResultSet.Results[i].Reagents[j].ID] = make([]uuid.UUID, 0)
+			}
 			for k := range reagent.ControlResults {
 				analysisResultSet.Results[i].Reagents[j].ControlResults[k].ID = reagentMapByAnalysisResultID[result.ID][j].ControlResults[k].ID
 				resultRelationsMap[result.ID][analysisResultSet.Results[i].Reagents[j].ID] = append(resultRelationsMap[result.ID][analysisResultSet.Results[i].Reagents[j].ID], analysisResultSet.Results[i].Reagents[j].ControlResults[k].ID)

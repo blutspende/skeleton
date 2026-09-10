@@ -904,7 +904,7 @@ func (s *skeleton) enqueueUnprocessedAnalysisRequests(ctx context.Context) {
 	for {
 		requests, err := s.analysisRepository.GetUnprocessedAnalysisRequests(ctx)
 		if err != nil {
-			time.Sleep(time.Duration(s.config.GetUnprocessedAnalysisRequestRetryMinute) * time.Minute)
+			time.Sleep(time.Duration(s.config.GetUnprocessedAnalysisRequestRetryMinutes) * time.Minute)
 			continue
 		}
 
@@ -941,7 +941,7 @@ func (s *skeleton) enqueueUnprocessedAnalysisRequests(ctx context.Context) {
 
 			if err != nil {
 				requests = failed
-				time.Sleep(time.Duration(s.config.UnprocessedAnalysisRequestErrorRetryMinute) * time.Minute)
+				time.Sleep(time.Duration(s.config.UnprocessedAnalysisRequestErrorRetryMinutes) * time.Minute)
 				continue
 			}
 
@@ -956,7 +956,7 @@ func (s *skeleton) enqueueUnprocessedAnalysisResults(ctx context.Context) {
 	for {
 		resultIDs, err := s.analysisRepository.GetUnprocessedAnalysisResultIDs(ctx)
 		if err != nil {
-			time.Sleep(time.Duration(s.config.GetUnprocessedAnalysisResultIDsRetryMinute) * time.Minute)
+			time.Sleep(time.Duration(s.config.GetUnprocessedAnalysisResultIDsRetryMinutes) * time.Minute)
 			continue
 		}
 
@@ -992,7 +992,7 @@ func (s *skeleton) enqueueUnprocessedAnalysisResults(ctx context.Context) {
 			if err != nil {
 				log.Error().Err(err).Msg("GetAnalysisResultsByIDs failed")
 				resultIDs = failed
-				time.Sleep(time.Duration(s.config.UnprocessedAnalysisResultErrorRetryMinute) * time.Minute)
+				time.Sleep(time.Duration(s.config.UnprocessedAnalysisResultErrorRetryMinutes) * time.Minute)
 				continue
 			}
 
@@ -1007,7 +1007,7 @@ func (s *skeleton) enqueueUnprocessedControlResults(ctx context.Context) {
 	for {
 		controlIDs, err := s.analysisRepository.GetUnprocessedControlResultIDs(ctx)
 		if err != nil {
-			time.Sleep(time.Duration(s.config.GetUnprocessedControlResultIDsRetryMinute) * time.Minute)
+			time.Sleep(time.Duration(s.config.GetUnprocessedControlResultIDsRetryMinutes) * time.Minute)
 			continue
 		}
 
@@ -1075,7 +1075,7 @@ func (s *skeleton) enqueueUnprocessedControlResults(ctx context.Context) {
 			if err != nil {
 				log.Error().Err(err).Msg("GetControlResultsByIDs failed")
 				controlIDs = failed
-				time.Sleep(time.Duration(s.config.UnprocessedAnalysisResultErrorRetryMinute) * time.Minute)
+				time.Sleep(time.Duration(s.config.UnprocessedAnalysisResultErrorRetryMinutes) * time.Minute)
 				continue
 			}
 
