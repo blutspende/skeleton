@@ -152,11 +152,16 @@ func New(ctx context.Context, serviceName, displayName string, requestedExtraVal
 	if err != nil {
 		return nil, err
 	}
-	authManager := NewAuthManager(&config,
-		NewRestyClient(context.Background(), &config, true))
+	unauthorizedRestyClient := NewRestyClient(context.Background(), &config, true)
+	authManager := NewAuthManager(ctx, unauthorizedRestyClient, config.OIDCBaseURL, config.ClientID, config.ClientSecret)
+	tokenSource, err := authManager.GetTokenSource()
+	if err != nil {
+		return nil, err
+	}
+
 	rateLimiter := rate.NewLimiter(config.MaxRequestsPerSecond, 1)
-	internalApiRestyClient := NewRestyClientWithAuthManager(context.Background(), &config, authManager, rateLimiter, config.StandardAPIClientTimeoutSeconds)
-	longPollingApiRestyClient := NewRestyClientWithAuthManager(context.Background(), &config, authManager, rateLimiter, 0) // do not set timeout for resty client, it is handled by longpollClient (prevents unnecessary context deadline exceeded errors)
+	internalApiRestyClient := NewAuthorizedRestyClient(context.Background(), &config, tokenSource, rateLimiter, config.StandardAPIClientTimeoutSeconds)
+	longPollingApiRestyClient := NewAuthorizedRestyClient(context.Background(), &config, tokenSource, rateLimiter, 0) // do not set timeout for resty client, it is handled by longpollClient (prevents unnecessary context deadline exceeded errors)
 	cerberusClient, err := NewCerberusClient(config.CerberusURL, internalApiRestyClient)
 	if err != nil {
 		return nil, err
