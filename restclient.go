@@ -3,13 +3,14 @@ package skeleton
 import (
 	"context"
 	"crypto/tls"
+	"net/http"
+	"time"
+
 	"github.com/blutspende/skeleton/config"
 	"github.com/go-resty/resty/v2"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
+	"golang.org/x/oauth2"
 	"golang.org/x/time/rate"
-	"net/http"
-	"time"
 )
 
 func NewRestyClient(ctx context.Context, configuration *config.Configuration, useProxy bool) *resty.Client {
@@ -28,12 +29,19 @@ func NewRestyClient(ctx context.Context, configuration *config.Configuration, us
 	return client
 }
 
-func NewRestyClientWithAuthManager(ctx context.Context, configuration *config.Configuration, authManager AuthManager, rateLimiter *rate.Limiter, timeoutSeconds uint) *resty.Client {
+func NewAuthorizedRestyClient(ctx context.Context, configuration *config.Configuration, tokenSource oauth2.TokenSource, rateLimiter *rate.Limiter, timeoutSeconds uint) *resty.Client {
 	client := resty.New().
 		SetRetryCount(2).
-		AddRetryCondition(configureRetryMechanismForService2ServiceCalls(authManager)).
+		AddRetryCondition(retryConditionFunc).
 		OnBeforeRequest(configureRequest(ctx, configuration)).
-		OnBeforeRequest(setService2ServiceAuthToken(authManager)).
+		OnBeforeRequest(func(client *resty.Client, request *resty.Request) error {
+			token, err := tokenSource.Token()
+			if err != nil {
+				return err
+			}
+			request.SetAuthToken(token.AccessToken)
+			return nil
+		}).
 		OnBeforeRequest(func(client *resty.Client, request *resty.Request) error {
 			return rateLimiter.Wait(ctx)
 		})
@@ -49,6 +57,14 @@ func NewRestyClientWithAuthManager(ctx context.Context, configuration *config.Co
 	return client
 }
 
+var retryConditionFunc = func(response *resty.Response, err error) bool { // retry on 401, 503 ...
+	if response != nil &&
+		(response.StatusCode() == http.StatusUnauthorized || response.StatusCode() == http.StatusServiceUnavailable) {
+		return true
+	}
+	return false
+}
+
 func configureRequest(ctx context.Context, configuration *config.Configuration) resty.RequestMiddleware {
 	return func(client *resty.Client, request *resty.Request) error {
 		request.SetContext(ctx)
@@ -57,33 +73,6 @@ func configureRequest(ctx context.Context, configuration *config.Configuration) 
 			request.EnableTrace()
 		}
 
-		return nil
-	}
-}
-
-func configureRetryMechanismForService2ServiceCalls(authManager AuthManager) resty.RetryConditionFunc {
-	return func(response *resty.Response, err error) bool {
-		if response == nil {
-			return true
-		}
-
-		if response.StatusCode() == http.StatusUnauthorized {
-			authManager.InvalidateClientCredential()
-			return true
-		}
-
-		return false
-	}
-}
-
-func setService2ServiceAuthToken(authManager AuthManager) resty.RequestMiddleware {
-	return func(client *resty.Client, request *resty.Request) error {
-		authToken, err := authManager.GetClientCredential()
-		if err != nil {
-			log.Error().Err(err).Msg("refresh internal api client auth token failed")
-			return err
-		}
-		client.SetAuthToken(authToken)
 		return nil
 	}
 }
