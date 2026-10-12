@@ -4190,8 +4190,8 @@ func (r *analysisRepository) GetAnalysisResultsBySampleCodes(ctx context.Context
 		return nil, nil
 	}
 	analysisResultsBySampleCodes := make(map[string][]AnalysisResult)
-	err := utils.Partition(len(sampleCodes), db.MaxQueryParams, func(low int, high int) error {
-		query := fmt.Sprintf(`SELECT * FROM %s.sk_analysis_results WHERE sample_code IN (?) AND created_at >= (current_date - make_interval(days := ?));`, r.dbSchema)
+	err := utils.Partition(len(sampleCodes), db.MaxQueryParams-1, func(low int, high int) error {
+		query := fmt.Sprintf(`SELECT id, analyte_mapping_id, instrument_id, instrument_run_id, instrument_module, sample_code, dea_raw_message_id, message_in_id, result, status, result_mode, yielded_at, valid_until, operator, technical_release_datetime, edited, edit_reason, is_invalid FROM %s.sk_analysis_results WHERE sample_code IN (?) AND created_at >= (current_date - make_interval(days := ?));`, r.dbSchema)
 		query, args, _ := sqlx.In(query, sampleCodes[low:high], cutoffDays)
 		query = r.db.Rebind(query)
 		rows, err := r.db.Queryx(ctx, query, args...)
